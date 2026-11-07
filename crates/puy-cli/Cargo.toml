@@ -1,5 +1,5 @@
 [package]
-name = "puy-cli"
+name = "puy"
 description = "The puy command-line tool"
 version.workspace = true
 edition.workspace = true

@@ -14,7 +14,7 @@ without starting a process.
 
 ```sh
 cargo test -p puy-testsuite                       # diff/ and golden/ (also part of cargo test --workspace)
-cargo test -p puy-cli                             # cli/, and the runnable cases again through `puy run` (native only)
+cargo test -p puy                             # cli/, and the runnable cases again through `puy run` (native only)
 cargo test -p puy-testsuite -- golden_nest        # filter by name (<group>_<case>)
 PUY_UPDATE_GOLDEN=1 cargo test -p puy-testsuite   # rewrite the expectations (review the diff)
 ```

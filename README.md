@@ -1,6 +1,6 @@
 # Puy
 
-[![crates.io](https://img.shields.io/crates/v/puy-cli.svg)](https://crates.io/crates/puy-cli)
+[![crates.io](https://img.shields.io/crates/v/puy.svg)](https://crates.io/crates/puy)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Puy is an Object Pascal implementation modeled on the feel of writing Delphi code.
@@ -40,8 +40,8 @@ automatically).
 
 ```sh
 cargo build --workspace
-cargo run -p puy-cli -- run examples/hello.pas
-cargo run -p puy-cli -- --help
+cargo run -p puy -- run examples/hello.pas
+cargo run -p puy -- --help
 ```
 
 The `puy` command:
@@ -57,7 +57,7 @@ The `puy` command:
 
 ```sh
 # WASI (run with a WASI runtime such as wasmtime)
-cargo build -p puy-cli --target wasm32-wasip2
+cargo build -p puy --target wasm32-wasip2
 
 # Browser (build only for now)
 cargo build -p puy-core -p puy-runtime-web --target wasm32-unknown-unknown
@@ -84,7 +84,7 @@ crates/
   puy-runtime-native/  Native runtime
   puy-runtime-wasi/    WASI runtime
   puy-runtime-web/     Browser runtime
-  puy-cli/             The puy command
+  puy-cli/             The puy command (crate `puy`)
   puy-testsuite/       Test runner for the cases under tests/ (not published)
 tests/                 Differential, golden and CLI test cases
 examples/              Sample programs
