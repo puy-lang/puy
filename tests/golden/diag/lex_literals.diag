@@ -1,0 +1,71 @@
+error[E0005]: integer literal is too large
+  --> lex_literals.pas:6:8
+   |
+ 6 |   N := 18446744073709551616;
+   |        ^^^^^^^^^^^^^^^^^^^^
+
+error[E0005]: integer literal is too large
+  --> lex_literals.pas:7:8
+   |
+ 7 |   N := $1FFFFFFFFFFFFFFFF;
+   |        ^^^^^^^^^^^^^^^^^^
+
+error[E0714]: constant value 18446744073709551615 is out of range for `Int64` (-9223372036854775808..9223372036854775807)
+  --> lex_literals.pas:8:8
+   |
+ 8 |   N := 18446744073709551615;
+   |        ^^^^^^^^^^^^^^^^^^^^
+
+error[E0009]: invalid multi-line string
+   --> lex_literals.pas:10:1
+    |
+ 10 |     hello
+    | ^^^^^^^^^ shallower than the closing quotes
+
+error[E0009]: invalid multi-line string
+   --> lex_literals.pas:11:1
+    |
+ 11 |     world x''';
+    | ^^^^^^^^^^^ text before the closing quotes
+
+error[E0008]: invalid character code after `#`
+   --> lex_literals.pas:18:8
+    |
+ 18 |   S := #$110000;
+    |        ^^^^^^^^
+
+error[E0008]: invalid character code after `#`
+   --> lex_literals.pas:19:8
+    |
+ 19 |   S := #x;
+    |        ^
+
+error[E0700]: undeclared identifier `x`
+   --> lex_literals.pas:19:9
+    |
+ 19 |   S := #x;
+    |         ^
+
+error[E0700]: undeclared identifier `rest`
+   --> lex_literals.pas:20:21
+    |
+ 20 |   { outer { inner } rest }
+    |                     ^^^^
+
+error[E0003]: invalid character `}`
+   --> lex_literals.pas:20:26
+    |
+ 20 |   { outer { inner } rest }
+    |                          ^
+    |
+    = note: block comments do not nest, so this `}` has no matching `{`
+
+error[E0003]: invalid characters `*)`
+   --> lex_literals.pas:21:18
+    |
+ 21 |   WriteLn(N, S); *)
+    |                  ^^
+    |
+    = note: block comments do not nest, so this `*)` has no matching `(*`
+
+error: aborting due to 11 errors

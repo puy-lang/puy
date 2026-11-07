@@ -1,0 +1,85 @@
+SOURCE_FILE@0..122
+  PROGRAM@0..122
+    PROGRAM_HEADER@0..18
+      PROGRAM_KW@0..7 "program"
+      WHITESPACE@7..8 " "
+      IDENT@8..17 "DumpHello"
+      SEMICOLON@17..18 ";"
+    NEWLINE@18..19 "\n"
+    NEWLINE@19..20 "\n"
+    CONST_SECTION@20..47
+      CONST_KW@20..25 "const"
+      NEWLINE@25..26 "\n"
+      WHITESPACE@26..28 "  "
+      CONST_DECL@28..47
+        IDENT@28..36 "Greeting"
+        WHITESPACE@36..37 " "
+        EQ@37..38 "="
+        WHITESPACE@38..39 " "
+        LITERAL@39..46
+          STRING_LIT@39..46 "'Hello'"
+        SEMICOLON@46..47 ";"
+    NEWLINE@47..48 "\n"
+    NEWLINE@48..49 "\n"
+    VAR_SECTION@49..66
+      VAR_KW@49..52 "var"
+      NEWLINE@52..53 "\n"
+      WHITESPACE@53..55 "  "
+      VAR_DECL@55..66
+        IDENT_LIST@55..56
+          IDENT@55..56 "N"
+        COLON@56..57 ":"
+        WHITESPACE@57..58 " "
+        TYPE_REF@58..65
+          QUALIFIED_NAME@58..65
+            IDENT@58..65 "Integer"
+        SEMICOLON@65..66 ";"
+    NEWLINE@66..67 "\n"
+    NEWLINE@67..68 "\n"
+    COMPOUND_STMT@68..120
+      BEGIN_KW@68..73 "begin"
+      NEWLINE@73..74 "\n"
+      WHITESPACE@74..76 "  "
+      ASSIGN_STMT@76..86
+        NAME_REF@76..77
+          IDENT@76..77 "N"
+        WHITESPACE@77..78 " "
+        ASSIGN@78..80 ":="
+        WHITESPACE@80..81 " "
+        BINARY_EXPR@81..86
+          LITERAL@81..82
+            INT_LIT@81..82 "2"
+          WHITESPACE@82..83 " "
+          PLUS@83..84 "+"
+          WHITESPACE@84..85 " "
+          LITERAL@85..86
+            INT_LIT@85..86 "3"
+      SEMICOLON@86..87 ";"
+      NEWLINE@87..88 "\n"
+      WHITESPACE@88..90 "  "
+      EXPR_STMT@90..115
+        CALL_EXPR@90..115
+          NAME_REF@90..97
+            IDENT@90..97 "WriteLn"
+          ARG_LIST@97..115
+            L_PAREN@97..98 "("
+            ARG@98..106
+              NAME_REF@98..106
+                IDENT@98..106 "Greeting"
+            COMMA@106..107 ","
+            WHITESPACE@107..108 " "
+            ARG@108..111
+              LITERAL@108..111
+                STRING_LIT@108..111 "' '"
+            COMMA@111..112 ","
+            WHITESPACE@112..113 " "
+            ARG@113..114
+              NAME_REF@113..114
+                IDENT@113..114 "N"
+            R_PAREN@114..115 ")"
+      SEMICOLON@115..116 ";"
+      NEWLINE@116..117 "\n"
+      END_KW@117..120 "end"
+    DOT@120..121 "."
+    NEWLINE@121..122 "\n"
+    EOF@122..122 ""

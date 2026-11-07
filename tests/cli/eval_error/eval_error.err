@@ -1,0 +1,7 @@
+error[E0700]: undeclared identifier `Undefined`
+  --> <eval>:1:9
+   |
+ 1 | WriteLn(Undefined)
+   |         ^^^^^^^^^
+
+error: aborting due to 1 error

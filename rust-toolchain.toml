@@ -1,0 +1,9 @@
+# The Rust version is pinned here. With plain `stable`, every CI job fetches the channel
+# manifest from static.rust-lang.org, which often timed out. With a pinned version, a machine
+# that already has it installed does not fetch anything. When a new stable is released, raise
+# this and `rust-version` in Cargo.toml together.
+[toolchain]
+channel = "1.99.1"
+profile = "minimal"
+components = ["rustfmt", "clippy"]
+targets = ["wasm32-wasip2", "wasm32-unknown-unknown"]

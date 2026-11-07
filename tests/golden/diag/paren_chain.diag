@@ -1,0 +1,25 @@
+error[E0703]: operator `=` cannot be applied to `Boolean` and `Integer`
+   --> paren_chain.pas:10:18
+    |
+ 10 |   if X = 1 and Y = 2 then
+    |                  ^
+    |
+    = fix: add parentheses around each comparison
+
+error[E0703]: operator `and` cannot be applied to `Integer` and `string`
+   --> paren_chain.pas:12:12
+    |
+ 12 |   if X = 1 and S = 'a' or Y > 1 then
+    |            ^^^
+    |
+    = fix: add parentheses around each comparison
+
+error[E0703]: operator `or` cannot be applied to `Char` and `Integer`
+   --> paren_chain.pas:12:24
+    |
+ 12 |   if X = 1 and S = 'a' or Y > 1 then
+    |                        ^^
+    |
+    = fix: add parentheses around each comparison
+
+error: aborting due to 3 errors

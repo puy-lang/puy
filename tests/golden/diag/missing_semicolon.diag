@@ -1,0 +1,11 @@
+error[E0400]: expected `;`, found `WriteLn`
+  --> missing_semicolon.pas:6:9
+   |
+ 6 |   A := 1
+   |         ^
+ 7 |   WriteLn(A);
+   |   ------- found here
+   |
+   = fix: insert `;`
+
+error: aborting due to 1 error

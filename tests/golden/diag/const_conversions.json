@@ -1,0 +1,264 @@
+[
+  {
+    "schema": "puy.diagnostics/1",
+    "diagnostics": [
+      {
+        "code": "E0714",
+        "severity": "error",
+        "name": null,
+        "message": "constant value 9223372036854775808 is out of range for `Int64` (-9223372036854775808..9223372036854775807)",
+        "primary": {
+          "file": "const_conversions.pas",
+          "start": 412,
+          "end": 437,
+          "line": 17,
+          "column": 8,
+          "end_line": 17,
+          "end_column": 33,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0714]: constant value 9223372036854775808 is out of range for `Int64` (-9223372036854775808..9223372036854775807)\n   --> const_conversions.pas:17:8\n    |\n 17 |   AH = Abs(-9223372036854775808);\n    |        ^^^^^^^^^^^^^^^^^^^^^^^^^"
+      },
+      {
+        "code": "E0714",
+        "severity": "error",
+        "name": null,
+        "message": "constant value 128 is out of range for `ShortInt` (-128..127)",
+        "primary": {
+          "file": "const_conversions.pas",
+          "start": 463,
+          "end": 466,
+          "line": 20,
+          "column": 18,
+          "end_line": 20,
+          "end_column": 21,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [],
+        "fixes": [
+          {
+            "title": "replace with `-128`",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "const_conversions.pas",
+                "start": 463,
+                "end": 466,
+                "line": 20,
+                "column": 18,
+                "end_line": 20,
+                "end_column": 21,
+                "original": "$80",
+                "replacement": "-128"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E0714]: constant value 128 is out of range for `ShortInt` (-128..127)\n   --> const_conversions.pas:20:18\n    |\n 20 |   Sh := ShortInt($80);\n    |                  ^^^\n    |\n    = suggestion: replace with `-128`"
+      },
+      {
+        "code": "E0714",
+        "severity": "error",
+        "name": null,
+        "message": "constant value 4294967295 is out of range for `Integer` (-2147483648..2147483647)",
+        "primary": {
+          "file": "const_conversions.pas",
+          "start": 484,
+          "end": 493,
+          "line": 21,
+          "column": 16,
+          "end_line": 21,
+          "end_column": 25,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [],
+        "fixes": [
+          {
+            "title": "replace with `-1`",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "const_conversions.pas",
+                "start": 484,
+                "end": 493,
+                "line": 21,
+                "column": 16,
+                "end_line": 21,
+                "end_column": 25,
+                "original": "$FFFFFFFF",
+                "replacement": "-1"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E0714]: constant value 4294967295 is out of range for `Integer` (-2147483648..2147483647)\n   --> const_conversions.pas:21:16\n    |\n 21 |   I := Integer($FFFFFFFF);\n    |                ^^^^^^^^^\n    |\n    = suggestion: replace with `-1`"
+      },
+      {
+        "code": "E0714",
+        "severity": "error",
+        "name": null,
+        "message": "constant value 8589934591 is out of range for `Integer` (-2147483648..2147483647)",
+        "primary": {
+          "file": "const_conversions.pas",
+          "start": 511,
+          "end": 521,
+          "line": 22,
+          "column": 16,
+          "end_line": 22,
+          "end_column": 26,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [],
+        "fixes": [
+          {
+            "title": "replace with `$FFFFFFFF`",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "const_conversions.pas",
+                "start": 511,
+                "end": 521,
+                "line": 22,
+                "column": 16,
+                "end_line": 22,
+                "end_column": 26,
+                "original": "$1FFFFFFFF",
+                "replacement": "$FFFFFFFF"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E0714]: constant value 8589934591 is out of range for `Integer` (-2147483648..2147483647)\n   --> const_conversions.pas:22:16\n    |\n 22 |   I := Integer($1FFFFFFFF);\n    |                ^^^^^^^^^^\n    |\n    = suggestion: replace with `$FFFFFFFF`"
+      },
+      {
+        "code": "E0714",
+        "severity": "error",
+        "name": null,
+        "message": "constant value 70000 is out of range for `Char` (0..65535)",
+        "primary": {
+          "file": "const_conversions.pas",
+          "start": 536,
+          "end": 541,
+          "line": 23,
+          "column": 13,
+          "end_line": 23,
+          "end_column": 18,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0714]: constant value 70000 is out of range for `Char` (0..65535)\n   --> const_conversions.pas:23:13\n    |\n 23 |   C := Char(70000);\n    |             ^^^^^"
+      },
+      {
+        "code": "E0714",
+        "severity": "error",
+        "name": null,
+        "message": "constant value -1 is out of range for `Char` (0..65535)",
+        "primary": {
+          "file": "const_conversions.pas",
+          "start": 555,
+          "end": 557,
+          "line": 24,
+          "column": 12,
+          "end_line": 24,
+          "end_column": 14,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0714]: constant value -1 is out of range for `Char` (0..65535)\n   --> const_conversions.pas:24:12\n    |\n 24 |   C := Chr(-1);\n    |            ^^"
+      },
+      {
+        "code": "E0703",
+        "severity": "error",
+        "name": null,
+        "message": "operator `+` cannot be applied to `string` and `Integer`",
+        "primary": {
+          "file": "const_conversions.pas",
+          "start": 591,
+          "end": 592,
+          "line": 26,
+          "column": 21,
+          "end_line": 26,
+          "end_column": 22,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [],
+        "fixes": [
+          {
+            "title": "pass as separate arguments",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "const_conversions.pas",
+                "start": 590,
+                "end": 593,
+                "line": 26,
+                "column": 20,
+                "end_line": 26,
+                "end_column": 23,
+                "original": " + ",
+                "replacement": ", "
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E0703]: operator `+` cannot be applied to `string` and `Integer`\n   --> const_conversions.pas:26:21\n    |\n 26 |   WriteLn('Total: ' + XX);\n    |                     ^\n    |\n    = suggestion: pass as separate arguments"
+      },
+      {
+        "code": "E0702",
+        "severity": "error",
+        "name": null,
+        "message": "type mismatch: expected an integer type, found `Char` (argument 2, parameter `N`)",
+        "primary": {
+          "file": "const_conversions.pas",
+          "start": 607,
+          "end": 610,
+          "line": 27,
+          "column": 10,
+          "end_line": 27,
+          "end_column": 13,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0702]: type mismatch: expected an integer type, found `Char` (argument 2, parameter `N`)\n   --> const_conversions.pas:27:10\n    |\n 27 |   Inc(I, 'a');\n    |          ^^^"
+      },
+      {
+        "code": "E0702",
+        "severity": "error",
+        "name": null,
+        "message": "type mismatch: expected an integer type, found `Boolean` (argument 2, parameter `N`)",
+        "primary": {
+          "file": "const_conversions.pas",
+          "start": 622,
+          "end": 626,
+          "line": 28,
+          "column": 10,
+          "end_line": 28,
+          "end_column": 14,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0702]: type mismatch: expected an integer type, found `Boolean` (argument 2, parameter `N`)\n   --> const_conversions.pas:28:10\n    |\n 28 |   Inc(C, True);\n    |          ^^^^"
+      }
+    ],
+    "summary": {
+      "errors": 9,
+      "warnings": 0,
+      "notes": 0
+    }
+  }
+]

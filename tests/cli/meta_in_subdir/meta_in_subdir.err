@@ -1,0 +1,13 @@
+error[E2507]: inline metadata is not allowed inside a project
+  --> src/main.pas:1:1
+   |
+ 1 | (*! puy
+   | ^^^^^^^
+ 2 | toolchain = "0.4.2"
+ 3 | *)
+   | ^^
+  ::: puy.toml:1:1
+ 1 | [package]
+   | - project manifest here
+
+error: aborting due to 1 error

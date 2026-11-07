@@ -1,0 +1,9 @@
+error[E0407]: unexpected content after the end of the program
+  --> syntax_after_end.pas:5:1
+   |
+ 5 | procedure P;
+   | ^^^^^^^^^
+   |
+   = note: a program ends at the first `end.`; routines and blocks end with `end;`
+
+error: aborting due to 1 error

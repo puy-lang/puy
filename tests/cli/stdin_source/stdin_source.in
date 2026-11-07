@@ -1,0 +1,1 @@
+WriteLn('from stdin ', ParamStr(0) = '', ' ', ParamStr(1));

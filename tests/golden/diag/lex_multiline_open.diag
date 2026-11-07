@@ -1,0 +1,18 @@
+error[E0009]: invalid multi-line string
+  --> lex_multiline_open.pas:4:8
+   |
+ 4 |   S := '''
+   |        ^^^ never closed
+
+error[E0400]: expected `end`, found end of file
+  --> lex_multiline_open.pas:8:1
+   |
+ 3 | begin
+   | ----- block starts here
+...
+ 8 |
+   | ^
+   |
+   = fix: insert `end`
+
+error: aborting due to 2 errors

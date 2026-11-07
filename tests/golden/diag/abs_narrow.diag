@@ -1,0 +1,7 @@
+error[E0714]: constant value 300 is out of range for `Byte` (0..255)
+   --> abs_narrow.pas:12:8
+    |
+ 12 |   B := Abs(-300);
+    |        ^^^^^^^^^
+
+error: aborting due to 1 error

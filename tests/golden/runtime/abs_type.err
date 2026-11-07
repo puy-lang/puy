@@ -1,0 +1,2 @@
+error: uncaught exception EIntOverflow: integer overflow in Integer arithmetic
+  at AbsType.<main> (abs_type.pas:23)

@@ -1,0 +1,46 @@
+error[E0707]: cannot assign to `C`
+  --> for_param_modes.pas:9:7
+   |
+ 6 | procedure P(const C: Integer; var V: Integer; out O: Integer; I: Integer);
+   |                   - declared here
+...
+ 9 |   for C := 1 to 3 do begin end;
+   |       ^ a `const` parameter
+
+error[E0722]: loop variable must be a local variable of an ordinal type
+   --> for_param_modes.pas:10:7
+    |
+  6 | procedure P(const C: Integer; var V: Integer; out O: Integer; I: Integer);
+    |                                   - declared here
+...
+ 10 |   for V := 1 to 3 do begin end;
+    |       ^
+    |
+    = note: a `var` or `out` parameter refers to the caller's variable; copy it to a local variable first
+
+error[E0722]: loop variable must be a local variable of an ordinal type
+   --> for_param_modes.pas:11:7
+    |
+  6 | procedure P(const C: Integer; var V: Integer; out O: Integer; I: Integer);
+    |                                                   - declared here
+...
+ 11 |   for O := 1 to 3 do begin end;
+    |       ^
+    |
+    = note: a `var` or `out` parameter refers to the caller's variable; copy it to a local variable first
+
+error[E2004]: loop variable `I` cannot be read after the loop
+   --> for_param_modes.pas:13:11
+    |
+  6 | procedure P(const C: Integer; var V: Integer; out O: Integer; I: Integer);
+    |                                                               - declared here
+...
+ 12 |   for I := 1 to 3 do begin end;
+    |       - assigned by this loop
+ 13 |   WriteLn(I);
+    |           ^ read here
+    |
+    = note: the value of a loop variable after the loop is undefined in Delphi, so Puy does not allow reading it
+    = note: copy the value to another variable inside the loop
+
+error: aborting due to 4 errors

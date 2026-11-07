@@ -1,0 +1,2 @@
+error: uncaught exception ERangeError: value 300 is out of range for Byte (0..255)
+  at RangeCheck.<main> (range_check.pas:11)

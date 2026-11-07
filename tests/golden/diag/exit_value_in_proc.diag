@@ -1,0 +1,27 @@
+error[E0711]: `Exit` with a value is not allowed in a procedure
+  --> exit_value_in_proc.pas:6:5
+   |
+ 3 | procedure P(N: Integer);
+   |           - declared here
+...
+ 6 |     Exit(3);
+   |     ^^^^
+
+error[E0711]: `Exit` with a value is not allowed in a procedure
+   --> exit_value_in_proc.pas:12:3
+    |
+ 10 | procedure Q;
+    |           - declared here
+ 11 | begin
+ 12 |   Exit(1);
+    |   ^^^^
+
+warning[W0003]: unreachable code (unreachable-code)
+   --> exit_value_in_proc.pas:13:3
+    |
+ 13 |   WriteLn('never');
+    |   ^^^^^^^^^^^^^^^^
+    |
+    = note: disable with `{$WARN unreachable-code OFF}`
+
+error: aborting due to 2 errors; 1 warning emitted

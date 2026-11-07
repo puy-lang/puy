@@ -1,0 +1,11 @@
+error[E0400]: expected `end`, found end of file
+  --> syntax_open_repeat.pas:8:18
+   |
+ 7 |     begin
+   |     ----- block starts here
+ 8 |       WriteLn(X);
+   |                  ^
+   |
+   = note: write `until` followed by the loop condition
+
+error: aborting due to 1 error

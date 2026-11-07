@@ -1,0 +1,10 @@
+error[E0407]: a script does not end with `.`
+  --> syntax_script_dot_block.pas:3:4
+   |
+ 3 | end.
+   |    ^
+   |
+   = note: start the file with `program` and end it with `end.`, or write nothing after the last statement of a script
+   = fix: remove `.`
+
+error: aborting due to 1 error

@@ -1,0 +1,9 @@
+error[E0216]: include file `dir_include_cycle.a.inc` includes itself
+  --> dir_include_cycle.b.inc:1:1
+   |
+ 1 | {$I dir_include_cycle.a.inc}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: include chain: dir_include_cycle.pas -> dir_include_cycle.a.inc -> dir_include_cycle.b.inc -> dir_include_cycle.a.inc
+
+error: aborting due to 1 error

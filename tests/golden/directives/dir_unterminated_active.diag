@@ -1,0 +1,10 @@
+error[E0203]: unterminated conditional directive
+  --> dir_unterminated_active.pas:7:1
+   |
+ 4 | {$IFDEF PUY}
+   | ------------ starts here
+...
+ 7 |
+   | ^
+
+error: aborting due to 1 error

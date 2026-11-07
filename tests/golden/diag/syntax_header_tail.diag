@@ -1,0 +1,32 @@
+error[E0400]: expected `;`, found `foo`
+  --> syntax_header_tail.pas:1:41
+   |
+ 1 | program SyntaxHeaderTail(Input, Output) foo;
+   |                                         ^^^
+
+error[E0414]: `uses` must come before declarations and statements
+  --> syntax_header_tail.pas:4:1
+   |
+ 2 | uses System.SysUtils;
+   | ---- first `uses` here
+ 3 | var X: Integer;
+ 4 | uses Foo, System.SysUtils as SU;
+   | ^^^^
+   |
+   = fix: move the items to the first `uses`
+
+error[E2500]: unit `Foo` not found
+  --> syntax_header_tail.pas:4:6
+   |
+ 4 | uses Foo, System.SysUtils as SU;
+   |      ^^^
+   |
+   = note: only `System.SysUtils` can be used in this release; more units of the standard library come with later releases
+
+error[E2500]: unit `System.SysUtils` is already used
+  --> syntax_header_tail.pas:4:11
+   |
+ 4 | uses Foo, System.SysUtils as SU;
+   |           ^^^^^^^^^^^^^^^
+
+error: aborting due to 4 errors

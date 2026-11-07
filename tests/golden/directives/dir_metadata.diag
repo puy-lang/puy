@@ -1,0 +1,34 @@
+warning[W0015]: inline metadata is only recognized at the start of the file (misplaced-metadata)
+  --> dir_metadata.pas:2:1
+   |
+ 2 | (*! puy
+   | ^^^^^^^
+ 3 | toolchain = "1.0"
+ 4 | *)
+   | ^^
+   |
+   = note: move the `(*! puy` comment to the start of the file
+   = note: disable with `{$WARN misplaced-metadata OFF}`
+
+warning[W0006]: `in 'SysUtils.pas'` is ignored (uses-in-clause)
+  --> dir_metadata.pas:6:22
+   |
+ 6 | uses System.SysUtils in 'SysUtils.pas';
+   |                      ^^^^^^^^^^^^^^^^^
+   |
+   = note: disable with `{$WARN uses-in-clause OFF}`
+   = fix: remove `in 'SysUtils.pas'`
+
+warning[W0015]: inline metadata is not read from an include file (misplaced-metadata)
+  --> dir_metadata.inc:1:1
+   |
+ 1 | (*! puy
+   | ^^^^^^^
+ 2 | toolchain = "1"
+ 3 | *)
+   | ^^
+   |
+   = note: move the `(*! puy` comment to the start of the file that is run
+   = note: disable with `{$WARN misplaced-metadata OFF}`
+
+warning: 3 warnings emitted

@@ -1,0 +1,2 @@
+error: uncaught exception EAssertionFailed: assertion failed: N > 5 (N must exceed 5)
+  at AssertFail.<main> (assert_fail.pas:9)

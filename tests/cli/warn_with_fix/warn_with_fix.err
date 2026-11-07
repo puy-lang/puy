@@ -1,0 +1,11 @@
+warning[W0009]: calling convention `cdecl` is ignored (ignored-calling-convention)
+  --> warn_with_fix.pas:3:14
+   |
+ 3 | procedure P; cdecl;
+   |              ^^^^^
+   |
+   = note: disable with `{$WARN ignored-calling-convention OFF}`
+   = fix: remove `cdecl`
+
+warning: 1 warning emitted
+help: 1 fix can be applied with `puy fix`

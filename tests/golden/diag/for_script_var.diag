@@ -1,0 +1,35 @@
+warning[W0001]: unused variable `I` (unused-variable)
+  --> for_script_var.pas:1:5
+   |
+ 1 | var I: Integer;
+   |     ^ declared here
+   |
+   = note: disable with `{$WARN unused-variable OFF}`
+   = suggestion: remove `I`
+
+error[E0700]: undeclared identifier `I`
+  --> for_script_var.pas:6:7
+   |
+ 1 | var I: Integer;
+   |     - declared here
+...
+ 6 |   for I := 1 to 2 do
+   |       ^
+   |
+   = note: a top-level variable of a script is a local variable of the main block and is not visible inside routines
+   = note: pass the value as a parameter instead
+   = fix: insert `var`
+
+error[E0700]: undeclared identifier `I`
+  --> for_script_var.pas:7:13
+   |
+ 1 | var I: Integer;
+   |     - declared here
+...
+ 7 |     WriteLn(I);
+   |             ^
+   |
+   = note: a top-level variable of a script is a local variable of the main block and is not visible inside routines
+   = note: pass the value as a parameter instead
+
+error: aborting due to 2 errors; 1 warning emitted

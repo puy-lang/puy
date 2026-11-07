@@ -1,0 +1,29 @@
+error[E0213]: invalid argument for `{$R}`
+  --> dir_arg_check.pas:5:1
+   |
+ 5 | {$R}
+   | ^^^^
+
+error[E0213]: invalid argument for `{$INLINE}`
+  --> dir_arg_check.pas:6:1
+   |
+ 6 | {$INLINE MAYBE}
+   | ^^^^^^^^^^^^^^^
+
+error[E0213]: invalid argument for `{$LEGACYIFEND}`
+  --> dir_arg_check.pas:8:1
+   |
+ 8 | {$LEGACYIFEND YES}
+   | ^^^^^^^^^^^^^^^^^^
+
+warning[W0007]: conditional symbol `VER350` is never defined in Puy (platform-symbol)
+   --> dir_arg_check.pas:10:9
+    |
+ 10 | {$IFDEF VER350}{$ENDIF}
+    |         ^^^^^^
+    |
+    = note: write the branch for Puy with `{$IFDEF PUY}`
+    = note: 1 more use of a compiler symbol in this file is not reported
+    = note: disable with `{$WARN platform-symbol OFF}`
+
+error: aborting due to 3 errors; 1 warning emitted

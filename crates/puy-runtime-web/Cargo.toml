@@ -1,0 +1,16 @@
+[package]
+name = "puy-runtime-web"
+description = "Browser runtime for Puy (wasm-bindgen)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+puy-core.workspace = true
+puy-host.workspace = true
+# TODO: add wasm-bindgen (watch the binary size; requirements §4.4)
+
+[lib]
+crate-type = ["cdylib", "rlib"]

@@ -1,0 +1,7 @@
+error[E0700]: undeclared identifier `Foo`
+  --> <stdin>:1:9
+   |
+ 1 | WriteLn(Foo)
+   |         ^^^
+
+error: aborting due to 1 error

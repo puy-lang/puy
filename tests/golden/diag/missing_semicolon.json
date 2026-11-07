@@ -1,0 +1,61 @@
+[
+  {
+    "diagnostics": [
+      {
+        "code": "E0400",
+        "fixes": [
+          {
+            "applicability": "safe",
+            "edits": [
+              {
+                "column": 9,
+                "end": 59,
+                "end_column": 9,
+                "end_line": 6,
+                "file": "missing_semicolon.pas",
+                "line": 6,
+                "original": "",
+                "replacement": ";",
+                "start": 59
+              }
+            ],
+            "title": "insert `;`"
+          }
+        ],
+        "message": "expected `;`, found `WriteLn`",
+        "name": null,
+        "notes": [],
+        "primary": {
+          "column": 9,
+          "end": 59,
+          "end_column": 9,
+          "end_line": 6,
+          "file": "missing_semicolon.pas",
+          "label": "",
+          "line": 6,
+          "start": 59
+        },
+        "rendered": "error[E0400]: expected `;`, found `WriteLn`\n  --> missing_semicolon.pas:6:9\n   |\n 6 |   A := 1\n   |         ^\n 7 |   WriteLn(A);\n   |   ------- found here\n   |\n   = fix: insert `;`",
+        "secondary": [
+          {
+            "column": 3,
+            "end": 69,
+            "end_column": 10,
+            "end_line": 7,
+            "file": "missing_semicolon.pas",
+            "label": "found here",
+            "line": 7,
+            "start": 62
+          }
+        ],
+        "severity": "error"
+      }
+    ],
+    "schema": "puy.diagnostics/1",
+    "summary": {
+      "errors": 1,
+      "notes": 0,
+      "warnings": 0
+    }
+  }
+]

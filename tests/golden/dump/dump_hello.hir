@@ -1,0 +1,13 @@
+program DumpHello
+.global g0 N: Integer
+.routine <main>
+  assign @10 R+
+    global g0 N
+    const Integer 5
+  writeln @11
+    arg
+      const string "Hello"
+    arg
+      const Char #32
+    arg
+      global g0 N: Integer

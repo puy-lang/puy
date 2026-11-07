@@ -1,0 +1,11 @@
+error[E0001]: source is not valid UTF-8
+  --> lex_invalid_utf8.pas:3:15
+   |
+ 3 |   WriteLn('caf�');
+   |               ^
+   |
+   = note: Puy reads source files as UTF-8 only
+   = note: UTF-8 files saved by Delphi 2009 or later (with a BOM) need no change
+   = note: convert an older ANSI source (such as Shift_JIS) to UTF-8 before compiling
+
+error: aborting due to 1 error

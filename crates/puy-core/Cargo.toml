@@ -1,0 +1,12 @@
+[package]
+name = "puy-core"
+description = "Puy compiler and stackless VM (no I/O, WASM-compatible)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+puy-host.workspace = true
+rowan.workspace = true

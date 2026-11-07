@@ -1,0 +1,10 @@
+error[E2000]: variable `Result` may be read before it is assigned
+  --> crlf_fix.pas:5:13
+   |
+ 5 |   Result := Result + 1;
+   |             ^^^^^^ read here
+   |
+   = note: Puy requires `Result` to be assigned before it is read
+   = fix: add `Result := 0;` at the start of the body
+
+error: aborting due to 1 error

@@ -1,0 +1,25 @@
+error[E0700]: undeclared identifier `Before`
+  --> script_later_var.pas:3:11
+   |
+ 3 |   WriteLn(Before, After);
+   |           ^^^^^^
+...
+ 7 | var Before := 1;
+   |     ------ declared here
+   |
+   = note: a top-level variable of a script is a local variable of the main block and is not visible inside routines
+   = note: pass the value as a parameter instead
+
+error[E0700]: undeclared identifier `After`
+  --> script_later_var.pas:3:19
+   |
+ 3 |   WriteLn(Before, After);
+   |                   ^^^^^
+...
+ 6 | var After := 2;
+   |     ----- declared here
+   |
+   = note: a top-level variable of a script is a local variable of the main block and is not visible inside routines
+   = note: pass the value as a parameter instead
+
+error: aborting due to 2 errors

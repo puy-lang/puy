@@ -1,0 +1,30 @@
+error[E0704]: recursive call to `Next` needs parentheses
+   --> bare_call.pas:10:3
+    |
+  8 | function Next: Integer;
+    |          ---- declared here
+  9 | begin
+ 10 |   Next;
+    |   ^^^^
+    |
+    = suggestion: replace with `Next()`
+
+error[E0704]: function `Square` requires arguments
+   --> bare_call.pas:25:3
+    |
+  3 | function Square(X: Integer): Integer;
+    |          ------ declared here
+...
+ 25 |   Square;
+    |   ^^^^^^
+
+error[E0704]: procedure `Show` requires arguments
+   --> bare_call.pas:26:3
+    |
+ 14 | procedure Show(X: Integer);
+    |           ---- declared here
+...
+ 26 |   Show;
+    |   ^^^^
+
+error: aborting due to 3 errors

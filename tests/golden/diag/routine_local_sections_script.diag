@@ -1,0 +1,7 @@
+error[E3200]: `type` is not supported yet (planned for M2)
+  --> routine_local_sections_script.pas:4:1
+   |
+ 4 | type
+   | ^^^^
+
+error: aborting due to 1 error

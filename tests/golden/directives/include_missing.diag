@@ -1,0 +1,10 @@
+error[E0209]: include file `nowhere.inc` not found
+  --> include_missing.pas:3:1
+   |
+ 3 | {$I nowhere.inc}
+   | ^^^^^^^^^^^^^^^^
+   |
+   = note: include file names are matched exactly on Linux and WASI
+   = note: write the name with the same case as the file on disk
+
+error: aborting due to 1 error

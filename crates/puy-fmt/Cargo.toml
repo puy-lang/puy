@@ -1,0 +1,11 @@
+[package]
+name = "puy-fmt"
+description = "Formatter for Puy (Object Pascal) source"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+puy-core.workspace = true

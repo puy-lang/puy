@@ -1,0 +1,17 @@
+error[E0400]: expected `end`, found end of file
+  --> lex_unterminated.pas:3:16
+   |
+ 2 | begin
+   | ----- block starts here
+ 3 |   WriteLn('a'); (* never closed
+   |                ^
+   |
+   = fix: insert `end`
+
+error[E0002]: unterminated comment
+  --> lex_unterminated.pas:3:17
+   |
+ 3 |   WriteLn('a'); (* never closed
+   |                 ^^ never closed
+
+error: aborting due to 2 errors

@@ -1,0 +1,50 @@
+[
+  {
+    "diagnostics": [
+      {
+        "code": "E2501",
+        "fixes": [
+          {
+            "applicability": "safe",
+            "edits": [
+              {
+                "column": 3,
+                "end": 39,
+                "end_column": 11,
+                "end_line": 4,
+                "file": "sysutils_short.pas",
+                "line": 4,
+                "original": "SysUtils",
+                "replacement": "System.SysUtils",
+                "start": 31
+              }
+            ],
+            "title": "replace with `System.SysUtils`"
+          }
+        ],
+        "message": "use the full unit name `System.SysUtils`",
+        "name": null,
+        "notes": [],
+        "primary": {
+          "column": 3,
+          "end": 39,
+          "end_column": 11,
+          "end_line": 4,
+          "file": "sysutils_short.pas",
+          "label": "",
+          "line": 4,
+          "start": 31
+        },
+        "rendered": "error[E2501]: use the full unit name `System.SysUtils`\n  --> sysutils_short.pas:4:3\n   |\n 4 |   SysUtils;\n   |   ^^^^^^^^\n   |\n   = fix: replace with `System.SysUtils`",
+        "secondary": [],
+        "severity": "error"
+      }
+    ],
+    "schema": "puy.diagnostics/1",
+    "summary": {
+      "errors": 1,
+      "notes": 0,
+      "warnings": 0
+    }
+  }
+]

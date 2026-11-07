@@ -1,0 +1,20 @@
+# Windows binaries link the MSVC C runtime (CRT) statically (requirements §9.5;
+# docs/design/platform-notes.md chapter 5). With the default dynamic linking they would not
+# start where vcruntime140.dll (the VC++ redistributable) is missing; this way they depend only
+# on DLLs shipped with the OS. CI and local builds use the same setting, so they test the same
+# form as the release binaries.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.aarch64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+# Enlarge the wasm32 stack (1MB by default). A chain of `if` at the nesting limit of 256
+# (`docs/spec/grammar.md` chapter 3) needs more than 2MB in a debug build, so use the same size as
+# the native `puy` (a 16MB thread) and the `puy-testsuite` runner
+# (`docs/design/compiler-pipeline.md` 3.11).
+[target.wasm32-wasip2]
+rustflags = ["-C", "link-arg=-zstack-size=16777216"]
+
+[target.wasm32-unknown-unknown]
+rustflags = ["-C", "link-arg=-zstack-size=16777216"]

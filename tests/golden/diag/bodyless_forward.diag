@@ -1,0 +1,72 @@
+error[E0411]: routine `Later` has no body
+  --> bodyless_forward.pas:6:11
+   |
+ 6 | procedure Later;
+   |           ^^^^^
+   |
+   = fix: insert `forward;`
+
+error[E0411]: routine `Never` has no body
+  --> bodyless_forward.pas:8:11
+   |
+ 8 | procedure Never;
+   |           ^^^^^
+   |
+   = note: write the body, or add `forward;` if the body comes later
+   = note: a body starts with `begin`
+
+error[E0411]: routine `Mismatch` has no body
+   --> bodyless_forward.pas:10:11
+    |
+ 10 | procedure Mismatch(X: Integer);
+    |           ^^^^^^^^
+    |
+    = fix: insert `forward;`
+
+error[E0411]: routine `Twice` has no body
+   --> bodyless_forward.pas:12:11
+    |
+ 12 | procedure Twice;
+    |           ^^^^^
+    |
+    = fix: insert `forward;`
+
+error[E0411]: routine `Twice` has no body
+   --> bodyless_forward.pas:14:11
+    |
+ 14 | procedure Twice;
+    |           ^^^^^
+    |
+    = fix: insert `forward;`
+
+error[E0723]: forward declaration of `Fwd` has no body
+   --> bodyless_forward.pas:16:11
+    |
+ 16 | procedure Fwd; forward;
+    |           ^^^
+
+error[E0723]: forward declaration of `FwdThenBodyless` has no body
+   --> bodyless_forward.pas:17:11
+    |
+ 17 | procedure FwdThenBodyless; forward;
+    |           ^^^^^^^^^^^^^^^
+
+error[E0411]: routine `FwdThenBodyless` has no body
+   --> bodyless_forward.pas:18:11
+    |
+ 18 | procedure FwdThenBodyless;
+    |           ^^^^^^^^^^^^^^^
+    |
+    = note: write the body, or add `forward;` if the body comes later
+    = note: a body starts with `begin`
+
+error[E0723]: body of `Mismatch` does not match its forward declaration
+   --> bodyless_forward.pas:21:11
+    |
+ 10 | procedure Mismatch(X: Integer);
+    |           -------- declared here
+...
+ 21 | procedure Mismatch; begin end;
+    |           ^^^^^^^^
+
+error: aborting due to 9 errors

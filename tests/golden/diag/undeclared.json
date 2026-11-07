@@ -1,0 +1,52 @@
+[
+  {
+    "diagnostics": [
+      {
+        "code": "E0700",
+        "fixes": [],
+        "message": "undeclared identifier `Cont`",
+        "name": null,
+        "notes": [],
+        "primary": {
+          "column": 11,
+          "end": 77,
+          "end_column": 15,
+          "end_line": 7,
+          "file": "undeclared.pas",
+          "label": "",
+          "line": 7,
+          "start": 73
+        },
+        "rendered": "error[E0700]: undeclared identifier `Cont`\n  --> undeclared.pas:7:11\n   |\n 7 |   WriteLn(Cont + 1);\n   |           ^^^^",
+        "secondary": [],
+        "severity": "error"
+      },
+      {
+        "code": "E0700",
+        "fixes": [],
+        "message": "undeclared identifier `Unknown`",
+        "name": null,
+        "notes": [],
+        "primary": {
+          "column": 3,
+          "end": 93,
+          "end_column": 10,
+          "end_line": 8,
+          "file": "undeclared.pas",
+          "label": "",
+          "line": 8,
+          "start": 86
+        },
+        "rendered": "error[E0700]: undeclared identifier `Unknown`\n  --> undeclared.pas:8:3\n   |\n 8 |   Unknown(Count);\n   |   ^^^^^^^",
+        "secondary": [],
+        "severity": "error"
+      }
+    ],
+    "schema": "puy.diagnostics/1",
+    "summary": {
+      "errors": 2,
+      "notes": 0,
+      "warnings": 0
+    }
+  }
+]

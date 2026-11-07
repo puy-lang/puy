@@ -1,0 +1,156 @@
+error[E2001]: function `F1` may return without assigning `Result`
+  --> sema_flow.pas:3:10
+   |
+ 3 | function F1: Integer;
+   |          ^^
+ 4 | begin
+ 5 | end;
+   | --- returns here
+   |
+   = note: Puy requires `Result` to be assigned on every path that returns
+   = suggestion: add `Result := 0;` at the start of the body
+
+error[E2001]: function `F2` may return without assigning `Result`
+   --> sema_flow.pas:6:10
+    |
+  6 | function F2(X: Integer): Integer;
+    |          ^^
+...
+ 10 | end;
+    | --- returns here
+    |
+    = note: Puy requires `Result` to be assigned on every path that returns
+    = suggestion: add `Result := 0;` at the start of the body
+
+error[E2001]: function `F3` may return without assigning `Result`
+   --> sema_flow.pas:11:10
+    |
+ 11 | function F3(X: Integer): Integer;
+    |          ^^
+...
+ 14 |     Exit;
+    |     ---- returns here
+    |
+    = note: Puy requires `Result` to be assigned on every path that returns
+    = suggestion: add `Result := 0;` at the start of the body
+
+error[E2002]: out parameter `A` may be read before it is assigned
+   --> sema_flow.pas:25:11
+    |
+ 23 | procedure O1(out A: Integer);
+    |                  - declared here
+ 24 | begin
+ 25 |   WriteLn(A);
+    |           ^ read here
+    |
+    = note: Puy requires an `out` parameter to be assigned before it is read
+    = fix: add `A := 0;` at the start of the body
+
+error[E2002]: out parameter `A` may not be assigned on return
+   --> sema_flow.pas:28:11
+    |
+ 28 | procedure O2(out A: Integer; X: Integer);
+    |           ^^
+    |                  - declared here
+...
+ 32 | end;
+    | --- returns here
+    |
+    = note: Puy requires an `out` parameter to be assigned on every path that returns
+    = suggestion: add `A := 0;` at the start of the body
+
+error[E2002]: out parameter `A` may not be assigned on return
+   --> sema_flow.pas:33:11
+    |
+ 33 | procedure O3(out A: Integer; X: Integer);
+    |           ^^
+    |                  - declared here
+...
+ 36 |     Exit;
+    |     ---- returns here
+    |
+    = note: Puy requires an `out` parameter to be assigned on every path that returns
+    = suggestion: add `A := 0;` at the start of the body
+
+error[E2002]: out parameter `A` may be read before it is assigned
+   --> sema_flow.pas:41:8
+    |
+ 39 | procedure O4(out A: string);
+    |                  - declared here
+ 40 | begin
+ 41 |   A := A + 'x';
+    |        ^ read here
+    |
+    = note: Puy requires an `out` parameter to be assigned before it is read
+    = fix: add `A := '';` at the start of the body
+
+error[E2002]: out parameter `A` may be read before it is assigned
+   --> sema_flow.pas:45:7
+    |
+ 43 | procedure O5(out A: Integer);
+    |                  - declared here
+ 44 | begin
+ 45 |   Inc(A);
+    |       ^ read here
+    |
+    = note: Puy requires an `out` parameter to be assigned before it is read
+    = fix: add `A := 0;` at the start of the body
+
+error[E2000]: variable `Result` may be read before it is assigned
+   --> sema_flow.pas:53:13
+    |
+ 53 |   Result := Result + 1;
+    |             ^^^^^^ read here
+    |
+    = note: Puy requires `Result` to be assigned before it is read
+    = fix: add `Result := 0;` at the start of the body
+
+error[E2000]: variable `Result` may be read before it is assigned
+   --> sema_flow.pas:57:7
+    |
+ 57 |   Inc(Result);
+    |       ^^^^^^ read here
+    |
+    = note: Puy requires `Result` to be assigned before it is read
+    = fix: add `Result := 0;` at the start of the body
+
+error[E2004]: loop variable `I` cannot be read after the loop
+   --> sema_flow.pas:64:11
+    |
+ 60 | var I, J: Integer;
+    |     - declared here
+ 61 | begin
+ 62 |   for I := 1 to 3 do
+    |       - assigned by this loop
+ 63 |     J := I;
+ 64 |   WriteLn(I, J);
+    |           ^ read here
+    |
+    = note: the value of a loop variable after the loop is undefined in Delphi, so Puy does not allow reading it
+    = note: copy the value to another variable inside the loop
+
+error[E2000]: variable `J` may be read before it is assigned
+   --> sema_flow.pas:64:14
+    |
+ 60 | var I, J: Integer;
+    |        - declared here
+...
+ 64 |   WriteLn(I, J);
+    |              ^ read here
+    |
+    = note: Puy requires every local variable to be assigned before it is read
+    = note: declare `J` on its own to give it an initial value
+
+error[E0700]: undeclared identifier `K`
+   --> sema_flow.pas:67:11
+    |
+ 65 |   for var K := 1 to 3 do
+    |           - declared here
+ 66 |     WriteLn(K);
+ 67 |   WriteLn(K);
+    |           ^
+    |
+    = note: a variable declared with `for var` is only in scope inside the loop
+    = note: copy the value to another variable inside the loop
+
+error: aborting due to 13 errors

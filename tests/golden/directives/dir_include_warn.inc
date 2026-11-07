@@ -1,0 +1,2 @@
+{$B+}
+{$IFDEF WIN32}{$ENDIF}

@@ -1,0 +1,9 @@
+error[E0413]: nesting is too deep (limit 256)
+    --> nest_if_257.pas:264:10
+     |
+ 264 |   if X > 0 then
+     |          ^
+     |
+     = note: split the expression or statement into smaller ones, using variables or routines
+
+error: aborting due to 1 error

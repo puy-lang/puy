@@ -1,0 +1,177 @@
+error[E0705]: wrong number of arguments: expected 1, found 2
+   --> sema_calls.pas:16:3
+    |
+  5 | procedure P(A: Integer);
+    |           - declared here
+...
+ 16 |   P(1, 2);
+    |   ^^^^^^^
+
+error[E0705]: wrong number of arguments: expected 1, found 0
+   --> sema_calls.pas:17:3
+    |
+  5 | procedure P(A: Integer);
+    |           - declared here
+...
+ 17 |   P();
+    |   ^^^
+
+error[E0704]: procedure `P` requires arguments
+   --> sema_calls.pas:18:3
+    |
+  5 | procedure P(A: Integer);
+    |           - declared here
+...
+ 18 |   P;
+    |   ^
+
+error[E0705]: wrong number of arguments: expected 0, found 1
+   --> sema_calls.pas:19:3
+    |
+  9 | function F: Integer;
+    |          - declared here
+...
+ 19 |   F(1);
+    |   ^^^^
+
+error[E0705]: wrong number of arguments: expected 1, found 2
+   --> sema_calls.pas:20:8
+    |
+ 20 |   I := Length(S, 1);
+    |        ^^^^^^^^^^^^
+
+error[E0705]: wrong number of arguments: expected 1, found 0
+   --> sema_calls.pas:21:8
+    |
+ 21 |   I := Length();
+    |        ^^^^^^^^
+
+error[E0705]: wrong number of arguments: expected 3, found 1
+   --> sema_calls.pas:22:8
+    |
+ 22 |   I := Copy(S);
+    |        ^^^^^^^
+
+error[E0705]: wrong number of arguments: expected 2, found 1
+   --> sema_calls.pas:23:8
+    |
+ 23 |   I := Pos(S);
+    |        ^^^^^^
+
+error[E0705]: wrong number of arguments: expected 1, found 3
+   --> sema_calls.pas:24:3
+    |
+ 24 |   Inc(I, 1, 2);
+    |   ^^^^^^^^^^^^
+
+error[E0705]: wrong number of indices: expected 1, found 2
+   --> sema_calls.pas:25:8
+    |
+ 25 |   I := S[1, 2];
+    |        ^^^^^^^
+
+error[E0720]: cannot index a value of type `Integer`
+   --> sema_calls.pas:26:8
+    |
+ 26 |   I := I[1];
+    |        ^^^^
+
+error[E0719]: index type mismatch: expected `Integer`, found `Char`
+   --> sema_calls.pas:27:13
+    |
+ 27 |   WriteLn(S['a']);
+    |             ^^^
+
+error[E0719]: index type mismatch: expected `Integer`, found `Boolean`
+   --> sema_calls.pas:28:13
+    |
+ 28 |   WriteLn(S[True]);
+    |             ^^^^
+
+error[E0717]: precision specifier requires a floating-point value
+   --> sema_calls.pas:29:11
+    |
+ 29 |   WriteLn(I:3:2);
+    |           ^^^^^
+
+error[E0725]: procedure `P` has no value
+   --> sema_calls.pas:30:11
+    |
+  5 | procedure P(A: Integer);
+    |           - declared here
+...
+ 30 |   WriteLn(P);
+    |           ^
+
+error[E0717]: width specifier is only allowed in `Write` and `WriteLn`
+   --> sema_calls.pas:31:5
+    |
+ 31 |   P(F:3);
+    |     ^^^
+
+error[E0725]: procedure `P` has no value
+   --> sema_calls.pas:32:8
+    |
+  5 | procedure P(A: Integer);
+    |           - declared here
+...
+ 32 |   I := P;
+    |        ^
+
+error[E0708]: `Integer` is a type and cannot be used as a value
+   --> sema_calls.pas:33:11
+    |
+ 33 |   WriteLn(Integer);
+    |           ^^^^^^^
+
+error[E0708]: `Integer` is a type and cannot be used as a value
+   --> sema_calls.pas:34:8
+    |
+ 34 |   I := Integer;
+    |        ^^^^^^^
+
+error[E0708]: `string` is a type and cannot be used as a value
+   --> sema_calls.pas:35:8
+    |
+ 35 |   I := string;
+    |        ^^^^^^
+
+error[E0700]: undeclared identifier `System.SysUtils`
+   --> sema_calls.pas:36:8
+    |
+ 36 |   I := System.SysUtils;
+    |        ^^^^^^^^^^^^^^^
+    |
+    = fix: add `uses System.SysUtils`
+
+error[E0710]: `Result` can only be used in a function
+   --> sema_calls.pas:37:3
+    |
+ 37 |   Result := 1;
+    |   ^^^^^^
+
+error[E0712]: `Break` outside a loop
+   --> sema_calls.pas:38:3
+    |
+ 38 |   Break;
+    |   ^^^^^
+
+error[E0712]: `Continue` outside a loop
+   --> sema_calls.pas:39:3
+    |
+ 39 |   Continue;
+    |   ^^^^^^^^
+
+error[E0711]: `Exit` with a value is not allowed in a procedure
+   --> sema_calls.pas:40:3
+    |
+ 40 |   Exit(1);
+    |   ^^^^
+
+error[E0721]: inline variable needs a type or an initial value
+   --> sema_calls.pas:41:3
+    |
+ 41 |   var N;
+    |   ^^^^^
+
+error: aborting due to 26 errors

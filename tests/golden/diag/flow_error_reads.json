@@ -1,0 +1,561 @@
+[
+  {
+    "schema": "puy.diagnostics/1",
+    "diagnostics": [
+      {
+        "code": "W0001",
+        "severity": "warning",
+        "name": "unused-variable",
+        "message": "unused variable `Z`",
+        "primary": {
+          "file": "flow_error_reads.pas",
+          "start": 186,
+          "end": 187,
+          "line": 6,
+          "column": 3,
+          "end_line": 6,
+          "end_column": 4,
+          "label": "declared here"
+        },
+        "secondary": [],
+        "notes": [
+          "remove `Z` and its assignments if the value is not needed",
+          "disable with `{$WARN unused-variable OFF}`"
+        ],
+        "fixes": [],
+        "rendered": "warning[W0001]: unused variable `Z` (unused-variable)\n  --> flow_error_reads.pas:6:3\n   |\n 6 |   Z: Integer;\n   |   ^ declared here\n   |\n   = note: remove `Z` and its assignments if the value is not needed\n   = note: disable with `{$WARN unused-variable OFF}`"
+      },
+      {
+        "code": "W0001",
+        "severity": "warning",
+        "name": "unused-variable",
+        "message": "unused variable `Y`",
+        "primary": {
+          "file": "flow_error_reads.pas",
+          "start": 210,
+          "end": 211,
+          "line": 8,
+          "column": 7,
+          "end_line": 8,
+          "end_column": 8,
+          "label": "declared here"
+        },
+        "secondary": [],
+        "notes": [
+          "disable with `{$WARN unused-variable OFF}`"
+        ],
+        "fixes": [
+          {
+            "title": "remove `Y`",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "flow_error_reads.pas",
+                "start": 204,
+                "end": 218,
+                "line": 8,
+                "column": 1,
+                "end_line": 9,
+                "end_column": 1,
+                "original": "  var Y := 2;\n",
+                "replacement": ""
+              }
+            ]
+          }
+        ],
+        "rendered": "warning[W0001]: unused variable `Y` (unused-variable)\n  --> flow_error_reads.pas:8:7\n   |\n 8 |   var Y := 2;\n   |       ^ declared here\n   |\n   = note: disable with `{$WARN unused-variable OFF}`\n   = suggestion: remove `Y`"
+      },
+      {
+        "code": "W0003",
+        "severity": "warning",
+        "name": "unreachable-code",
+        "message": "unreachable code",
+        "primary": {
+          "file": "flow_error_reads.pas",
+          "start": 238,
+          "end": 251,
+          "line": 11,
+          "column": 3,
+          "end_line": 11,
+          "end_column": 16,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "disable with `{$WARN unreachable-code OFF}`"
+        ],
+        "fixes": [],
+        "rendered": "warning[W0003]: unreachable code (unreachable-code)\n   --> flow_error_reads.pas:11:3\n    |\n 11 |   WriteLn(Y, Z);\n    |   ^^^^^^^^^^^^^\n    |\n    = note: disable with `{$WARN unreachable-code OFF}`"
+      },
+      {
+        "code": "E0700",
+        "severity": "error",
+        "name": null,
+        "message": "undeclared identifier `Foo`",
+        "primary": {
+          "file": "flow_error_reads.pas",
+          "start": 325,
+          "end": 328,
+          "line": 19,
+          "column": 8,
+          "end_line": 19,
+          "end_column": 11,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0700]: undeclared identifier `Foo`\n   --> flow_error_reads.pas:19:8\n    |\n 19 |   Q := Foo + R;\n    |        ^^^"
+      },
+      {
+        "code": "E2000",
+        "severity": "error",
+        "name": null,
+        "message": "variable `R` may be read before it is assigned",
+        "primary": {
+          "file": "flow_error_reads.pas",
+          "start": 331,
+          "end": 332,
+          "line": 19,
+          "column": 14,
+          "end_line": 19,
+          "end_column": 15,
+          "label": "read here"
+        },
+        "secondary": [
+          {
+            "file": "flow_error_reads.pas",
+            "start": 300,
+            "end": 301,
+            "line": 17,
+            "column": 3,
+            "end_line": 17,
+            "end_column": 4,
+            "label": "declared here"
+          }
+        ],
+        "notes": [
+          "Puy requires every local variable to be assigned before it is read"
+        ],
+        "fixes": [
+          {
+            "title": "add an initial value: `var R: Integer = 0;`",
+            "applicability": "safe",
+            "edits": [
+              {
+                "file": "flow_error_reads.pas",
+                "start": 310,
+                "end": 310,
+                "line": 17,
+                "column": 13,
+                "end_line": 17,
+                "end_column": 13,
+                "original": "",
+                "replacement": " = 0"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E2000]: variable `R` may be read before it is assigned\n   --> flow_error_reads.pas:19:14\n    |\n 17 |   R: Integer;\n    |   - declared here\n 18 | begin\n 19 |   Q := Foo + R;\n    |              ^ read here\n    |\n    = note: Puy requires every local variable to be assigned before it is read\n    = fix: add an initial value: `var R: Integer = 0;`"
+      },
+      {
+        "code": "E0702",
+        "severity": "error",
+        "name": null,
+        "message": "type mismatch: expected `Integer`, found `Char`",
+        "primary": {
+          "file": "flow_error_reads.pas",
+          "start": 461,
+          "end": 464,
+          "line": 26,
+          "column": 8,
+          "end_line": 26,
+          "end_column": 11,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0702]: type mismatch: expected `Integer`, found `Char`\n   --> flow_error_reads.pas:26:8\n    |\n 26 |   Exit('x');\n    |        ^^^"
+      },
+      {
+        "code": "E0700",
+        "severity": "error",
+        "name": null,
+        "message": "undeclared identifier `Foo`",
+        "primary": {
+          "file": "flow_error_reads.pas",
+          "start": 520,
+          "end": 523,
+          "line": 31,
+          "column": 8,
+          "end_line": 31,
+          "end_column": 11,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0700]: undeclared identifier `Foo`\n   --> flow_error_reads.pas:31:8\n    |\n 31 |   Exit(Foo);\n    |        ^^^"
+      },
+      {
+        "code": "E0710",
+        "severity": "error",
+        "name": null,
+        "message": "`Result` can only be used in a function",
+        "primary": {
+          "file": "flow_error_reads.pas",
+          "start": 599,
+          "end": 605,
+          "line": 37,
+          "column": 3,
+          "end_line": 37,
+          "end_column": 9,
+          "label": ""
+        },
+        "secondary": [
+          {
+            "file": "flow_error_reads.pas",
+            "start": 579,
+            "end": 589,
+            "line": 35,
+            "column": 11,
+            "end_line": 35,
+            "end_column": 21,
+            "label": "declared here"
+          }
+        ],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0710]: `Result` can only be used in a function\n   --> flow_error_reads.pas:37:3\n    |\n 35 | procedure UsesResult;\n    |           ---------- declared here\n 36 | begin\n 37 |   Result := 1;\n    |   ^^^^^^"
+      },
+      {
+        "code": "W0001",
+        "severity": "warning",
+        "name": "unused-variable",
+        "message": "unused variable `A`",
+        "primary": {
+          "file": "flow_error_reads.pas",
+          "start": 855,
+          "end": 856,
+          "line": 53,
+          "column": 3,
+          "end_line": 53,
+          "end_column": 4,
+          "label": "declared here"
+        },
+        "secondary": [],
+        "notes": [
+          "disable with `{$WARN unused-variable OFF}`"
+        ],
+        "fixes": [
+          {
+            "title": "remove `A`",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "flow_error_reads.pas",
+                "start": 855,
+                "end": 858,
+                "line": 53,
+                "column": 3,
+                "end_line": 53,
+                "end_column": 6,
+                "original": "A, ",
+                "replacement": ""
+              }
+            ]
+          }
+        ],
+        "rendered": "warning[W0001]: unused variable `A` (unused-variable)\n   --> flow_error_reads.pas:53:3\n    |\n 53 |   A, B: Integer;\n    |   ^ declared here\n    |\n    = note: disable with `{$WARN unused-variable OFF}`\n    = suggestion: remove `A`"
+      },
+      {
+        "code": "E0725",
+        "severity": "error",
+        "name": null,
+        "message": "procedure `DoIt` has no value",
+        "primary": {
+          "file": "flow_error_reads.pas",
+          "start": 954,
+          "end": 958,
+          "line": 66,
+          "column": 8,
+          "end_line": 66,
+          "end_column": 12,
+          "label": ""
+        },
+        "secondary": [
+          {
+            "file": "flow_error_reads.pas",
+            "start": 628,
+            "end": 632,
+            "line": 40,
+            "column": 11,
+            "end_line": 40,
+            "end_column": 15,
+            "label": "declared here"
+          }
+        ],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0725]: procedure `DoIt` has no value\n   --> flow_error_reads.pas:66:8\n    |\n 40 | procedure DoIt;\n    |           ---- declared here\n...\n 66 |   X := DoIt;\n    |        ^^^^"
+      },
+      {
+        "code": "E0706",
+        "severity": "error",
+        "name": null,
+        "message": "argument 1 must be a variable (parameter `A` is `var`)",
+        "primary": {
+          "file": "flow_error_reads.pas",
+          "start": 968,
+          "end": 969,
+          "line": 67,
+          "column": 9,
+          "end_line": 67,
+          "end_column": 10,
+          "label": ""
+        },
+        "secondary": [
+          {
+            "file": "flow_error_reads.pas",
+            "start": 706,
+            "end": 707,
+            "line": 45,
+            "column": 21,
+            "end_line": 45,
+            "end_column": 22,
+            "label": "declared here"
+          }
+        ],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0706]: argument 1 must be a variable (parameter `A` is `var`)\n   --> flow_error_reads.pas:67:9\n    |\n 45 | procedure ByRef(var A: Integer);\n    |                     - declared here\n...\n 67 |   ByRef(K);\n    |         ^"
+      },
+      {
+        "code": "E0706",
+        "severity": "error",
+        "name": null,
+        "message": "argument 1 must be a variable (parameter `X` is `var`)",
+        "primary": {
+          "file": "flow_error_reads.pas",
+          "start": 978,
+          "end": 979,
+          "line": 68,
+          "column": 7,
+          "end_line": 68,
+          "end_column": 8,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0706]: argument 1 must be a variable (parameter `X` is `var`)\n   --> flow_error_reads.pas:68:7\n    |\n 68 |   Dec(K);\n    |       ^"
+      },
+      {
+        "code": "E0706",
+        "severity": "error",
+        "name": null,
+        "message": "argument 1 must be a variable (parameter `X` is `out`)",
+        "primary": {
+          "file": "flow_error_reads.pas",
+          "start": 991,
+          "end": 992,
+          "line": 69,
+          "column": 10,
+          "end_line": 69,
+          "end_column": 11,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0706]: argument 1 must be a variable (parameter `X` is `out`)\n   --> flow_error_reads.pas:69:10\n    |\n 69 |   ReadLn(K);\n    |          ^"
+      },
+      {
+        "code": "W0001",
+        "severity": "warning",
+        "name": "unused-variable",
+        "message": "unused variable `VV`",
+        "primary": {
+          "file": "flow_error_reads.pas",
+          "start": 1047,
+          "end": 1049,
+          "line": 71,
+          "column": 7,
+          "end_line": 71,
+          "end_column": 9,
+          "label": "declared here"
+        },
+        "secondary": [],
+        "notes": [
+          "disable with `{$WARN unused-variable OFF}`"
+        ],
+        "fixes": [
+          {
+            "title": "remove `VV`",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "flow_error_reads.pas",
+                "start": 1041,
+                "end": 1057,
+                "line": 71,
+                "column": 1,
+                "end_line": 72,
+                "end_column": 1,
+                "original": "  var VV: DoIt;\n",
+                "replacement": ""
+              }
+            ]
+          }
+        ],
+        "rendered": "warning[W0001]: unused variable `VV` (unused-variable)\n   --> flow_error_reads.pas:71:7\n    |\n 71 |   var VV: DoIt;\n    |       ^^ declared here\n    |\n    = note: disable with `{$WARN unused-variable OFF}`\n    = suggestion: remove `VV`"
+      },
+      {
+        "code": "E0708",
+        "severity": "error",
+        "name": null,
+        "message": "`DoIt` is not a type",
+        "primary": {
+          "file": "flow_error_reads.pas",
+          "start": 1051,
+          "end": 1055,
+          "line": 71,
+          "column": 11,
+          "end_line": 71,
+          "end_column": 15,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0708]: `DoIt` is not a type\n   --> flow_error_reads.pas:71:11\n    |\n 71 |   var VV: DoIt;\n    |           ^^^^"
+      },
+      {
+        "code": "W0001",
+        "severity": "warning",
+        "name": "unused-variable",
+        "message": "unused variable `WW`",
+        "primary": {
+          "file": "flow_error_reads.pas",
+          "start": 1063,
+          "end": 1065,
+          "line": 72,
+          "column": 7,
+          "end_line": 72,
+          "end_column": 9,
+          "label": "declared here"
+        },
+        "secondary": [],
+        "notes": [
+          "disable with `{$WARN unused-variable OFF}`"
+        ],
+        "fixes": [
+          {
+            "title": "remove `WW`",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "flow_error_reads.pas",
+                "start": 1057,
+                "end": 1075,
+                "line": 72,
+                "column": 1,
+                "end_line": 73,
+                "end_column": 1,
+                "original": "  var WW: System;\n",
+                "replacement": ""
+              }
+            ]
+          }
+        ],
+        "rendered": "warning[W0001]: unused variable `WW` (unused-variable)\n   --> flow_error_reads.pas:72:7\n    |\n 72 |   var WW: System;\n    |       ^^ declared here\n    |\n    = note: disable with `{$WARN unused-variable OFF}`\n    = suggestion: remove `WW`"
+      },
+      {
+        "code": "E0708",
+        "severity": "error",
+        "name": null,
+        "message": "`System` is not a type",
+        "primary": {
+          "file": "flow_error_reads.pas",
+          "start": 1067,
+          "end": 1073,
+          "line": 72,
+          "column": 11,
+          "end_line": 72,
+          "end_column": 17,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0708]: `System` is not a type\n   --> flow_error_reads.pas:72:11\n    |\n 72 |   var WW: System;\n    |           ^^^^^^"
+      },
+      {
+        "code": "W0001",
+        "severity": "warning",
+        "name": "unused-variable",
+        "message": "unused variable `ZZ`",
+        "primary": {
+          "file": "flow_error_reads.pas",
+          "start": 1081,
+          "end": 1083,
+          "line": 73,
+          "column": 7,
+          "end_line": 73,
+          "end_column": 9,
+          "label": "declared here"
+        },
+        "secondary": [],
+        "notes": [
+          "disable with `{$WARN unused-variable OFF}`"
+        ],
+        "fixes": [
+          {
+            "title": "remove `ZZ`",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "flow_error_reads.pas",
+                "start": 1075,
+                "end": 1088,
+                "line": 73,
+                "column": 1,
+                "end_line": 74,
+                "end_column": 1,
+                "original": "  var ZZ: K;\n",
+                "replacement": ""
+              }
+            ]
+          }
+        ],
+        "rendered": "warning[W0001]: unused variable `ZZ` (unused-variable)\n   --> flow_error_reads.pas:73:7\n    |\n 73 |   var ZZ: K;\n    |       ^^ declared here\n    |\n    = note: disable with `{$WARN unused-variable OFF}`\n    = suggestion: remove `ZZ`"
+      },
+      {
+        "code": "E0708",
+        "severity": "error",
+        "name": null,
+        "message": "`K` is not a type",
+        "primary": {
+          "file": "flow_error_reads.pas",
+          "start": 1085,
+          "end": 1086,
+          "line": 73,
+          "column": 11,
+          "end_line": 73,
+          "end_column": 12,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0708]: `K` is not a type\n   --> flow_error_reads.pas:73:11\n    |\n 73 |   var ZZ: K;\n    |           ^"
+      }
+    ],
+    "summary": {
+      "errors": 12,
+      "warnings": 7,
+      "notes": 0
+    }
+  }
+]

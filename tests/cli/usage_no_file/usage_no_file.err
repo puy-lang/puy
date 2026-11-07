@@ -1,0 +1,21 @@
+error: `run` needs a file
+
+Usage: puy <command> [options] [args]
+       puy [options] <file> [args...]        (same as `puy run`)
+       puy [options] -e '<statements>' [args...]
+
+Commands:
+  run <file|-> [args...]   Compile and run a program (`-` reads the source from stdin)
+  check <file|->           Type-check only (`--dump tokens|cst|hir|bytecode` prints a stage)
+  fix <file>               Apply safe fixes to the file
+  explain <code>           Explain an error code
+
+Options:
+  --format text|json       Output format for diagnostics (default: text)
+  --color auto|always|never
+  --define NAME            Define a conditional symbol (repeatable)
+  --stdout-buffering auto|line|full|none
+  --keep-line-endings      `fix`: keep the file's line endings
+  -V, --version            Print the version
+  -h, --help               Print this help
+

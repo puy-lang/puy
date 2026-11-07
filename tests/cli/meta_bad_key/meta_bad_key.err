@@ -1,0 +1,10 @@
+error[E2507]: invalid inline metadata: unknown key `name`
+  --> meta_bad_key.pas:1:1
+   |
+ 1 | (*! puy
+   | ^^^^^^^
+...
+ 4 | *)
+   | ^^
+
+error: aborting due to 1 error

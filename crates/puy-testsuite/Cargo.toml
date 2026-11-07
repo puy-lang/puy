@@ -1,0 +1,24 @@
+[package]
+name = "puy-testsuite"
+description = "Runner for the diff / golden / lifetime test cases under tests/ (not published)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+puy-core.workspace = true
+puy-host.workspace = true
+
+[dev-dependencies]
+serde_json = { workspace = true, features = ["preserve_order"] }
+
+# Records FPC output (native only; docs/design/testing.md 3.4)
+[[bin]]
+name = "record-fpc"
+path = "src/bin/record_fpc.rs"

@@ -1,0 +1,9 @@
+error[E0406]: missing `.` after the final `end`
+  --> syntax_no_dot.pas:4:4
+   |
+ 4 | end
+   |    ^
+   |
+   = fix: insert `.`
+
+error: aborting due to 1 error

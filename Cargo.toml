@@ -1,0 +1,34 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+rust-version = "1.99"
+repository = "https://github.com/puy-lang/puy"
+license = "MIT"
+
+[workspace.dependencies]
+# crates.io needs a version on each path dependency; keep it equal to `workspace.package.version`.
+# puy-testsuite is not published and only used as a dev-dependency, so it has no version
+# (`cargo publish` drops such dev-dependencies).
+puy-core = { path = "crates/puy-core", version = "0.0.1" }
+puy-host = { path = "crates/puy-host", version = "0.0.1" }
+puy-fmt = { path = "crates/puy-fmt", version = "0.0.1" }
+puy-runtime-native = { path = "crates/puy-runtime-native", version = "0.0.1" }
+puy-runtime-wasi = { path = "crates/puy-runtime-wasi", version = "0.0.1" }
+puy-testsuite = { path = "crates/puy-testsuite" }
+
+# The CST of puy-core (docs/design/compiler-pipeline.md 3.1). MIT / Apache-2.0. Works on WASM
+rowan = "0.16.1"
+# The source of randomness for the runtimes (docs/design/platform-notes.md chapter 3). MIT / Apache-2.0
+getrandom = "0.4.3"
+# Lets the test runner compare `.json` expectations as parsed values (dev-dependency)
+serde_json = "1.0.154"
+
+# WASM assumes panic=abort (requirements §5.10, §14.3)
+[profile.release]
+panic = "abort"
+lto = true
+codegen-units = 1

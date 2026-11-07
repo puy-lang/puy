@@ -1,0 +1,60 @@
+error[E2500]: unit `System` is already used
+  --> recover_misc.pas:7:6
+   |
+ 7 | uses System.;
+   |      ^^^^^^
+
+error[E0405]: expected an identifier
+  --> recover_misc.pas:7:13
+   |
+ 7 | uses System.;
+   |             ^
+   |             - found here
+
+error[E3200]: `reference to` is not supported yet (planned for M3)
+   --> recover_misc.pas:10:6
+    |
+ 10 |   P: reference to procedure(X: Integer);
+    |      ^^^^^^^^^
+
+error[E0006]: non-ASCII character in identifier
+   --> recover_misc.pas:12:6
+    |
+ 12 |   Café: Integer;
+    |      ^
+    |
+    = note: identifiers are limited to ASCII letters, digits and `_`
+
+error[E0006]: non-ASCII characters in identifier
+   --> recover_misc.pas:13:3
+    |
+ 13 |   あいう: Integer;
+    |   ^^^
+    |
+    = note: identifiers are limited to ASCII letters, digits and `_`
+
+error[E3200]: `1._5` is not supported yet (planned for M3)
+   --> recover_misc.pas:16:8
+    |
+ 16 |   N := 1._5;
+    |        ^^^^
+
+error[E3200]: `1.Foo` is not supported yet (planned for M3)
+   --> recover_misc.pas:17:8
+    |
+ 17 |   N := 1.Foo;
+    |        ^^^^^
+
+error[E3200]: `raise` is not supported yet (planned for M2)
+   --> recover_misc.pas:18:3
+    |
+ 18 |   raise Exception.Create('x');
+    |   ^^^^^
+
+error[E0008]: invalid character code after `#`
+   --> recover_misc.pas:19:8
+    |
+ 19 |   S := #$;
+    |        ^^
+
+error: aborting due to 9 errors

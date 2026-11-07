@@ -1,0 +1,150 @@
+warning[W0001]: unused variable `Z` (unused-variable)
+  --> flow_error_reads.pas:6:3
+   |
+ 6 |   Z: Integer;
+   |   ^ declared here
+   |
+   = note: remove `Z` and its assignments if the value is not needed
+   = note: disable with `{$WARN unused-variable OFF}`
+
+warning[W0001]: unused variable `Y` (unused-variable)
+  --> flow_error_reads.pas:8:7
+   |
+ 8 |   var Y := 2;
+   |       ^ declared here
+   |
+   = note: disable with `{$WARN unused-variable OFF}`
+   = suggestion: remove `Y`
+
+warning[W0003]: unreachable code (unreachable-code)
+   --> flow_error_reads.pas:11:3
+    |
+ 11 |   WriteLn(Y, Z);
+    |   ^^^^^^^^^^^^^
+    |
+    = note: disable with `{$WARN unreachable-code OFF}`
+
+error[E0700]: undeclared identifier `Foo`
+   --> flow_error_reads.pas:19:8
+    |
+ 19 |   Q := Foo + R;
+    |        ^^^
+
+error[E2000]: variable `R` may be read before it is assigned
+   --> flow_error_reads.pas:19:14
+    |
+ 17 |   R: Integer;
+    |   - declared here
+ 18 | begin
+ 19 |   Q := Foo + R;
+    |              ^ read here
+    |
+    = note: Puy requires every local variable to be assigned before it is read
+    = fix: add an initial value: `var R: Integer = 0;`
+
+error[E0702]: type mismatch: expected `Integer`, found `Char`
+   --> flow_error_reads.pas:26:8
+    |
+ 26 |   Exit('x');
+    |        ^^^
+
+error[E0700]: undeclared identifier `Foo`
+   --> flow_error_reads.pas:31:8
+    |
+ 31 |   Exit(Foo);
+    |        ^^^
+
+error[E0710]: `Result` can only be used in a function
+   --> flow_error_reads.pas:37:3
+    |
+ 35 | procedure UsesResult;
+    |           ---------- declared here
+ 36 | begin
+ 37 |   Result := 1;
+    |   ^^^^^^
+
+warning[W0001]: unused variable `A` (unused-variable)
+   --> flow_error_reads.pas:53:3
+    |
+ 53 |   A, B: Integer;
+    |   ^ declared here
+    |
+    = note: disable with `{$WARN unused-variable OFF}`
+    = suggestion: remove `A`
+
+error[E0725]: procedure `DoIt` has no value
+   --> flow_error_reads.pas:66:8
+    |
+ 40 | procedure DoIt;
+    |           ---- declared here
+...
+ 66 |   X := DoIt;
+    |        ^^^^
+
+error[E0706]: argument 1 must be a variable (parameter `A` is `var`)
+   --> flow_error_reads.pas:67:9
+    |
+ 45 | procedure ByRef(var A: Integer);
+    |                     - declared here
+...
+ 67 |   ByRef(K);
+    |         ^
+
+error[E0706]: argument 1 must be a variable (parameter `X` is `var`)
+   --> flow_error_reads.pas:68:7
+    |
+ 68 |   Dec(K);
+    |       ^
+
+error[E0706]: argument 1 must be a variable (parameter `X` is `out`)
+   --> flow_error_reads.pas:69:10
+    |
+ 69 |   ReadLn(K);
+    |          ^
+
+warning[W0001]: unused variable `VV` (unused-variable)
+   --> flow_error_reads.pas:71:7
+    |
+ 71 |   var VV: DoIt;
+    |       ^^ declared here
+    |
+    = note: disable with `{$WARN unused-variable OFF}`
+    = suggestion: remove `VV`
+
+error[E0708]: `DoIt` is not a type
+   --> flow_error_reads.pas:71:11
+    |
+ 71 |   var VV: DoIt;
+    |           ^^^^
+
+warning[W0001]: unused variable `WW` (unused-variable)
+   --> flow_error_reads.pas:72:7
+    |
+ 72 |   var WW: System;
+    |       ^^ declared here
+    |
+    = note: disable with `{$WARN unused-variable OFF}`
+    = suggestion: remove `WW`
+
+error[E0708]: `System` is not a type
+   --> flow_error_reads.pas:72:11
+    |
+ 72 |   var WW: System;
+    |           ^^^^^^
+
+warning[W0001]: unused variable `ZZ` (unused-variable)
+   --> flow_error_reads.pas:73:7
+    |
+ 73 |   var ZZ: K;
+    |       ^^ declared here
+    |
+    = note: disable with `{$WARN unused-variable OFF}`
+    = suggestion: remove `ZZ`
+
+error[E0708]: `K` is not a type
+   --> flow_error_reads.pas:73:11
+    |
+ 73 |   var ZZ: K;
+    |           ^
+
+error: aborting due to 12 errors; 7 warnings emitted

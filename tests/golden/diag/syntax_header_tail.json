@@ -1,0 +1,134 @@
+[
+  {
+    "schema": "puy.diagnostics/1",
+    "diagnostics": [
+      {
+        "code": "E0400",
+        "severity": "error",
+        "name": null,
+        "message": "expected `;`, found `foo`",
+        "primary": {
+          "file": "syntax_header_tail.pas",
+          "start": 40,
+          "end": 43,
+          "line": 1,
+          "column": 41,
+          "end_line": 1,
+          "end_column": 44,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0400]: expected `;`, found `foo`\n  --> syntax_header_tail.pas:1:41\n   |\n 1 | program SyntaxHeaderTail(Input, Output) foo;\n   |                                         ^^^"
+      },
+      {
+        "code": "E0414",
+        "severity": "error",
+        "name": null,
+        "message": "`uses` must come before declarations and statements",
+        "primary": {
+          "file": "syntax_header_tail.pas",
+          "start": 83,
+          "end": 87,
+          "line": 4,
+          "column": 1,
+          "end_line": 4,
+          "end_column": 5,
+          "label": ""
+        },
+        "secondary": [
+          {
+            "file": "syntax_header_tail.pas",
+            "start": 45,
+            "end": 49,
+            "line": 2,
+            "column": 1,
+            "end_line": 2,
+            "end_column": 5,
+            "label": "first `uses` here"
+          }
+        ],
+        "notes": [],
+        "fixes": [
+          {
+            "title": "move the items to the first `uses`",
+            "applicability": "safe",
+            "edits": [
+              {
+                "file": "syntax_header_tail.pas",
+                "start": 65,
+                "end": 65,
+                "line": 2,
+                "column": 21,
+                "end_line": 2,
+                "end_column": 21,
+                "original": "",
+                "replacement": ", Foo"
+              },
+              {
+                "file": "syntax_header_tail.pas",
+                "start": 83,
+                "end": 116,
+                "line": 4,
+                "column": 1,
+                "end_line": 5,
+                "end_column": 1,
+                "original": "uses Foo, System.SysUtils as SU;\n",
+                "replacement": ""
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E0414]: `uses` must come before declarations and statements\n  --> syntax_header_tail.pas:4:1\n   |\n 2 | uses System.SysUtils;\n   | ---- first `uses` here\n 3 | var X: Integer;\n 4 | uses Foo, System.SysUtils as SU;\n   | ^^^^\n   |\n   = fix: move the items to the first `uses`"
+      },
+      {
+        "code": "E2500",
+        "severity": "error",
+        "name": null,
+        "message": "unit `Foo` not found",
+        "primary": {
+          "file": "syntax_header_tail.pas",
+          "start": 88,
+          "end": 91,
+          "line": 4,
+          "column": 6,
+          "end_line": 4,
+          "end_column": 9,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "only `System.SysUtils` can be used in this release; more units of the standard library come with later releases"
+        ],
+        "fixes": [],
+        "rendered": "error[E2500]: unit `Foo` not found\n  --> syntax_header_tail.pas:4:6\n   |\n 4 | uses Foo, System.SysUtils as SU;\n   |      ^^^\n   |\n   = note: only `System.SysUtils` can be used in this release; more units of the standard library come with later releases"
+      },
+      {
+        "code": "E2500",
+        "severity": "error",
+        "name": null,
+        "message": "unit `System.SysUtils` is already used",
+        "primary": {
+          "file": "syntax_header_tail.pas",
+          "start": 93,
+          "end": 108,
+          "line": 4,
+          "column": 11,
+          "end_line": 4,
+          "end_column": 26,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E2500]: unit `System.SysUtils` is already used\n  --> syntax_header_tail.pas:4:11\n   |\n 4 | uses Foo, System.SysUtils as SU;\n   |           ^^^^^^^^^^^^^^^"
+      }
+    ],
+    "summary": {
+      "errors": 4,
+      "warnings": 0,
+      "notes": 0
+    }
+  }
+]

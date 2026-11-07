@@ -1,0 +1,17 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.rs]
+indent_style = space
+indent_size = 4
+
+# Test cases keep their line endings and trailing whitespace as they are (docs/design/testing.md chapter 2)
+[tests/**]
+end_of_line = unset
+insert_final_newline = unset
+trim_trailing_whitespace = false

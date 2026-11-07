@@ -1,0 +1,2 @@
+error: uncaught exception ERangeError: value 65536 is out of range for Char (0..65535)
+  at CharRange.<main> (char_range.pas:11)

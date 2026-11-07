@@ -1,0 +1,4 @@
+error: uncaught exception EDivByZero: division by zero
+  at DivZero.Divide (div_zero.pas:5)
+  at DivZero.Run (div_zero.pas:11)
+  at DivZero.<main> (div_zero.pas:16)

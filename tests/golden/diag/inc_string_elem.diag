@@ -1,0 +1,19 @@
+error[E0706]: argument 1 must be a variable (parameter `X` is `var`)
+  --> inc_string_elem.pas:9:7
+   |
+ 9 |   Inc(S[1]);
+   |       ^^^^
+
+error[E0706]: argument 1 must be a variable (parameter `X` is `var`)
+   --> inc_string_elem.pas:10:7
+    |
+ 10 |   Dec(S[2], 1);
+    |       ^^^^
+
+error[E0706]: argument 1 must be a variable (parameter `X` is `out`)
+   --> inc_string_elem.pas:11:10
+    |
+ 11 |   ReadLn(S[1]);
+    |          ^^^^
+
+error: aborting due to 3 errors

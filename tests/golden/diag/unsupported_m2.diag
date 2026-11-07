@@ -1,0 +1,123 @@
+error[E3200]: nested routines are not supported yet (planned for M2)
+  --> unsupported_m2.pas:5:3
+   |
+ 5 |   procedure Inner; begin end;
+   |   ^^^^^^^^^
+
+error[E3200]: default parameter values are not supported yet (planned for M2)
+   --> unsupported_m2.pas:11:26
+    |
+ 11 | procedure Def(X: Integer = 1); begin end;
+    |                          ^
+
+error[E3200]: `overload` is not supported yet (planned for M2)
+   --> unsupported_m2.pas:12:29
+    |
+ 12 | procedure Over(X: Integer); overload; deprecated;
+    |                             ^^^^^^^^
+
+error[E3200]: `deprecated` is not supported yet (planned for M2)
+   --> unsupported_m2.pas:12:39
+    |
+ 12 | procedure Over(X: Integer); overload; deprecated;
+    |                                       ^^^^^^^^^^
+
+error[E3200]: `Double` is not supported yet (planned for M2)
+   --> unsupported_m2.pas:19:6
+    |
+ 19 |   D: Double;
+    |      ^^^^^^
+
+error[E3200]: `case` is not supported yet (planned for M2)
+   --> unsupported_m2.pas:21:3
+    |
+ 21 |   case I of 1: WriteLn('one'); end;
+    |   ^^^^
+
+error[E3200]: `try` is not supported yet (planned for M2)
+   --> unsupported_m2.pas:22:3
+    |
+ 22 |   try
+    |   ^^^
+
+error[E3200]: `raise` is not supported yet (planned for M2)
+   --> unsupported_m2.pas:26:3
+    |
+ 26 |   raise;
+    |   ^^^^^
+
+error[E3200]: `/` is not supported yet (planned for M2)
+   --> unsupported_m2.pas:27:10
+    |
+ 27 |   Z := 7 / 2;
+    |          ^
+    |
+    = note: use `div` for the integer quotient
+
+error[E3200]: floating-point literals are not supported yet (planned for M2)
+   --> unsupported_m2.pas:28:8
+    |
+ 28 |   Z := 1.5;
+    |        ^^^
+
+error[E3200]: `in` is not supported yet (planned for M2)
+   --> unsupported_m2.pas:29:8
+    |
+ 29 |   if 1 in [1, 2] then WriteLn('in');
+    |        ^^
+
+error[E3200]: set and array constructors are not supported yet (planned for M2)
+   --> unsupported_m2.pas:29:11
+    |
+ 29 |   if 1 in [1, 2] then WriteLn('in');
+    |           ^
+
+error[E3200]: `Low` is not supported yet (planned for M2)
+   --> unsupported_m2.pas:30:8
+    |
+ 30 |   Z := Low(Integer) + Succ(1);
+    |        ^^^
+
+error[E3200]: `Succ` is not supported yet (planned for M2)
+   --> unsupported_m2.pas:30:23
+    |
+ 30 |   Z := Low(Integer) + Succ(1);
+    |                       ^^^^
+
+error[E3200]: `for..in` is not supported yet (planned for M2)
+   --> unsupported_m2.pas:31:13
+    |
+ 31 |   for var E in S do WriteLn(E);
+    |             ^^
+
+error[E3200]: `I.ToString` is not supported yet (planned for M3)
+   --> unsupported_m2.pas:32:8
+    |
+ 32 |   Z := I.ToString;
+    |        ^^^^^^^^^^
+
+error[E3200]: `ErrOutput` is not supported yet (planned for M2)
+   --> unsupported_m2.pas:33:11
+    |
+ 33 |   WriteLn(ErrOutput, 'x');
+    |           ^^^^^^^^^
+
+error[E3200]: `ReadLn` with several arguments is not supported yet (planned for M2)
+   --> unsupported_m2.pas:34:3
+    |
+ 34 |   ReadLn(S, S);
+    |   ^^^^^^^^^^^^
+
+error[E3200]: `Format` is not supported yet (planned for M2)
+   --> unsupported_m2.pas:35:11
+    |
+ 35 |   WriteLn(Format('%d', [1]));
+    |           ^^^^^^
+
+error[E3200]: set and array constructors are not supported yet (planned for M2)
+   --> unsupported_m2.pas:35:24
+    |
+ 35 |   WriteLn(Format('%d', [1]));
+    |                        ^
+
+error: aborting due to 20 errors

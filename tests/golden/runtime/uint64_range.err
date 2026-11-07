@@ -1,0 +1,2 @@
+error: uncaught exception ERangeError: value 18446744073709551615 is out of range for Int64 (-9223372036854775808..9223372036854775807)
+  at UInt64Range.<main> (uint64_range.pas:17)

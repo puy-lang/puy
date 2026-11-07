@@ -1,0 +1,21 @@
+warning[W0004]: directive `{$B+}` is ignored (ignored-directive)
+  --> dir_include_warn.inc:1:1
+   |
+ 1 | {$B+}
+   | ^^^^^
+   |
+   = note: boolean operators in Puy always short-circuit
+   = note: disable with `{$WARN ignored-directive OFF}`
+   = fix: remove `{$B+}`
+
+warning[W0007]: conditional symbol `WIN32` is never defined in Puy (platform-symbol)
+  --> dir_include_warn.inc:2:9
+   |
+ 2 | {$IFDEF WIN32}{$ENDIF}
+   |         ^^^^^
+   |
+   = note: a Puy program runs unchanged on every platform, so OS and CPU symbols are never defined
+   = note: check the platform at run time with `TOSVersion.Platform`
+   = note: disable with `{$WARN platform-symbol OFF}`
+
+warning: 2 warnings emitted

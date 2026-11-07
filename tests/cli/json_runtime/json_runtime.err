@@ -1,0 +1,1 @@
+{"schema":"puy.exception/1","class":"EDivByZero","message":"division by zero","stack":[{"function":"JsonRuntime.<main>","file":"json_runtime.pas","line":6}],"omitted":0}

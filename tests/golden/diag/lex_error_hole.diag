@@ -1,0 +1,59 @@
+error[E0007]: string literal must not span lines
+  --> lex_error_hole.pas:7:8
+   |
+ 7 |   S := 'abc;
+   |        ^^^^^
+   |
+   = note: use `'''` for a string that spans lines
+
+error[E0007]: string literal must not span lines
+  --> lex_error_hole.pas:9:8
+   |
+ 9 |   S := 'abc
+   |        ^^^^
+   |
+   = note: use `'''` for a string that spans lines
+
+error[E0004]: invalid numeric literal
+   --> lex_error_hole.pas:11:12
+    |
+ 11 |   N := Chr(0x3042);
+    |            ^^^^^^
+
+error[E0003]: invalid character `$`
+   --> lex_error_hole.pas:12:8
+    |
+ 12 |   N := $G + 1;
+    |        ^
+
+error[E0004]: invalid numeric literal
+   --> lex_error_hole.pas:13:14
+    |
+ 13 |   WriteLn(N, 0x12);
+    |              ^^^^
+
+error[E0006]: non-ASCII character in identifier
+   --> lex_error_hole.pas:15:3
+    |
+ 15 |   あ := 1;
+    |   ^
+    |
+    = note: identifiers are limited to ASCII letters, digits and `_`
+
+error[E0006]: non-ASCII character in identifier
+   --> lex_error_hole.pas:16:3
+    |
+ 16 |   あ(1, N);
+    |   ^
+    |
+    = note: identifiers are limited to ASCII letters, digits and `_`
+
+error[E0006]: non-ASCII character in identifier
+   --> lex_error_hole.pas:17:3
+    |
+ 17 |   あ
+    |   ^
+    |
+    = note: identifiers are limited to ASCII letters, digits and `_`
+
+error: aborting due to 8 errors

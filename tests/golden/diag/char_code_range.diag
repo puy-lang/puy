@@ -1,0 +1,13 @@
+error[E0008]: invalid character code after `#`
+  --> char_code_range.pas:6:11
+   |
+ 6 |   WriteLn(#$110000);
+   |           ^^^^^^^^
+
+error[E0008]: invalid character code after `#`
+  --> char_code_range.pas:7:11
+   |
+ 7 |   WriteLn(#1114112);
+   |           ^^^^^^^^
+
+error: aborting due to 2 errors

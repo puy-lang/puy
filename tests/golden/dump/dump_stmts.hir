@@ -1,0 +1,237 @@
+program DumpStmts uses=System.SysUtils
+.global g0 G: Integer
+.global g1 S: string
+.routine f0 Square(X: Integer): Integer
+  .var v0 X: Integer param
+  .var v1 Result: Integer result
+  assign @13 R+
+    var v1 Result
+    binary Integer
+      var v0 X: Integer
+      * Integer int:Integer
+        var v0 X: Integer
+.routine f1 Swap(var A: Integer; var B: Integer; const Tag: string; out Count: Byte)
+  .var v0 A: Integer var param
+  .var v1 B: Integer var param
+  .var v2 Tag: string const param
+  .var v3 Count: Byte out param
+  .var v4 T: Integer local
+  assign @20 R+
+    var v4 T
+    var v0 A: Integer
+  assign @21 R+
+    var v0 A
+    var v1 B: Integer
+  assign @22 R+
+    var v1 B
+    var v4 T: Integer
+  assign @23 R+
+    var v3 Count
+    convert narrow Byte R+
+      builtin Length Integer
+        var v2 Tag: string
+.routine <init>
+  assign @8 R+ init
+    global g0 G
+    const Integer 10
+.routine <main>
+  .var v0 B: Byte local
+  .var v1 C: Char local
+  .var v2 U: UInt64 local
+  .var v3 -: Int64 hidden
+  .var v4 I: Char for var
+  .var v5 J: Integer for var
+  assign @27 R+
+    global g1 S
+    const string "abc"
+  assign @28 R+
+    index
+      global g1 S
+      const Integer 1
+    const Char #121
+  assign @29 R+ init
+    var v0 B
+    const Byte 1
+  assign @30 R+ init
+    var v1 C
+    index Char
+      global g1 S: string
+      const Integer 2
+  assign @31 R+ init
+    var v2 U
+    const UInt64 1
+  inc @32 calc=Integer Q+R+
+    var v0 B
+    const Integer 2
+  dec @33 calc=Integer Q+R+
+    global g0 G
+  expr @34
+    call f1 Swap: -
+      ref
+        global g0 G
+      ref
+        global g0 G
+      global g1 S: string
+      out
+        var v0 B
+  if @35
+    cond
+      binary Boolean
+        binary Boolean
+          global g0 G: Integer
+          > Boolean int:Integer
+            const Integer 0
+        and Boolean bool
+          binary Boolean
+            var v0 B: Byte
+            < Boolean int:Integer
+              const Integer 3
+    then
+      writeln @36
+        arg
+          call f0 Square: Integer
+            global g0 G: Integer
+        width
+          const Int64 5
+        arg
+          const Char #32
+        arg
+          builtin UIntToStr string
+            var v2 U: UInt64
+        arg
+          convert int->bool
+            global g0 G: Integer
+        arg
+          convert ord->Integer
+            var v1 C: Char
+        arg
+          unary neg Integer int:Integer
+            global g0 G: Integer
+        arg
+          unary not Integer int:Integer
+            var v0 B: Byte
+    cond
+      binary Boolean
+        global g1 S: string
+        = Boolean str
+          convert char->string
+            var v1 C: Char
+    then
+      halt @38
+        const Integer 1
+    else
+      exit @40
+  while @41
+    cond
+      binary Boolean
+        global g0 G: Integer
+        > Boolean int:Integer
+          const Integer 0
+    body
+      dec @42 calc=Integer Q+R+
+        global g0 G
+  repeat @43
+    body
+      inc @44 calc=Integer Q+R+
+        global g0 G
+      if @45
+        cond
+          binary Boolean
+            global g0 G: Integer
+            = Boolean int:Integer
+              const Integer 2
+        then
+          break @45
+    until
+      binary Boolean
+        global g0 G: Integer
+        >= Boolean int:Integer
+          const Integer 3
+  for @47 to Q+R+
+    global g0 G counter=v3
+    from
+      const Integer 1
+    to
+      const Integer 3
+    body
+      write @48
+        arg
+          global g0 G: Integer
+  for @49 to Q+R+
+    var v4 I
+    from
+      const Char #97
+    to
+      const Char #99
+    body
+      continue @50
+  for @51 downto Q+R+
+    var v5 J
+    from
+      const Integer 3
+    to
+      const Integer 1
+    body
+      block @52
+  readln @53
+    global g1 S
+  readln @54
+  assert @55 "G < 5"
+    binary Boolean
+      global g0 G: Integer
+      < Boolean int:Integer
+        const Integer 5
+    binary string
+      const string "G is "
+      + string str
+        builtin IntToStr string
+          global g0 G: Int64
+  nop @58
+  nop @60
+  writeln @61
+    arg
+      builtin Copy string
+        global g1 S: string
+        const Integer 1
+        const Integer 1
+    arg
+      builtin Pos Integer
+        const string "a"
+        global g1 S: string
+    arg
+      builtin Abs Integer
+        global g0 G: Integer
+    arg
+      builtin ParamCount Integer
+    arg
+      builtin ParamStr string
+        const Integer 0
+    arg
+      builtin UpperCase string
+        global g1 S: string
+    arg
+      builtin Trim string
+        global g1 S: string
+    arg
+      builtin GetEnvironmentVariable string
+        const string "HOME"
+    arg
+      binary Int64
+        builtin StrToIntDef Integer
+          global g1 S: string
+          const Integer 0
+        + Int64 int:Int64
+          builtin StrToInt64 Int64
+            global g1 S: string
+        + Int64 int:Int64
+          builtin StrToInt Integer
+            global g1 S: string
+    arg
+      builtin LowerCase string
+        global g1 S: string
+    arg
+      const string "😀"
+    arg
+      const Char #55296
+    arg
+      const string "\u{d800}\"x"

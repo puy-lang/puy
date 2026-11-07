@@ -1,0 +1,39 @@
+warning[W0004]: `X-` in directive `{$R+,X-}` is ignored (ignored-directive)
+  --> dir_comma_partial.pas:5:1
+   |
+ 5 | {$R+,X-}
+   | ^^^^^^^^
+   |
+   = note: Puy compiles to bytecode for a VM, where this directive has no meaning
+   = note: disable with `{$WARN ignored-directive OFF}`
+   = fix: replace with `{$R+}`
+
+warning[W0004]: `X-` in directive `{$X-,R+}` is ignored (ignored-directive)
+  --> dir_comma_partial.pas:6:1
+   |
+ 6 | {$X-,R+}
+   | ^^^^^^^^
+   |
+   = note: Puy compiles to bytecode for a VM, where this directive has no meaning
+   = note: disable with `{$WARN ignored-directive OFF}`
+   = fix: replace with `{$R+}`
+
+warning[W0004]: directive `{$X-,Y+}` is ignored (ignored-directive)
+  --> dir_comma_partial.pas:7:1
+   |
+ 7 | {$X-,Y+}
+   | ^^^^^^^^
+   |
+   = note: Puy compiles to bytecode for a VM, where this directive has no meaning
+   = note: disable with `{$WARN ignored-directive OFF}`
+   = fix: remove `{$X-,Y+}`
+
+note[W0008]: user hint: R on (user-message)
+  --> dir_comma_partial.pas:8:12
+   |
+ 8 | {$IFOPT R+}{$MESSAGE HINT 'R on'}{$ENDIF}
+   |            ^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: disable with `{$WARN user-message OFF}`
+
+warning: 3 warnings emitted

@@ -1,0 +1,12 @@
+error[E0400]: expected `;`, found `WriteLn`
+  --> fix_help.pas:6:9
+   |
+ 6 |   A := 1
+   |         ^
+ 7 |   WriteLn(A);
+   |   ------- found here
+   |
+   = fix: insert `;`
+
+error: aborting due to 1 error
+help: 1 fix can be applied with `puy fix`

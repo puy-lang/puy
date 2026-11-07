@@ -1,0 +1,98 @@
+error[E2500]: unit `Windows` not found
+  --> sema_declared.pas:2:6
+   |
+ 2 | uses Windows, Vcl.Forms, System.SysUtils, Foo;
+   |      ^^^^^^^
+   |
+   = note: Puy has no OS-specific units, VCL or FMX
+   = note: check the platform at run time with `TOSVersion.Platform`, and use `Puy.UI` for a GUI
+
+error[E2500]: unit `Vcl.Forms` not found
+  --> sema_declared.pas:2:15
+   |
+ 2 | uses Windows, Vcl.Forms, System.SysUtils, Foo;
+   |               ^^^^^^^^^
+   |
+   = note: Puy has no OS-specific units, VCL or FMX
+   = note: check the platform at run time with `TOSVersion.Platform`, and use `Puy.UI` for a GUI
+
+error[E2500]: unit `Foo` not found
+  --> sema_declared.pas:2:43
+   |
+ 2 | uses Windows, Vcl.Forms, System.SysUtils, Foo;
+   |                                           ^^^
+   |
+   = note: only `System.SysUtils` can be used in this release; more units of the standard library come with later releases
+
+error[E0701]: `C` is already declared
+  --> sema_declared.pas:5:3
+   |
+ 4 |   C = 1;
+   |   - declared here
+ 5 |   C = 2;
+   |   ^ declared again here
+
+error[E0701]: `Result` is a reserved name
+  --> sema_declared.pas:6:3
+   |
+ 6 |   Result = 3;
+   |   ^^^^^^
+
+error[E0701]: `True` is a reserved name
+  --> sema_declared.pas:7:3
+   |
+ 7 |   True = 4;
+   |   ^^^^
+
+error[E0701]: `X` is already declared
+   --> sema_declared.pas:10:3
+    |
+  9 |   X: Integer;
+    |   - declared here
+ 10 |   X: string;
+    |   ^ declared again here
+
+error[E0700]: undeclared identifier `Foo`
+   --> sema_declared.pas:11:6
+    |
+ 11 |   T: Foo;
+    |      ^^^
+
+error[E0708]: `C` is not a type
+   --> sema_declared.pas:12:6
+    |
+ 12 |   U: C;
+    |      ^
+
+error[E0700]: undeclared identifier `SysUtils`
+   --> sema_declared.pas:13:6
+    |
+ 13 |   V: SysUtils;
+    |      ^^^^^^^^
+
+error[E0701]: `L` is already declared
+   --> sema_declared.pas:19:7
+    |
+ 16 |   L: Integer;
+    |   - declared here
+...
+ 19 |   var L := 2;
+    |       ^ declared again here
+
+error[E0701]: `P` is already declared
+   --> sema_declared.pas:22:11
+    |
+ 14 | procedure P;
+    |           - declared here
+...
+ 22 | procedure P;
+    |           ^ declared again here
+
+error[E0701]: `A` is already declared
+   --> sema_declared.pas:25:25
+    |
+ 25 | function P2(A: Integer; A: string): Integer;
+    |                         ^ declared again here
+    |             - declared here
+
+error: aborting due to 13 errors

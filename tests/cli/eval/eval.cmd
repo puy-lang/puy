@@ -1,0 +1,1 @@
+-e "WriteLn(ParamStr(0) = '', ' ', ParamCount, ' ', ParamStr(2))" first 'second arg'

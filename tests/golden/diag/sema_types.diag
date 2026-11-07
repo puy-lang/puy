@@ -1,0 +1,123 @@
+error[E0702]: type mismatch: expected `Integer`, found `string`
+   --> sema_types.pas:18:8
+    |
+ 18 |   I := 'abc';
+    |        ^^^^^
+
+error[E0702]: type mismatch: expected `string`, found `Integer`
+   --> sema_types.pas:19:8
+    |
+ 19 |   S := 1;
+    |        ^
+
+error[E0702]: type mismatch: expected `Boolean`, found `Integer`
+   --> sema_types.pas:20:8
+    |
+ 20 |   B := 1;
+    |        ^
+
+error[E0702]: type mismatch: expected `Integer`, found `Boolean`
+   --> sema_types.pas:21:8
+    |
+ 21 |   I := True;
+    |        ^^^^
+
+error[E0702]: type mismatch: expected `Char`, found `string`
+   --> sema_types.pas:22:8
+    |
+ 22 |   C := 'ab';
+    |        ^^^^
+
+error[E0702]: type mismatch: expected `Integer`, found `Byte` (argument 1, parameter `A`)
+   --> sema_types.pas:24:5
+    |
+ 24 |   V(By);
+    |     ^^
+    |
+    = note: a `var` parameter needs a variable of exactly the same type
+
+error[E0702]: type mismatch: expected `Integer`, found `string` (argument 1, parameter `A`)
+   --> sema_types.pas:25:5
+    |
+ 25 |   V(S);
+    |     ^
+    |
+    = note: a `var` parameter needs a variable of exactly the same type
+
+error[E0702]: type mismatch: expected `string`, found `Char` (argument 1, parameter `A`)
+   --> sema_types.pas:26:5
+    |
+ 26 |   O(C);
+    |     ^
+    |
+    = note: a `out` parameter needs a variable of exactly the same type
+
+error[E0703]: operator `+` cannot be applied to `string` and `Integer`
+   --> sema_types.pas:27:10
+    |
+ 27 |   I := S + 1;
+    |          ^
+    |
+    = suggestion: convert with `IntToStr(…)`
+
+error[E0703]: operator `*` cannot be applied to `string` and `Integer`
+   --> sema_types.pas:28:10
+    |
+ 28 |   S := S * 2;
+    |          ^
+
+error[E0702]: type mismatch: expected `Boolean`, found `Integer`
+   --> sema_types.pas:29:8
+    |
+ 29 |   B := not I;
+    |        ^^^^^
+
+error[E0703]: operator `-` cannot be applied to `Boolean`
+   --> sema_types.pas:30:8
+    |
+ 30 |   B := -B;
+    |        ^
+
+error[E0703]: operator `and` cannot be applied to `Integer` and `Boolean`
+   --> sema_types.pas:31:10
+    |
+ 31 |   I := I and B;
+    |          ^^^
+
+error[E0716]: cannot mix `UInt64` and signed integers
+   --> sema_types.pas:33:10
+    |
+ 33 |   I := U + I;
+    |          ^
+    |
+    = suggestion: convert the `UInt64` operand to `Int64`
+    = suggestion: convert the signed operand to `UInt64`
+
+error[E0716]: cannot mix `UInt64` and signed integers
+   --> sema_types.pas:35:10
+    |
+ 35 |   B := U < I;
+    |          ^
+    |
+    = suggestion: convert the `UInt64` operand to `Int64`
+    = suggestion: convert the signed operand to `UInt64`
+
+error[E0724]: a value of type `string` cannot be converted to `Integer`
+   --> sema_types.pas:37:8
+    |
+ 37 |   I := Integer(S);
+    |        ^^^^^^^^^^
+
+error[E0724]: a value of type `Integer` cannot be converted to `string`
+   --> sema_types.pas:38:8
+    |
+ 38 |   S := string(I);
+    |        ^^^^^^^^^
+
+error[E3200]: floating-point literals are not supported yet (planned for M2)
+   --> sema_types.pas:42:16
+    |
+ 42 |   I := Integer(1.5);
+    |                ^^^
+
+error: aborting due to 18 errors

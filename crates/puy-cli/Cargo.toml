@@ -1,0 +1,28 @@
+[package]
+name = "puy-cli"
+description = "The puy command-line tool"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+puy-core.workspace = true
+puy-host.workspace = true
+puy-fmt.workspace = true
+
+# On WASI, use puy-runtime-wasi (docs/design/host-interface.md 3.6)
+[target.'cfg(not(target_os = "wasi"))'.dependencies]
+puy-runtime-native.workspace = true
+
+[target.'cfg(target_os = "wasi")'.dependencies]
+puy-runtime-wasi.workspace = true
+
+# Used by the CLI tests (tests/cli.rs) to read case settings (`// puy-test:`)
+[dev-dependencies]
+puy-testsuite.workspace = true
+
+[[bin]]
+name = "puy"
+path = "src/main.rs"

@@ -1,0 +1,22 @@
+warning[W0001]: unused variable `Unused` (unused-variable)
+  --> unused_and_uninit.pas:5:10
+   |
+ 5 |   Value, Unused: Integer;
+   |          ^^^^^^ declared here
+   |
+   = note: disable with `{$WARN unused-variable OFF}`
+   = suggestion: remove `Unused`
+
+error[E2000]: variable `Value` may be read before it is assigned
+  --> unused_and_uninit.pas:9:11
+   |
+ 5 |   Value, Unused: Integer;
+   |   ----- declared here
+...
+ 9 |   WriteLn(Value);
+   |           ^^^^^ read here
+   |
+   = note: Puy requires every local variable to be assigned before it is read
+   = note: declare `Value` on its own to give it an initial value
+
+error: aborting due to 1 error; 1 warning emitted

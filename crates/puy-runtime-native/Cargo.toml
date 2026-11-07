@@ -1,0 +1,13 @@
+[package]
+name = "puy-runtime-native"
+description = "Native runtime for Puy"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+puy-core.workspace = true
+puy-host.workspace = true
+getrandom.workspace = true

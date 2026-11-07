@@ -1,0 +1,218 @@
+error[E0200]: unknown compiler directive `{$RANGECHEKS ON}`
+  --> dir_unknown.pas:2:3
+   |
+ 2 | {$RANGECHEKS ON}
+   |   ^^^^^^^^^^
+   |
+   = suggestion: replace with `RANGECHECKS`
+
+error[E0200]: `{$` starts a compiler directive
+  --> dir_unknown.pas:3:1
+   |
+ 3 | {$100 yen}
+   | ^^^^^^^^^^
+   |
+   = note: write `{ $` with a space after `{` if this is a comment
+
+error[E0200]: unknown compiler directive `{$IFC X}`
+  --> dir_unknown.pas:4:3
+   |
+ 4 | {$IFC X}
+   |   ^^^
+   |
+   = suggestion: replace with `IF`
+
+error[E0201]: directive `{$H-}` is not supported in Puy
+  --> dir_unknown.pas:5:1
+   |
+ 5 | {$H-}
+   | ^^^^^
+   |
+   = note: `{$H-}` would make `string` a short string, which Puy does not have
+
+error[E0201]: directive `{$LONGSTRINGS OFF}` is not supported in Puy
+  --> dir_unknown.pas:6:1
+   |
+ 6 | {$LONGSTRINGS OFF}
+   | ^^^^^^^^^^^^^^^^^^
+   |
+   = note: `{$H-}` would make `string` a short string, which Puy does not have
+
+error[E0201]: directive `{$ZEROBASEDSTRINGS ON}` is not supported in Puy
+  --> dir_unknown.pas:7:1
+   |
+ 7 | {$ZEROBASEDSTRINGS ON}
+   | ^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: string indexes in Puy always start at 1
+
+error[E0201]: directive `{$I-}` is not supported in Puy
+  --> dir_unknown.pas:8:1
+   |
+ 8 | {$I-}
+   | ^^^^^
+   |
+   = note: I/O errors in Puy are always exceptions; there is no `IOResult`
+
+error[E0212]: `{$POINTERS ON}` is not supported yet
+  --> dir_unknown.pas:9:1
+   |
+ 9 | {$POINTERS ON}
+   | ^^^^^^^^^^^^^^
+
+error[E0212]: `{$POINTERMATH ON}` is not supported yet
+   --> dir_unknown.pas:10:1
+    |
+ 10 | {$POINTERMATH ON}
+    | ^^^^^^^^^^^^^^^^^
+
+error[E0213]: `DEBUG` is defined by the build type and cannot be changed
+   --> dir_unknown.pas:13:1
+    |
+ 13 | {$DEFINE DEBUG}
+    | ^^^^^^^^^^^^^^^
+    |
+    = note: the build type is chosen by the `puy` command, not by the source
+
+error[E0213]: `RELEASE` is defined by the build type and cannot be changed
+   --> dir_unknown.pas:14:1
+    |
+ 14 | {$UNDEF RELEASE}
+    | ^^^^^^^^^^^^^^^^
+    |
+    = note: the build type is chosen by the `puy` command, not by the source
+
+error[E0213]: `PUY` is always defined and cannot be changed
+   --> dir_unknown.pas:15:1
+    |
+ 15 | {$UNDEF PUY}
+    | ^^^^^^^^^^^^
+
+error[E0213]: invalid argument for `{$DEFINE}`
+   --> dir_unknown.pas:16:1
+    |
+ 16 | {$DEFINE 1x}
+    | ^^^^^^^^^^^^
+
+error[E0213]: invalid argument for `{$I}`
+   --> dir_unknown.pas:17:1
+    |
+ 17 | {$I}
+    | ^^^^
+
+error[E0213]: invalid argument for `{$I}`
+   --> dir_unknown.pas:18:1
+    |
+ 18 | {$I ''}
+    | ^^^^^^^
+
+error[E0213]: invalid argument for `{$I}`
+   --> dir_unknown.pas:19:1
+    |
+ 19 | {$I %DATE%}
+    | ^^^^^^^^^^^
+
+error[E0214]: `{$IFOPT B+}` cannot test this switch
+   --> dir_unknown.pas:20:1
+    |
+ 20 | {$IFOPT B+}
+    | ^^^^^^^^^^^
+
+error[E0213]: invalid argument for `{$Q}`
+   --> dir_unknown.pas:28:1
+    |
+ 28 | {$Q yes}
+    | ^^^^^^^^
+
+warning[W0014]: unknown warning name `unused_variable` (unknown-warning-name)
+   --> dir_unknown.pas:29:1
+    |
+ 29 | {$WARN unused_variable OFF}
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: disable with `{$WARN unknown-warning-name OFF}`
+    = suggestion: replace with `unused-variable`
+
+warning[W0014]: unknown warning name `nosuch` (unknown-warning-name)
+   --> dir_unknown.pas:31:1
+    |
+ 31 | {$WARN nosuch ON}
+    | ^^^^^^^^^^^^^^^^^
+    |
+    = note: disable with `{$WARN unknown-warning-name OFF}`
+
+error[E0211]: user error: boom
+   --> dir_unknown.pas:33:1
+    |
+ 33 | {$MESSAGE ERROR 'boom'}
+    | ^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0211]: user error: fatal boom
+   --> dir_unknown.pas:34:1
+    |
+ 34 | {$MESSAGE FATAL 'fatal boom'}
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning[W0008]: user warning: careful (user-message)
+   --> dir_unknown.pas:35:1
+    |
+ 35 | {$MESSAGE WARN 'careful'}
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: disable with `{$WARN user-message OFF}`
+
+note[W0008]: user hint: just a hint (user-message)
+   --> dir_unknown.pas:36:1
+    |
+ 36 | {$MESSAGE 'just a hint'}
+    | ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: disable with `{$WARN user-message OFF}`
+
+note[W0008]: user hint: hint 2 (user-message)
+   --> dir_unknown.pas:37:1
+    |
+ 37 | {$MESSAGE HINT 'hint 2'}
+    | ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: disable with `{$WARN user-message OFF}`
+
+error[E0211]: user error: fpc error
+   --> dir_unknown.pas:38:1
+    |
+ 38 | {$ERROR fpc error}
+    | ^^^^^^^^^^^^^^^^^^
+
+warning[W0008]: user warning: fpc warning (user-message)
+   --> dir_unknown.pas:39:1
+    |
+ 39 | {$WARNING fpc warning}
+    | ^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: disable with `{$WARN user-message OFF}`
+
+note[W0008]: user hint: fpc note (user-message)
+   --> dir_unknown.pas:40:1
+    |
+ 40 | {$NOTE fpc note}
+    | ^^^^^^^^^^^^^^^^
+    |
+    = note: disable with `{$WARN user-message OFF}`
+
+note[W0008]: user hint: fpc info (user-message)
+   --> dir_unknown.pas:41:1
+    |
+ 41 | {$INFO 'fpc info'}
+    | ^^^^^^^^^^^^^^^^^^
+    |
+    = note: disable with `{$WARN user-message OFF}`
+
+error[W0001]: unused variable `Unused` (unused-variable)
+   --> dir_unknown.pas:58:3
+    |
+ 58 |   Unused: Integer;
+    |   ^^^^^^ declared here
+    |
+    = suggestion: remove `Unused`
+
+error: aborting due to 22 errors; 4 warnings emitted

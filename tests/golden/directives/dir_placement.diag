@@ -1,0 +1,52 @@
+warning[W0005]: directive `{$IFDEF PUY}` is not at a declaration or statement boundary (directive-placement)
+  --> dir_placement.pas:8:10
+   |
+ 8 |   X := 1 {$IFDEF PUY} + 1 {$ELSE} + 2 {$ENDIF};
+   |          ^^^^^^^^^^^^
+   |
+   = note: disable with `{$WARN directive-placement OFF}`
+
+warning[W0005]: directive `{$R-}` is not at a declaration or statement boundary (directive-placement)
+  --> dir_placement.pas:9:10
+   |
+ 9 |   X := 1 {$R-} + 1;
+   |          ^^^^^
+   |
+   = note: Puy applies a switch from the next declaration or statement, not from this point
+   = note: disable with `{$WARN directive-placement OFF}`
+
+warning[W0005]: directive `{$IFDEF PUY}` is not at a declaration or statement boundary (directive-placement)
+   --> dir_placement.pas:10:6
+    |
+ 10 |   if {$IFDEF PUY} X {$ENDIF} > 0 then {$Q-} X := 2;
+    |      ^^^^^^^^^^^^
+    |
+    = note: disable with `{$WARN directive-placement OFF}`
+
+warning[W0005]: directive `{$Q-}` is not at a declaration or statement boundary (directive-placement)
+   --> dir_placement.pas:10:39
+    |
+ 10 |   if {$IFDEF PUY} X {$ENDIF} > 0 then {$Q-} X := 2;
+    |                                       ^^^^^
+    |
+    = note: Puy applies a switch from the next declaration or statement, not from this point
+    = note: disable with `{$WARN directive-placement OFF}`
+
+warning[W0005]: directive `{$WARN unused-variable OFF}` is not at a declaration or statement boundary (directive-placement)
+   --> dir_placement.pas:12:10
+    |
+ 12 |   X := X {$WARN unused-variable OFF} + 1;
+    |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: Puy applies a switch from the next declaration or statement, not from this point
+    = note: disable with `{$WARN directive-placement OFF}`
+
+warning[W0005]: directive `{$IFDEF PUY}` is not at a declaration or statement boundary (directive-placement)
+   --> dir_placement.pas:13:8
+    |
+ 13 |   P(X, {$IFDEF PUY} X {$ENDIF});
+    |        ^^^^^^^^^^^^
+    |
+    = note: disable with `{$WARN directive-placement OFF}`
+
+warning: 6 warnings emitted

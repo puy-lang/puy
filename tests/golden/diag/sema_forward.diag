@@ -1,0 +1,70 @@
+error[E0723]: forward declaration of `NoBody` has no body
+  --> sema_forward.pas:8:11
+   |
+ 8 | procedure NoBody; forward;
+   |           ^^^^^^
+
+error[E0723]: body of `Mismatch` does not match its forward declaration
+   --> sema_forward.pas:10:11
+    |
+  9 | procedure Mismatch(A: Integer); forward;
+    |           -------- declared here
+ 10 | procedure Mismatch(A: string);
+    |           ^^^^^^^^
+
+error[E0723]: body of `Mis2` does not match its forward declaration
+   --> sema_forward.pas:14:10
+    |
+ 13 | function Mis2(A: Integer): Integer; forward;
+    |          ---- declared here
+ 14 | function Mis2(A: Integer): string;
+    |          ^^^^
+
+error[E0723]: body of `Mis3` does not match its forward declaration
+   --> sema_forward.pas:19:11
+    |
+ 18 | procedure Mis3(const A: Integer); forward;
+    |           ---- declared here
+ 19 | procedure Mis3(var A: Integer);
+    |           ^^^^
+
+error[E0723]: body of `Mis5` does not match its forward declaration
+   --> sema_forward.pas:27:11
+    |
+ 26 | procedure Mis5(A: Integer); forward;
+    |           ---- declared here
+ 27 | procedure Mis5(B: Integer);
+    |           ^^^^
+
+error[E0723]: body of `Mis6` does not match its forward declaration
+   --> sema_forward.pas:31:11
+    |
+ 30 | procedure Mis6(A: Integer); forward;
+    |           ---- declared here
+ 31 | procedure Mis6(A: Integer; B: Integer);
+    |           ^^^^
+
+error[E0704]: recursive call to `Rec` needs parentheses
+   --> sema_forward.pas:36:44
+    |
+ 34 | function Rec(X: Integer): Integer;
+    |          --- declared here
+ 35 | begin
+ 36 |   if X = 0 then Result := 0 else Result := Rec + 1;
+    |                                            ^^^
+    |
+    = suggestion: replace with `Result`
+
+error[E0704]: recursive call to `Rec2` needs parentheses
+   --> sema_forward.pas:40:13
+    |
+ 38 | function Rec2: Integer;
+    |          ---- declared here
+ 39 | begin
+ 40 |   Result := Rec2 + 1;
+    |             ^^^^
+    |
+    = suggestion: replace with `Result`
+    = suggestion: replace with `Rec2()`
+
+error: aborting due to 8 errors

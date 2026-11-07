@@ -1,0 +1,9 @@
+error[E0700]: undeclared identifier `IntToStr`
+  --> script_uses_meta.pas:5:9
+   |
+ 5 | WriteLn(IntToStr(5));
+   |         ^^^^^^^^
+   |
+   = fix: add `uses System.SysUtils`
+
+error: aborting due to 1 error

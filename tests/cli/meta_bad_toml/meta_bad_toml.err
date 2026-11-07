@@ -1,0 +1,10 @@
+error[E2507]: invalid inline metadata: cannot parse line 2
+  --> meta_bad_toml.pas:1:1
+   |
+ 1 | (*! puy
+   | ^^^^^^^
+ 2 | toolchain "0.4.2"
+ 3 | *)
+   | ^^
+
+error: aborting due to 1 error

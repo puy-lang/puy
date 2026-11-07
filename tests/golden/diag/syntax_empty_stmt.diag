@@ -1,0 +1,37 @@
+warning[W0018]: empty statement after `then` (empty-statement)
+  --> syntax_empty_stmt.pas:5:16
+   |
+ 5 |   if X > 0 then;
+   |                ^
+   |
+   = note: write a statement after `then`, or `begin end` if the body is meant to be empty
+   = note: disable with `{$WARN empty-statement OFF}`
+
+warning[W0018]: empty statement after `else` (empty-statement)
+  --> syntax_empty_stmt.pas:6:34
+   |
+ 6 |   if X > 0 then WriteLn('a') else;
+   |                                  ^
+   |
+   = note: write a statement after `else`, or `begin end` if the body is meant to be empty
+   = note: disable with `{$WARN empty-statement OFF}`
+
+warning[W0018]: empty statement after `do` (empty-statement)
+  --> syntax_empty_stmt.pas:7:17
+   |
+ 7 |   while X > 0 do;
+   |                 ^
+   |
+   = note: write a statement after `do`, or `begin end` if the body is meant to be empty
+   = note: disable with `{$WARN empty-statement OFF}`
+
+warning[W0018]: empty statement after `do` (empty-statement)
+  --> syntax_empty_stmt.pas:8:21
+   |
+ 8 |   for X := 1 to 2 do;
+   |                     ^
+   |
+   = note: write a statement after `do`, or `begin end` if the body is meant to be empty
+   = note: disable with `{$WARN empty-statement OFF}`
+
+warning: 4 warnings emitted

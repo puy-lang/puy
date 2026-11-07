@@ -1,0 +1,41 @@
+; puyc format 1
+.const
+  0: str "\n"
+.global
+  0: int X
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpFold file="dump_fold.pas" init=- fini=- entry=0
+.func 0 DumpFold.<main> params=0 regs=3
+  .line 7
+  0000  LoadInt      r0, 1
+  0001  StoreGlobal  r0, g0
+  .line 8
+  0002  LoadInt      r0, 6
+  0003  LoadGlobal   r1, g0
+  0004  AddInt       r0, r0, r1
+  0005  NarrowOvf    r0, r0, 4
+  0006  StoreGlobal  r0, g0
+  .line 9
+  0007  LoadGlobal   r0, g0
+  0008  LoadInt      r1, 6
+  0009  AddInt       r0, r0, r1
+  000a  NarrowOvf    r0, r0, 4
+  000b  StoreGlobal  r0, g0
+  .line 10
+  000c  LoadInt      r0, 2
+  000d  LoadGlobal   r1, g0
+  000e  LoadInt      r2, 2
+  000f  MulInt       r1, r1, r2
+  0010  NarrowOvf    r1, r1, 4
+  0011  AddInt       r0, r0, r1
+  0012  NarrowOvf    r0, r0, 4
+  0013  StoreGlobal  r0, g0
+  .line 11
+  0014  LoadGlobal   r0, g0
+  0015  IntToStr     r0, r0
+  0016  LoadConst    r1, k0
+  0017  ConcatStr    r0, r0, r1
+  0018  CallHost     r0, h0
+  .line 12
+  0019  RetVoid

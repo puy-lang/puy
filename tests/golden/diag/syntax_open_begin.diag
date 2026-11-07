@@ -1,0 +1,11 @@
+error[E0400]: expected `end`, found end of file
+  --> syntax_open_begin.pas:7:18
+   |
+ 6 |     begin
+   |     ----- block starts here
+ 7 |       WriteLn(X);
+   |                  ^
+   |
+   = fix: insert `end end end`
+
+error: aborting due to 1 error

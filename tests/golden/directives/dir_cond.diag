@@ -1,0 +1,204 @@
+error[E0202]: `{$ENDIF}` without matching `{$IF}`
+  --> dir_cond.pas:2:1
+   |
+ 2 | {$ENDIF}
+   | ^^^^^^^^
+
+error[E0202]: `{$ELSE}` without matching `{$IF}`
+  --> dir_cond.pas:3:1
+   |
+ 3 | {$ELSE}
+   | ^^^^^^^
+
+error[E0202]: `{$ELSEIF}` without matching `{$IF}`
+  --> dir_cond.pas:4:1
+   |
+ 4 | {$ELSEIF True}
+   | ^^^^^^^^^^^^^^
+
+error[E0204]: `{$ELSE}` after `{$ELSE}`
+  --> dir_cond.pas:7:1
+   |
+ 7 | {$ELSE}
+   | ^^^^^^^
+
+error[E0204]: `{$ELSE}` after `{$ELSE}`
+  --> dir_cond.pas:9:1
+   |
+ 9 | {$ELSEIF True}
+   | ^^^^^^^^^^^^^^
+
+error[E0205]: invalid expression in `{$IF}`
+   --> dir_cond.pas:11:9
+    |
+ 11 | {$IF 1 +}
+    |         ^
+
+error[E0205]: invalid expression in `{$IF}`
+   --> dir_cond.pas:13:6
+    |
+ 13 | {$IF 99999999999999999999 > 1}
+    |      ^^^^^^^^^^^^^^^^^^^^
+
+error[E0205]: invalid expression in `{$IF}`
+   --> dir_cond.pas:15:6
+    |
+ 15 | {$IF #13 = 'a'}
+    |      ^
+
+error[E0206]: unknown name `Foo` in `{$IF}` expression
+   --> dir_cond.pas:17:6
+    |
+ 17 | {$IF Foo}
+    |      ^^^
+    |
+    = suggestion: replace with `Defined(Foo)`
+
+error[E0206]: unknown name `Level` in `{$IF}` expression
+   --> dir_cond.pas:19:6
+    |
+ 19 | {$IF Level > 1}
+    |      ^^^^^
+
+error[E0206]: unknown name `Foo` in `{$IF}` expression
+   --> dir_cond.pas:21:6
+    |
+ 21 | {$IF Foo and Defined(PUY)}
+    |      ^^^
+    |
+    = suggestion: replace with `Defined(Foo)`
+
+error[E0207]: `Declared()` is not supported in `{$IF}`
+   --> dir_cond.pas:23:6
+    |
+ 23 | {$IF Declared(Foo)}
+    |      ^^^^^^^^^^^^^
+    |
+    = note: use `Defined(…)` for a conditional symbol, or test the condition at run time
+
+error[E0208]: `CompilerVersion` is not defined in Puy
+   --> dir_cond.pas:25:6
+    |
+ 25 | {$IF CompilerVersion >= 23}
+    |      ^^^^^^^^^^^^^^^
+    |
+    = fix: replace with `{$IFDEF PUY}`
+
+error[E0208]: `CompilerVersion` is not defined in Puy
+   --> dir_cond.pas:27:6
+    |
+ 27 | {$IF CompilerVersion < 23}
+    |      ^^^^^^^^^^^^^^^
+    |
+    = fix: replace with `{$IFNDEF PUY}`
+
+error[E0208]: `RTLVersion` is not defined in Puy
+   --> dir_cond.pas:28:16
+    |
+ 28 | {$ELSEIF 23 <= RTLVersion}
+    |                ^^^^^^^^^^
+    |
+    = fix: replace with `{$ELSEIF Defined(PUY)}`
+
+error[E0208]: `CompilerVersion` is not defined in Puy
+   --> dir_cond.pas:30:6
+    |
+ 30 | {$IF CompilerVersion = 23}
+    |      ^^^^^^^^^^^^^^^
+    |
+    = note: write the branch for Puy with `{$IFDEF PUY}`
+
+error[E0208]: `CompilerVersion` is not defined in Puy
+   --> dir_cond.pas:32:22
+    |
+ 32 | {$IF Defined(X) and (CompilerVersion >= 23)}
+    |                      ^^^^^^^^^^^^^^^
+    |
+    = note: write the branch for Puy with `{$IFDEF PUY}`
+
+error[E0215]: type mismatch in `{$IF}` expression
+   --> dir_cond.pas:34:6
+    |
+ 34 | {$IF 1 + 'a'}
+    |      ^^^^^^^
+
+error[E0215]: division by zero in `{$IF}` expression
+   --> dir_cond.pas:36:6
+    |
+ 36 | {$IF 1 div 0 = 0}
+    |      ^^^^^^^
+
+error[E0215]: division by zero in `{$IF}` expression
+   --> dir_cond.pas:38:6
+    |
+ 38 | {$IF 1 mod (2 - 2) = 0}
+    |      ^^^^^^^^^^^^
+
+error[E0215]: type mismatch in `{$IF}` expression
+   --> dir_cond.pas:40:6
+    |
+ 40 | {$IF not 1}
+    |      ^^^^^
+
+error[E0213]: invalid argument for `{$IFDEF}`
+   --> dir_cond.pas:42:1
+    |
+ 42 | {$IFDEF Foo-bar}
+    | ^^^^^^^^^^^^^^^^
+
+error[E0205]: invalid expression in `{$IF}`
+   --> dir_cond.pas:44:17
+    |
+ 44 | {$IF Defined(Foo-bar)}
+    |                 ^
+
+warning[W0007]: conditional symbol `MSWINDOWS` is never defined in Puy (platform-symbol)
+   --> dir_cond.pas:46:10
+    |
+ 46 | {$IFNDEF MSWINDOWS}
+    |          ^^^^^^^^^
+    |
+    = note: a Puy program runs unchanged on every platform, so OS and CPU symbols are never defined
+    = note: check the platform at run time with `TOSVersion.Platform`
+    = note: disable with `{$WARN platform-symbol OFF}`
+
+warning[W0007]: conditional symbol `LINUX` is never defined in Puy (platform-symbol)
+   --> dir_cond.pas:48:9
+    |
+ 48 | {$IFDEF LINUX}
+    |         ^^^^^
+    |
+    = note: a Puy program runs unchanged on every platform, so OS and CPU symbols are never defined
+    = note: check the platform at run time with `TOSVersion.Platform`
+    = note: disable with `{$WARN platform-symbol OFF}`
+
+warning[W0007]: conditional symbol `CPUX64` is never defined in Puy (platform-symbol)
+   --> dir_cond.pas:50:14
+    |
+ 50 | {$IF Defined(CPUX64) or Defined(FPC)}
+    |              ^^^^^^
+    |
+    = note: a Puy program runs unchanged on every platform, so OS and CPU symbols are never defined
+    = note: check the platform at run time with `TOSVersion.Platform`
+    = note: disable with `{$WARN platform-symbol OFF}`
+
+warning[W0007]: conditional symbol `FPC` is never defined in Puy (platform-symbol)
+   --> dir_cond.pas:50:33
+    |
+ 50 | {$IF Defined(CPUX64) or Defined(FPC)}
+    |                                 ^^^
+    |
+    = note: write the branch for Puy with `{$IFDEF PUY}`
+    = note: 3 more uses of compiler symbols in this file are not reported
+    = note: disable with `{$WARN platform-symbol OFF}`
+
+error[E0203]: unterminated conditional directive
+   --> dir_cond.pas:73:1
+    |
+ 61 | {$IFDEF NOPE}
+    | ------------- starts here
+...
+ 73 |
+    | ^
+
+error: aborting due to 24 errors; 4 warnings emitted

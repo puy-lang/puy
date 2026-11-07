@@ -1,0 +1,7 @@
+error[E2507]: invalid inline metadata: the first line must be `(*! puy`
+  --> meta_bad_line.pas:1:1
+   |
+ 1 | (*! puy 1.0 *)
+   | ^^^^^^^^^^^^^^
+
+error: aborting due to 1 error

@@ -1,0 +1,12 @@
+error[E0400]: expected `until`, found `end`
+  --> syntax_repeat_end_routine_script.pas:7:3
+   |
+ 5 |   repeat
+   |   ------ block starts here
+ 6 |     WriteLn('p');
+ 7 |   end;
+   |   ^^^
+   |
+   = note: write `until` followed by the loop condition
+
+error: aborting due to 1 error

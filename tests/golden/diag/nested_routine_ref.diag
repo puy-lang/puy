@@ -1,0 +1,7 @@
+error[E3200]: nested routines are not supported yet (planned for M2)
+   --> nested_routine_ref.pas:10:3
+    |
+ 10 |   function Twice(X: Integer): Integer;
+    |   ^^^^^^^^
+
+error: aborting due to 1 error

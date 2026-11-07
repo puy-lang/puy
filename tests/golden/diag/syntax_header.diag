@@ -1,0 +1,8 @@
+error[E0405]: expected an identifier
+  --> syntax_header.pas:1:8
+   |
+ 1 | program ;
+   |        ^
+   |         - found here
+
+error: aborting due to 1 error

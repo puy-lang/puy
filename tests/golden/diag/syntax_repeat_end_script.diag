@@ -1,0 +1,12 @@
+error[E0400]: expected `until`, found `end`
+  --> syntax_repeat_end_script.pas:6:1
+   |
+ 3 | repeat
+   | ------ block starts here
+...
+ 6 | end;
+   | ^^^
+   |
+   = note: write `until` followed by the loop condition
+
+error: aborting due to 1 error

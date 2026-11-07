@@ -1,0 +1,183 @@
+warning[W0004]: FPC-only directive `{$MODE OBJFPC}` is ignored (ignored-directive)
+  --> dir_ignored.pas:2:1
+   |
+ 2 | {$MODE OBJFPC}
+   | ^^^^^^^^^^^^^^
+   |
+   = note: Puy always uses the Delphi dialect
+   = note: disable with `{$WARN ignored-directive OFF}`
+   = fix: remove `{$MODE OBJFPC}`
+
+warning[W0004]: directive `{$R foo.res}` is ignored (ignored-directive)
+  --> dir_ignored.pas:3:1
+   |
+ 3 | {$R foo.res}
+   | ^^^^^^^^^^^^
+   |
+   = note: Puy does not build native executables from directives; executable settings belong in `puy.toml`
+   = note: disable with `{$WARN ignored-directive OFF}`
+   = fix: remove `{$R foo.res}`
+
+warning[W0004]: directive `{$APPTYPE CONSOLE}` is ignored (ignored-directive)
+  --> dir_ignored.pas:4:1
+   |
+ 4 | {$APPTYPE CONSOLE}
+   | ^^^^^^^^^^^^^^^^^^
+   |
+   = note: Puy does not build native executables from directives; executable settings belong in `puy.toml`
+   = note: disable with `{$WARN ignored-directive OFF}`
+   = fix: remove `{$APPTYPE CONSOLE}`
+
+warning[W0004]: directive `{$TEXTBLOCK CRLF}` is ignored (ignored-directive)
+  --> dir_ignored.pas:5:1
+   |
+ 5 | {$TEXTBLOCK CRLF}
+   | ^^^^^^^^^^^^^^^^^
+   |
+   = note: multi-line strings in Puy always use LF; write `#13#10` explicitly for CR LF
+   = note: disable with `{$WARN ignored-directive OFF}`
+   = fix: remove `{$TEXTBLOCK CRLF}`
+
+warning[W0004]: directive `{$B+}` is ignored (ignored-directive)
+  --> dir_ignored.pas:6:1
+   |
+ 6 | {$B+}
+   | ^^^^^
+   |
+   = note: boolean operators in Puy always short-circuit
+   = note: disable with `{$WARN ignored-directive OFF}`
+   = fix: remove `{$B+}`
+
+warning[W0004]: directive `{$J-}` is ignored (ignored-directive)
+  --> dir_ignored.pas:7:1
+   |
+ 7 | {$J-}
+   | ^^^^^
+   |
+   = note: typed constants in Puy are always read-only
+   = note: disable with `{$WARN ignored-directive OFF}`
+   = fix: remove `{$J-}`
+
+warning[W0004]: directive `{$RTTI EXPLICIT}` is ignored (ignored-directive)
+  --> dir_ignored.pas:8:1
+   |
+ 8 | {$RTTI EXPLICIT}
+   | ^^^^^^^^^^^^^^^^
+   |
+   = note: Puy keeps run-time type information for every type
+   = note: disable with `{$WARN ignored-directive OFF}`
+   = fix: remove `{$RTTI EXPLICIT}`
+
+warning[W0004]: directive `{$M+}` is ignored (ignored-directive)
+  --> dir_ignored.pas:9:1
+   |
+ 9 | {$M+}
+   | ^^^^^
+   |
+   = note: Puy keeps run-time type information for every type
+   = note: disable with `{$WARN ignored-directive OFF}`
+   = fix: remove `{$M+}`
+
+warning[W0004]: directive `{$M 16384,1048576}` is ignored (ignored-directive)
+   --> dir_ignored.pas:10:1
+    |
+ 10 | {$M 16384,1048576}
+    | ^^^^^^^^^^^^^^^^^^
+    |
+    = note: Puy compiles to bytecode for a VM, where this directive has no meaning
+    = note: disable with `{$WARN ignored-directive OFF}`
+    = fix: remove `{$M 16384,1048576}`
+
+warning[W0004]: directive `{$SCOPEDENUMS ON}` is ignored (ignored-directive)
+   --> dir_ignored.pas:11:1
+    |
+ 11 | {$SCOPEDENUMS ON}
+    | ^^^^^^^^^^^^^^^^^
+    |
+    = note: enumeration values in Puy are always qualified with the type name
+    = note: disable with `{$WARN ignored-directive OFF}`
+    = fix: remove `{$SCOPEDENUMS ON}`
+
+warning[W0004]: directive `{$HINTS OFF}` is ignored (ignored-directive)
+   --> dir_ignored.pas:12:1
+    |
+ 12 | {$HINTS OFF}
+    | ^^^^^^^^^^^^
+    |
+    = note: disable individual warnings with `{$WARN <name> OFF}`
+    = note: disable with `{$WARN ignored-directive OFF}`
+    = fix: remove `{$HINTS OFF}`
+
+warning[W0004]: directive `{$WARNINGS OFF}` is ignored (ignored-directive)
+   --> dir_ignored.pas:13:1
+    |
+ 13 | {$WARNINGS OFF}
+    | ^^^^^^^^^^^^^^^
+    |
+    = note: disable individual warnings with `{$WARN <name> OFF}`
+    = note: disable with `{$WARN ignored-directive OFF}`
+    = fix: remove `{$WARNINGS OFF}`
+
+warning[W0004]: directive `{$O+}` is ignored (ignored-directive)
+   --> dir_ignored.pas:14:1
+    |
+ 14 | {$O+}
+    | ^^^^^
+    |
+    = note: Puy compiles to bytecode for a VM, where this directive has no meaning
+    = note: disable with `{$WARN ignored-directive OFF}`
+    = fix: remove `{$O+}`
+
+warning[W0004]: directive `{$HPPEMIT 'x'}` is ignored (ignored-directive)
+   --> dir_ignored.pas:15:1
+    |
+ 15 | {$HPPEMIT 'x'}
+    | ^^^^^^^^^^^^^^
+    |
+    = note: Puy does not generate C++ headers
+    = note: disable with `{$WARN ignored-directive OFF}`
+    = fix: remove `{$HPPEMIT 'x'}`
+
+warning[W0004]: FPC-only directive `{$PUSH}` is ignored (ignored-directive)
+   --> dir_ignored.pas:16:1
+    |
+ 16 | {$PUSH}
+    | ^^^^^^^
+    |
+    = note: Puy always uses the Delphi dialect
+    = note: to restore a switch later, record it with `{$IFOPT R+}{$DEFINE R_ON}{$ENDIF}` and test `R_ON` afterwards
+    = note: disable with `{$WARN ignored-directive OFF}`
+    = fix: remove `{$PUSH}`
+
+warning[W0004]: FPC-only directive `{$POP}` is ignored (ignored-directive)
+   --> dir_ignored.pas:18:1
+    |
+ 18 | {$POP}
+    | ^^^^^^
+    |
+    = note: Puy always uses the Delphi dialect
+    = note: to restore a switch later, record it with `{$IFOPT R+}{$DEFINE R_ON}{$ENDIF}` and test `R_ON` afterwards
+    = note: disable with `{$WARN ignored-directive OFF}`
+    = fix: remove `{$POP}`
+
+warning[W0004]: FPC-only directive `{$MODESWITCH ADVANCEDRECORDS}` is ignored (ignored-directive)
+   --> dir_ignored.pas:19:1
+    |
+ 19 | {$MODESWITCH ADVANCEDRECORDS}
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: Puy always uses the Delphi dialect
+    = note: disable with `{$WARN ignored-directive OFF}`
+    = fix: remove `{$MODESWITCH ADVANCEDRECORDS}`
+
+warning[W0004]: directive `{$D+}` is ignored (ignored-directive)
+   --> dir_ignored.pas:23:1
+    |
+ 23 | {$D+}
+    | ^^^^^
+    |
+    = note: Puy compiles to bytecode for a VM, where this directive has no meaning
+    = note: disable with `{$WARN ignored-directive OFF}`
+    = fix: remove `{$D+}`
+
+warning: 18 warnings emitted

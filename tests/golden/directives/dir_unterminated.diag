@@ -1,0 +1,10 @@
+error[E0203]: unterminated conditional directive
+  --> dir_unterminated.pas:8:1
+   |
+ 4 | {$IFDEF NOPE}
+   | ------------- starts here
+...
+ 8 |
+   | ^
+
+error: aborting due to 1 error

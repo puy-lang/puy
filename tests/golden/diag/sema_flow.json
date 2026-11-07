@@ -1,0 +1,632 @@
+[
+  {
+    "schema": "puy.diagnostics/1",
+    "diagnostics": [
+      {
+        "code": "E2001",
+        "severity": "error",
+        "name": null,
+        "message": "function `F1` may return without assigning `Result`",
+        "primary": {
+          "file": "sema_flow.pas",
+          "start": 43,
+          "end": 45,
+          "line": 3,
+          "column": 10,
+          "end_line": 3,
+          "end_column": 12,
+          "label": ""
+        },
+        "secondary": [
+          {
+            "file": "sema_flow.pas",
+            "start": 62,
+            "end": 65,
+            "line": 5,
+            "column": 1,
+            "end_line": 5,
+            "end_column": 4,
+            "label": "returns here"
+          }
+        ],
+        "notes": [
+          "Puy requires `Result` to be assigned on every path that returns"
+        ],
+        "fixes": [
+          {
+            "title": "add `Result := 0;` at the start of the body",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "sema_flow.pas",
+                "start": 61,
+                "end": 61,
+                "line": 4,
+                "column": 6,
+                "end_line": 4,
+                "end_column": 6,
+                "original": "",
+                "replacement": "\nResult := 0;"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E2001]: function `F1` may return without assigning `Result`\n  --> sema_flow.pas:3:10\n   |\n 3 | function F1: Integer;\n   |          ^^\n 4 | begin\n 5 | end;\n   | --- returns here\n   |\n   = note: Puy requires `Result` to be assigned on every path that returns\n   = suggestion: add `Result := 0;` at the start of the body"
+      },
+      {
+        "code": "E2001",
+        "severity": "error",
+        "name": null,
+        "message": "function `F2` may return without assigning `Result`",
+        "primary": {
+          "file": "sema_flow.pas",
+          "start": 76,
+          "end": 78,
+          "line": 6,
+          "column": 10,
+          "end_line": 6,
+          "end_column": 12,
+          "label": ""
+        },
+        "secondary": [
+          {
+            "file": "sema_flow.pas",
+            "start": 140,
+            "end": 143,
+            "line": 10,
+            "column": 1,
+            "end_line": 10,
+            "end_column": 4,
+            "label": "returns here"
+          }
+        ],
+        "notes": [
+          "Puy requires `Result` to be assigned on every path that returns"
+        ],
+        "fixes": [
+          {
+            "title": "add `Result := 0;` at the start of the body",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "sema_flow.pas",
+                "start": 106,
+                "end": 106,
+                "line": 7,
+                "column": 6,
+                "end_line": 7,
+                "end_column": 6,
+                "original": "",
+                "replacement": "\n  Result := 0;"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E2001]: function `F2` may return without assigning `Result`\n   --> sema_flow.pas:6:10\n    |\n  6 | function F2(X: Integer): Integer;\n    |          ^^\n...\n 10 | end;\n    | --- returns here\n    |\n    = note: Puy requires `Result` to be assigned on every path that returns\n    = suggestion: add `Result := 0;` at the start of the body"
+      },
+      {
+        "code": "E2001",
+        "severity": "error",
+        "name": null,
+        "message": "function `F3` may return without assigning `Result`",
+        "primary": {
+          "file": "sema_flow.pas",
+          "start": 154,
+          "end": 156,
+          "line": 11,
+          "column": 10,
+          "end_line": 11,
+          "end_column": 12,
+          "label": ""
+        },
+        "secondary": [
+          {
+            "file": "sema_flow.pas",
+            "start": 205,
+            "end": 209,
+            "line": 14,
+            "column": 5,
+            "end_line": 14,
+            "end_column": 9,
+            "label": "returns here"
+          }
+        ],
+        "notes": [
+          "Puy requires `Result` to be assigned on every path that returns"
+        ],
+        "fixes": [
+          {
+            "title": "add `Result := 0;` at the start of the body",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "sema_flow.pas",
+                "start": 184,
+                "end": 184,
+                "line": 12,
+                "column": 6,
+                "end_line": 12,
+                "end_column": 6,
+                "original": "",
+                "replacement": "\n  Result := 0;"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E2001]: function `F3` may return without assigning `Result`\n   --> sema_flow.pas:11:10\n    |\n 11 | function F3(X: Integer): Integer;\n    |          ^^\n...\n 14 |     Exit;\n    |     ---- returns here\n    |\n    = note: Puy requires `Result` to be assigned on every path that returns\n    = suggestion: add `Result := 0;` at the start of the body"
+      },
+      {
+        "code": "E2002",
+        "severity": "error",
+        "name": null,
+        "message": "out parameter `A` may be read before it is assigned",
+        "primary": {
+          "file": "sema_flow.pas",
+          "start": 366,
+          "end": 367,
+          "line": 25,
+          "column": 11,
+          "end_line": 25,
+          "end_column": 12,
+          "label": "read here"
+        },
+        "secondary": [
+          {
+            "file": "sema_flow.pas",
+            "start": 337,
+            "end": 338,
+            "line": 23,
+            "column": 18,
+            "end_line": 23,
+            "end_column": 19,
+            "label": "declared here"
+          }
+        ],
+        "notes": [
+          "Puy requires an `out` parameter to be assigned before it is read"
+        ],
+        "fixes": [
+          {
+            "title": "add `A := 0;` at the start of the body",
+            "applicability": "safe",
+            "edits": [
+              {
+                "file": "sema_flow.pas",
+                "start": 355,
+                "end": 355,
+                "line": 24,
+                "column": 6,
+                "end_line": 24,
+                "end_column": 6,
+                "original": "",
+                "replacement": "\n  A := 0;"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E2002]: out parameter `A` may be read before it is assigned\n   --> sema_flow.pas:25:11\n    |\n 23 | procedure O1(out A: Integer);\n    |                  - declared here\n 24 | begin\n 25 |   WriteLn(A);\n    |           ^ read here\n    |\n    = note: Puy requires an `out` parameter to be assigned before it is read\n    = fix: add `A := 0;` at the start of the body"
+      },
+      {
+        "code": "E2002",
+        "severity": "error",
+        "name": null,
+        "message": "out parameter `A` may not be assigned on return",
+        "primary": {
+          "file": "sema_flow.pas",
+          "start": 395,
+          "end": 397,
+          "line": 28,
+          "column": 11,
+          "end_line": 28,
+          "end_column": 13,
+          "label": ""
+        },
+        "secondary": [
+          {
+            "file": "sema_flow.pas",
+            "start": 461,
+            "end": 464,
+            "line": 32,
+            "column": 1,
+            "end_line": 32,
+            "end_column": 4,
+            "label": "returns here"
+          },
+          {
+            "file": "sema_flow.pas",
+            "start": 402,
+            "end": 403,
+            "line": 28,
+            "column": 18,
+            "end_line": 28,
+            "end_column": 19,
+            "label": "declared here"
+          }
+        ],
+        "notes": [
+          "Puy requires an `out` parameter to be assigned on every path that returns"
+        ],
+        "fixes": [
+          {
+            "title": "add `A := 0;` at the start of the body",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "sema_flow.pas",
+                "start": 432,
+                "end": 432,
+                "line": 29,
+                "column": 6,
+                "end_line": 29,
+                "end_column": 6,
+                "original": "",
+                "replacement": "\n  A := 0;"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E2002]: out parameter `A` may not be assigned on return\n   --> sema_flow.pas:28:11\n    |\n 28 | procedure O2(out A: Integer; X: Integer);\n    |           ^^\n    |                  - declared here\n...\n 32 | end;\n    | --- returns here\n    |\n    = note: Puy requires an `out` parameter to be assigned on every path that returns\n    = suggestion: add `A := 0;` at the start of the body"
+      },
+      {
+        "code": "E2002",
+        "severity": "error",
+        "name": null,
+        "message": "out parameter `A` may not be assigned on return",
+        "primary": {
+          "file": "sema_flow.pas",
+          "start": 476,
+          "end": 478,
+          "line": 33,
+          "column": 11,
+          "end_line": 33,
+          "end_column": 13,
+          "label": ""
+        },
+        "secondary": [
+          {
+            "file": "sema_flow.pas",
+            "start": 534,
+            "end": 538,
+            "line": 36,
+            "column": 5,
+            "end_line": 36,
+            "end_column": 9,
+            "label": "returns here"
+          },
+          {
+            "file": "sema_flow.pas",
+            "start": 483,
+            "end": 484,
+            "line": 33,
+            "column": 18,
+            "end_line": 33,
+            "end_column": 19,
+            "label": "declared here"
+          }
+        ],
+        "notes": [
+          "Puy requires an `out` parameter to be assigned on every path that returns"
+        ],
+        "fixes": [
+          {
+            "title": "add `A := 0;` at the start of the body",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "sema_flow.pas",
+                "start": 513,
+                "end": 513,
+                "line": 34,
+                "column": 6,
+                "end_line": 34,
+                "end_column": 6,
+                "original": "",
+                "replacement": "\n  A := 0;"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E2002]: out parameter `A` may not be assigned on return\n   --> sema_flow.pas:33:11\n    |\n 33 | procedure O3(out A: Integer; X: Integer);\n    |           ^^\n    |                  - declared here\n...\n 36 |     Exit;\n    |     ---- returns here\n    |\n    = note: Puy requires an `out` parameter to be assigned on every path that returns\n    = suggestion: add `A := 0;` at the start of the body"
+      },
+      {
+        "code": "E2002",
+        "severity": "error",
+        "name": null,
+        "message": "out parameter `A` may be read before it is assigned",
+        "primary": {
+          "file": "sema_flow.pas",
+          "start": 597,
+          "end": 598,
+          "line": 41,
+          "column": 8,
+          "end_line": 41,
+          "end_column": 9,
+          "label": "read here"
+        },
+        "secondary": [
+          {
+            "file": "sema_flow.pas",
+            "start": 572,
+            "end": 573,
+            "line": 39,
+            "column": 18,
+            "end_line": 39,
+            "end_column": 19,
+            "label": "declared here"
+          }
+        ],
+        "notes": [
+          "Puy requires an `out` parameter to be assigned before it is read"
+        ],
+        "fixes": [
+          {
+            "title": "add `A := '';` at the start of the body",
+            "applicability": "safe",
+            "edits": [
+              {
+                "file": "sema_flow.pas",
+                "start": 589,
+                "end": 589,
+                "line": 40,
+                "column": 6,
+                "end_line": 40,
+                "end_column": 6,
+                "original": "",
+                "replacement": "\n  A := '';"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E2002]: out parameter `A` may be read before it is assigned\n   --> sema_flow.pas:41:8\n    |\n 39 | procedure O4(out A: string);\n    |                  - declared here\n 40 | begin\n 41 |   A := A + 'x';\n    |        ^ read here\n    |\n    = note: Puy requires an `out` parameter to be assigned before it is read\n    = fix: add `A := '';` at the start of the body"
+      },
+      {
+        "code": "E2002",
+        "severity": "error",
+        "name": null,
+        "message": "out parameter `A` may be read before it is assigned",
+        "primary": {
+          "file": "sema_flow.pas",
+          "start": 653,
+          "end": 654,
+          "line": 45,
+          "column": 7,
+          "end_line": 45,
+          "end_column": 8,
+          "label": "read here"
+        },
+        "secondary": [
+          {
+            "file": "sema_flow.pas",
+            "start": 628,
+            "end": 629,
+            "line": 43,
+            "column": 18,
+            "end_line": 43,
+            "end_column": 19,
+            "label": "declared here"
+          }
+        ],
+        "notes": [
+          "Puy requires an `out` parameter to be assigned before it is read"
+        ],
+        "fixes": [
+          {
+            "title": "add `A := 0;` at the start of the body",
+            "applicability": "safe",
+            "edits": [
+              {
+                "file": "sema_flow.pas",
+                "start": 646,
+                "end": 646,
+                "line": 44,
+                "column": 6,
+                "end_line": 44,
+                "end_column": 6,
+                "original": "",
+                "replacement": "\n  A := 0;"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E2002]: out parameter `A` may be read before it is assigned\n   --> sema_flow.pas:45:7\n    |\n 43 | procedure O5(out A: Integer);\n    |                  - declared here\n 44 | begin\n 45 |   Inc(A);\n    |       ^ read here\n    |\n    = note: Puy requires an `out` parameter to be assigned before it is read\n    = fix: add `A := 0;` at the start of the body"
+      },
+      {
+        "code": "E2000",
+        "severity": "error",
+        "name": null,
+        "message": "variable `Result` may be read before it is assigned",
+        "primary": {
+          "file": "sema_flow.pas",
+          "start": 752,
+          "end": 758,
+          "line": 53,
+          "column": 13,
+          "end_line": 53,
+          "end_column": 19,
+          "label": "read here"
+        },
+        "secondary": [],
+        "notes": [
+          "Puy requires `Result` to be assigned before it is read"
+        ],
+        "fixes": [
+          {
+            "title": "add `Result := 0;` at the start of the body",
+            "applicability": "safe",
+            "edits": [
+              {
+                "file": "sema_flow.pas",
+                "start": 739,
+                "end": 739,
+                "line": 52,
+                "column": 6,
+                "end_line": 52,
+                "end_column": 6,
+                "original": "",
+                "replacement": "\n  Result := 0;"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E2000]: variable `Result` may be read before it is assigned\n   --> sema_flow.pas:53:13\n    |\n 53 |   Result := Result + 1;\n    |             ^^^^^^ read here\n    |\n    = note: Puy requires `Result` to be assigned before it is read\n    = fix: add `Result := 0;` at the start of the body"
+      },
+      {
+        "code": "E2000",
+        "severity": "error",
+        "name": null,
+        "message": "variable `Result` may be read before it is assigned",
+        "primary": {
+          "file": "sema_flow.pas",
+          "start": 803,
+          "end": 809,
+          "line": 57,
+          "column": 7,
+          "end_line": 57,
+          "end_column": 13,
+          "label": "read here"
+        },
+        "secondary": [],
+        "notes": [
+          "Puy requires `Result` to be assigned before it is read"
+        ],
+        "fixes": [
+          {
+            "title": "add `Result := 0;` at the start of the body",
+            "applicability": "safe",
+            "edits": [
+              {
+                "file": "sema_flow.pas",
+                "start": 796,
+                "end": 796,
+                "line": 56,
+                "column": 6,
+                "end_line": 56,
+                "end_column": 6,
+                "original": "",
+                "replacement": "\n  Result := 0;"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E2000]: variable `Result` may be read before it is assigned\n   --> sema_flow.pas:57:7\n    |\n 57 |   Inc(Result);\n    |       ^^^^^^ read here\n    |\n    = note: Puy requires `Result` to be assigned before it is read\n    = fix: add `Result := 0;` at the start of the body"
+      },
+      {
+        "code": "E2004",
+        "severity": "error",
+        "name": null,
+        "message": "loop variable `I` cannot be read after the loop",
+        "primary": {
+          "file": "sema_flow.pas",
+          "start": 901,
+          "end": 902,
+          "line": 64,
+          "column": 11,
+          "end_line": 64,
+          "end_column": 12,
+          "label": "read here"
+        },
+        "secondary": [
+          {
+            "file": "sema_flow.pas",
+            "start": 864,
+            "end": 865,
+            "line": 62,
+            "column": 7,
+            "end_line": 62,
+            "end_column": 8,
+            "label": "assigned by this loop"
+          },
+          {
+            "file": "sema_flow.pas",
+            "start": 837,
+            "end": 838,
+            "line": 60,
+            "column": 5,
+            "end_line": 60,
+            "end_column": 6,
+            "label": "declared here"
+          }
+        ],
+        "notes": [
+          "the value of a loop variable after the loop is undefined in Delphi, so Puy does not allow reading it",
+          "copy the value to another variable inside the loop"
+        ],
+        "fixes": [],
+        "rendered": "error[E2004]: loop variable `I` cannot be read after the loop\n   --> sema_flow.pas:64:11\n    |\n 60 | var I, J: Integer;\n    |     - declared here\n 61 | begin\n 62 |   for I := 1 to 3 do\n    |       - assigned by this loop\n 63 |     J := I;\n 64 |   WriteLn(I, J);\n    |           ^ read here\n    |\n    = note: the value of a loop variable after the loop is undefined in Delphi, so Puy does not allow reading it\n    = note: copy the value to another variable inside the loop"
+      },
+      {
+        "code": "E2000",
+        "severity": "error",
+        "name": null,
+        "message": "variable `J` may be read before it is assigned",
+        "primary": {
+          "file": "sema_flow.pas",
+          "start": 904,
+          "end": 905,
+          "line": 64,
+          "column": 14,
+          "end_line": 64,
+          "end_column": 15,
+          "label": "read here"
+        },
+        "secondary": [
+          {
+            "file": "sema_flow.pas",
+            "start": 840,
+            "end": 841,
+            "line": 60,
+            "column": 8,
+            "end_line": 60,
+            "end_column": 9,
+            "label": "declared here"
+          }
+        ],
+        "notes": [
+          "Puy requires every local variable to be assigned before it is read",
+          "declare `J` on its own to give it an initial value"
+        ],
+        "fixes": [],
+        "rendered": "error[E2000]: variable `J` may be read before it is assigned\n   --> sema_flow.pas:64:14\n    |\n 60 | var I, J: Integer;\n    |        - declared here\n...\n 64 |   WriteLn(I, J);\n    |              ^ read here\n    |\n    = note: Puy requires every local variable to be assigned before it is read\n    = note: declare `J` on its own to give it an initial value"
+      },
+      {
+        "code": "E0700",
+        "severity": "error",
+        "name": null,
+        "message": "undeclared identifier `K`",
+        "primary": {
+          "file": "sema_flow.pas",
+          "start": 959,
+          "end": 960,
+          "line": 67,
+          "column": 11,
+          "end_line": 67,
+          "end_column": 12,
+          "label": ""
+        },
+        "secondary": [
+          {
+            "file": "sema_flow.pas",
+            "start": 918,
+            "end": 919,
+            "line": 65,
+            "column": 11,
+            "end_line": 65,
+            "end_column": 12,
+            "label": "declared here"
+          }
+        ],
+        "notes": [
+          "a variable declared with `for var` is only in scope inside the loop",
+          "copy the value to another variable inside the loop"
+        ],
+        "fixes": [],
+        "rendered": "error[E0700]: undeclared identifier `K`\n   --> sema_flow.pas:67:11\n    |\n 65 |   for var K := 1 to 3 do\n    |           - declared here\n 66 |     WriteLn(K);\n 67 |   WriteLn(K);\n    |           ^\n    |\n    = note: a variable declared with `for var` is only in scope inside the loop\n    = note: copy the value to another variable inside the loop"
+      }
+    ],
+    "summary": {
+      "errors": 13,
+      "warnings": 0,
+      "notes": 0
+    }
+  }
+]

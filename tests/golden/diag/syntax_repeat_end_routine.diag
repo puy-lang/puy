@@ -1,0 +1,34 @@
+error[E0400]: expected `until`, found `end`
+   --> syntax_repeat_end_routine.pas:15:3
+    |
+ 13 |   repeat
+    |   ------ block starts here
+ 14 |     I := I + 1;
+ 15 |   end;
+    |   ^^^
+    |
+    = note: write `until` followed by the loop condition
+
+error[E0400]: expected `until`, found `end`
+   --> syntax_repeat_end_routine.pas:25:5
+    |
+ 23 |     repeat
+    |     ------ block starts here
+ 24 |       WriteLn('q');
+ 25 |     end;
+    |     ^^^
+    |
+    = note: write `until` followed by the loop condition
+
+error[E0400]: expected `until`, found `end`
+   --> syntax_repeat_end_routine.pas:35:5
+    |
+ 33 |     repeat
+    |     ------ block starts here
+ 34 |       WriteLn('r');
+ 35 |     end;
+    |     ^^^
+    |
+    = note: write `until` followed by the loop condition
+
+error: aborting due to 3 errors

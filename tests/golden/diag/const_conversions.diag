@@ -1,0 +1,63 @@
+error[E0714]: constant value 9223372036854775808 is out of range for `Int64` (-9223372036854775808..9223372036854775807)
+   --> const_conversions.pas:17:8
+    |
+ 17 |   AH = Abs(-9223372036854775808);
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0714]: constant value 128 is out of range for `ShortInt` (-128..127)
+   --> const_conversions.pas:20:18
+    |
+ 20 |   Sh := ShortInt($80);
+    |                  ^^^
+    |
+    = suggestion: replace with `-128`
+
+error[E0714]: constant value 4294967295 is out of range for `Integer` (-2147483648..2147483647)
+   --> const_conversions.pas:21:16
+    |
+ 21 |   I := Integer($FFFFFFFF);
+    |                ^^^^^^^^^
+    |
+    = suggestion: replace with `-1`
+
+error[E0714]: constant value 8589934591 is out of range for `Integer` (-2147483648..2147483647)
+   --> const_conversions.pas:22:16
+    |
+ 22 |   I := Integer($1FFFFFFFF);
+    |                ^^^^^^^^^^
+    |
+    = suggestion: replace with `$FFFFFFFF`
+
+error[E0714]: constant value 70000 is out of range for `Char` (0..65535)
+   --> const_conversions.pas:23:13
+    |
+ 23 |   C := Char(70000);
+    |             ^^^^^
+
+error[E0714]: constant value -1 is out of range for `Char` (0..65535)
+   --> const_conversions.pas:24:12
+    |
+ 24 |   C := Chr(-1);
+    |            ^^
+
+error[E0703]: operator `+` cannot be applied to `string` and `Integer`
+   --> const_conversions.pas:26:21
+    |
+ 26 |   WriteLn('Total: ' + XX);
+    |                     ^
+    |
+    = suggestion: pass as separate arguments
+
+error[E0702]: type mismatch: expected an integer type, found `Char` (argument 2, parameter `N`)
+   --> const_conversions.pas:27:10
+    |
+ 27 |   Inc(I, 'a');
+    |          ^^^
+
+error[E0702]: type mismatch: expected an integer type, found `Boolean` (argument 2, parameter `N`)
+   --> const_conversions.pas:28:10
+    |
+ 28 |   Inc(C, True);
+    |          ^^^^
+
+error: aborting due to 9 errors

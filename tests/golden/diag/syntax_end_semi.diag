@@ -1,0 +1,10 @@
+error[E0406]: expected `.` after the final `end`, found `;`
+  --> syntax_end_semi.pas:4:4
+   |
+ 4 | end;
+   |    ^
+   |    - found here
+   |
+   = fix: replace `;` with `.`
+
+error: aborting due to 1 error

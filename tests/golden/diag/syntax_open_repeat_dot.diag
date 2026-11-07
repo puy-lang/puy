@@ -1,0 +1,13 @@
+error[E0400]: expected `until`, found `.`
+  --> syntax_open_repeat_dot.pas:7:15
+   |
+ 5 |   repeat
+   |   ------ block starts here
+ 6 |     X := X - 1;
+ 7 |     WriteLn(X).
+   |               ^
+   |               - found here
+   |
+   = note: write `until` followed by the loop condition
+
+error: aborting due to 1 error

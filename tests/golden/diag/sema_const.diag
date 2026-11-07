@@ -1,0 +1,79 @@
+error[E0715]: division by zero in constant expression
+  --> sema_const.pas:3:9
+   |
+ 3 |   A = 1 div 0;
+   |         ^^^
+
+error[E0715]: division by zero in constant expression
+  --> sema_const.pas:4:9
+   |
+ 4 |   B = 1 mod 0;
+   |         ^^^
+
+error[E0714]: constant value 300 is out of range for `Byte` (0..255)
+  --> sema_const.pas:6:13
+   |
+ 6 |   D: Byte = C;
+   |             ^
+
+error[E3200]: `High` is not supported yet (planned for M2)
+  --> sema_const.pas:8:7
+   |
+ 8 |   F = High(Integer) + 1;
+   |       ^^^^
+
+error[E0714]: constant value 300 is out of range for `Byte` (0..255)
+  --> sema_const.pas:9:12
+   |
+ 9 |   G = Byte(300);
+   |            ^^^
+   |
+   = suggestion: replace with `44`
+
+error[E0714]: constant value -1 is out of range for `Byte` (0..255)
+   --> sema_const.pas:10:12
+    |
+ 10 |   H = Byte(-1);
+    |            ^^
+    |
+    = suggestion: replace with `$FF`
+
+error[E0713]: constant expression required
+   --> sema_const.pas:17:13
+    |
+ 17 |   const K = N;
+    |             ^
+
+error[E0714]: constant value 300 is out of range for `Byte` (0..255)
+   --> sema_const.pas:19:9
+    |
+ 19 |   By := 300;
+    |         ^^^
+
+error[E0714]: constant value 200 is out of range for `ShortInt` (-128..127)
+   --> sema_const.pas:20:9
+    |
+ 20 |   Sh := 200;
+    |         ^^^
+
+error[E0714]: constant value 256 is out of range for `Byte` (0..255)
+   --> sema_const.pas:22:14
+    |
+ 22 |   By := Byte(256);
+    |              ^^^
+    |
+    = suggestion: replace with `0`
+
+error[E0715]: division by zero in constant expression
+   --> sema_const.pas:23:10
+    |
+ 23 |   N := N div 0;
+    |          ^^^
+
+error[E0715]: division by zero in constant expression
+   --> sema_const.pas:24:10
+    |
+ 24 |   N := N mod 0;
+    |          ^^^
+
+error: aborting due to 12 errors

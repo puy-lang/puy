@@ -1,0 +1,9 @@
+error[E0413]: nesting is too deep (limit 256)
+    --> nest_begin_257.pas:261:9
+     |
+ 261 | WriteLn('x');
+     |         ^^^
+     |
+     = note: split the expression or statement into smaller ones, using variables or routines
+
+error: aborting due to 1 error

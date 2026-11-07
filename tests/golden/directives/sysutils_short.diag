@@ -1,0 +1,9 @@
+error[E2501]: use the full unit name `System.SysUtils`
+  --> sysutils_short.pas:4:3
+   |
+ 4 |   SysUtils;
+   |   ^^^^^^^^
+   |
+   = fix: replace with `System.SysUtils`
+
+error: aborting due to 1 error

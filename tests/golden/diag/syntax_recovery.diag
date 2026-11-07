@@ -1,0 +1,211 @@
+error[E0400]: expected `;`, found `Y`
+  --> syntax_recovery.pas:3:13
+   |
+ 3 |   X: Integer
+   |             ^
+ 4 |   Y: Integer;
+   |   - found here
+   |
+   = fix: insert `;`
+
+error[E0409]: only one variable can be declared with an initial value
+  --> syntax_recovery.pas:5:17
+   |
+ 5 |   A, B: Integer = 0;
+   |                 ^^^
+
+error[E0404]: expected a type
+  --> syntax_recovery.pas:6:5
+   |
+ 6 |   Z: ;
+   |     ^
+   |      - found here
+
+error[E0405]: expected an identifier
+  --> syntax_recovery.pas:6:7
+   |
+ 6 |   Z: ;
+   |       ^
+ 7 |   : Integer;
+   |   - found here
+
+error[E0405]: expected an identifier
+   --> syntax_recovery.pas:9:6
+    |
+  9 | const
+    |      ^
+ 10 |   = 1;
+    |   - found here
+
+error[E0405]: expected an identifier
+   --> syntax_recovery.pas:11:10
+    |
+ 11 | procedure (P: Integer);
+    |          ^
+    |           - found here
+
+warning[W0009]: calling convention `stdcall` is ignored (ignored-calling-convention)
+   --> syntax_recovery.pas:14:26
+    |
+ 14 | procedure Q(P: Integer); stdcall; platform; 42;
+    |                          ^^^^^^^
+    |
+    = note: disable with `{$WARN ignored-calling-convention OFF}`
+    = fix: remove `stdcall`
+
+warning[W0010]: hint directive `platform` is ignored (ignored-hint-directive)
+   --> syntax_recovery.pas:14:35
+    |
+ 14 | procedure Q(P: Integer); stdcall; platform; 42;
+    |                                   ^^^^^^^^
+    |
+    = note: disable with `{$WARN ignored-hint-directive OFF}`
+    = fix: remove `platform`
+
+error[E0401]: unexpected `42`
+   --> syntax_recovery.pas:14:45
+    |
+ 14 | procedure Q(P: Integer); stdcall; platform; 42;
+    |                                             ^^
+
+error[E0404]: expected a type
+   --> syntax_recovery.pas:17:14
+    |
+ 17 | function F(): ;
+    |              ^
+    |               - found here
+
+error[E0400]: expected `;`, found `WriteLn`
+   --> syntax_recovery.pas:22:9
+    |
+ 22 |   X := 1
+    |         ^
+ 23 |   WriteLn(X);
+    |   ------- found here
+    |
+    = fix: insert `;`
+
+error[E0400]: expected `then`, found `WriteLn`
+   --> syntax_recovery.pas:24:11
+    |
+ 24 |   if X > 0 WriteLn('a');
+    |           ^
+    |            ------- found here
+    |
+    = fix: insert `then`
+
+error[E0400]: expected `then`, found `WriteLn`
+   --> syntax_recovery.pas:25:13
+    |
+ 25 |   if (X > 0)WriteLn('a');
+    |             ^
+    |             ------- found here
+    |
+    = fix: insert `then`
+
+error[E0702]: type mismatch: expected `Boolean`, found `Integer`
+   --> syntax_recovery.pas:26:6
+    |
+ 26 |   if X := 1 then WriteLn(X);
+    |      ^
+
+error[E0400]: expected `then`, found `:=`
+   --> syntax_recovery.pas:26:8
+    |
+ 26 |   if X := 1 then WriteLn(X);
+    |        ^^
+
+error[E0403]: expected an expression
+   --> syntax_recovery.pas:27:7
+    |
+ 27 |   X := ;
+    |       ^
+    |        - found here
+
+error[E0403]: expected an expression
+   --> syntax_recovery.pas:28:5
+    |
+ 28 |   if then WriteLn('b');
+    |     ^
+    |      ---- found here
+
+error[E0403]: expected an expression
+   --> syntax_recovery.pas:29:11
+    |
+ 29 |   WriteLn(,);
+    |           ^
+    |           - found here
+
+error[E0403]: expected an expression
+   --> syntax_recovery.pas:29:12
+    |
+ 29 |   WriteLn(,);
+    |            ^
+    |            - found here
+
+error[E0400]: expected `;`, found `'a'`
+   --> syntax_recovery.pas:30:11
+    |
+ 30 |   WriteLn 'a';
+    |           ^^^
+
+error[E0400]: expected `do`, found `X`
+   --> syntax_recovery.pas:31:14
+    |
+ 31 |   while X > 0 X := X - 1;
+    |              ^
+    |               - found here
+    |
+    = fix: insert `do`
+
+error[E0400]: expected `do`, found `WriteLn`
+   --> syntax_recovery.pas:32:18
+    |
+ 32 |   for X := 1 to 3 WriteLn(X);
+    |                  ^
+    |                   ------- found here
+    |
+    = fix: insert `do`
+
+error[E0410]: `;` is not allowed before `else`
+   --> syntax_recovery.pas:34:17
+    |
+ 34 |     WriteLn('a');
+    |                 ^
+    |
+    = fix: remove `;`
+
+error[E0402]: expected a statement
+   --> syntax_recovery.pas:38:3
+    |
+ 38 |   else WriteLn('c');
+    |   ^^^^
+
+error[E0402]: expected a statement
+   --> syntax_recovery.pas:39:9
+    |
+ 39 |   begin ) end;
+    |         ^
+
+error[E0400]: expected `)`, found `;`
+   --> syntax_recovery.pas:40:14
+    |
+ 40 |   X := (1 + 2;
+    |              ^
+    |              - found here
+    |
+    = fix: insert `)`
+
+error[E0400]: expected `;`, found `)`
+   --> syntax_recovery.pas:41:10
+    |
+ 41 |   Y := 1 ) + 2;
+    |          ^
+
+error[E0400]: expected `;`, found `2`
+   --> syntax_recovery.pas:42:10
+    |
+ 42 |   X := 1 2;
+    |          ^
+
+error: aborting due to 26 errors; 2 warnings emitted

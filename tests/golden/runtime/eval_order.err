@@ -1,0 +1,2 @@
+error: uncaught exception EDivByZero: division by zero
+  at EvalOrder.<main> (eval_order.pas:43)
