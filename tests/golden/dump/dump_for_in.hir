@@ -1,0 +1,61 @@
+program DumpForIn
+.type TInts = array of Integer
+.global g0 G: Integer
+.global g1 Ints: TInts
+.routine f0 Total(const A: array of Integer): Int64
+  .var v0 A: array of Integer const param
+  .var v1 Result: Int64 result
+  .var v2 E: Int64 for var
+  .var v3 -: array of Integer hidden
+  .var v4 -: Integer hidden
+  assign @15 R+
+    var v1 Result
+    const Int64 0
+  for-in @16 coll=v3 idx=v4
+    var v2 E
+    in
+      var v0 A: array of Integer
+    body
+      assign @17 R+
+        var v1 Result
+        binary Int64
+          var v1 Result: Int64
+          + Int64 int:Int64
+            var v2 E: Int64
+.routine <main>
+  .var v0 -: TInts hidden
+  .var v1 -: Integer hidden
+  .var v2 C: Char for var
+  .var v3 -: string hidden
+  .var v4 -: Integer hidden
+  assign @21 R+
+    global g1 Ints
+    array TInts
+      const Integer 1
+      const Integer 2
+      const Integer 3
+  for-in @22 coll=v0 idx=v1
+    global g0 G
+    in
+      global g1 Ints: TInts
+    body
+      if @23
+        cond
+          binary Boolean
+            global g0 G: Integer
+            = Boolean int:Integer
+              const Integer 2
+        then
+          continue @24
+  for-in @25 coll=v3 idx=v4
+    var v2 C
+    in
+      const string "ab"
+    body
+      writeln @26
+        arg
+          var v2 C: Char
+  writeln @27
+    arg
+      call f0 Total: Int64
+        global g1 Ints: TInts

@@ -1,0 +1,68 @@
+; puy ir 1
+.global
+.func f0 ConstCopyOnWrite.<main> params=0
+  .reg t0: - temp
+  .reg t1: - temp
+bb0:
+  .line 27
+  Call         -, f1()
+  .line 28
+  Call         -, f1()
+  .line 29
+  RetVoid
+.finally
+.func f1 ConstCopyOnWrite.Use params=0
+  .reg v0 P: TPoint local
+  .reg t0: Integer temp
+  .reg t1: Integer temp
+  .reg t2: string temp
+  .reg t3: string temp
+  .reg t4: Integer temp
+  .reg t5: string temp
+  .reg t6: string temp
+  .reg t7: string temp
+  .reg t8: string temp
+  .reg t9: Integer temp
+  .reg t10: TPoint temp
+  .reg t11: string temp
+  .reg t12: string temp
+  .reg t13: TPoint temp
+  .reg t14: string temp
+bb0:
+  .line 20
+  LoadConst    v0, ConstCopyOnWrite.TPoint (X: 0; Y: 0; Tag: "origin")
+  .line 21
+  FieldGet     t0, v0, 0
+  LoadInt      t1, 1
+  AddInt       t0, t0, t1
+  NarrowOvf    t0, t0, 4
+  Unique       v0, ConstCopyOnWrite.TPoint
+  FieldSet     v0, 0, t0
+  .line 22
+  LoadConst    t2, "moved"
+  Unique       v0, ConstCopyOnWrite.TPoint
+  FieldSetRef  v0, 2, t2
+  .line 23
+  FieldGet     t4, v0, 0
+  IntToStr     t3, t4
+  LoadConst    t5, " "
+  ConcatStr    t3, t3, t5
+  FieldGetRef  t6, v0, 2
+  ConcatStr    t3, t3, t6
+  LoadConst    t7, " "
+  ConcatStr    t3, t3, t7
+  LoadConst    t10, ConstCopyOnWrite.TPoint (X: 0; Y: 0; Tag: "origin")
+  FieldGet     t9, t10, 0
+  IntToStr     t8, t9
+  ConcatStr    t3, t3, t8
+  LoadConst    t11, " "
+  ConcatStr    t3, t3, t11
+  LoadConst    t13, ConstCopyOnWrite.TPoint (X: 0; Y: 0; Tag: "origin")
+  FieldGetRef  t12, t13, 2
+  ConcatStr    t3, t3, t12
+  LoadConst    t14, "\n"
+  ConcatStr    t3, t3, t14
+  CallHost     -, h0(t3)
+  .line 24
+  RetVoid
+.finally v0, t2, t3, t5, t6, t7, t8, t10, t11, t12, t13, t14

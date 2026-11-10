@@ -1,0 +1,76 @@
+error[E0738]: a `var` or `out` parameter cannot have a default value
+   --> default_param_errors.pas:12:30
+    |
+ 12 | procedure V(var X: Integer = 0);
+    |                              ^
+
+error[E0738]: a `var` or `out` parameter cannot have a default value
+   --> default_param_errors.pas:16:30
+    |
+ 16 | procedure O(out X: Integer = 0);
+    |                              ^
+
+error[E0738]: only one parameter can be declared with a default value
+   --> default_param_errors.pas:21:31
+    |
+ 21 | procedure Two(A, B: Integer = 0);
+    |                               ^
+
+error[E0738]: parameters with default values must come last
+   --> default_param_errors.pas:25:33
+    |
+ 25 | procedure Order(A: Integer = 0; B: Integer);
+    |                                 ^
+
+error[E0738]: a parameter of type `TArray<Integer>` cannot have a default value
+   --> default_param_errors.pas:29:36
+    |
+ 29 | procedure Arr(A: TArray<Integer> = nil);
+    |                                    ^^^
+
+error[E0738]: a parameter of type `TPoint` cannot have a default value
+   --> default_param_errors.pas:33:27
+    |
+ 33 | procedure Rec(P: TPoint = 0);
+    |                           ^
+
+error[E0713]: constant expression required
+   --> default_param_errors.pas:40:33
+    |
+ 40 | procedure NotConst(A: Integer = G);
+    |                                 ^
+
+error[E0723]: default value of parameter `A` does not match the forward declaration of `Mismatch`
+   --> default_param_errors.pas:48:11
+    |
+ 44 | procedure Mismatch(A: Integer = 1); forward;
+    |           -------- declared here
+...
+ 48 | procedure Mismatch(A: Integer = 2);
+    |           ^^^^^^^^
+
+error[E0702]: type mismatch: expected `Integer`, found `Char`
+   --> default_param_errors.pas:64:32
+    |
+ 64 | procedure TypeErr(A: Integer = 'x');
+    |                                ^^^
+
+error[E0705]: wrong number of arguments: expected 1 to 3, found 4
+   --> default_param_errors.pas:70:3
+    |
+ 60 | procedure Range(A: Integer; B: Integer = 0; C: Integer = 0);
+    |           ----- declared here
+...
+ 70 |   Range(1, 2, 3, 4);
+    |   ^^^^^^^^^^^^^^^^^
+
+error[E0705]: wrong number of arguments: expected 1 to 3, found 0
+   --> default_param_errors.pas:71:3
+    |
+ 60 | procedure Range(A: Integer; B: Integer = 0; C: Integer = 0);
+    |           ----- declared here
+...
+ 71 |   Range();
+    |   ^^^^^^^
+
+error: aborting due to 11 errors

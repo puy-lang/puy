@@ -1,0 +1,50 @@
+warning[W0017]: unused parameter `A` (unused-parameter)
+   --> unused_parameter.pas:11:17
+    |
+ 11 | procedure Later(A: Integer; const C: string; var V: Integer; out O: Integer);
+    |                 ^ declared here
+    |
+    = note: disable with `{$WARN unused-parameter OFF}`
+
+warning[W0017]: unused parameter `C` (unused-parameter)
+   --> unused_parameter.pas:11:35
+    |
+ 11 | procedure Later(A: Integer; const C: string; var V: Integer; out O: Integer);
+    |                                   ^ declared here
+    |
+    = note: disable with `{$WARN unused-parameter OFF}`
+
+warning[W0017]: unused parameter `V` (unused-parameter)
+   --> unused_parameter.pas:11:50
+    |
+ 11 | procedure Later(A: Integer; const C: string; var V: Integer; out O: Integer);
+    |                                                  ^ declared here
+    |
+    = note: disable with `{$WARN unused-parameter OFF}`
+
+warning[W0017]: unused parameter `X` (unused-parameter)
+   --> unused_parameter.pas:26:20
+    |
+ 26 | procedure Declared(X: Integer);
+    |                    ^ declared here
+    |
+    = note: disable with `{$WARN unused-parameter OFF}`
+
+warning[W0017]: unused parameter `N` (unused-parameter)
+   --> unused_parameter.pas:32:20
+    |
+ 32 | procedure Assigned(N: Integer);
+    |                    ^ declared here
+    |
+    = note: disable with `{$WARN unused-parameter OFF}`
+
+warning[W0002]: value assigned to `N` is never read (unused-value)
+   --> unused_parameter.pas:42:3
+    |
+ 42 |   N := 5;
+    |   ^
+    |
+    = note: remove the assignment if the value is not needed
+    = note: disable with `{$WARN unused-value OFF}`
+
+warning: 6 warnings emitted

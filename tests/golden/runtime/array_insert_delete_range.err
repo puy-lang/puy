@@ -1,0 +1,2 @@
+error: uncaught exception ERangeError: array index 0 is out of range 0..-1
+  at ArrayInsertDeleteRange.<main> (array_insert_delete_range.pas:50)

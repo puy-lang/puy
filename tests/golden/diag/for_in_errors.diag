@@ -1,0 +1,130 @@
+error[E0730]: cannot iterate over a value of type `Integer`
+   --> for_in_errors.pas:24:12
+    |
+ 24 |   for I in 10 do
+    |            ^^
+
+error[E0730]: cannot iterate over a value of type `TPoint`
+   --> for_in_errors.pas:26:12
+    |
+ 26 |   for I in P do
+    |            ^
+
+error[E0702]: type mismatch: expected `string`, found `Integer`
+   --> for_in_errors.pas:28:12
+    |
+ 28 |   for S in Ints do
+    |            ^^^^
+
+error[E0702]: type mismatch: expected `Integer`, found `Char`
+   --> for_in_errors.pas:30:12
+    |
+ 30 |   for I in 'abc' do
+    |            ^^^^^
+
+error[E0722]: loop variable must be a local variable
+   --> for_in_errors.pas:32:7
+    |
+ 18 | procedure Bad(var V: Integer; const K: Integer; P: TPoint);
+    |                   - declared here
+...
+ 32 |   for V in Ints do
+    |       ^
+    |
+    = note: a `var` or `out` parameter refers to the caller's variable; copy it to a local variable first
+
+error[E0707]: cannot assign to `K`
+   --> for_in_errors.pas:34:7
+    |
+ 18 | procedure Bad(var V: Integer; const K: Integer; P: TPoint);
+    |                                     - declared here
+...
+ 34 |   for K in Ints do
+    |       ^ a `const` parameter
+
+error[E0722]: loop variable must be a local variable
+   --> for_in_errors.pas:36:7
+    |
+ 15 |   G: Integer;
+    |   - declared here
+...
+ 36 |   for G in Ints do
+    |       ^
+
+error[E0707]: cannot assign to `I`
+   --> for_in_errors.pas:39:5
+    |
+ 20 |   I: Integer;
+    |   - declared here
+...
+ 39 |     I := 0;
+    |     ^ the loop variable
+
+error[E0707]: cannot assign to `I`
+   --> for_in_errors.pas:41:9
+    |
+ 20 |   I: Integer;
+    |   - declared here
+...
+ 41 |     Inc(I);
+    |         ^ the loop variable
+
+error[E0707]: cannot assign to `I`
+   --> for_in_errors.pas:43:9
+    |
+ 20 |   I: Integer;
+    |   - declared here
+...
+ 43 |     for I in Ints do
+    |         ^ the loop variable
+
+error[E2004]: loop variable `B` cannot be read after the loop
+   --> for_in_errors.pas:47:11
+    |
+ 22 |   B: Byte;
+    |   - declared here
+...
+ 45 |   for B in Ints do
+    |       - assigned by this loop
+ 46 |     WriteLn(B);
+ 47 |   WriteLn(B);
+    |           ^ read here
+    |
+    = note: the value of a loop variable after the loop is undefined in Delphi, so Puy does not allow reading it
+    = note: copy the value to another variable inside the loop
+
+error[E0700]: undeclared identifier `Undeclared`
+   --> for_in_errors.pas:48:7
+    |
+ 48 |   for Undeclared in Ints do
+    |       ^^^^^^^^^^
+    |
+    = fix: insert `var`
+
+error[E0700]: undeclared identifier `Undeclared`
+   --> for_in_errors.pas:49:13
+    |
+ 49 |     WriteLn(Undeclared);
+    |             ^^^^^^^^^^
+
+error[E0707]: cannot assign to `X`
+   --> for_in_errors.pas:55:5
+    |
+ 54 |   for var X in Ints do
+    |           - declared here
+ 55 |     X := 1;
+    |     ^ the loop variable
+
+error[E0700]: undeclared identifier `X`
+   --> for_in_errors.pas:56:11
+    |
+ 54 |   for var X in Ints do
+    |           - declared here
+ 55 |     X := 1;
+ 56 |   WriteLn(X);
+    |           ^
+    |
+    = note: a variable declared with `for var` is only in scope inside the loop
+    = note: copy the value to another variable inside the loop
+
+error: aborting due to 15 errors

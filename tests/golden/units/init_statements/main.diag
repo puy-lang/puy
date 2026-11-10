@@ -1,0 +1,10 @@
+warning[W0020]: use `initialization` instead of `begin` (legacy-unit-init)
+  --> src/Legacy.pas:7:1
+   |
+ 7 | begin
+   | ^^^^^
+   |
+   = note: disable with `{$WARN legacy-unit-init OFF}`
+   = fix: replace `begin` with `initialization`
+
+warning: 1 warning emitted

@@ -1,0 +1,12 @@
+unit Main uses=Helpers
+.global g0 Seed: Integer
+.routine f1 Next(): Integer
+  .var v0 Result: Integer result
+  assign @17 R+
+    var v0 Result
+    call f0 Double: Integer
+      global g0 Seed: Integer
+.routine <init>
+  assign @9 R+ init
+    global g0 Seed
+    const Integer 3

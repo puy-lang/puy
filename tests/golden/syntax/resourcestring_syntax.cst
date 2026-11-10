@@ -1,0 +1,64 @@
+SOURCE_FILE@0..259
+  LINE_COMMENT@0..96 "// The tree of `resourcestring` (grammar.md 1.3): a section at the top level, and a section that"
+  NEWLINE@96..97 "\n"
+  LINE_COMMENT@97..161 "// starts the body of a routine (E0416; the body is still read)."
+  NEWLINE@161..162 "\n"
+  NEWLINE@162..163 "\n"
+  SCRIPT@163..259
+    RESOURCESTRING_SECTION@163..207
+      RESOURCESTRING_KW@163..177 "resourcestring"
+      NEWLINE@177..178 "\n"
+      WHITESPACE@178..180 "  "
+      CONST_DECL@180..188
+        IDENT@180..181 "A"
+        WHITESPACE@181..182 " "
+        EQ@182..183 "="
+        WHITESPACE@183..184 " "
+        LITERAL@184..187
+          STRING_LIT@184..187 "'a'"
+        SEMICOLON@187..188 ";"
+      NEWLINE@188..189 "\n"
+      WHITESPACE@189..191 "  "
+      CONST_DECL@191..207
+        IDENT@191..192 "B"
+        COLON@192..193 ":"
+        WHITESPACE@193..194 " "
+        TYPE_REF@194..200
+          STRING_KW@194..200 "string"
+        WHITESPACE@200..201 " "
+        EQ@201..202 "="
+        WHITESPACE@202..203 " "
+        LITERAL@203..206
+          STRING_LIT@203..206 "'b'"
+        SEMICOLON@206..207 ";"
+    NEWLINE@207..208 "\n"
+    NEWLINE@208..209 "\n"
+    ROUTINE_DECL@209..258
+      ROUTINE_HEADER@209..220
+        PROCEDURE_KW@209..218 "procedure"
+        WHITESPACE@218..219 " "
+        QUALIFIED_NAME@219..220
+          IDENT@219..220 "P"
+      SEMICOLON@220..221 ";"
+      NEWLINE@221..222 "\n"
+      ROUTINE_BODY@222..257
+        RESOURCESTRING_SECTION@222..247
+          RESOURCESTRING_KW@222..236 "resourcestring"
+          NEWLINE@236..237 "\n"
+          WHITESPACE@237..239 "  "
+          CONST_DECL@239..247
+            IDENT@239..240 "C"
+            WHITESPACE@240..241 " "
+            EQ@241..242 "="
+            WHITESPACE@242..243 " "
+            LITERAL@243..246
+              STRING_LIT@243..246 "'c'"
+            SEMICOLON@246..247 ";"
+        NEWLINE@247..248 "\n"
+        COMPOUND_STMT@248..257
+          BEGIN_KW@248..253 "begin"
+          NEWLINE@253..254 "\n"
+          END_KW@254..257 "end"
+      SEMICOLON@257..258 ";"
+    NEWLINE@258..259 "\n"
+    EOF@259..259 ""

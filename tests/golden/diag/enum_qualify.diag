@@ -1,0 +1,42 @@
+error[E0736]: an enumeration type must be declared with a name
+   --> enum_qualify.pas:16:6
+    |
+ 16 |   V: (P, Q);
+    |      ^^^^^^
+    |
+    = note: declare the enumeration as a named type, as in `type TColor = (Red, Green, Blue)`
+
+error[E0736]: enumeration value `Right` must be qualified with its type
+   --> enum_qualify.pas:25:8
+    |
+ 25 |   S := Right;
+    |        ^^^^^
+    |
+    = fix: replace with `TSide.Right`
+
+error[E0736]: enumeration value `Green` must be qualified with its type
+   --> enum_qualify.pas:30:8
+    |
+ 30 |   C := Green;
+    |        ^^^^^
+    |
+    = fix: replace with `TColor.Green`
+
+error[E0736]: enumeration value `Amber` must be qualified with its type
+   --> enum_qualify.pas:31:8
+    |
+ 31 |   L := Amber;
+    |        ^^^^^
+    |
+    = fix: replace with `TLight.Amber`
+
+error[E0736]: enumeration value `Red` must be qualified with its type
+   --> enum_qualify.pas:32:8
+    |
+ 32 |   C := Red;
+    |        ^^^
+    |
+    = suggestion: replace with `TColor.Red`
+    = suggestion: replace with `TLight.Red`
+
+error: aborting due to 5 errors

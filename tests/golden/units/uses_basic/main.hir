@@ -1,0 +1,38 @@
+program Main uses=Greeting,MyApp.Models.User
+.global g2 P: TPoint
+.routine <main>
+  writeln @9
+    arg
+      call f0 Greet: string
+        const string "unit"
+  writeln @10
+    arg
+      call f0 Greet: string
+        const string "qualified"
+  writeln @11
+    arg
+      call f2 Describe: string
+        const string "nested"
+  assign @12 R+
+    global g2 P
+    call f1 Origin: TPoint
+  writeln @13
+    arg
+      field Integer X #0
+        global g2 P: TPoint
+    arg
+      const Char #32
+    arg
+      field Integer Y #1
+        global g2 P: TPoint
+  assign @14 R+
+    global g0 Count
+    binary Integer
+      global g0 Count: Integer
+      + Integer int:Integer
+        const Integer 1
+  writeln @15
+    arg
+      global g0 Count: Integer
+    arg
+      const Char #33

@@ -1,0 +1,59 @@
+error[E0707]: cannot assign to `U[1]`
+   --> utf8_diag.pas:20:3
+    |
+ 20 |   U[1] := 65;
+    |   ^^^^ a byte of a `UTF8String`
+    |
+    = note: convert the value to `string` to change its characters, then convert it back
+
+error[E0730]: cannot iterate over a value of type `UTF8String`
+   --> utf8_diag.pas:21:12
+    |
+ 21 |   for C in U do
+    |            ^
+
+error[E0702]: type mismatch: expected `string`, found `UTF8String` (argument 1, parameter `S`)
+   --> utf8_diag.pas:23:10
+    |
+ 23 |   Change(U);
+    |          ^
+    |
+    = note: a `var` parameter needs a variable of exactly the same type
+
+error[E0702]: type mismatch: expected `Char`, found `Byte`
+   --> utf8_diag.pas:24:8
+    |
+ 24 |   C := U[1];
+    |        ^^^^
+
+error[E0724]: a value of type `UTF8String` cannot be converted to `Integer`
+   --> utf8_diag.pas:26:8
+    |
+ 26 |   B := Integer(U);
+    |        ^^^^^^^^^^
+
+error[E0724]: a value of type `Integer` cannot be converted to `UTF8String`
+   --> utf8_diag.pas:27:8
+    |
+ 27 |   U := UTF8String(5);
+    |        ^^^^^^^^^^^^^
+
+error[E0703]: operator `+` cannot be applied to `UTF8String` and `Integer`
+   --> utf8_diag.pas:28:13
+    |
+ 28 |   WriteLn(U + 1);
+    |             ^
+
+error[E0703]: operator `*` cannot be applied to `UTF8String` and `UTF8String`
+   --> utf8_diag.pas:29:13
+    |
+ 29 |   WriteLn(U * U);
+    |             ^
+
+error[E0706]: argument 1 must be a variable (parameter `X` is `var`)
+   --> utf8_diag.pas:30:7
+    |
+ 30 |   Inc(U[1]);
+    |       ^^^^
+
+error: aborting due to 9 errors

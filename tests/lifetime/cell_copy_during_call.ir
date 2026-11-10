@@ -1,0 +1,167 @@
+; puy ir 1
+.global
+  g0 R: TRec
+  g1 Y: TRec
+.func f0 CellCopyDuringCall.<main> params=0
+  .reg t0: TRec temp
+  .reg t1: string temp
+  .reg t2: TRec temp
+  .reg t3: TInner temp
+  .reg t4: Int64 temp
+  .reg t5: string temp
+  .reg t6: TRec temp
+  .reg t7: array[0..1] of TInner temp
+  .reg t8: TInner temp
+  .reg t9: - ref
+  .reg t10: - ref
+  .reg t11: TRec temp
+  .reg t12: TInner temp
+  .reg t13: - ref
+  .reg t14: - temp
+  .reg t15: Int64 temp
+  .reg t16: Int64 temp
+  .reg t17: - cell
+  .reg t18: Int64 temp
+  .reg t19: TRec temp
+  .reg t20: array[0..1] of TInner temp
+  .reg t21: TInner temp
+  .reg t22: - ref
+  .reg t23: - temp
+  .reg t24: Int64 temp
+  .reg t25: Int64 temp
+  .reg t26: Int64 temp
+  .reg t27: - cell
+  .reg t28: string temp
+  .reg t29: Integer temp
+  .reg t30: TRec temp
+  .reg t31: TInner temp
+  .reg t32: string temp
+  .reg t33: string temp
+  .reg t34: Integer temp
+  .reg t35: TRec temp
+  .reg t36: TInner temp
+  .reg t37: string temp
+  .reg t38: string temp
+  .reg t39: TRec temp
+  .reg t40: array[0..1] of TInner temp
+  .reg t41: Int64 temp
+  .reg t42: TInner temp
+  .reg t43: string temp
+  .reg t44: string temp
+  .reg t45: TRec temp
+  .reg t46: array[0..1] of TInner temp
+  .reg t47: Int64 temp
+  .reg t48: TInner temp
+  .reg t49: string temp
+bb0:
+  .line 28
+  Release      t0
+  StoreGlobalRef t0, g0
+  .line 29
+  LoadConst    t1, "old"
+  LoadGlobal   t2, g0
+  Unique       t2, CellCopyDuringCall.TRec
+  StoreGlobal  t2, g0
+  FieldGet     t3, t2, 0
+  Unique       t3, CellCopyDuringCall.TInner
+  FieldSet     t2, 0, t3
+  FieldSetRef  t3, 1, t1
+  .line 30
+  LoadInt      t4, 1
+  LoadConst    t5, "item"
+  LoadGlobal   t6, g0
+  Unique       t6, CellCopyDuringCall.TRec
+  StoreGlobal  t6, g0
+  FieldGet     t7, t6, 1
+  Unique       t7, array[0..1] of CellCopyDuringCall.TInner
+  FieldSet     t6, 1, t7
+  ValGet       t8, t7, t4
+  Unique       t8, CellCopyDuringCall.TInner
+  ValSet       t7, t4, t8
+  FieldSetRef  t8, 1, t5
+  .line 31
+  LoadGlobal   t11, g0
+  Unique       t11, CellCopyDuringCall.TRec
+  StoreGlobal  t11, g0
+  FieldGet     t12, t11, 0
+  Unique       t12, CellCopyDuringCall.TInner
+  FieldSet     t11, 0, t12
+  MakeGlobalRef t13, g0
+  LoadZero     t15
+  LoadZero     t16
+  LoadZero     t14
+  MakeCell     t14, t13, 2, t15, t16
+  MoveRef      t17, t14
+  Move         t9, t17
+  LoadInt      t18, 1
+  LoadGlobal   t19, g0
+  Unique       t19, CellCopyDuringCall.TRec
+  StoreGlobal  t19, g0
+  FieldGet     t20, t19, 1
+  Unique       t20, array[0..1] of CellCopyDuringCall.TInner
+  FieldSet     t19, 1, t20
+  ValGet       t21, t20, t18
+  Unique       t21, CellCopyDuringCall.TInner
+  ValSet       t20, t18, t21
+  MakeGlobalRef t22, g0
+  LoadInt      t24, 1
+  Move         t25, t18
+  LoadInt      t26, 1
+  LoadZero     t23
+  MakeCell     t23, t22, 3, t24, t25, t26
+  MoveRef      t27, t23
+  Move         t10, t27
+  Call         -, f1(t9, t10)
+  .line 32
+  LoadGlobal   t30, g0
+  FieldGet     t31, t30, 0
+  FieldGet     t29, t31, 0
+  IntToStr     t28, t29
+  LoadConst    t32, " "
+  ConcatStr    t28, t28, t32
+  LoadGlobal   t35, g1
+  FieldGet     t36, t35, 0
+  FieldGet     t34, t36, 0
+  IntToStr     t33, t34
+  ConcatStr    t28, t28, t33
+  LoadConst    t37, " "
+  ConcatStr    t28, t28, t37
+  LoadGlobal   t39, g0
+  FieldGet     t40, t39, 1
+  LoadInt      t41, 1
+  ValGet       t42, t40, t41
+  FieldGetRef  t38, t42, 1
+  ConcatStr    t28, t28, t38
+  LoadConst    t43, " "
+  ConcatStr    t28, t28, t43
+  LoadGlobal   t45, g1
+  FieldGet     t46, t45, 1
+  LoadInt      t47, 1
+  ValGet       t48, t46, t47
+  FieldGetRef  t44, t48, 1
+  ConcatStr    t28, t28, t44
+  LoadConst    t49, "\n"
+  ConcatStr    t28, t28, t49
+  CallHost     -, h0(t28)
+  .line 33
+  RetVoid
+.finally t0, t1, t5, t17, t27, t28, t32, t33, t37, t38, t43, t44, t49
+.func f1 CellCopyDuringCall.Change params=2
+  .reg v0 X: Integer var param
+  .reg v1 S: string var param
+  .reg t0: TRec temp
+  .reg t1: Integer temp
+  .reg t2: string temp
+bb0:
+  .line 22
+  LoadGlobalRef t0, g0
+  StoreGlobalRef t0, g1
+  .line 23
+  LoadInt      t1, 7
+  StoreRef     v0, t1
+  .line 24
+  LoadConst    t2, "new"
+  StoreRefRef  v1, t2
+  .line 25
+  RetVoid
+.finally t0, t2

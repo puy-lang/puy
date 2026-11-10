@@ -1,0 +1,104 @@
+error[E0701]: `X` is already declared
+   --> type_decl_errors.pas:15:5
+    |
+ 14 |     X, Y: Integer;
+    |     - declared here
+ 15 |     X: string;                  // E0701: duplicate field
+    |     ^ declared again here
+
+error[E0701]: `TPoint` is already declared
+   --> type_decl_errors.pas:17:3
+    |
+ 13 |   TPoint = record
+    |   ------ declared here
+...
+ 17 |   TPoint = record end;          // E0701: duplicate type name
+    |   ^^^^^^ declared again here
+
+error[E0727]: type `TSelf` contains itself
+   --> type_decl_errors.pas:18:3
+    |
+ 18 |   TSelf = record
+    |   ^^^^^
+ 19 |     Next: TSelf;                // E0727: contains itself
+    |     ---- part of the cycle
+
+error[E0727]: type `TA` contains itself
+   --> type_decl_errors.pas:21:3
+    |
+ 21 |   TA = record
+    |   ^^
+ 22 |     B: array[0..1] of TB;       // E0727: TA -> TB -> TA
+    |     - part of the cycle
+    |        ----- part of the cycle
+...
+ 25 |     A: TA;
+    |     - part of the cycle
+
+error[E0728]: invalid array bounds `3..1`
+   --> type_decl_errors.pas:27:17
+    |
+ 27 |   TBack = array[3..1] of Integer;          // E0728: invalid bounds
+    |                 ^^^^
+
+error[E0728]: array type is too large
+   --> type_decl_errors.pas:28:17
+    |
+ 28 |   THuge = array[Integer] of Byte;          // E0728: too large
+    |                 ^^^^^^^
+
+error[E3005]: variant records are not supported in Puy
+   --> type_decl_errors.pas:31:5
+    |
+ 31 |     case Boolean of                        // E3005
+    |     ^^^^
+    |
+    = note: use inheritance instead
+
+warning[W0016]: `packed` is ignored (ignored-packed)
+   --> type_decl_errors.pas:34:13
+    |
+ 34 |   TPacked = packed record                  // W0016
+    |             ^^^^^^
+    |
+    = note: Puy chooses the memory layout of records and arrays itself
+    = note: disable with `{$WARN ignored-packed OFF}`
+    = fix: remove `packed`
+
+error[E0727]: type `TDyn` contains itself
+   --> type_decl_errors.pas:37:3
+    |
+ 37 |   TDyn = array of TDyn;                    // E0727: an array of itself
+    |   ^^^^
+
+error[E3200]: methods and visibility sections in records are not supported yet (planned for M3)
+   --> type_decl_errors.pas:39:5
+    |
+ 39 |     procedure Run;                         // E3200 (M3)
+    |     ^^^^^^^^^
+
+error[E3200]: distinct types (`type X = type Y`) are not supported yet (planned for M4)
+   --> type_decl_errors.pas:41:15
+    |
+ 41 |   TDistinct = type Integer;                // E3200 (M4)
+    |               ^^^^
+
+error[E0700]: undeclared identifier `TNowhere`
+   --> type_decl_errors.pas:43:8
+    |
+ 43 |     F: TNowhere;                           // E0700
+    |        ^^^^^^^^
+
+error[E0708]: `Main` is not a type
+   --> type_decl_errors.pas:45:29
+    |
+ 45 |   TNotType = array[0..1] of Main;          // E0708
+    |                             ^^^^
+
+error[E0713]: constant expression required
+   --> type_decl_errors.pas:46:24
+    |
+ 46 |   TBadBound = array[0..N] of Integer;      // E0713: N is a variable
+    |                        ^
+
+error: aborting due to 13 errors; 1 warning emitted

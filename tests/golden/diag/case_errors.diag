@@ -1,0 +1,112 @@
+error[E0709]: duplicate case label `1`
+   --> case_errors.pas:27:8
+    |
+ 26 |     1: WriteLn('a');
+    |     - previous label here
+ 27 |     2, 1: WriteLn('b');
+    |        ^
+
+error[E0709]: duplicate case label `5`
+   --> case_errors.pas:29:5
+    |
+ 28 |     3..6: WriteLn('c');
+    |     ---- previous label here
+ 29 |     5: WriteLn('d');
+    |     ^
+
+error[E0709]: duplicate case label `0..10`
+   --> case_errors.pas:30:5
+    |
+ 26 |     1: WriteLn('a');
+    |     - previous label here
+...
+ 30 |     0..10: WriteLn('e');
+    |     ^^^^^
+
+error[E0709]: empty case label range `9..7`
+   --> case_errors.pas:31:5
+    |
+ 31 |     9..7: WriteLn('f');
+    |     ^^^^
+
+error[E0709]: duplicate case label `TColor.Green`
+   --> case_errors.pas:35:5
+    |
+ 34 |     TColor.Red..TColor.Green: WriteLn('a');
+    |     ------------------------ previous label here
+ 35 |     TColor.Green: WriteLn('b');
+    |     ^^^^^^^^^^^^
+
+error[E0709]: a range is not allowed in a `string` case
+   --> case_errors.pas:38:5
+    |
+ 38 |     'a'..'c': WriteLn('a');
+    |     ^^^^^^^^
+
+error[E0709]: duplicate case label `'x'`
+   --> case_errors.pas:40:5
+    |
+ 39 |     'x': WriteLn('b');
+    |     --- previous label here
+ 40 |     'x', 'X': WriteLn('c');
+    |     ^^^
+
+error[E0709]: duplicate case label `'y'`
+   --> case_errors.pas:42:5
+    |
+ 41 |     'y': WriteLn('d');
+    |     --- previous label here
+ 42 |     'y': WriteLn('e');
+    |     ^^^
+
+error[E0739]: case selector must be an ordinal type or `string`, found `TPoint`
+   --> case_errors.pas:44:8
+    |
+ 44 |   case P of
+    |        ^
+
+error[E0739]: case selector must be an ordinal type or `string`, found `TArray<Integer>`
+   --> case_errors.pas:47:8
+    |
+ 47 |   case A of
+    |        ^
+
+error[E0702]: type mismatch: expected `Integer`, found `Char`
+   --> case_errors.pas:51:5
+    |
+ 51 |     'x': WriteLn('a');
+    |     ^^^
+
+error[E0713]: constant expression required
+   --> case_errors.pas:52:5
+    |
+ 52 |     I: WriteLn('b');
+    |     ^
+
+error[E0702]: type mismatch: expected `Integer`, found `TColor`
+   --> case_errors.pas:53:5
+    |
+ 53 |     TColor.Red: WriteLn('c');
+    |     ^^^^^^^^^^
+
+error[E0714]: constant value 256 is out of range for `Byte` (0..255)
+   --> case_errors.pas:57:5
+    |
+ 57 |     256: WriteLn('b');
+    |     ^^^
+
+error[E0714]: constant value 10 is out of range for `TDigit` (0..9)
+   --> case_errors.pas:61:5
+    |
+ 61 |     10: WriteLn('b');
+    |     ^^
+
+error[E0736]: enumeration value `Red` must be qualified with its type
+   --> case_errors.pas:64:5
+    |
+ 64 |     Red: WriteLn('a');
+    |     ^^^
+    |
+    = fix: replace with `TColor.Red`
+
+error: aborting due to 16 errors

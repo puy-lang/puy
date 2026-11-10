@@ -1,4 +1,4 @@
-; puyc format 1
+; puyc format 2
 .const
   0: str "Hello "
   1: str "\n"
@@ -7,17 +7,18 @@
 .host
   0: Console.Write params=1 ret=0
 .unit DumpHello file="dump_hello.pas" init=- fini=- entry=0
-.func 0 DumpHello.<main> params=0 regs=3
+.func 0 DumpHello.<main> params=0 regs=4
   .line 10
-  0000  LoadInt      r0, 5
-  0001  StoreGlobal  r0, g0
+  0000  LoadInt      r3, 5
+  0001  StoreGlobal  r3, g0
   .line 11
   0002  LoadConst    r0, k0
-  0003  LoadGlobal   r1, g0
-  0004  IntToStr     r1, r1
+  0003  LoadGlobal   r3, g0
+  0004  IntToStr     r1, r3
   0005  ConcatStr    r0, r0, r1
   0006  LoadConst    r2, k1
   0007  ConcatStr    r0, r0, r2
   0008  CallHost     r0, h0
   .line 12
   0009  RetVoid
+.finally r0, r1, r2

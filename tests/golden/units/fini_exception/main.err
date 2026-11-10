@@ -1,0 +1,5 @@
+error: uncaught exception Exception: from main
+  at Main.<main> (main.pas:10)
+error: uncaught exception EInvalidOp: from finalization
+  at Outer.Fail (src/Outer.pas:13)
+  at Outer.<fini> (src/Outer.pas:20)

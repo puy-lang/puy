@@ -1,0 +1,52 @@
+; puyc format 2
+.const
+  0: str "\n"
+  1: str "ab"
+  2: str "-"
+.global
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpOverload file="dump_overload.pas" init=- fini=- entry=0
+.func 0 DumpOverload.<main> params=0 regs=7
+  .line 17
+  0000  LoadInt      r6, 4
+  0001  Call         r6, f1
+  0002  Move         r5, r6
+  0003  IntToStr     r0, r5
+  0004  LoadConst    r1, k0
+  0005  ConcatStr    r0, r0, r1
+  0006  CallHost     r0, h0
+  .line 18
+  0007  LoadConst    r3, k1
+  0008  Move         r5, r3
+  0009  LoadZero     r6
+  000a  LoadConst    r6, k2
+  000b  Call         r5, f2
+  000c  MoveRef      r2, r5
+  000d  LoadConst    r4, k0
+  000e  ConcatStr    r2, r2, r4
+  000f  CallHost     r2, h0
+  .line 19
+  0010  RetVoid
+.finally r0, r1, r2, r3, r4
+.func 1 DumpOverload.Twice params=1 regs=3
+  .local r0 N
+  .local r1 Result
+  .line 8
+  0000  Move         r1, r0
+  0001  LoadInt      r2, 2
+  0002  MulInt       r1, r1, r2
+  0003  NarrowOvf    r1, r1, 4
+  .line 9
+  0004  Ret          r1
+.func 2 DumpOverload.Twice#2 params=2 regs=3
+  .local r0 S
+  .local r1 Sep
+  .local r2 Result
+  .line 13
+  0000  AssignRef    r2, r0
+  0001  ConcatStr    r2, r2, r1
+  0002  ConcatStr    r2, r2, r0
+  .line 14
+  0003  Ret          r2
+.finally r1, r2

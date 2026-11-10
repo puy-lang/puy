@@ -1,0 +1,2 @@
+error: uncaught exception EEncodingError: UTF8String cut inside a multibyte character at byte 2
+  at Utf8Encoding.<main> (utf8_encoding.pas:81)

@@ -1,0 +1,13 @@
+error[E0711]: `Exit` with a value is not allowed in a procedure
+   --> unit_init_exit.pas:10:3
+    |
+ 10 |   Exit(1);
+    |   ^^^^
+
+error[E0710]: `Result` can only be used in a function
+   --> unit_init_exit.pas:12:3
+    |
+ 12 |   Result := 2;
+    |   ^^^^^^
+
+error: aborting due to 2 errors

@@ -1,0 +1,2 @@
+error: uncaught exception ERangeError: value 12 is out of range for `TDigit` (0..9)
+  at EnumRangeCheck.<main> (enum_range_check.pas:51)

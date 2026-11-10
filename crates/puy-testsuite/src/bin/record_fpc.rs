@@ -77,10 +77,17 @@ mod native {
             format!("{{$mode delphiunicode}}{{$codepage utf8}}{{$SCOPEDENUMS ON}}{switches}\n");
         // Fully qualified unit names do not work with FPC 3.2.2's `-FN`, so rewrite them to short names
         // (`design/testing.md` 3.3; decided 2026-11-03). In M1 only `System.SysUtils` can be written
-        text.push_str(&super::replace_ascii_case_insensitive(
+        let body = super::replace_ascii_case_insensitive(
             &String::from_utf8_lossy(src),
             "System.SysUtils",
             "SysUtils",
+        );
+        // FPC's `TReplaceFlags` is a set of an anonymous enumeration, so the values cannot be
+        // qualified with `TReplaceFlag.` as Puy requires (`design/testing.md` 3.3)
+        text.push_str(&super::replace_ascii_case_insensitive(
+            &body,
+            "TReplaceFlag.",
+            "",
         ));
         let pas = work.join(format!("{}.pas", case.name));
         std::fs::write(&pas, text).map_err(|e| e.to_string())?;

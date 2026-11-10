@@ -1,0 +1,45 @@
+error[E0701]: `A` is already declared
+   --> overload_decl_errors.pas:11:11
+    |
+  7 | procedure A(X: Integer);
+    |           - declared here
+...
+ 11 | procedure A(const S: string); overload;
+    |           ^ declared again here
+    |
+    = fix: add `overload`
+
+error[E0701]: overloads of `B` have the same parameters
+   --> overload_decl_errors.pas:19:11
+    |
+ 15 | procedure B(X: Integer); overload;
+    |           - declared here
+...
+ 19 | procedure B(const X: Integer); overload;
+    |           ^ declared again here
+
+error[E0701]: overloads of `C` have the same parameters
+   --> overload_decl_errors.pas:28:10
+    |
+ 23 | function C(X: Integer): Integer; overload;
+    |          - declared here
+...
+ 28 | function C(X: Integer): string; overload;
+    |          ^ declared again here
+
+error[E0723]: forward declaration of `E` has no body
+   --> overload_decl_errors.pas:34:11
+    |
+ 34 | procedure E(const S: string); overload; forward;
+    |           ^
+
+error[E0701]: `G` is already declared
+   --> overload_decl_errors.pas:44:11
+    |
+ 40 | procedure G(X: Integer);
+    |           - declared here
+...
+ 44 | procedure G(X: Integer);
+    |           ^ declared again here
+
+error: aborting due to 5 errors

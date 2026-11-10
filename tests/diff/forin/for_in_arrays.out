@@ -1,0 +1,11 @@
+dynamic: 10 20 30 40
+static: five six seven
+char index: 1 2 3
+open: 10 20 30 40
+open: 1 2 3
+value: five six seven
+records: (1,2) (3,4)
+widened: 10000000000 20000000000 30000000000 40000000000
+string: 104 233 108 108 111
+reversed: cba
+empty: 0

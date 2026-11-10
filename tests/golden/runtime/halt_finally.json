@@ -1,0 +1,46 @@
+[
+  {
+    "schema": "puy.exception/1",
+    "halt": true,
+    "class": "ECleanup",
+    "message": "first cleanup failed",
+    "stack": [
+      {
+        "function": "halt_finally.Stop",
+        "file": "halt_finally.pas",
+        "line": 24
+      },
+      {
+        "function": "halt_finally.Drop",
+        "file": "halt_finally.pas",
+        "line": 34
+      },
+      {
+        "function": "halt_finally.<main>",
+        "file": "halt_finally.pas",
+        "line": 40
+      }
+    ],
+    "omitted": 0,
+    "properties": {},
+    "suppressed": [],
+    "inner": null
+  },
+  {
+    "schema": "puy.exception/1",
+    "halt": true,
+    "class": "ECleanup",
+    "message": "second cleanup failed",
+    "stack": [
+      {
+        "function": "halt_finally.<main>",
+        "file": "halt_finally.pas",
+        "line": 43
+      }
+    ],
+    "omitted": 0,
+    "properties": {},
+    "suppressed": [],
+    "inner": null
+  }
+]

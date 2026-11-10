@@ -1,0 +1,26 @@
+[42] [   42] [42   ] [0042] [-0042]
+[-1234567890123] [65535] [FF] [0000FF] [2A]
+[4294967295] [FFFFFFFF]
+[abc] [     abc] [abc     ] [ab] [z]
+[日本語] [x]
+b a b c
+[     7] [7     ] [007] [%] [100%]
+[3.14] [3] [   3.142] [3.1     ]
+[1.23E+003] [-1.230E-004]
+[0.000123] [1234.5]
+[1,234,567.89] [-9,876,543.2] [12.00]
+00FF 1000 FFFFFFFF FFFFFEE08E04FB35 FFFF
+TRUE FALSE FALSE TRUE
+-1 0 True False
+TRUE 123
+TRUE 31
+FALSE 0
+77
+[a b  ] [  a b] [x]
+TRUE FALSE FALSE
+TRUE TRUE TRUE TRUE
+TRUE TRUE TRUE
+a+b-c a+b+c
+abc ba
+[***] [] []
+'it''s' ''

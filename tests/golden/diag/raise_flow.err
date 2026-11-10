@@ -1,0 +1,3 @@
+error: uncaught exception Exception: never
+  at RaiseFlow.Never (raise_flow.pas:17)
+  at RaiseFlow.<main> (raise_flow.pas:27)

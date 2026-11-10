@@ -1,4 +1,4 @@
-error: invalid value `ir` for `--dump`: expected `tokens`, `cst`, `hir` or `bytecode`
+error: invalid value `asm` for `--dump`: expected `tokens`, `cst`, `hir`, `ir` or `bytecode`
 
 Usage: puy <command> [options] [args]
        puy [options] <file> [args...]        (same as `puy run`)
@@ -6,7 +6,7 @@ Usage: puy <command> [options] [args]
 
 Commands:
   run <file|-> [args...]   Compile and run a program (`-` reads the source from stdin)
-  check <file|->           Type-check only (`--dump tokens|cst|hir|bytecode` prints a stage)
+  check <file|->           Type-check only (`--dump tokens|cst|hir|ir|bytecode` prints a stage)
   fix <file>               Apply safe fixes to the file
   explain <code>           Explain an error code
 

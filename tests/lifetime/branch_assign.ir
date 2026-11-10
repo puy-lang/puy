@@ -1,0 +1,57 @@
+; puy ir 1
+.global
+.func f0 BranchAssign.<main> params=0
+  .reg t0: Integer temp
+  .reg t1: Integer temp
+bb0:
+  .line 24
+  LoadInt      t0, 1
+  Call         -, f1(t0)
+  .line 25
+  LoadInt      t1, -2
+  Call         -, f1(t1)
+  .line 26
+  RetVoid
+.finally
+.func f1 BranchAssign.Show params=1
+  .reg v0 N: Integer param
+  .reg v1 S: string local
+  .reg v2 T: string local
+  .reg t0: Integer temp
+  .reg t1: string temp
+  .reg t2: string temp
+  .reg t3: string temp
+  .reg t4: string temp
+bb0:
+  .line 13
+  LoadZero     t0
+  JmpIfLeInt   v0, t0, bb2, bb1
+bb1:
+  .line 14
+  LoadConst    v1, "positive"
+  .line 13
+  Jmp          bb3
+bb2:
+  .line 16
+  IntToStr     v1, v0
+  .line 13
+  Jmp          bb3
+bb3:
+  .line 17
+  Release      v2
+  .line 18
+  AssignRef    t1, v2
+  ConcatStr    t1, t1, v1
+  MoveRef      v2, t1
+  .line 19
+  AssignRef    v2, v1
+  Release      t2
+  ConcatStr    v2, v2, t2
+  .line 20
+  AssignRef    t3, v2
+  LoadConst    t4, "\n"
+  ConcatStr    t3, t3, t4
+  CallHost     -, h0(t3)
+  .line 21
+  RetVoid
+.finally v1, v2, t1, t2, t3, t4

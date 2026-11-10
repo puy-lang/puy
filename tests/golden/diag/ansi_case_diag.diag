@@ -1,0 +1,53 @@
+error[E0736]: enumeration value `cmFull` must be qualified with its type
+   --> ansi_case_diag.pas:13:27
+    |
+ 13 |   S := AnsiUpperCase('a', cmFull);
+    |                           ^^^^^^
+    |
+    = fix: replace with `TCaseMapping.cmFull`
+
+error[E0736]: enumeration value `cfUpper` must be qualified with its type
+   --> ansi_case_diag.pas:14:31
+    |
+ 14 |   B := AnsiSameText('a', 'b', cfUpper);
+    |                               ^^^^^^^
+    |
+    = fix: replace with `TCaseFold.cfUpper`
+
+error[E0702]: type mismatch: expected `TCaseMapping`, found `TCaseFold` (argument 2, parameter `Mapping`)
+   --> ansi_case_diag.pas:15:27
+    |
+ 15 |   S := AnsiLowerCase('a', TCaseFold.cfUpper);
+    |                           ^^^^^^^^^^^^^^^^^
+
+error[E0702]: type mismatch: expected `TCaseFold`, found `Boolean` (argument 3, parameter `Fold`)
+   --> ansi_case_diag.pas:16:31
+    |
+ 16 |   B := AnsiSameText('a', 'b', True);
+    |                               ^^^^
+
+error[E0702]: type mismatch: expected `TCaseMapping`, found `Integer` (argument 2, parameter `Mapping`)
+   --> ansi_case_diag.pas:17:27
+    |
+ 17 |   S := AnsiUpperCase('a', 1);
+    |                           ^
+
+error[E0705]: wrong number of arguments: expected 1 to 2, found 0
+   --> ansi_case_diag.pas:18:8
+    |
+ 18 |   S := AnsiUpperCase;
+    |        ^^^^^^^^^^^^^
+
+error[E0705]: wrong number of arguments: expected 1 to 2, found 3
+   --> ansi_case_diag.pas:19:8
+    |
+ 19 |   S := AnsiLowerCase('a', TCaseMapping.cmFull, TCaseMapping.cmFull);
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0705]: wrong number of arguments: expected 2 to 3, found 1
+   --> ansi_case_diag.pas:20:8
+    |
+ 20 |   B := AnsiCompareText('a') = 0;
+    |        ^^^^^^^^^^^^^^^^^^^^
+
+error: aborting due to 8 errors

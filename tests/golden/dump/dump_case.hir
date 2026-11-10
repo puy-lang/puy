@@ -1,0 +1,43 @@
+program DumpCase
+.global g0 I: Integer
+.global g1 S: string
+.routine <main>
+  assign @11 R+
+    global g0 I
+    const Integer 4
+  case @12
+    selector
+      binary Integer
+        global g0 I: Integer
+        + Integer int:Integer
+          const Integer 1
+    arm
+      label
+        const Integer 1
+      label
+        const Integer 3
+        const Integer 5
+      then
+        writeln @13
+          arg
+            const Char #97
+    arm
+      label
+        const Integer 2
+    else
+      writeln @16
+        arg
+          const Char #98
+  assign @18 R+
+    global g1 S
+    const string "x"
+  case @19
+    selector
+      global g1 S: string
+    arm
+      label
+        const string "x"
+      then
+        writeln @20
+          arg
+            const Char #120

@@ -1,0 +1,106 @@
+; puy ir 1
+.global
+  g0 Names: TNames
+.func f0 ForInLifetime.<main> params=0
+  .reg v0 S: string for var
+  .reg v1 -: TNames hidden
+  .reg v2 -: Integer hidden
+  .reg t0: TNames temp
+  .reg t1: string temp
+  .reg t2: string temp
+  .reg t3: TNames temp
+  .reg t4: Int64 temp
+  .reg t5: Int64 temp
+  .reg t6: TNames temp
+  .reg t7: string temp
+  .reg t8: string temp
+  .reg t9: TNames temp
+  .reg t10: TNames temp
+  .reg t11: string temp
+  .reg t12: TNames temp
+  .reg t13: Int64 temp
+bb0:
+  .line 20
+  LoadConst    t1, "a"
+  LoadConst    t2, "b"
+  LoadInt      t3, 2
+  NewArr       t3, ForInLifetime.TNames
+  LoadZero     t4
+  DynSetRef    t3, t4, t1
+  LoadInt      t4, 1
+  DynSetRef    t3, t4, t2
+  MoveRef      t0, t3
+  StoreGlobalRef t0, g0
+  .line 21
+  LoadGlobalRef v1, g0
+  ArrLen       t5, v1
+  LoadZero     v2
+  Jmp          bb1
+bb1:
+  .line 21
+  JmpIfLeInt   t5, v2, bb4, bb2
+bb2:
+  .line 21
+  DynGetRef    v0, v1, v2
+  .line 23
+  Release      t6
+  StoreGlobalRef t6, g0
+  .line 24
+  AssignRef    t7, v0
+  LoadConst    t8, "\n"
+  ConcatStr    t7, t7, t8
+  CallHost     -, h0(t7)
+  .line 21
+  Jmp          bb3
+bb3:
+  .line 21
+  AddIntI      v2, v2, 1
+  Jmp          bb1
+bb4:
+  .line 26
+  LoadConst    t11, "c"
+  LoadInt      t12, 1
+  NewArr       t12, ForInLifetime.TNames
+  LoadZero     t13
+  DynSetRef    t12, t13, t11
+  MoveRef      t10, t12
+  Move         t9, t10
+  Call         -, f1(t9)
+  .line 27
+  RetVoid
+.finally v0, v1, t0, t1, t2, t6, t7, t8, t10, t11
+.func f1 ForInLifetime.Show params=1
+  .reg v0 Names: TNames const param
+  .reg v1 S: string for var
+  .reg v2 -: TNames hidden
+  .reg v3 -: Integer hidden
+  .reg t0: Int64 temp
+  .reg t1: string temp
+  .reg t2: string temp
+bb0:
+  .line 12
+  AssignRef    v2, v0
+  ArrLen       t0, v2
+  LoadZero     v3
+  Jmp          bb1
+bb1:
+  .line 12
+  JmpIfLeInt   t0, v3, bb4, bb2
+bb2:
+  .line 12
+  DynGetRef    v1, v2, v3
+  .line 13
+  AssignRef    t1, v1
+  LoadConst    t2, "\n"
+  ConcatStr    t1, t1, t2
+  CallHost     -, h0(t1)
+  .line 12
+  Jmp          bb3
+bb3:
+  .line 12
+  AddIntI      v3, v3, 1
+  Jmp          bb1
+bb4:
+  .line 14
+  RetVoid
+.finally v1, v2, t1, t2

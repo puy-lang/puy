@@ -1,0 +1,4 @@
+program Tool;
+
+begin
+end.

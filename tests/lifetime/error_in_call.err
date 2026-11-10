@@ -1,0 +1,4 @@
+error: uncaught exception ERangeError: string index 100 is out of range 1..5
+  at ErrorInCall.Item (error_in_call.pas:11)
+  at ErrorInCall.Outer (error_in_call.pas:19)
+  at ErrorInCall.<main> (error_in_call.pas:23)

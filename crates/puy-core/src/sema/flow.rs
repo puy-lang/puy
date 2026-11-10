@@ -1,8 +1,9 @@
 //! Control-flow analysis (`docs/spec/semantics.md` 4.4, 4.6): definite assignment (E2000–E2004),
-//! unused variables (W0001), unreachable code (W0003).
+//! unused variables (W0001), unused parameters (W0017), unreachable code (W0003). Unused values
+//! (W0002) are in `values`.
 
 use super::hir::*;
-use super::types::Ty;
+use super::types::{Ty, TypeTable};
 use crate::diagnostics::{Code, Diagnostic, Fix, Stage, TextEdit};
 use crate::source::{FileId, Span, TextRange, TextSize};
 use crate::syntax::SyntaxKind;
@@ -22,8 +23,55 @@ struct LoopCtx {
     continues: Vec<State>,
 }
 
+/// A jump that may pass through `finally` blocks on its way.
+#[derive(Clone, Copy)]
+enum Jump {
+    /// `Exit` (the position, for `returns here`).
+    Exit(TextRange),
+    /// `Break` / `Continue` of the loop at this index of `Flow::loops`.
+    Break(usize),
+    Continue(usize),
+}
+
+/// The body of a `try..finally` being analyzed: jumps out of it run the `finally` block first, so
+/// its assignments count on their way (`docs/spec/exceptions.md` 5.7).
+struct FinallyCtx {
+    /// `Flow::loops.len()` at the `try` (loops below it are outside the `finally`).
+    loops_at_entry: usize,
+    pending: Vec<(Jump, State)>,
+}
+
+/// What a call of a nested routine does to the variables of the routine whose definite
+/// assignment is being checked (`docs/spec/semantics.md` 4.9): the variables it may read before
+/// assigning them (directly or through the nested routines it calls), and those it assigns on
+/// every path that returns (`None`: all of them, as it never returns).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Effect {
+    pub reads: Vec<VarId>,
+    pub writes: Option<Vec<VarId>>,
+}
+
+/// The effects of the nested routines, keyed by routine.
+pub type Effects = std::collections::HashMap<RoutineId, Effect>;
+
+/// Working out the effect of a nested routine (`summary`): the variables of the routine being
+/// checked (the target) get state slots after the routine's own variables.
+struct Summary {
+    /// The number of the routine's own variables (the target's variable `v` is slot `own + v`).
+    own: usize,
+    /// For each variable of the routine, the slot of the target's variable it refers to.
+    alias: Vec<Option<usize>>,
+    /// The target's variables read before they are assigned.
+    reads: Vec<bool>,
+    /// The target's variables assigned at every return so far (`None`: no return yet).
+    writes: Option<Vec<bool>>,
+}
+
 struct Flow<'a> {
     r: &'a Routine,
+    effects: &'a Effects,
+    summary: Option<Summary>,
+    types: &'a TypeTable,
     file: FileId,
     bytes: &'a [u8],
     diags: Vec<Diagnostic>,
@@ -37,24 +85,33 @@ struct Flow<'a> {
     sema_reads: &'a [(VarId, TextRange)],
     /// Those of `sema_reads` seen by this analysis.
     seen: Vec<bool>,
+    /// Read where the tree does not show it (`sema_reads` not seen, in reachable code).
+    unseen_read: Vec<bool>,
     /// Ranges of unreachable code (W0003).
     unreachable: Vec<TextRange>,
     loops: Vec<LoopCtx>,
+    finallies: Vec<FinallyCtx>,
     result_return_reported: bool,
     out_return_reported: Vec<bool>,
 }
 
-/// `sema_reads` are the variable reads recorded by semantic analysis (with positions). Reads inside expressions that did not
+/// `unused_param_on` marks the parameters where W0017 is enabled. `sema_reads` are the variable reads recorded by semantic analysis (with positions). Reads inside expressions that did not
 /// make it into the tree (error-typed expressions, discarded statements) also count as reads if they are in reachable code (4.6).
 pub fn analyze(
     r: &Routine,
+    types: &TypeTable,
     file: FileId,
     bytes: &[u8],
     sema_reads: &[(VarId, TextRange)],
+    unused_param_on: &[bool],
+    effects: &Effects,
 ) -> Vec<Diagnostic> {
     let n = r.vars.len();
     let mut f = Flow {
         r,
+        effects,
+        summary: None,
+        types,
         file,
         bytes,
         diags: Vec::new(),
@@ -63,21 +120,15 @@ pub fn analyze(
         tainted: vec![None; n],
         sema_reads,
         seen: vec![false; sema_reads.len()],
+        unseen_read: vec![false; n],
         unreachable: Vec::new(),
         loops: Vec::new(),
+        finallies: Vec::new(),
         result_return_reported: false,
         out_return_reported: vec![false; n],
     };
     let mut cur = Cursor {
-        state: (0..n)
-            .map(|i| match r.vars[i].kind {
-                VarKind::Param(ast::ParamMode::Out) => false,
-                VarKind::Param(_) => true,
-                VarKind::Result => false,
-                VarKind::Local => false,
-                VarKind::Hidden => true,
-            })
-            .collect(),
+        state: initial_state(r),
         reachable: true,
     };
     f.stmts(&r.body, &mut cur);
@@ -86,23 +137,224 @@ pub fn analyze(
     }
     f.count_unseen_reads();
     f.unused_variables();
-    f.diags
+    f.unused_parameters();
+    // W0001 alone for a variable whose value is never read, and W0017 alone for such a
+    // parameter where W0017 is enabled; no W0002 for a variable read where the tree does not show
+    // it (the reads cannot be placed on a path)
+    // A variable a nested routine uses is not followed by W0002 (its value may be read or
+    // replaced by any call; `docs/spec/semantics.md` 4.9)
+    let excluded: Vec<bool> = (0..n)
+        .map(|i| {
+            let v = &r.vars[i];
+            let never_read = !(f.reads[i] || v.read_by_nested)
+                && (v.kind == VarKind::Local || unused_param_on[i]);
+            never_read || f.unseen_read[i] || v.captured
+        })
+        .collect();
+    let mut diags = f.diags;
+    diags.extend(super::values::analyze(r, file, sema_reads, &excluded));
+    diags
+}
+
+/// Whether each variable is assigned on entry. A variable of an enclosing routine is: its reads
+/// and assignments are checked at the calls of the nested routine (`docs/spec/semantics.md` 4.9).
+fn initial_state(r: &Routine) -> State {
+    r.vars
+        .iter()
+        .map(|v| match v.kind {
+            VarKind::Param(ast::ParamMode::Out) => false,
+            VarKind::Param(_) => true,
+            VarKind::Result => false,
+            VarKind::Local => false,
+            VarKind::Hidden | VarKind::Exception | VarKind::Outer { .. } => true,
+        })
+        .collect()
+}
+
+/// The effects of the nested routines `group` on the variables of `target` (`target_vars` of
+/// them; `docs/spec/semantics.md` 4.9). Each entry is a nested routine with how many routines out
+/// `target` is from it. Calls can be mutual, so the effects are worked out again until they stop
+/// changing, starting from reading nothing and assigning everything.
+pub fn nested_effects(
+    group: &[(RoutineId, Option<&Routine>, u32)],
+    target_vars: usize,
+    types: &TypeTable,
+    file: FileId,
+    bytes: &[u8],
+) -> Effects {
+    let mut effects: Effects = group
+        .iter()
+        .map(|&(id, _, _)| {
+            (
+                id,
+                Effect {
+                    reads: Vec::new(),
+                    writes: None,
+                },
+            )
+        })
+        .collect();
+    loop {
+        let mut changed = false;
+        for &(id, r, up) in group {
+            // A routine without a body or with syntax errors (not analyzed) keeps the start
+            let Some(r) = r.filter(|r| !r.has_syntax_errors) else {
+                continue;
+            };
+            let e = summarize(r, up, target_vars, &effects, types, file, bytes);
+            if effects.get(&id) != Some(&e) {
+                effects.insert(id, e);
+                changed = true;
+            }
+        }
+        if !changed {
+            return effects;
+        }
+    }
+}
+
+/// The effect of one nested routine `r` on the variables of the routine `up` levels out.
+fn summarize(
+    r: &Routine,
+    up: u32,
+    target_vars: usize,
+    effects: &Effects,
+    types: &TypeTable,
+    file: FileId,
+    bytes: &[u8],
+) -> Effect {
+    let n = r.vars.len();
+    let alias = r
+        .vars
+        .iter()
+        .map(|v| match v.kind {
+            VarKind::Outer { up: u, var } if u == up => Some(n + var.0 as usize),
+            _ => None,
+        })
+        .collect();
+    let mut f = Flow {
+        r,
+        effects,
+        summary: Some(Summary {
+            own: n,
+            alias,
+            reads: vec![false; target_vars],
+            writes: None,
+        }),
+        types,
+        file,
+        bytes,
+        diags: Vec::new(),
+        reads: vec![false; n],
+        refs: vec![0; n],
+        tainted: vec![None; n],
+        sema_reads: &[],
+        seen: Vec::new(),
+        unseen_read: vec![false; n],
+        unreachable: Vec::new(),
+        loops: Vec::new(),
+        finallies: Vec::new(),
+        result_return_reported: false,
+        out_return_reported: vec![false; n],
+    };
+    let mut state = initial_state(r);
+    state.extend(std::iter::repeat_n(false, target_vars));
+    let mut cur = Cursor {
+        state,
+        reachable: true,
+    };
+    f.stmts(&r.body, &mut cur);
+    if cur.reachable {
+        f.check_return(&cur.state, r.end_span);
+    }
+    let s = f.summary.expect("set above");
+    let ids = |set: &[bool]| -> Vec<VarId> {
+        set.iter()
+            .enumerate()
+            .filter(|(_, b)| **b)
+            .map(|(i, _)| VarId(i as u32))
+            .collect()
+    };
+    Effect {
+        reads: ids(&s.reads),
+        writes: s.writes.as_deref().map(ids),
+    }
 }
 
 fn span(file: FileId, range: TextRange) -> Span {
     Span::new(file, range)
 }
 
-fn zero_text(ty: Ty) -> &'static str {
-    match ty {
-        Ty::Boolean => "False",
-        Ty::Char => "#0",
-        Ty::String => "''",
-        _ => "0",
-    }
+/// The text of a type's default value in a fix: `0`, `''`, `Default(TPoint)`
+/// (`docs/spec/types.md` chapter 6). `None` for an anonymous record or static array, which has no
+/// name to write.
+fn zero_text(ty: Ty, types: &TypeTable) -> Option<String> {
+    Some(match ty {
+        Ty::Boolean => "False".into(),
+        Ty::Char => "#0".into(),
+        Ty::String | Ty::Utf8String => "''".into(),
+        Ty::Record(id) | Ty::Array(id) => format!("Default({})", types.get(id).name.as_ref()?),
+        Ty::DynArray(_) | Ty::Exception(_) => "nil".into(),
+        _ => "0".into(),
+    })
 }
 
 impl<'a> Flow<'a> {
+    /// The state slot of a variable: for a variable of the target routine while working out an
+    /// effect, the target's slot.
+    fn slot(&self, id: VarId) -> usize {
+        let i = id.0 as usize;
+        match &self.summary {
+            Some(s) => s.alias[i].unwrap_or(i),
+            None => i,
+        }
+    }
+
+    fn mark_assigned(&mut self, id: VarId, cur: &mut Cursor) {
+        let s = self.slot(id);
+        cur.state[s] = true;
+    }
+
+    /// The slot of the target's variable `v` (a variable of an enclosing routine while working
+    /// out an effect; otherwise the routine's own).
+    fn target_slot(&self, v: VarId) -> usize {
+        self.summary.as_ref().map_or(0, |s| s.own) + v.0 as usize
+    }
+
+    /// A call of a nested routine: its reads and assignments of the target's variables
+    /// (`docs/spec/semantics.md` 4.9).
+    fn call_effect(&mut self, routine: RoutineId, at: TextRange, cur: &mut Cursor) {
+        let Some(e) = self.effects.get(&routine) else {
+            return;
+        };
+        for &v in &e.reads {
+            if self.summary.is_some() {
+                let slot = self.target_slot(v);
+                if !cur.state[slot]
+                    && let Some(s) = &mut self.summary
+                {
+                    s.reads[v.0 as usize] = true;
+                }
+            } else {
+                self.read_as(v, at, "read by this call", cur);
+            }
+        }
+        match &e.writes {
+            Some(writes) => {
+                for &v in writes {
+                    let slot = self.target_slot(v);
+                    cur.state[slot] = true;
+                }
+            }
+            None => {
+                let start = self.target_slot(VarId(0));
+                for st in &mut cur.state[start..] {
+                    *st = true;
+                }
+            }
+        }
+    }
+
     fn stmts(&mut self, list: &[Stmt], cur: &mut Cursor) {
         for (i, s) in list.iter().enumerate() {
             if !cur.reachable {
@@ -118,6 +370,33 @@ impl<'a> Flow<'a> {
             self.stmt(s, cur);
             let _ = i;
         }
+    }
+
+    /// The loop variable and body of a `for` / `for..in` (after the bounds or the collection):
+    /// the variable is assigned inside the body and unassigned after the loop (E2004).
+    fn for_loop(&mut self, var: &ForVar, var_span: TextRange, body: &Stmt, cur: &mut Cursor) {
+        if let ForVar::Local(id) = var {
+            let i = id.0 as usize;
+            cur.state[i] = true;
+            self.tainted[i] = None;
+            self.refs[i] += 1;
+        }
+        self.loops.push(LoopCtx {
+            breaks: Vec::new(),
+            continues: Vec::new(),
+        });
+        let mut b = cur.clone();
+        self.stmt(body, &mut b);
+        let ctx = self.loops.pop().unwrap();
+        for st in &ctx.breaks {
+            and_state(&mut cur.state, st);
+        }
+        if let ForVar::Local(id) = var {
+            let i = id.0 as usize;
+            cur.state[i] = false;
+            self.tainted[i] = Some(var_span);
+        }
+        cur.reachable = true;
     }
 
     fn stmt(&mut self, s: &Stmt, cur: &mut Cursor) {
@@ -213,38 +492,27 @@ impl<'a> Flow<'a> {
             } => {
                 self.expr(from, cur);
                 self.expr(to, cur);
-                if let ForVar::Local(id) = var {
-                    let i = id.0 as usize;
-                    cur.state[i] = true;
-                    self.tainted[i] = None;
-                    self.refs[i] += 1;
-                }
-                self.loops.push(LoopCtx {
-                    breaks: Vec::new(),
-                    continues: Vec::new(),
-                });
-                let mut b = cur.clone();
-                self.stmt(body, &mut b);
-                let ctx = self.loops.pop().unwrap();
-                for st in &ctx.breaks {
-                    and_state(&mut cur.state, st);
-                }
-                if let ForVar::Local(id) = var {
-                    let i = id.0 as usize;
-                    cur.state[i] = false;
-                    self.tainted[i] = Some(*var_span);
-                }
-                cur.reachable = true;
+                self.for_loop(var, *var_span, body, cur);
+            }
+            StmtKind::ForIn {
+                var,
+                var_span,
+                coll,
+                body,
+                ..
+            } => {
+                self.expr(coll, cur);
+                self.for_loop(var, *var_span, body, cur);
             }
             StmtKind::Break => {
-                if let Some(l) = self.loops.last_mut() {
-                    l.breaks.push(cur.state.clone());
+                if let Some(i) = self.loops.len().checked_sub(1) {
+                    self.jump(Jump::Break(i), cur.state.clone());
                 }
                 cur.reachable = false;
             }
             StmtKind::Continue => {
-                if let Some(l) = self.loops.last_mut() {
-                    l.continues.push(cur.state.clone());
+                if let Some(i) = self.loops.len().checked_sub(1) {
+                    self.jump(Jump::Continue(i), cur.state.clone());
                 }
                 cur.reachable = false;
             }
@@ -256,14 +524,45 @@ impl<'a> Flow<'a> {
                         self.refs[rid.0 as usize] += 1;
                     }
                 }
-                self.check_return(&cur.state, s.span);
+                self.jump(Jump::Exit(s.span), cur.state.clone());
                 cur.reachable = false;
             }
-            StmtKind::Halt(code) => {
+            StmtKind::Halt(code) | StmtKind::Raise(code) => {
                 if let Some(c) = code {
                     self.expr(c, cur);
                 }
                 cur.reachable = false;
+            }
+            StmtKind::RaiseOuter(x) => {
+                self.expr(x, cur);
+                cur.reachable = false;
+            }
+            StmtKind::Try { body, handler } => self.try_stmt(body, handler, cur),
+            StmtKind::Case {
+                selector,
+                arms,
+                else_body,
+            } => {
+                // Without `else`, the path past every arm counts even if the labels cover all the
+                // selector's values (`docs/spec/semantics.md` 4.10)
+                self.expr(selector, cur);
+                let mut merged: Option<Cursor> = None;
+                for arm in arms {
+                    let mut b = cur.clone();
+                    if let Some(body) = &arm.body {
+                        self.stmt(body, &mut b);
+                    }
+                    merge_into(&mut merged, b);
+                }
+                match else_body {
+                    Some(list) => {
+                        let mut b = cur.clone();
+                        self.stmts(list, &mut b);
+                        merge_into(&mut merged, b);
+                    }
+                    None => merge_into(&mut merged, cur.clone()),
+                }
+                *cur = merged.expect("the path past the arms is merged");
             }
             StmtKind::IncDec { target, delta, .. } => {
                 if let Some(d) = delta {
@@ -272,19 +571,63 @@ impl<'a> Flow<'a> {
                 // Same as `X := X + N`: read, then assign (4.4)
                 self.place_read(target, cur);
                 if let Place::Var(id, _) = target {
-                    cur.state[id.0 as usize] = true;
+                    self.mark_assigned(*id, cur);
                 }
             }
-            StmtKind::ReadLn(place) => {
-                if let Some(p) = place {
+            StmtKind::Insert {
+                source,
+                target,
+                index,
+                ..
+            } => {
+                // Same as `S := …S…`: read, then assign
+                self.expr(source, cur);
+                self.place_read(target, cur);
+                self.expr(index, cur);
+                if let Place::Var(id, _) = target {
+                    self.mark_assigned(*id, cur);
+                }
+            }
+            StmtKind::Delete {
+                target,
+                index,
+                count,
+            } => {
+                self.place_read(target, cur);
+                self.expr(index, cur);
+                self.expr(count, cur);
+                if let Place::Var(id, _) = target {
+                    self.mark_assigned(*id, cur);
+                }
+            }
+            StmtKind::SetElem { target, elem, .. } => {
+                // Same as `S := S + [X]`
+                self.expr(elem, cur);
+                self.place_read(target, cur);
+                if let Place::Var(id, _) = target {
+                    self.mark_assigned(*id, cur);
+                }
+            }
+            StmtKind::Read { targets, .. } => {
+                for p in targets {
                     self.place_write(p, cur);
                 }
+            }
+            StmtKind::SetLength { target, lens } => {
+                for l in lens {
+                    self.expr(l, cur);
+                }
+                // An assignment (`docs/spec/types.md` chapter 6)
+                self.place_write(target, cur);
             }
             StmtKind::Write { args, .. } => {
                 for a in args {
                     self.expr(&a.value, cur);
                     if let Some(w) = &a.width {
                         self.expr(w, cur);
+                    }
+                    if let Some(d) = &a.precision {
+                        self.expr(d, cur);
                     }
                 }
             }
@@ -294,7 +637,79 @@ impl<'a> Flow<'a> {
                     self.expr(m, cur);
                 }
             }
-            StmtKind::Nop => {}
+            StmtKind::Nop | StmtKind::Flush => {}
+        }
+    }
+
+    /// A `Break` / `Continue` / `Exit` with the state at the jump. Through a `finally` block, the
+    /// jump waits until the block has been analyzed.
+    fn jump(&mut self, j: Jump, state: State) {
+        if let Some(f) = self.finallies.last_mut() {
+            let outside = match j {
+                Jump::Exit(_) => true,
+                Jump::Break(i) | Jump::Continue(i) => i < f.loops_at_entry,
+            };
+            if outside {
+                f.pending.push((j, state));
+                return;
+            }
+        }
+        match j {
+            Jump::Exit(at) => self.check_return(&state, at),
+            Jump::Break(i) => self.loops[i].breaks.push(state),
+            Jump::Continue(i) => self.loops[i].continues.push(state),
+        }
+    }
+
+    /// `try..except` / `try..finally` (`docs/spec/exceptions.md` 5.7): handlers and the `finally`
+    /// block start from the state at the `try`.
+    fn try_stmt(&mut self, body: &[Stmt], handler: &TryHandler, cur: &mut Cursor) {
+        let entry = cur.clone();
+        match handler {
+            TryHandler::Except {
+                handlers,
+                else_body,
+            } => {
+                let mut b = entry.clone();
+                self.stmts(body, &mut b);
+                let mut merged = Some(b);
+                for h in handlers {
+                    let mut c = entry.clone();
+                    if let Some(s) = &h.body {
+                        self.stmt(s, &mut c);
+                    }
+                    merge_into(&mut merged, c);
+                }
+                // Without `else`, an exception no handler matches is raised again
+                if let Some(list) = else_body {
+                    let mut c = entry.clone();
+                    self.stmts(list, &mut c);
+                    merge_into(&mut merged, c);
+                }
+                *cur = merged.expect("the body's cursor is merged first");
+            }
+            TryHandler::Finally(fin) => {
+                self.finallies.push(FinallyCtx {
+                    loops_at_entry: self.loops.len(),
+                    pending: Vec::new(),
+                });
+                let mut b = entry.clone();
+                self.stmts(body, &mut b);
+                let ctx = self.finallies.pop().expect("pushed above");
+                let mut f = entry;
+                self.stmts(fin, &mut f);
+                if f.reachable {
+                    for (j, mut state) in ctx.pending {
+                        or_state(&mut state, &f.state);
+                        self.jump(j, state);
+                    }
+                }
+                if b.reachable {
+                    or_state(&mut b.state, &f.state);
+                }
+                b.reachable = b.reachable && f.reachable;
+                *cur = b;
+            }
         }
     }
 
@@ -315,11 +730,18 @@ impl<'a> Flow<'a> {
                 }
             }
             ExprKind::Unary { operand, .. } => self.expr(operand, cur),
-            ExprKind::StrIndex { base, index } => {
+            ExprKind::StrIndex { base, index } | ExprKind::Elem { base, index } => {
                 self.expr(base, cur);
                 self.expr(index, cur);
             }
-            ExprKind::Call { args, .. } => {
+            ExprKind::Field { base, .. } => self.expr(base, cur),
+            ExprKind::Slice { base, low, high } => {
+                self.expr(base, cur);
+                for b in low.iter().chain(high.iter()) {
+                    self.expr(b, cur);
+                }
+            }
+            ExprKind::Call { routine, args } => {
                 for a in args {
                     match a {
                         CallArg::Value(v) => self.expr(v, cur),
@@ -332,13 +754,29 @@ impl<'a> Flow<'a> {
                         }
                     }
                 }
+                self.call_effect(*routine, e.span, cur);
             }
-            ExprKind::Builtin { args, .. } => {
+            ExprKind::Builtin { args, .. } | ExprKind::ArrayCtor(args) => {
                 for a in args {
                     self.expr(a, cur);
                 }
             }
-            ExprKind::Convert { operand, .. } => self.expr(operand, cur),
+            ExprKind::Convert { operand, .. } | ExprKind::NewExc { msg: operand, .. } => {
+                self.expr(operand, cur)
+            }
+            ExprKind::ExcMember { base, .. } => self.expr(base, cur),
+            ExprKind::TryStrToInt { s, target } => {
+                self.expr(s, cur);
+                self.place_write(target, cur);
+            }
+            ExprKind::SetCtor(elems) => {
+                for el in elems {
+                    self.expr(&el.low, cur);
+                    if let Some(h) = &el.high {
+                        self.expr(h, cur);
+                    }
+                }
+            }
         }
     }
 
@@ -375,6 +813,7 @@ impl<'a> Flow<'a> {
             }
             self.reads[id.0 as usize] = true;
             self.refs[id.0 as usize] += 1;
+            self.unseen_read[id.0 as usize] = true;
         }
     }
 
@@ -385,10 +824,12 @@ impl<'a> Flow<'a> {
                 self.read(*id, *span, cur);
             }
             Place::Global(_) => {}
-            Place::StrIndex { base, index, .. } => {
+            Place::StrIndex { base, index, .. } | Place::Elem { base, index, .. } => {
                 self.expr(index, cur);
                 self.place_read(base, cur);
             }
+            Place::Field { base, .. } => self.place_read(base, cur),
+            Place::ExcMember { base, .. } => self.expr(base, cur),
         }
     }
 
@@ -396,23 +837,42 @@ impl<'a> Flow<'a> {
         match p {
             Place::Var(id, _) => {
                 let i = id.0 as usize;
-                cur.state[i] = true;
+                self.mark_assigned(*id, cur);
                 self.tainted[i] = None;
                 self.refs[i] += 1;
             }
             Place::Global(_) => {}
-            Place::StrIndex { base, index, .. } => {
-                // The `S` in `S[I] := C` is read
+            // Writing a part reads the whole: the `S` in `S[I] := C`, `R` in `R.F := 1`
+            // (`docs/spec/types.md` chapter 6)
+            Place::StrIndex { base, index, .. } | Place::Elem { base, index, .. } => {
                 self.expr(index, cur);
                 self.place_read(base, cur);
             }
+            Place::Field { base, .. } => self.place_read(base, cur),
+            Place::ExcMember { base, .. } => self.expr(base, cur),
         }
     }
 
     fn read(&mut self, id: VarId, at: TextRange, cur: &mut Cursor) {
+        self.read_as(id, at, "read here", cur);
+    }
+
+    /// A read at `at`, labeled `label` in E2000 / E2002 / E2004 (a call of a nested routine reads
+    /// the variables it reads; `docs/spec/semantics.md` 4.9).
+    fn read_as(&mut self, id: VarId, at: TextRange, label: &'static str, cur: &mut Cursor) {
         let i = id.0 as usize;
         self.refs[i] += 1;
         self.reads[i] = true;
+        let slot = self.slot(id);
+        if slot != i {
+            // A variable of the target read by a nested routine (working out its effect)
+            if !cur.state[slot]
+                && let Some(s) = &mut self.summary
+            {
+                s.reads[slot - s.own] = true;
+            }
+            return;
+        }
         if cur.state[i] {
             return;
         }
@@ -420,7 +880,7 @@ impl<'a> Flow<'a> {
         let name = v.name.clone();
         if let Some(for_span) = self.tainted[i] {
             let d = Diagnostic::error(Code::E(2004), format!("loop variable `{name}` cannot be read after the loop"), Stage::Flow)
-                .with_primary(span(self.file, at), "read here")
+                .with_primary(span(self.file, at), label)
                 .with_secondary(span(self.file, for_span), "assigned by this loop")
                 .with_secondary(span(self.file, v.span), "declared here")
                 .with_note("the value of a loop variable after the loop is undefined in Delphi, so Puy does not allow reading it")
@@ -435,7 +895,7 @@ impl<'a> Flow<'a> {
                     format!("out parameter `{name}` may be read before it is assigned"),
                     Stage::Flow,
                 )
-                .with_primary(span(self.file, at), "read here")
+                .with_primary(span(self.file, at), label)
                 .with_secondary(span(self.file, v.span), "declared here")
                 .with_note("Puy requires an `out` parameter to be assigned before it is read");
                 let d = match self.begin_insert(&name, v.ty) {
@@ -450,7 +910,7 @@ impl<'a> Flow<'a> {
                     "variable `Result` may be read before it is assigned",
                     Stage::Flow,
                 )
-                .with_primary(span(self.file, at), "read here")
+                .with_primary(span(self.file, at), label)
                 .with_note("Puy requires `Result` to be assigned before it is read");
                 let d = match self.begin_insert("Result", v.ty) {
                     Some(f) => d.with_fix(f),
@@ -464,17 +924,26 @@ impl<'a> Flow<'a> {
                     format!("variable `{name}` may be read before it is assigned"),
                     Stage::Flow,
                 )
-                .with_primary(span(self.file, at), "read here")
+                .with_primary(span(self.file, at), label)
                 .with_secondary(span(self.file, v.span), "declared here")
                 .with_note("Puy requires every local variable to be assigned before it is read");
                 match self.initial_value_fix(v) {
                     Ok(f) => d = d.with_fix(f),
-                    Err(true) => {
+                    Err(NoFix::SeveralNames) => {
                         d = d.with_note(format!(
                             "declare `{name}` on its own to give it an initial value"
                         ))
                     }
-                    Err(false) => {}
+                    Err(NoFix::Anonymous) => {
+                        d = d
+                            .with_note(format!(
+                                "declare a named type such as `TName` for `{name}` and initialize it with `Default(TName)`"
+                            ))
+                            .with_note(
+                                "or give it an initial value that lists every element, as in `(0, 0, 0)`",
+                            )
+                    }
+                    Err(NoFix::Other) => {}
                 }
                 self.diags.push(d);
             }
@@ -485,6 +954,7 @@ impl<'a> Flow<'a> {
     /// adds a line with the same indentation as the next line (continuing on the `begin` line reads poorly).
     fn begin_insert(&self, name: &str, ty: Ty) -> Option<Fix> {
         let at = self.r.body_begin?;
+        let zero = zero_text(ty, self.types)?;
         let rest = &self.bytes[u32::from(at) as usize..];
         let text = match rest.first() {
             Some(b'\r' | b'\n') => {
@@ -500,30 +970,27 @@ impl<'a> Flow<'a> {
                     .take_while(|b| matches!(b, b' ' | b'\t'))
                     .map(|&b| b as char)
                     .collect();
-                format!("{newline}{indent}{name} := {};", zero_text(ty))
+                format!("{newline}{indent}{name} := {zero};")
             }
-            _ => format!(" {name} := {};", zero_text(ty)),
+            _ => format!(" {name} := {zero};"),
         };
         Some(Fix::safe(
-            format!(
-                "add `{name} := {};` at the start of the body",
-                zero_text(ty)
-            ),
+            format!("add `{name} := {zero};` at the start of the body"),
             vec![TextEdit::insert(self.file, at, text)],
         ))
     }
 
-    /// An edit adding an initial value to a declaration (E2000). `Err(true)` means a declaration with two or more identifiers.
-    fn initial_value_fix(&self, v: &Var) -> Result<Fix, bool> {
-        let decl = v.decl.as_ref().ok_or(false)?;
-        let zero = zero_text(v.ty);
+    /// An edit adding an initial value to a declaration (E2000).
+    fn initial_value_fix(&self, v: &Var) -> Result<Fix, NoFix> {
+        let decl = v.decl.as_ref().ok_or(NoFix::Other)?;
+        let zero = zero_text(v.ty, self.types).ok_or(NoFix::Anonymous)?;
         match decl.kind() {
             SyntaxKind::VAR_DECL => {
-                let d = ast::VarDecl::cast(decl.clone()).ok_or(false)?;
+                let d = ast::VarDecl::cast(decl.clone()).ok_or(NoFix::Other)?;
                 if d.names().len() != 1 {
-                    return Err(true);
+                    return Err(NoFix::SeveralNames);
                 }
-                let t = d.type_ref().ok_or(false)?;
+                let t = d.type_ref().ok_or(NoFix::Other)?;
                 let at = t.syntax().text_range().end();
                 let text = format!(" = {zero}");
                 let shown = format!("var {}: {} = {zero};", v.name, t.text());
@@ -533,8 +1000,8 @@ impl<'a> Flow<'a> {
                 ))
             }
             SyntaxKind::INLINE_VAR_DECL => {
-                let d = ast::InlineVarDecl::cast(decl.clone()).ok_or(false)?;
-                let t = d.type_ref().ok_or(false)?;
+                let d = ast::InlineVarDecl::cast(decl.clone()).ok_or(NoFix::Other)?;
+                let t = d.type_ref().ok_or(NoFix::Other)?;
                 let at = t.syntax().text_range().end();
                 let text = format!(" := {zero}");
                 let shown = format!("var {}: {} := {zero};", v.name, t.text());
@@ -543,12 +1010,20 @@ impl<'a> Flow<'a> {
                     vec![TextEdit::insert(self.file, at, text)],
                 ))
             }
-            _ => Err(false),
+            _ => Err(NoFix::Other),
         }
     }
 
     /// Whether `Result` and `out` parameters are assigned at a return point (the return variants of E2001, E2002).
     fn check_return(&mut self, state: &State, at: TextRange) {
+        if let Some(s) = &mut self.summary {
+            let now = &state[s.own..];
+            match &mut s.writes {
+                Some(w) => and_state(w, &now.to_vec()),
+                None => s.writes = Some(now.to_vec()),
+            }
+            return;
+        }
         if let Some(rid) = self.r.result_var()
             && !state[rid.0 as usize]
             && !self.result_return_reported
@@ -571,7 +1046,9 @@ impl<'a> Flow<'a> {
             self.diags.push(d);
         }
         for (i, v) in self.r.vars.iter().enumerate() {
+            // An `out` parameter whose type was rejected has its own diagnostic
             if v.kind == VarKind::Param(ast::ParamMode::Out)
+                && !v.ty.is_error()
                 && !state[i]
                 && !self.out_return_reported[i]
             {
@@ -600,14 +1077,20 @@ impl<'a> Flow<'a> {
     /// W0001.
     fn unused_variables(&mut self) {
         for (i, v) in self.r.vars.iter().enumerate() {
-            if v.kind != VarKind::Local || v.is_loop_var || v.is_for_var || self.reads[i] {
+            if v.kind != VarKind::Local
+                || v.is_loop_var
+                || v.is_for_var
+                || self.reads[i]
+                || v.read_by_nested
+            {
                 continue;
             }
             let name = v.name.clone();
             let mut d =
                 Diagnostic::warning(Code::W(1), format!("unused variable `{name}`"), Stage::Flow)
                     .with_primary(span(self.file, v.span), "declared here");
-            if self.refs[i] == 0 {
+            // A variable a nested routine assigns is not removed by the fix
+            if self.refs[i] == 0 && !v.captured {
                 if let Some(edit) = self.deletion_edit(v) {
                     d = d.with_fix(Fix::suggestion(format!("remove `{name}`"), vec![edit]));
                 }
@@ -617,6 +1100,29 @@ impl<'a> Flow<'a> {
                 ));
             }
             self.diags.push(d);
+        }
+    }
+
+    /// W0017 (disabled by default): a value or `const` parameter that is never read, or a `var`
+    /// parameter that is neither read nor written.
+    fn unused_parameters(&mut self) {
+        for (i, v) in self.r.vars.iter().enumerate() {
+            let unused = match v.kind {
+                VarKind::Param(ast::ParamMode::Value | ast::ParamMode::Const) => {
+                    !self.reads[i] && !v.read_by_nested
+                }
+                VarKind::Param(ast::ParamMode::Var) => self.refs[i] == 0 && !v.captured,
+                _ => false,
+            };
+            if unused {
+                let d = Diagnostic::warning(
+                    Code::W(17),
+                    format!("unused parameter `{}`", v.name),
+                    Stage::Flow,
+                )
+                .with_primary(span(self.file, v.span), "declared here");
+                self.diags.push(d);
+            }
         }
     }
 
@@ -676,6 +1182,21 @@ impl<'a> Flow<'a> {
         };
         let range = crate::diagnostics::deletion_range(self.bytes, range);
         Some(TextEdit::delete(self.file, range))
+    }
+}
+
+/// Why E2000 has no fix that adds an initial value.
+enum NoFix {
+    /// A declaration of two or more identifiers.
+    SeveralNames,
+    /// An anonymous record or static array type (`docs/spec/types.md` chapter 6).
+    Anonymous,
+    Other,
+}
+
+fn or_state(a: &mut State, b: &State) {
+    for (x, y) in a.iter_mut().zip(b) {
+        *x = *x || *y;
     }
 }
 

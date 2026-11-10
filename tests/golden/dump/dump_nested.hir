@@ -1,0 +1,44 @@
+program DumpNested uses=System.SysUtils
+.routine f0 Show(const T: string)
+  .var v0 T: string const param
+  writeln @12
+    arg
+      var v0 T: string
+.routine f1 Run(N: Integer)
+  .var v0 N: Integer param
+  .var v1 S: string local
+  assign @36 R+
+    var v1 S
+    const string "n="
+  expr @37
+    call f3 Run.Middle: -
+  expr @38
+    call f0 Show: -
+      var v1 S: string
+.routine f2 Run.Twice(K: Integer): Integer
+  .var v0 K: Integer param
+  .var v1 Result: Integer result
+  assign @21 R+
+    var v1 Result
+    binary Integer
+      var v0 K: Integer
+      * Integer int:Integer
+        const Integer 2
+.routine f3 Run.Middle()
+  expr @32
+    call f4 Run.Middle.Deep: -
+.routine f4 Run.Middle.Deep()
+  .var v0 S: string outer v1 up=2
+  .var v1 N: Integer outer v0 up=2
+  assign @28 R+
+    var v0 S
+    binary string
+      var v0 S: string
+      + string str
+        builtin IntToStr string
+          call f2 Run.Twice: Integer
+            var v1 N: Integer
+.routine <main>
+  expr @42
+    call f1 Run: -
+      const Integer 21

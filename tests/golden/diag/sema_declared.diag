@@ -22,7 +22,7 @@ error[E2500]: unit `Foo` not found
  2 | uses Windows, Vcl.Forms, System.SysUtils, Foo;
    |                                           ^^^
    |
-   = note: only `System.SysUtils` can be used in this release; more units of the standard library come with later releases
+   = note: a script without `puy.toml` can only use standard library units
 
 error[E0701]: `C` is already declared
   --> sema_declared.pas:5:3

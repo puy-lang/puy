@@ -1,0 +1,17 @@
+error[E0700]: undeclared identifier `Twice`
+  --> main.pas:9:11
+   |
+ 9 |   WriteLn(Twice(2));
+   |           ^^^^^
+   |
+   = fix: replace with `T.Twice`
+
+error[E0700]: undeclared identifier `MyApp.Tools`
+   --> main.pas:10:11
+    |
+ 10 |   WriteLn(MyApp.Tools.Twice(3));
+    |           ^^^^^^^^^^^
+    |
+    = fix: replace with `T`
+
+error: aborting due to 2 errors

@@ -1,0 +1,26 @@
+program DumpAnsiCase uses=System.SysUtils
+.global g0 S: string
+.routine <main>
+  assign @12 R+
+    global g0 S
+    const string "Aß"
+  writeln @13
+    arg
+      builtin AnsiUpperCase string
+        global g0 S: string
+        const TCaseMapping 0
+    arg
+      builtin AnsiLowerCase string
+        global g0 S: string
+        const TCaseMapping 1
+  writeln @14
+    arg
+      builtin AnsiSameText Boolean
+        global g0 S: string
+        const string "aSS"
+        const TCaseFold 0
+    arg
+      builtin AnsiCompareText Integer
+        global g0 S: string
+        const string "b"
+        const TCaseFold 1

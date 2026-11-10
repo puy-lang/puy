@@ -1,0 +1,18 @@
+StringOfChar: EOutOfMemory: out of memory
+IntToHex: EOutOfMemory: out of memory
+SetLength: EOutOfMemory: out of memory
+SetLength UTF8String: EOutOfMemory: out of memory
+Write width: EOutOfMemory: out of memory
+Write decimals: EOutOfMemory: out of memory
+Format width: EOutOfMemory: out of memory
+Format precision d: EOutOfMemory: out of memory
+Format precision f: EOutOfMemory: out of memory
+Format precision n Currency: EOutOfMemory: out of memory
+Format precision x: EOutOfMemory: out of memory
+Format precision u: EOutOfMemory: out of memory
+Format precision e: EOutOfMemory: out of memory
+Write decimals Currency: EOutOfMemory: out of memory
+1000 1000 1000
+3
+40000
+40000

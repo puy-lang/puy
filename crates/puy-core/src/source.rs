@@ -229,6 +229,14 @@ mod tests {
 /// refused without reading it, with `HostError` (`Other`, `message` is `file is too large (limit 4294967294 bytes)`).
 pub trait SourceProvider {
     fn read(&mut self, path: &str) -> Result<Vec<u8>, puy_host::HostError>;
+
+    /// The files under the directory `dir` and its subdirectories, as paths relative to `dir`
+    /// with `/` between the parts (the `src/` of a package; `docs/spec/units.md` 2.2). A provider
+    /// that serves no directories returns none.
+    fn list(&mut self, dir: &str) -> Result<Vec<String>, puy_host::HostError> {
+        let _ = dir;
+        Ok(Vec::new())
+    }
 }
 
 /// A `SourceProvider` that serves in-memory files (for tests and the Playground).
@@ -249,6 +257,19 @@ impl MemorySourceProvider {
 }
 
 impl SourceProvider for MemorySourceProvider {
+    fn list(&mut self, dir: &str) -> Result<Vec<String>, puy_host::HostError> {
+        let prefix = if dir.is_empty() || dir.ends_with('/') {
+            dir.to_string()
+        } else {
+            format!("{dir}/")
+        };
+        Ok(self
+            .files
+            .iter()
+            .filter_map(|(p, _)| p.strip_prefix(&prefix).map(str::to_string))
+            .collect())
+    }
+
     fn read(&mut self, path: &str) -> Result<Vec<u8>, puy_host::HostError> {
         match self.files.iter().find(|(p, _)| p == path) {
             Some((_, b)) => Ok(b.clone()),

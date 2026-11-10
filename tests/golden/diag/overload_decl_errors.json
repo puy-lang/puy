@@ -1,0 +1,174 @@
+[
+  {
+    "schema": "puy.diagnostics/1",
+    "diagnostics": [
+      {
+        "code": "E0701",
+        "severity": "error",
+        "name": null,
+        "message": "`A` is already declared",
+        "primary": {
+          "file": "overload_decl_errors.pas",
+          "start": 316,
+          "end": 317,
+          "line": 11,
+          "column": 11,
+          "end_line": 11,
+          "end_column": 12,
+          "label": "declared again here"
+        },
+        "secondary": [
+          {
+            "file": "overload_decl_errors.pas",
+            "start": 279,
+            "end": 280,
+            "line": 7,
+            "column": 11,
+            "end_line": 7,
+            "end_column": 12,
+            "label": "declared here"
+          }
+        ],
+        "notes": [],
+        "fixes": [
+          {
+            "title": "add `overload`",
+            "applicability": "safe",
+            "edits": [
+              {
+                "file": "overload_decl_errors.pas",
+                "start": 293,
+                "end": 293,
+                "line": 7,
+                "column": 25,
+                "end_line": 7,
+                "end_column": 25,
+                "original": "",
+                "replacement": " overload;"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E0701]: `A` is already declared\n   --> overload_decl_errors.pas:11:11\n    |\n  7 | procedure A(X: Integer);\n    |           - declared here\n...\n 11 | procedure A(const S: string); overload;\n    |           ^ declared again here\n    |\n    = fix: add `overload`"
+      },
+      {
+        "code": "E0701",
+        "severity": "error",
+        "name": null,
+        "message": "overloads of `B` have the same parameters",
+        "primary": {
+          "file": "overload_decl_errors.pas",
+          "start": 415,
+          "end": 416,
+          "line": 19,
+          "column": 11,
+          "end_line": 19,
+          "end_column": 12,
+          "label": "declared again here"
+        },
+        "secondary": [
+          {
+            "file": "overload_decl_errors.pas",
+            "start": 368,
+            "end": 369,
+            "line": 15,
+            "column": 11,
+            "end_line": 15,
+            "end_column": 12,
+            "label": "declared here"
+          }
+        ],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0701]: overloads of `B` have the same parameters\n   --> overload_decl_errors.pas:19:11\n    |\n 15 | procedure B(X: Integer); overload;\n    |           - declared here\n...\n 19 | procedure B(const X: Integer); overload;\n    |           ^ declared again here"
+      },
+      {
+        "code": "E0701",
+        "severity": "error",
+        "name": null,
+        "message": "overloads of `C` have the same parameters",
+        "primary": {
+          "file": "overload_decl_errors.pas",
+          "start": 537,
+          "end": 538,
+          "line": 28,
+          "column": 10,
+          "end_line": 28,
+          "end_column": 11,
+          "label": "declared again here"
+        },
+        "secondary": [
+          {
+            "file": "overload_decl_errors.pas",
+            "start": 467,
+            "end": 468,
+            "line": 23,
+            "column": 10,
+            "end_line": 23,
+            "end_column": 11,
+            "label": "declared here"
+          }
+        ],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0701]: overloads of `C` have the same parameters\n   --> overload_decl_errors.pas:28:10\n    |\n 23 | function C(X: Integer): Integer; overload;\n    |          - declared here\n...\n 28 | function C(X: Integer): string; overload;\n    |          ^ declared again here"
+      },
+      {
+        "code": "E0723",
+        "severity": "error",
+        "name": null,
+        "message": "forward declaration of `E` has no body",
+        "primary": {
+          "file": "overload_decl_errors.pas",
+          "start": 652,
+          "end": 653,
+          "line": 34,
+          "column": 11,
+          "end_line": 34,
+          "end_column": 12,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0723]: forward declaration of `E` has no body\n   --> overload_decl_errors.pas:34:11\n    |\n 34 | procedure E(const S: string); overload; forward;\n    |           ^"
+      },
+      {
+        "code": "E0701",
+        "severity": "error",
+        "name": null,
+        "message": "`G` is already declared",
+        "primary": {
+          "file": "overload_decl_errors.pas",
+          "start": 786,
+          "end": 787,
+          "line": 44,
+          "column": 11,
+          "end_line": 44,
+          "end_column": 12,
+          "label": "declared again here"
+        },
+        "secondary": [
+          {
+            "file": "overload_decl_errors.pas",
+            "start": 749,
+            "end": 750,
+            "line": 40,
+            "column": 11,
+            "end_line": 40,
+            "end_column": 12,
+            "label": "declared here"
+          }
+        ],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0701]: `G` is already declared\n   --> overload_decl_errors.pas:44:11\n    |\n 40 | procedure G(X: Integer);\n    |           - declared here\n...\n 44 | procedure G(X: Integer);\n    |           ^ declared again here"
+      }
+    ],
+    "summary": {
+      "errors": 5,
+      "warnings": 0,
+      "notes": 0
+    }
+  }
+]

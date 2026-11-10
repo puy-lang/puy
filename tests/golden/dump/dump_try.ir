@@ -1,0 +1,196 @@
+; puy ir 1
+.global
+.func f0 DumpTry.<main> params=0
+  .reg t0: Exception exception
+  .reg t1: Integer temp
+  .reg t2: string temp
+  .reg t3: string temp
+  .reg t4: Integer temp
+  .reg t5: Integer temp
+  .reg t6: string temp
+  .try bb0..bb0 except bb1..bb1 t0
+bb0:
+  .line 45
+  LoadZero     t1
+  Call         -, f1(t1)
+  .line 44
+  Jmp          bb2
+bb1:
+  .line 47
+  LoadConst    t2, "caught\n"
+  CallHost     -, h0(t2)
+  .line 44
+  Release      t0
+  Jmp          bb2
+bb2:
+  .line 49
+  LoadInt      t5, 4
+  Call         t4, f2(t5)
+  IntToStr     t3, t4
+  LoadConst    t6, "\n"
+  ConcatStr    t3, t3, t6
+  CallHost     -, h0(t3)
+  .line 50
+  RetVoid
+.finally t0, t2, t3, t6
+.func f1 DumpTry.Handle params=1
+  .reg v0 N: Integer param
+  .reg v1 E: EAppError exception
+  .reg t0: Exception exception
+  .reg t1: Integer temp
+  .reg t2: EAppError temp
+  .reg t3: Integer temp
+  .reg t4: Exception temp
+  .reg t5: string temp
+  .reg t6: Integer temp
+  .reg t7: Exception temp
+  .reg t8: string temp
+  .try bb0..bb4 except bb5..bb11 t0
+bb0:
+  .line 14
+  LoadZero     t1
+  JmpIfLeInt   v0, t1, bb3, bb1
+bb1:
+  .line 15
+  LoadConst    t2, "app"
+  NewExc       t2, DumpTry.EAppError
+  Raise        t2
+bb2:
+  .line 14
+  Jmp          bb4
+bb3:
+  .line 14
+  Jmp          bb4
+bb4:
+  .line 13
+  Jmp          bb12
+bb5:
+  .line 17
+  ExcClass     t3, t0
+  ClassIs      t3, DumpTry.EAppError
+  JmpIfFalse   t3, bb8, bb6
+bb6:
+  .line 17
+  Move         v1, t0
+  .line 18
+  LoadConst    t4, "wrapped "
+  ExcGet       t5, v1, 0
+  ConcatStr    t4, t4, t5
+  NewExc       t4, Exception
+  RaiseOuter   t4, t0
+bb7:
+  .line 13
+  Release      t0
+  Jmp          bb12
+bb8:
+  .line 19
+  ExcClass     t6, t0
+  ClassIs      t6, EConvertError
+  JmpIfFalse   t6, bb11, bb9
+bb9:
+  .line 20
+  AssignRef    t7, t0
+  Raise        t7
+bb10:
+  .line 13
+  Release      t0
+  Jmp          bb12
+bb11:
+  .line 22
+  LoadConst    t8, "other\n"
+  CallHost     -, h0(t8)
+  .line 13
+  Release      t0
+  Jmp          bb12
+bb12:
+  .line 24
+  RetVoid
+.finally t0, t2, t4, t5, t7, t8
+.func f2 DumpTry.Count params=1
+  .reg v0 N: Integer param
+  .reg v1 Result: Integer result
+  .reg v2 I: Integer local
+  .reg t0: Integer temp
+  .reg t1: - state
+  .reg t2: Exception exception
+  .reg t3: Integer temp
+  .reg t4: Integer temp
+  .reg t5: string temp
+  .reg t6: string temp
+  .try bb3..bb11 finally bb12..bb12 t1, t2
+bb0:
+  .line 30
+  LoadZero     v1
+  .line 31
+  LoadInt      v2, 1
+  Move         t0, v0
+  JmpIfLtInt   t0, v2, bb18, bb1
+bb1:
+  .line 31
+  Jmp          bb2
+bb2:
+  .line 32
+  Jmp          bb3
+bb3:
+  .line 33
+  LoadInt      t3, 3
+  JmpIfNeInt   v2, t3, bb6, bb4
+bb4:
+  .line 34
+  LoadInt      t1, 3
+  Jmp          bb12
+bb5:
+  .line 33
+  Jmp          bb7
+bb6:
+  .line 33
+  Jmp          bb7
+bb7:
+  .line 35
+  LoadInt      t4, 5
+  JmpIfNeInt   v2, t4, bb10, bb8
+bb8:
+  .line 36
+  LoadInt      t1, 4
+  Jmp          bb12
+bb9:
+  .line 35
+  Jmp          bb11
+bb10:
+  .line 35
+  Jmp          bb11
+bb11:
+  .line 37
+  AddIntI      v1, v1, 1
+  NarrowOvf    v1, v1, 4
+  .line 32
+  LoadZero     t1
+  Jmp          bb12
+bb12:
+  .line 39
+  IntToStr     t5, v2
+  LoadConst    t6, "\n"
+  ConcatStr    t5, t5, t6
+  CallHost     -, h0(t5)
+  .line 32
+  EndFinally   t1, bb15, bb13, bb14
+bb13:
+  .line 32
+  Jmp          bb18
+bb14:
+  .line 32
+  Ret          v1
+bb15:
+  .line 31
+  Jmp          bb16
+bb16:
+  .line 31
+  JmpIfEqInt   v2, t0, bb18, bb17
+bb17:
+  .line 31
+  AddIntI      v2, v2, 1
+  Jmp          bb2
+bb18:
+  .line 41
+  Ret          v1
+.finally t2, t5, t6

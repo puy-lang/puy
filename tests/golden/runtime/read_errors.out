@@ -1,0 +1,9 @@
+invalid integer input: 'abc' 0
+invalid integer input: ' 12x' 0
+N=42
+invalid integer input: ' 2 x'
+3[ ]
+invalid floating-point input: '1.5.2'
+invalid integer input: ''
+read past end of input
+done

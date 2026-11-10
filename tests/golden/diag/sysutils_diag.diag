@@ -1,0 +1,115 @@
+error[E3200]: `array of const` parameters are not supported yet (planned for M3)
+   --> sysutils_diag.pas:16:27
+    |
+ 16 | procedure Log(const Args: array of const);
+    |                           ^^^^^
+
+error[E0702]: cannot pass a value of type `TColor` in an `array of const`
+   --> sysutils_diag.pas:32:25
+    |
+ 32 |   WriteLn(Format('%d', [C]));
+    |                         ^
+
+error[E0702]: cannot pass a value of type `TPoint` in an `array of const`
+   --> sysutils_diag.pas:33:25
+    |
+ 33 |   WriteLn(Format('%d', [P, A]));
+    |                         ^
+
+error[E0702]: cannot pass a value of type `array of Integer` in an `array of const`
+   --> sysutils_diag.pas:33:28
+    |
+ 33 |   WriteLn(Format('%d', [P, A]));
+    |                            ^
+
+error[E0729]: cannot infer the type of an array constructor
+   --> sysutils_diag.pas:34:25
+    |
+ 34 |   WriteLn(Format('%d', [[TColor.Red]]));
+    |                         ^^^^^^^^^^^^
+    |
+    = note: give the array a type, as in `var A: TArray<Integer> := [1, 2]`
+
+error[E0702]: type mismatch: expected `array of const`, found `Integer` (argument 2, parameter `Args`)
+   --> sysutils_diag.pas:35:24
+    |
+ 35 |   WriteLn(Format('%d', N));
+    |                        ^
+
+error[E0702]: a range is not allowed in an array constructor
+   --> sysutils_diag.pas:36:25
+    |
+ 36 |   WriteLn(Format('%d', [1..2]));
+    |                         ^^^^
+
+error[E0705]: wrong number of arguments: expected 2, found 1
+   --> sysutils_diag.pas:37:11
+    |
+ 37 |   WriteLn(Format('%d'));
+    |           ^^^^^^^^^^^^
+
+error[E0702]: type mismatch: expected `string`, found `Integer` (argument 1, parameter `Fmt`)
+   --> sysutils_diag.pas:38:18
+    |
+ 38 |   WriteLn(Format(1, [N]));
+    |                  ^
+
+error[E0706]: argument 2 must be a variable (parameter `Value` is `out`)
+   --> sysutils_diag.pas:39:28
+    |
+ 39 |   WriteLn(TryStrToInt('1', 5));
+    |                            ^
+
+error[E0702]: type mismatch: expected `Integer`, found `Byte` (argument 2, parameter `Value`)
+   --> sysutils_diag.pas:40:28
+    |
+ 40 |   WriteLn(TryStrToInt('1', B));
+    |                            ^
+    |
+    = note: a `out` parameter needs a variable of exactly the same type
+
+error[E0705]: wrong number of arguments: expected 2, found 1
+   --> sysutils_diag.pas:41:11
+    |
+ 41 |   WriteLn(TryStrToInt('1'));
+    |           ^^^^^^^^^^^^^^^^
+
+error[E0702]: type mismatch: expected an integer type, found `Double` (argument 1, parameter `Value`)
+   --> sysutils_diag.pas:42:20
+    |
+ 42 |   WriteLn(IntToHex(1.5, 2));
+    |                    ^^^
+
+error[E0705]: wrong number of arguments: expected 1 to 2, found 3
+   --> sysutils_diag.pas:43:11
+    |
+ 43 |   WriteLn(BoolToStr(True, True, True));
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0702]: type mismatch: expected `TReplaceFlag`, found `Integer`
+   --> sysutils_diag.pas:44:68
+    |
+ 44 |   WriteLn(StringReplace('a', 'b', 'c', [TReplaceFlag.rfIgnoreCase, 3]));
+    |                                                                    ^
+
+error[E0736]: enumeration value `rfReplaceAll` must be qualified with its type
+   --> sysutils_diag.pas:45:41
+    |
+ 45 |   WriteLn(StringReplace('a', 'b', 'c', [rfReplaceAll]));
+    |                                         ^^^^^^^^^^^^
+    |
+    = fix: replace with `TReplaceFlag.rfReplaceAll`
+
+error[E0702]: type mismatch: expected `Char`, found `string` (argument 1, parameter `Ch`)
+   --> sysutils_diag.pas:46:24
+    |
+ 46 |   WriteLn(StringOfChar('ab', 2));
+    |                        ^^^^
+
+error[E0702]: cannot pass a value of type `TColor` in an `array of const`
+   --> sysutils_diag.pas:47:36
+    |
+ 47 |   raise Exception.CreateFmt('%d', [C]);
+    |                                    ^
+
+error: aborting due to 18 errors

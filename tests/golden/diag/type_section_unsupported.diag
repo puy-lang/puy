@@ -1,0 +1,55 @@
+error[E3200]: `class` is not supported yet (planned for M3)
+  --> type_section_unsupported.pas:8:10
+   |
+ 8 |   TFoo = class;
+   |          ^^^^^
+
+error[E3200]: `class` is not supported yet (planned for M3)
+  --> type_section_unsupported.pas:9:10
+   |
+ 9 |   TRef = class of TFoo;
+   |          ^^^^^
+
+error[E3200]: `class` is not supported yet (planned for M3)
+   --> type_section_unsupported.pas:10:10
+    |
+ 10 |   TFoo = class(TObject)
+    |          ^^^^^
+
+error[E3200]: `interface` is not supported yet (planned for M3)
+   --> type_section_unsupported.pas:14:11
+    |
+ 14 |   TIntf = interface
+    |           ^^^^^^^^^
+
+error[E3010]: `dispinterface` is not supported in Puy
+   --> type_section_unsupported.pas:17:11
+    |
+ 17 |   TDisp = dispinterface
+    |           ^^^^^^^^^^^^^
+    |
+    = note: Puy does not support COM
+
+error[E3002]: `object` is not supported in Puy
+   --> type_section_unsupported.pas:19:10
+    |
+ 19 |   TObj = object
+    |          ^^^^^^
+    |
+    = note: use a `record` or a `class` instead
+
+error[E3004]: `^` is not supported in Puy
+   --> type_section_unsupported.pas:24:10
+    |
+ 24 |   TPtr = ^Integer;
+    |          ^
+    |
+    = note: use a class, a dynamic array or a `var` parameter instead
+
+error[E3200]: `procedure` is not supported yet (planned for M2)
+   --> type_section_unsupported.pas:25:11
+    |
+ 25 |   TProc = procedure(X: Integer);
+    |           ^^^^^^^^^
+
+error: aborting due to 8 errors

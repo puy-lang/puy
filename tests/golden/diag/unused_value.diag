@@ -1,0 +1,64 @@
+warning[W0002]: value assigned to `A` is never read (unused-value)
+   --> unused_value.pas:29:3
+    |
+ 29 |   A := 1;
+    |   ^
+    |
+    = note: remove the assignment if the value is not needed
+    = note: disable with `{$WARN unused-value OFF}`
+
+warning[W0002]: value assigned to `B` is never read (unused-value)
+   --> unused_value.pas:34:3
+    |
+ 34 |   B := 0;
+    |   ^
+    |
+    = note: remove the assignment if the value is not needed
+    = note: disable with `{$WARN unused-value OFF}`
+
+warning[W0002]: value assigned to `N` is never read (unused-value)
+   --> unused_value.pas:35:3
+    |
+ 35 |   N := 5;
+    |   ^
+    |
+    = note: remove the assignment if the value is not needed
+    = note: disable with `{$WARN unused-value OFF}`
+
+warning[W0002]: value assigned to `S` is never read (unused-value)
+   --> unused_value.pas:43:3
+    |
+ 43 |   S := 'none';
+    |   ^
+    |
+    = note: remove the assignment if the value is not needed
+    = note: disable with `{$WARN unused-value OFF}`
+
+warning[W0002]: value assigned to `X` is never read (unused-value)
+   --> unused_value.pas:80:5
+    |
+ 80 |     X := I;
+    |     ^
+    |
+    = note: remove the assignment if the value is not needed
+    = note: disable with `{$WARN unused-value OFF}`
+
+warning[W0002]: value assigned to `Last` is never read (unused-value)
+   --> unused_value.pas:85:3
+    |
+ 85 |   Last := 0;
+    |   ^^^^
+    |
+    = note: remove the assignment if the value is not needed
+    = note: disable with `{$WARN unused-value OFF}`
+
+warning[W0001]: unused variable `Part` (unused-variable)
+   --> unused_value.pas:97:34
+    |
+ 97 |   Counted, Passed, Filled, Loop, Part: Integer;
+    |                                  ^^^^ declared here
+    |
+    = note: remove `Part` and its assignments if the value is not needed
+    = note: disable with `{$WARN unused-variable OFF}`
+
+warning: 7 warnings emitted

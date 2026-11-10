@@ -1,0 +1,150 @@
+; puyc format 2
+.const
+  0: float 0.10000000149011612
+  1: float 2
+  2: float 0.25
+  3: int 1056964608
+  4: float -1.25
+  5: agg ty64 (k3, k4)
+  6: str " "
+  7: str "\n"
+  8: int 2147483647
+  9: str "2.5"
+  10: str " INF 3.141592653589793\n"
+.type
+  64: record DumpReals.TPoint slots=2
+.global
+  0: int D
+  1: int S
+  2: int C
+  3: int I
+  4: ref P
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpReals file="dump_reals.pas" init=- fini=- entry=0
+.func 0 DumpReals.<main> params=0 regs=34
+  .line 26
+  0000  LoadInt      r26, 3
+  0001  StoreGlobal  r26, g3
+  .line 27
+  0002  LoadConst    r26, k0
+  0003  F64ToF32     r26, r26
+  0004  StoreGlobal  r26, g1
+  .line 28
+  0005  LoadGlobal   r26, g3
+  0006  IntToF64     r26, r26
+  0007  LoadConst    r27, k1
+  0008  DivF64       r26, r26, r27
+  0009  LoadGlobal   r28, g1
+  000a  F32ToF64     r28, r28
+  000b  AddF64       r26, r26, r28
+  000c  StoreGlobal  r26, g0
+  .line 29
+  000d  LoadInt      r26, 15000
+  000e  StoreGlobal  r26, g2
+  .line 30
+  000f  LoadGlobal   r26, g2
+  0010  LoadGlobal   r27, g3
+  0011  IntToCurr    r27, r27
+  0012  MulCurr      r26, r26, r27
+  0013  CurrToF64    r26, r26
+  0014  LoadConst    r27, k2
+  0015  SubF64       r26, r26, r27
+  0016  F64ToCurr    r26, r26
+  0017  StoreGlobal  r26, g2
+  .line 31
+  0018  LoadConst    r0, k5
+  0019  StoreGlobalRef r0, g4
+  .line 32
+  001a  LoadGlobal   r26, g0
+  001b  LoadGlobal   r28, g4
+  001c  FieldGet     r27, r28, 1
+  001d  LeF64        r26, r27, r26
+  001e  JmpIfFalse   r26, -> 0040
+  .line 33
+  001f  LoadGlobal   r26, g0
+  0020  LoadInt      r27, 2
+  0021  F64ToFixed   r1, r26, r27
+  0022  LoadInt      r28, 8
+  0023  StrPadLeft   r1, r1, r28
+  0024  LoadConst    r2, k6
+  0025  ConcatStr    r1, r1, r2
+  0026  LoadGlobal   r29, g2
+  0027  NegCurr      r29, r29
+  0028  CurrToStr    r3, r29
+  0029  ConcatStr    r1, r1, r3
+  002a  LoadConst    r4, k6
+  002b  ConcatStr    r1, r1, r4
+  002c  LoadGlobal   r30, g0
+  002d  TruncF64     r30, r30
+  002e  IntToStr     r5, r30
+  002f  ConcatStr    r1, r1, r5
+  0030  LoadConst    r6, k6
+  0031  ConcatStr    r1, r1, r6
+  0032  LoadGlobal   r31, g2
+  0033  RoundCurr    r31, r31
+  0034  IntToStr     r7, r31
+  0035  ConcatStr    r1, r1, r7
+  0036  LoadConst    r8, k6
+  0037  ConcatStr    r1, r1, r8
+  0038  LoadGlobal   r33, g4
+  0039  FieldGet     r32, r33, 0
+  003a  F32ToStr     r9, r32
+  003b  ConcatStr    r1, r1, r9
+  003c  LoadConst    r10, k7
+  003d  ConcatStr    r1, r1, r10
+  003e  CallHost     r1, h0
+  .line 32
+  003f  Jmp          -> 0040
+  .line 34
+  0040  LoadGlobal   r26, g0
+  0041  SqrtF64      r26, r26
+  0042  F64ToStr     r11, r26
+  0043  LoadConst    r12, k6
+  0044  ConcatStr    r11, r11, r12
+  0045  LoadGlobal   r27, g1
+  0046  NegF32       r27, r27
+  0047  LoadConst    r28, k8
+  0048  AndInt       r27, r27, r28
+  0049  F32ToStr     r13, r27
+  004a  ConcatStr    r11, r11, r13
+  004b  LoadConst    r14, k6
+  004c  ConcatStr    r11, r11, r14
+  004d  LoadGlobal   r29, g2
+  004e  MulCurr      r28, r29, r29
+  004f  CurrToStr    r15, r28
+  0050  ConcatStr    r11, r11, r15
+  0051  LoadConst    r16, k6
+  0052  ConcatStr    r11, r11, r16
+  0053  LoadGlobal   r29, g1
+  0054  F32ToStr     r17, r29
+  0055  ConcatStr    r11, r11, r17
+  0056  LoadConst    r18, k6
+  0057  ConcatStr    r11, r11, r18
+  0058  LoadConst    r20, k9
+  0059  StrToF64     r29, r20
+  005a  F64ToStr     r19, r29
+  005b  ConcatStr    r11, r11, r19
+  005c  LoadConst    r21, k7
+  005d  ConcatStr    r11, r11, r21
+  005e  CallHost     r11, h0
+  .line 35
+  005f  LoadGlobal   r26, g0
+  0060  LoadGlobal   r27, g0
+  0061  EqF64        r26, r26, r27
+  0062  NotBool      r26, r26
+  0063  BoolToStr    r22, r26
+  0064  LoadConst    r23, k6
+  0065  ConcatStr    r22, r22, r23
+  0066  LoadGlobal   r27, g2
+  0067  LoadGlobal   r28, g3
+  0068  IntToCurr    r28, r28
+  0069  EqInt        r27, r27, r28
+  006a  BoolToStr    r24, r27
+  006b  ConcatStr    r22, r22, r24
+  006c  LoadConst    r25, k10
+  006d  ConcatStr    r22, r22, r25
+  006e  CallHost     r22, h0
+  .line 36
+  006f  RetVoid
+.finally r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16, r17, r18, r19, r20, r21, r22, r23, r24, r25

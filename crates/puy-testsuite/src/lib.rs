@@ -9,6 +9,11 @@ pub struct Case {
     /// `diff` / `golden` / `lifetime`
     pub group: &'static str,
     pub name: &'static str,
+    /// The stem of the source and expectation files: the case name, or `main` for a package.
+    pub stem: &'static str,
+    /// A directory with `puy.toml` (`docs/design/testing.md` 3.6): `files` are named by their
+    /// path inside it, and the program is `main.pas`.
+    pub package: bool,
     /// (file name, contents)
     pub files: &'static [(&'static str, &'static [u8])],
 }
@@ -17,7 +22,7 @@ include!(concat!(env!("OUT_DIR"), "/cases.rs"));
 
 impl Case {
     pub fn file(&self, ext: &str) -> Option<&'static [u8]> {
-        let want = format!("{}.{ext}", self.name);
+        let want = format!("{}.{ext}", self.stem);
         self.files.iter().find(|(n, _)| *n == want).map(|(_, b)| *b)
     }
 
@@ -25,12 +30,39 @@ impl Case {
         self.file("pas").expect("case has a .pas file")
     }
 
-    /// The `.inc` files (`<stem>.inc`, `<stem>.*.inc`).
+    /// The files the compiler can read besides the program: the `.inc` files (`<stem>.inc`,
+    /// `<stem>.*.inc`), and for a package every file inside it except the expected results of
+    /// `puy fix` (`*.fixed.pas`).
     pub fn includes(&self) -> Vec<(&'static str, &'static [u8])> {
         self.files
             .iter()
-            .filter(|(n, _)| n.ends_with(".inc"))
+            .filter(|(n, _)| {
+                if self.package {
+                    !n.ends_with(".fixed.pas")
+                } else {
+                    n.ends_with(".inc")
+                }
+            })
             .copied()
+            .collect()
+    }
+}
+
+impl Case {
+    /// The units of a package with an expected result of `puy fix`: (the unit's path, the
+    /// expectation `<path without .pas>.fixed.pas`). The program's is `file("fixed.pas")`.
+    pub fn fixed_units(&self) -> Vec<(String, &'static [u8])> {
+        if !self.package {
+            return Vec::new();
+        }
+        let main = format!("{}.fixed.pas", self.stem);
+        self.files
+            .iter()
+            .filter(|(n, _)| *n != main)
+            .filter_map(|(n, b)| {
+                n.strip_suffix(".fixed.pas")
+                    .map(|stem| (format!("{stem}.pas"), *b))
+            })
             .collect()
     }
 }
@@ -49,6 +81,11 @@ pub struct CaseConfig {
     pub no_env: bool,
     pub stack_limit: Option<usize>,
     pub memory_limit: Option<usize>,
+    /// `stdout-buffering=line|full|none` (`IsolateConfig.stdout_buffering`; `full` if not given).
+    pub stdout_buffering: Option<String>,
+    /// `merge-stderr`: standard error goes into the same capture as standard output, in the
+    /// order of the host writes (`.out` shows the interleaving, like `2>&1`).
+    pub merge_stderr: bool,
 }
 
 /// Parses the settings. Unknown items are an `Err`.
@@ -91,6 +128,7 @@ pub fn parse_config(src: &[u8]) -> Result<CaseConfig, String> {
             "release" => cfg.release = true,
             "no-console" => cfg.no_console = true,
             "no-env" => cfg.no_env = true,
+            "merge-stderr" => cfg.merge_stderr = true,
             _ => {
                 if let Some(name) = item.strip_prefix("define=") {
                     cfg.defines.push(name.to_string());
@@ -98,6 +136,11 @@ pub fn parse_config(src: &[u8]) -> Result<CaseConfig, String> {
                     cfg.stack_limit = Some(parse_size(v)?);
                 } else if let Some(v) = item.strip_prefix("memory-limit=") {
                     cfg.memory_limit = Some(parse_size(v)?);
+                } else if let Some(v) = item.strip_prefix("stdout-buffering=") {
+                    if !matches!(v, "line" | "full" | "none") {
+                        return Err(format!("invalid stdout-buffering `{v}`"));
+                    }
+                    cfg.stdout_buffering = Some(v.to_string());
                 } else {
                     return Err(format!("unknown puy-test item `{item}`"));
                 }
@@ -139,6 +182,15 @@ mod tests {
                 .no_env
         );
         assert_eq!(parse_config(b"program X;").unwrap(), CaseConfig::default());
+    }
+
+    #[test]
+    fn stdio_config_items() {
+        // `stdout-buffering=` takes the three fixed modes only; `merge-stderr` is a flag
+        let c = parse_config(b"// puy-test: merge-stderr, stdout-buffering=line\n").unwrap();
+        assert!(c.merge_stderr);
+        assert_eq!(c.stdout_buffering.as_deref(), Some("line"));
+        assert!(parse_config(b"// puy-test: stdout-buffering=auto\n").is_err());
     }
 
     #[test]

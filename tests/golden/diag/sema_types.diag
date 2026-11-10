@@ -114,10 +114,12 @@ error[E0724]: a value of type `Integer` cannot be converted to `string`
  38 |   S := string(I);
     |        ^^^^^^^^^
 
-error[E3200]: floating-point literals are not supported yet (planned for M2)
-   --> sema_types.pas:42:16
+error[E0724]: a value of type `Double` cannot be converted to `Integer`
+   --> sema_types.pas:42:8
     |
  42 |   I := Integer(1.5);
-    |                ^^^
+    |        ^^^^^^^^^^^^
+    |
+    = note: convert a floating-point value to an integer with `Trunc` or `Round`
 
 error: aborting due to 18 errors

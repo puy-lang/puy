@@ -1,0 +1,2 @@
+error: uncaught exception EOutOfMemory: out of memory
+  at SetLengthTooLarge.<main> (set_length_too_large.pas:11)

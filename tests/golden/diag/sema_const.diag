@@ -16,11 +16,11 @@ error[E0714]: constant value 300 is out of range for `Byte` (0..255)
  6 |   D: Byte = C;
    |             ^
 
-error[E3200]: `High` is not supported yet (planned for M2)
-  --> sema_const.pas:8:7
+error[E0714]: constant value 2147483648 is out of range for `Integer` (-2147483648..2147483647)
+  --> sema_const.pas:8:21
    |
  8 |   F = High(Integer) + 1;
-   |       ^^^^
+   |                     ^
 
 error[E0714]: constant value 300 is out of range for `Byte` (0..255)
   --> sema_const.pas:9:12

@@ -13,8 +13,19 @@ fn main() {
     let tests_dir = tests_dir.canonicalize().unwrap_or(tests_dir);
     println!("cargo:rerun-if-changed={}", tests_dir.display());
     let mut cases: Vec<(String, String, Vec<PathBuf>)> = Vec::new(); // (group, name, files)
-    for group in ["diff", "golden", "lifetime"] {
-        let dir = tests_dir.join(group);
+    // (group, name, directory, files)
+    let mut package_cases: Vec<(String, String, PathBuf, Vec<PathBuf>)> = Vec::new();
+    // `examples/` (the sample programs next to `tests/`) is a group of its own: each program, and
+    // each package directory with `puy.toml` (its program is `main.pas`), runs with leak checking
+    // and must finish cleanly, with no expectation files (`docs/design/testing.md` 3.11)
+    let examples_dir = tests_dir.join("../examples");
+    println!("cargo:rerun-if-changed={}", examples_dir.display());
+    for group in ["diff", "golden", "lifetime", "examples"] {
+        let dir = if group == "examples" {
+            examples_dir.clone()
+        } else {
+            tests_dir.join(group)
+        };
         if !dir.is_dir() {
             continue;
         }
@@ -24,6 +35,26 @@ fn main() {
         for f in &files {
             println!("cargo:rerun-if-changed={}", f.display());
         }
+        // A directory with `puy.toml` is one case: a package whose program is `main.pas`
+        // (`docs/design/testing.md` 3.6). Its files are named by their path inside it.
+        let packages: Vec<PathBuf> = files
+            .iter()
+            .filter(|f| f.file_name().is_some_and(|n| n == "puy.toml"))
+            .filter_map(|f| f.parent().map(Path::to_path_buf))
+            .collect();
+        for pkg in &packages {
+            let name = case_name(group, &pkg.file_name().unwrap().to_string_lossy());
+            let mine: Vec<PathBuf> = files
+                .iter()
+                .filter(|f| f.starts_with(pkg))
+                .cloned()
+                .collect();
+            package_cases.push((group.to_string(), name, pkg.clone(), mine));
+        }
+        let files: Vec<PathBuf> = files
+            .into_iter()
+            .filter(|f| !packages.iter().any(|p| f.starts_with(p)))
+            .collect();
         // Group by stem
         let pas: Vec<&PathBuf> = files
             .iter()
@@ -32,6 +63,18 @@ fn main() {
                     && !f.to_string_lossy().ends_with(".fixed.pas")
             })
             .collect();
+        // The examples follow the same layout as `examples_run_cleanly` in `puy-cli`: programs and
+        // package directories directly under `examples/`, nothing deeper (`docs/design/testing.md`
+        // 3.11). Anything else would run here but be skipped there.
+        if group == "examples" {
+            for p in packages.iter().chain(pas.iter().copied()) {
+                assert!(
+                    p.parent() == Some(dir.as_path()),
+                    "examples must be directly under `examples/`: {}",
+                    p.display()
+                );
+            }
+        }
         for p in pas {
             let stem = p.file_stem().unwrap().to_string_lossy().to_string();
             let parent = p.parent().unwrap();
@@ -40,11 +83,16 @@ fn main() {
                 .filter(|f| f.parent() == Some(parent) && stem_of(f) == stem)
                 .cloned()
                 .collect();
-            cases.push((group.to_string(), stem, mine));
+            let name = case_name(group, &stem);
+            cases.push((group.to_string(), name, mine));
         }
     }
     // A duplicate name is an error in the cases
-    let mut names: Vec<&str> = cases.iter().map(|c| c.1.as_str()).collect();
+    let mut names: Vec<&str> = cases
+        .iter()
+        .map(|c| c.1.as_str())
+        .chain(package_cases.iter().map(|c| c.1.as_str()))
+        .collect();
     names.sort();
     for w in names.windows(2) {
         if w[0] == w[1] {
@@ -58,8 +106,12 @@ fn main() {
     );
     let mut tests_rs = String::new();
     for (group, name, files) in &cases {
+        let stem = name
+            .strip_prefix("example_")
+            .filter(|_| group == "examples")
+            .unwrap_or(name);
         cases_rs.push_str(&format!(
-            "    Case {{ group: {group:?}, name: {name:?}, files: &[\n"
+            "    Case {{ group: {group:?}, name: {name:?}, stem: {stem:?}, package: false, files: &[\n"
         ));
         for f in files {
             let fname = f.file_name().unwrap().to_string_lossy();
@@ -69,6 +121,31 @@ fn main() {
             ));
         }
         cases_rs.push_str("    ] },\n");
+    }
+    for (group, name, dir, files) in &package_cases {
+        cases_rs.push_str(&format!(
+            "    Case {{ group: {group:?}, name: {name:?}, stem: \"main\", package: true, files: &[\n"
+        ));
+        for f in files {
+            let rel: Vec<String> = f
+                .strip_prefix(dir)
+                .unwrap()
+                .components()
+                .map(|c| c.as_os_str().to_string_lossy().into_owned())
+                .collect();
+            let rel = rel.join("/");
+            cases_rs.push_str(&format!(
+                "        ({rel:?}, include_bytes!({:?})),\n",
+                f.display().to_string()
+            ));
+        }
+        cases_rs.push_str("    ] },\n");
+    }
+    for (group, name) in cases
+        .iter()
+        .map(|c| (&c.0, &c.1))
+        .chain(package_cases.iter().map(|c| (&c.0, &c.1)))
+    {
         let fn_name = format!("{group}_{}", name.replace('-', "_"));
         tests_rs.push_str(&format!(
             "#[test]\nfn {fn_name}() -> Result<(), String> {{\n    runner::run_case(puy_testsuite::find_case({name:?}).unwrap())\n}}\n\n"
@@ -78,6 +155,16 @@ fn main() {
     cases_rs.push_str(&format!("/// Absolute path of `tests/` (used to write expectations with `PUY_UPDATE_GOLDEN=1`).\npub const TESTS_DIR: &str = {:?};\n", tests_dir.display().to_string()));
     fs::write(out_dir.join("cases.rs"), cases_rs).unwrap();
     fs::write(out_dir.join("tests.rs"), tests_rs).unwrap();
+}
+
+/// The examples share names with cases (`hello`), so their names (programs and packages) get a
+/// prefix.
+fn case_name(group: &str, name: &str) -> String {
+    if group == "examples" {
+        format!("example_{name}")
+    } else {
+        name.to_string()
+    }
 }
 
 fn stem_of(f: &Path) -> String {

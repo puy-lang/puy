@@ -1,0 +1,7 @@
+error[E0700]: undeclared identifier `Missing`
+  --> src/Lib.pas:6:11
+   |
+ 6 |   Value = Missing;
+   |           ^^^^^^^
+
+error: aborting due to 1 error

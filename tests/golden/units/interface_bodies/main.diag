@@ -1,0 +1,41 @@
+error[E0723]: `Draw` is declared in the interface section but has no body
+  --> src/Shapes.pas:5:11
+   |
+ 5 | procedure Draw;
+   |           ^^^^
+
+error[E0723]: `forward` is not allowed in the interface section
+  --> src/Shapes.pas:8:18
+   |
+ 8 | procedure Clear; forward;
+   |                  ^^^^^^^
+   |
+   = fix: remove `forward`
+
+error[E0415]: a routine body is not allowed in the interface section
+  --> src/Shapes.pas:9:18
+   |
+ 9 | procedure Quick; begin end;
+   |                  ^^^^^
+   |
+   = note: write the body in the `implementation` section
+
+error[E0701]: `Size` is already declared
+   --> src/Shapes.pas:19:3
+    |
+ 14 |   Size = 3;
+    |   ---- declared here
+...
+ 19 |   Size = 4;
+    |   ^^^^ declared again here
+
+error[E0723]: body of `Fill` does not match its declaration in the interface section
+   --> src/Shapes.pas:21:11
+    |
+  6 | procedure Fill(Color: Integer);
+    |           ---- declared here
+...
+ 21 | procedure Fill(Color: string);
+    |           ^^^^
+
+error: aborting due to 5 errors

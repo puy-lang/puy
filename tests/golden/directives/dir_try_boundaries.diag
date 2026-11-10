@@ -1,0 +1,10 @@
+warning[W0005]: directive `{$R+}` is not at a declaration or statement boundary (directive-placement)
+   --> dir_try_boundaries.pas:21:10
+    |
+ 21 |     on E {$R+}: Exception do
+    |          ^^^^^
+    |
+    = note: Puy applies a switch from the next declaration or statement, not from this point
+    = note: disable with `{$WARN directive-placement OFF}`
+
+warning: 1 warning emitted

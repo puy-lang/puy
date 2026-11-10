@@ -1,0 +1,6 @@
+a-é日 7
+<a-é日> 9
+<a-日> 7
+<a-日>
+EEncodingError: UTF8String cut inside a multibyte character at byte 6
+EEncodingError: UTF8String cut inside a multibyte character at byte 5

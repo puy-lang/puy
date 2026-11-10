@@ -1,0 +1,57 @@
+; puyc format 2
+.const
+  0: str "b\n"
+  1: str "a\n"
+  2: str "x"
+  3: str "x\n"
+.global
+  0: int I
+  1: ref S
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpCase file="dump_case.pas" init=- fini=- entry=0
+.func 0 DumpCase.<main> params=0 regs=9
+  .line 11
+  0000  LoadInt      r6, 4
+  0001  StoreGlobal  r6, g0
+  .line 12
+  0002  LoadGlobal   r6, g0
+  0003  LoadInt      r7, 1
+  0004  AddInt       r6, r6, r7
+  0005  NarrowOvf    r6, r6, 4
+  .line 13
+  0006  LoadInt      r7, 1
+  0007  JmpIfEqInt   r6, r7, -> 0011
+  0008  LoadInt      r7, 3
+  0009  JmpIfLtInt   r6, r7, -> 000c
+  000a  LoadInt      r8, 5
+  000b  JmpIfLeInt   r6, r8, -> 0011
+  .line 14
+  000c  LoadInt      r7, 2
+  000d  JmpIfEqInt   r6, r7, -> 0014
+  .line 16
+  000e  LoadConst    r0, k0
+  000f  CallHost     r0, h0
+  .line 12
+  0010  Jmp          -> 0014
+  .line 13
+  0011  LoadConst    r1, k1
+  0012  CallHost     r1, h0
+  .line 12
+  0013  Jmp          -> 0014
+  .line 18
+  0014  LoadConst    r2, k2
+  0015  StoreGlobalRef r2, g1
+  .line 19
+  0016  LoadGlobalRef r3, g1
+  .line 20
+  0017  LoadConst    r4, k2
+  0018  JmpIfEqStr   r3, r4, -> 001a
+  .line 19
+  0019  Jmp          -> 001c
+  .line 20
+  001a  LoadConst    r5, k3
+  001b  CallHost     r5, h0
+  .line 22
+  001c  RetVoid
+.finally r0, r1, r2, r3, r4, r5

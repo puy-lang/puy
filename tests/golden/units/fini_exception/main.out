@@ -1,0 +1,4 @@
+init Outer
+main
+fini Outer
+fini Inner

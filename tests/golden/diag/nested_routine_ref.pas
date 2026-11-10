@@ -1,7 +1,7 @@
 program NestedRoutineRef;
 
-// Referring to a nested routine (E3200) by name in the outer body does not add E0700 and the like
-// (semantics.md chapter 8). The nested routine takes precedence over a global of the same name
+// The nested routine takes precedence over a global of the same name in the outer body
+// (semantics.md 4.9): it is called, and as a loop variable it is not a variable (E0707)
 
 var
   Twice: string;

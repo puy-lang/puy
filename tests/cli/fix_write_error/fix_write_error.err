@@ -1,0 +1,2 @@
+error[F0002]: cannot write `src/Greet.pas`: permission denied
+fixed tools/fix_write_error.pas (1 fix)

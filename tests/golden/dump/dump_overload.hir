@@ -1,0 +1,32 @@
+program DumpOverload
+.routine f0 Twice(N: Integer): Integer
+  .var v0 N: Integer param
+  .var v1 Result: Integer result
+  assign @8 R+
+    var v1 Result
+    binary Integer
+      var v0 N: Integer
+      * Integer int:Integer
+        const Integer 2
+.routine f1 Twice#2(const S: string; Sep: string): string
+  .var v0 S: string const param
+  .var v1 Sep: string param
+  .var v2 Result: string result
+  assign @13 R+
+    var v2 Result
+    binary string
+      var v0 S: string
+      + string str
+        var v1 Sep: string
+      + string str
+        var v0 S: string
+.routine <main>
+  writeln @17
+    arg
+      call f0 Twice: Integer
+        const Integer 4
+  writeln @18
+    arg
+      call f1 Twice#2: string
+        const string "ab"
+        const string "-"

@@ -1,1 +1,1 @@
-check --dump ir usage_bad_dump.pas
+check --dump asm usage_bad_dump.pas

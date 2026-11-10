@@ -1,0 +1,94 @@
+; puy ir 1
+.global
+  g0 C: EConvertError
+.func f0 DumpExceptions.<main> params=0
+  .reg t0: EConvertError temp
+  .reg t1: string temp
+  .reg t2: Boolean temp
+  .reg t3: string temp
+  .reg t4: EConvertError temp
+  .reg t5: string temp
+  .reg t6: string temp
+  .reg t7: string temp
+  .reg t8: Integer temp
+  .reg t9: string temp
+  .reg t10: EConvertError temp
+  .reg t11: string temp
+  .reg t12: EConvertError temp
+  .reg t13: EConvertError temp
+  .reg t14: string temp
+  .reg t15: string temp
+  .reg t16: string temp
+bb0:
+  .line 24
+  LoadConst    t0, "x"
+  NewExc       t0, EConvertError
+  StoreGlobalRef t0, g0
+  .line 25
+  LoadGlobal   t4, g0
+  ExcGet       t3, t4, 2
+  Release      t5
+  EqStr        t2, t3, t5
+  BoolToStr    t1, t2
+  LoadConst    t6, " "
+  ConcatStr    t1, t1, t6
+  LoadGlobal   t10, g0
+  ExcInfo      t9, t10, 0
+  StrLen       t8, t9
+  IntToStr     t7, t8
+  ConcatStr    t1, t1, t7
+  LoadConst    t11, "\n"
+  ConcatStr    t1, t1, t11
+  CallHost     -, h0(t1)
+  .line 26
+  LoadGlobalRef t12, g0
+  Release      t13
+  JmpIfNeInt   t12, t13, bb2, bb1
+bb1:
+  .line 26
+  LoadConst    t14, "assertion failed: C <> nil"
+  NewExc       t14, EAssertionFailed
+  Raise        t14
+bb2:
+  .line 27
+  LoadConst    t16, "stop"
+  Move         t15, t16
+  Call         -, f1(t15)
+  .line 28
+  RetVoid
+.finally t0, t1, t3, t5, t6, t7, t9, t11, t12, t13, t14, t16
+.func f1 DumpExceptions.Fail params=1
+  .reg v0 Why: string const param
+  .reg v1 E: EAppError local
+  .reg t0: string temp
+  .reg t1: string temp
+  .reg t2: string temp
+  .reg t3: string temp
+  .reg t4: string temp
+  .reg t5: string temp
+  .reg t6: EAppError temp
+bb0:
+  .line 15
+  AssignRef    v1, v0
+  NewExc       v1, DumpExceptions.EConfigError
+  .line 16
+  ExcGet       t0, v1, 0
+  LoadConst    t1, "!"
+  ConcatStr    t0, t0, t1
+  ExcSet       v1, 0, t0
+  .line 17
+  ExcInfo      t2, v1, 2
+  LoadConst    t3, ": "
+  ConcatStr    t2, t2, t3
+  ExcGet       t4, v1, 0
+  ConcatStr    t2, t2, t4
+  LoadConst    t5, "\n"
+  ConcatStr    t2, t2, t5
+  CallHost     -, h0(t2)
+  .line 18
+  AssignRef    t6, v1
+  Raise        t6
+bb1:
+  .line 19
+  RetVoid
+.finally v1, t0, t1, t2, t3, t4, t5, t6

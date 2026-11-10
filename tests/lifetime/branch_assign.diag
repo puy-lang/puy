@@ -1,0 +1,10 @@
+warning[W0002]: value assigned to `T` is never read (unused-value)
+   --> branch_assign.pas:18:3
+    |
+ 18 |   T := T + S;
+    |   ^
+    |
+    = note: remove the assignment if the value is not needed
+    = note: disable with `{$WARN unused-value OFF}`
+
+warning: 1 warning emitted

@@ -1,0 +1,2 @@
+error: uncaught exception EEncodingError: UTF8String cut inside a multibyte character at byte 3
+  at SliceUtf8.<main> (slice_utf8.pas:21)

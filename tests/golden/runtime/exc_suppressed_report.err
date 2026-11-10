@@ -1,0 +1,12 @@
+error: uncaught exception EIOError: connection reset
+  at exc_suppressed_report.Close (exc_suppressed_report.pas:29)
+  at exc_suppressed_report.<main> (exc_suppressed_report.pas:34)
+  suppressed: EParseError: bad input
+    at exc_suppressed_report.Parse (exc_suppressed_report.pas:20)
+    at exc_suppressed_report.Close (exc_suppressed_report.pas:27)
+    at exc_suppressed_report.<main> (exc_suppressed_report.pas:34)
+    caused by: EConvertError: 'x' is not a valid integer
+      at exc_suppressed_report.ReadPort (exc_suppressed_report.pas:12)
+      at exc_suppressed_report.Parse (exc_suppressed_report.pas:18)
+      at exc_suppressed_report.Close (exc_suppressed_report.pas:27)
+      at exc_suppressed_report.<main> (exc_suppressed_report.pas:34)

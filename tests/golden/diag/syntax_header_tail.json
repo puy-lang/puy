@@ -99,10 +99,10 @@
         },
         "secondary": [],
         "notes": [
-          "only `System.SysUtils` can be used in this release; more units of the standard library come with later releases"
+          "a script without `puy.toml` can only use standard library units"
         ],
         "fixes": [],
-        "rendered": "error[E2500]: unit `Foo` not found\n  --> syntax_header_tail.pas:4:6\n   |\n 4 | uses Foo, System.SysUtils as SU;\n   |      ^^^\n   |\n   = note: only `System.SysUtils` can be used in this release; more units of the standard library come with later releases"
+        "rendered": "error[E2500]: unit `Foo` not found\n  --> syntax_header_tail.pas:4:6\n   |\n 4 | uses Foo, System.SysUtils as SU;\n   |      ^^^\n   |\n   = note: a script without `puy.toml` can only use standard library units"
       },
       {
         "code": "E2500",

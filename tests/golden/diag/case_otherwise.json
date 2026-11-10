@@ -1,0 +1,52 @@
+[
+  {
+    "schema": "puy.diagnostics/1",
+    "diagnostics": [
+      {
+        "code": "E0400",
+        "severity": "error",
+        "name": null,
+        "message": "expected `else`, found `otherwise`",
+        "primary": {
+          "file": "case_otherwise.pas",
+          "start": 309,
+          "end": 318,
+          "line": 15,
+          "column": 3,
+          "end_line": 15,
+          "end_column": 12,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "Puy writes the default part of a `case` statement with `else`"
+        ],
+        "fixes": [
+          {
+            "title": "replace `otherwise` with `else`",
+            "applicability": "safe",
+            "edits": [
+              {
+                "file": "case_otherwise.pas",
+                "start": 309,
+                "end": 318,
+                "line": 15,
+                "column": 3,
+                "end_line": 15,
+                "end_column": 12,
+                "original": "otherwise",
+                "replacement": "else"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E0400]: expected `else`, found `otherwise`\n   --> case_otherwise.pas:15:3\n    |\n 15 |   otherwise\n    |   ^^^^^^^^^\n    |\n    = note: Puy writes the default part of a `case` statement with `else`\n    = fix: replace `otherwise` with `else`"
+      }
+    ],
+    "summary": {
+      "errors": 1,
+      "warnings": 0,
+      "notes": 0
+    }
+  }
+]

@@ -217,6 +217,67 @@ pub enum SyntaxKind {
     DEREF_EXPR,
     NIL_EXPR,
     INHERITED_EXPR,
+    TYPE_SECTION,
+    TYPE_DECL,
+    RECORD_TYPE,
+    FIELD_DECL,
+    ARRAY_TYPE,
+    INDEX_RANGE,
+    RECORD_CONST,
+    FIELD_CONST,
+    ARRAY_CONST,
+    ARRAY_CTOR,
+    GENERIC_TYPE_REF,
+    /// `raise [Expr]` (`docs/spec/grammar.md` 2.2).
+    RAISE_STMT,
+    /// `class(Parent) [end]`: an exception class (`docs/spec/grammar.md` 2.2).
+    CLASS_TYPE,
+    /// `try StmtList (except … | finally …) end` (`docs/spec/grammar.md` 2.2).
+    TRY_STMT,
+    /// `except` and its handlers or statements.
+    EXCEPT_BLOCK,
+    /// `finally` and its statements.
+    FINALLY_BLOCK,
+    /// `on [IDENT ":"] TypeRef do [Statement]`.
+    EXCEPTION_HANDLER,
+    /// `else StmtList` after the handlers of an `except` block.
+    HANDLER_ELSE,
+    /// `( EnumValue {, EnumValue} )`: an enumeration type (`docs/spec/grammar.md` 2.2).
+    ENUM_TYPE,
+    /// `IDENT ["=" Expr]` inside an enumeration type.
+    ENUM_VALUE,
+    /// `Expr ".." Expr`: a subrange type.
+    SUBRANGE_TYPE,
+    /// `set of TypeSpec`: a set type (`docs/spec/types.md` 8.3).
+    SET_TYPE,
+    /// `case Expr of CaseArm {; CaseArm} [else StmtList] end` (`docs/spec/semantics.md` 4.10).
+    CASE_STMT,
+    /// `CaseLabel {, CaseLabel} : Statement`.
+    CASE_ARM,
+    /// `Expr [.. Expr]`: one label of a `case` arm.
+    CASE_LABEL,
+    /// `else StmtList` of a `case` statement.
+    CASE_ELSE,
+    /// `"=" Expr`: the default value of a parameter (`docs/spec/semantics.md` 4.8).
+    DEFAULT_VALUE,
+    /// `[Expr] ".." [Expr]`: a slice inside an index (`docs/spec/types.md` 8.7).
+    SLICE,
+    /// `resourcestring ConstDecl {ConstDecl}` (`docs/spec/grammar.md` 1.3).
+    RESOURCESTRING_SECTION,
+    /// `UnitHeader InterfacePart ImplementationPart [UnitInit] end .` (`docs/spec/units.md` chapter 1).
+    UNIT,
+    /// `unit QualifiedName {RoutineDirective} ;`.
+    UNIT_HEADER,
+    /// `interface [UsesClause] {InterfaceDecl}`.
+    INTERFACE_SECTION,
+    /// `implementation [UsesClause] {DeclSection}`.
+    IMPLEMENTATION_SECTION,
+    /// `initialization StmtList` (or the old form `begin StmtList`).
+    INIT_SECTION,
+    /// `finalization StmtList`.
+    FINAL_SECTION,
+    /// A routine heading without a body in the `interface` section.
+    ROUTINE_HEADER_DECL,
     /// Node wrapping tokens skipped by error recovery.
     ERROR_NODE,
     #[doc(hidden)]
@@ -529,6 +590,42 @@ kind_names![
     DEREF_EXPR,
     NIL_EXPR,
     INHERITED_EXPR,
+    TYPE_SECTION,
+    TYPE_DECL,
+    RECORD_TYPE,
+    FIELD_DECL,
+    ARRAY_TYPE,
+    INDEX_RANGE,
+    RECORD_CONST,
+    FIELD_CONST,
+    ARRAY_CONST,
+    ARRAY_CTOR,
+    GENERIC_TYPE_REF,
+    RAISE_STMT,
+    CLASS_TYPE,
+    TRY_STMT,
+    EXCEPT_BLOCK,
+    FINALLY_BLOCK,
+    EXCEPTION_HANDLER,
+    HANDLER_ELSE,
+    ENUM_TYPE,
+    ENUM_VALUE,
+    SUBRANGE_TYPE,
+    SET_TYPE,
+    CASE_STMT,
+    CASE_ARM,
+    CASE_LABEL,
+    CASE_ELSE,
+    DEFAULT_VALUE,
+    SLICE,
+    RESOURCESTRING_SECTION,
+    UNIT,
+    UNIT_HEADER,
+    INTERFACE_SECTION,
+    IMPLEMENTATION_SECTION,
+    INIT_SECTION,
+    FINAL_SECTION,
+    ROUTINE_HEADER_DECL,
     ERROR_NODE,
 ];
 

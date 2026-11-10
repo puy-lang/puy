@@ -1,0 +1,3 @@
+error: uncaught exception EEmptyInput: the input is empty
+  at raise_declared.Parse (raise_declared.pas:10)
+  at raise_declared.<main> (raise_declared.pas:15)

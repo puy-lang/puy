@@ -1,0 +1,176 @@
+[
+  {
+    "schema": "puy.diagnostics/1",
+    "diagnostics": [
+      {
+        "code": "E0416",
+        "severity": "error",
+        "name": null,
+        "message": "`resourcestring` is not allowed inside a routine",
+        "primary": {
+          "file": "resourcestring_errors.pas",
+          "start": 475,
+          "end": 489,
+          "line": 10,
+          "column": 1,
+          "end_line": 10,
+          "end_column": 15,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "move the `resourcestring` section outside the routine"
+        ],
+        "fixes": [],
+        "rendered": "error[E0416]: `resourcestring` is not allowed inside a routine\n   --> resourcestring_errors.pas:10:1\n    |\n 10 | resourcestring\n    | ^^^^^^^^^^^^^^\n    |\n    = note: move the `resourcestring` section outside the routine"
+      },
+      {
+        "code": "E0416",
+        "severity": "error",
+        "name": null,
+        "message": "`resourcestring` is not allowed inside a routine",
+        "primary": {
+          "file": "resourcestring_errors.pas",
+          "start": 577,
+          "end": 591,
+          "line": 19,
+          "column": 1,
+          "end_line": 19,
+          "end_column": 15,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "move the `resourcestring` section outside the routine"
+        ],
+        "fixes": [],
+        "rendered": "error[E0416]: `resourcestring` is not allowed inside a routine\n   --> resourcestring_errors.pas:19:1\n    |\n 19 | resourcestring\n    | ^^^^^^^^^^^^^^\n    |\n    = note: move the `resourcestring` section outside the routine"
+      },
+      {
+        "code": "E0417",
+        "severity": "error",
+        "name": null,
+        "message": "a `resourcestring` cannot have a type",
+        "primary": {
+          "file": "resourcestring_errors.pas",
+          "start": 713,
+          "end": 719,
+          "line": 30,
+          "column": 11,
+          "end_line": 30,
+          "end_column": 17,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "a `resourcestring` is always of type `string`"
+        ],
+        "fixes": [
+          {
+            "title": "remove the type",
+            "applicability": "safe",
+            "edits": [
+              {
+                "file": "resourcestring_errors.pas",
+                "start": 711,
+                "end": 719,
+                "line": 30,
+                "column": 9,
+                "end_line": 30,
+                "end_column": 17,
+                "original": ": string",
+                "replacement": ""
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E0417]: a `resourcestring` cannot have a type\n   --> resourcestring_errors.pas:30:11\n    |\n 30 |   STyped: string = 'typed';\n    |           ^^^^^^\n    |\n    = note: a `resourcestring` is always of type `string`\n    = fix: remove the type"
+      },
+      {
+        "code": "E0417",
+        "severity": "error",
+        "name": null,
+        "message": "a `resourcestring` cannot have a type",
+        "primary": {
+          "file": "resourcestring_errors.pas",
+          "start": 746,
+          "end": 753,
+          "line": 31,
+          "column": 16,
+          "end_line": 31,
+          "end_column": 23,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "a `resourcestring` is always of type `string`"
+        ],
+        "fixes": [
+          {
+            "title": "remove the type",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "resourcestring_errors.pas",
+                "start": 743,
+                "end": 753,
+                "line": 31,
+                "column": 13,
+                "end_line": 31,
+                "end_column": 23,
+                "original": " : Integer",
+                "replacement": ""
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E0417]: a `resourcestring` cannot have a type\n   --> resourcestring_errors.pas:31:16\n    |\n 31 |   SWrongType : Integer = 'wrong';\n    |                ^^^^^^^\n    |\n    = note: a `resourcestring` is always of type `string`\n    = suggestion: remove the type"
+      },
+      {
+        "code": "E0702",
+        "severity": "error",
+        "name": null,
+        "message": "type mismatch: expected `string`, found `Integer`",
+        "primary": {
+          "file": "resourcestring_errors.pas",
+          "start": 777,
+          "end": 779,
+          "line": 32,
+          "column": 13,
+          "end_line": 32,
+          "end_column": 15,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0702]: type mismatch: expected `string`, found `Integer`\n   --> resourcestring_errors.pas:32:13\n    |\n 32 |   SNumber = 42;\n    |             ^^"
+      },
+      {
+        "code": "E0713",
+        "severity": "error",
+        "name": null,
+        "message": "constant expression required",
+        "primary": {
+          "file": "resourcestring_errors.pas",
+          "start": 795,
+          "end": 796,
+          "line": 33,
+          "column": 15,
+          "end_line": 33,
+          "end_column": 16,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0713]: constant expression required\n   --> resourcestring_errors.pas:33:15\n    |\n 33 |   SVariable = G;\n    |               ^"
+      }
+    ],
+    "summary": {
+      "errors": 6,
+      "warnings": 0,
+      "notes": 0
+    }
+  }
+]

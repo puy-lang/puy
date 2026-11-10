@@ -1,0 +1,136 @@
+; puy ir 1
+.global
+.func f0 SetCopyOnWrite.<main> params=0
+  .reg t0: - temp
+  .reg t1: - temp
+bb0:
+  .line 42
+  Call         -, f2()
+  .line 43
+  Call         -, f2()
+  .line 44
+  RetVoid
+.finally
+.func f1 SetCopyOnWrite.Show params=2
+  .reg v0 S: string const param
+  .reg v1 C: TChars const param
+  .reg v2 Ch: Char local
+  .reg v3 -: TChars hidden
+  .reg v4 -: Integer hidden
+  .reg t0: string temp
+  .reg t1: string temp
+  .reg t2: Int64 temp
+  .reg t3: Int64 temp
+  .reg t4: string temp
+  .reg t5: string temp
+  .reg t6: string temp
+bb0:
+  .line 18
+  AssignRef    t0, v0
+  LoadConst    t1, ":"
+  ConcatStr    t0, t0, t1
+  CallHost     -, h0(t0)
+  .line 19
+  AssignRef    v3, v1
+  LoadInt      v4, -1
+  Jmp          bb1
+bb1:
+  .line 19
+  AddIntI      t2, v4, 1
+  SetNextBig   t2, v3, t2
+  LoadZero     t3
+  JmpIfLtInt   t2, t3, bb4, bb2
+bb2:
+  .line 19
+  Move         v4, t2
+  Move         v2, v4
+  .line 20
+  LoadConst    t4, " "
+  StrFromChar  t5, v2
+  ConcatStr    t4, t4, t5
+  CallHost     -, h0(t4)
+  .line 19
+  Jmp          bb3
+bb3:
+  .line 19
+  Jmp          bb1
+bb4:
+  .line 21
+  LoadConst    t6, "\n"
+  CallHost     -, h0(t6)
+  .line 22
+  RetVoid
+.finally v3, t0, t1, t4, t5, t6
+.func f2 SetCopyOnWrite.Run params=0
+  .reg v0 A: TChars local
+  .reg v1 B: TChars local
+  .reg t0: Char temp
+  .reg t1: Char temp
+  .reg t2: string temp
+  .reg t3: TChars temp
+  .reg t4: string temp
+  .reg t5: string temp
+  .reg t6: TChars temp
+  .reg t7: string temp
+  .reg t8: TChars temp
+  .reg t9: TChars temp
+  .reg t10: string temp
+  .reg t11: TChars temp
+  .reg t12: string temp
+  .reg t13: string temp
+  .reg t14: TChars temp
+  .reg t15: string temp
+  .reg t16: string temp
+  .reg t17: TChars temp
+  .reg t18: string temp
+  .reg t19: TChars temp
+bb0:
+  .line 28
+  LoadConst    v0, SetCopyOnWrite.TChars [97, 101, 105, 111, 117]
+  .line 29
+  AssignRef    v1, v0
+  .line 30
+  LoadInt      t0, 121
+  Unique       v1, SetCopyOnWrite.TChars
+  SetIncl      v1, t0, t0
+  .line 31
+  LoadInt      t1, 97
+  Unique       v0, SetCopyOnWrite.TChars
+  SetExcl      v0, t1, t1
+  .line 32
+  LoadConst    t4, "A"
+  Move         t2, t4
+  Move         t3, v0
+  Call         -, f1(t2, t3)
+  .line 33
+  LoadConst    t7, "B"
+  Move         t5, t7
+  Move         t6, v1
+  Call         -, f1(t5, t6)
+  .line 34
+  AssignRef    v0, v1
+  .line 35
+  AssignRef    t8, v1
+  LoadConst    t9, SetCopyOnWrite.TChars [101..111]
+  Unique       t8, SetCopyOnWrite.TChars
+  SetDiff      t8, t9
+  MoveRef      v1, t8
+  .line 36
+  LoadConst    t12, "A"
+  Move         t10, t12
+  Move         t11, v0
+  Call         -, f1(t10, t11)
+  .line 37
+  LoadConst    t15, "B"
+  Move         t13, t15
+  Move         t14, v1
+  Call         -, f1(t13, t14)
+  .line 38
+  LoadConst    t18, "Vowels"
+  Move         t16, t18
+  LoadConst    t19, SetCopyOnWrite.TChars [97, 101, 105, 111, 117]
+  Move         t17, t19
+  Call         -, f1(t16, t17)
+  .line 39
+  RetVoid
+.finally v0, v1, t4, t7, t8, t9, t12, t15, t18, t19

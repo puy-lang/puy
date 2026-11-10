@@ -1,0 +1,9 @@
+error[E0700]: undeclared identifier `TShape`
+   --> main.pas:10:6
+    |
+ 10 |   S: TShape;
+    |      ^^^^^^
+    |
+    = fix: add `uses Shapes`
+
+error: aborting due to 1 error

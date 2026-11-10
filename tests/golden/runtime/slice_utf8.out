@@ -1,0 +1,4 @@
+あ 3
+ab
+[]
+EEncodingError: UTF8String cut inside a multibyte character at byte 3

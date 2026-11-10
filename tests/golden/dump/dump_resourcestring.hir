@@ -1,0 +1,13 @@
+program DumpResourceString
+.global g0 S: string
+.routine <main>
+  assign @16 R+
+    global g0 S
+    const string ":"
+  writeln @17
+    arg
+      const string "Error: failed"
+    arg
+      global g0 S: string
+    arg
+      const Integer 1

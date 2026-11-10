@@ -1,0 +1,2 @@
+error: uncaught exception ERangeError: index 2 is out of range for `TRow` (-1..1)
+  at ArrayIndexRange.<main> (array_index_range.pas:27)

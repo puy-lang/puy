@@ -1,0 +1,2 @@
+error: uncaught exception ERangeError: value #90 is out of range for `TLower` (#97..#122)
+  at SetRangeCheck.<main> (set_range_check.pas:58)

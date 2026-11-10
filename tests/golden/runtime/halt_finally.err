@@ -1,0 +1,6 @@
+warning: exception during Halt: ECleanup: first cleanup failed
+  at halt_finally.Stop (halt_finally.pas:24)
+  at halt_finally.Drop (halt_finally.pas:34)
+  at halt_finally.<main> (halt_finally.pas:40)
+warning: exception during Halt: ECleanup: second cleanup failed
+  at halt_finally.<main> (halt_finally.pas:43)

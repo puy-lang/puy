@@ -1,0 +1,42 @@
+program DumpStdio
+.global g0 I: Integer
+.global g1 C: Char
+.global g2 S: string
+.global g3 D: Double
+.global g4 M: Currency
+.routine <main>
+  readln @14
+    global g0 I
+    global g1 C
+    global g2 S
+  read @15
+    global g3 D
+    global g0 I
+    global g4 M
+  readln @16
+  writeln @17 err
+    arg
+      const Char #101
+    arg
+      const string "\n"
+    arg
+      global g0 I: Integer
+  write @18
+    arg
+      global g1 C: Char
+    arg
+      global g3 D: Double
+    arg
+      global g4 M: Currency
+  flush @19
+  nop @20
+  if @21
+    cond
+      binary Boolean
+        builtin Eof Boolean
+        or Boolean bool
+          builtin Eoln Boolean
+    then
+      writeln @22
+        arg
+          global g2 S: string

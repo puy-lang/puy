@@ -1,0 +1,145 @@
+error[E0737]: set base type `Integer` must have ordinal values in 0..65535
+   --> set_errors.pas:16:18
+    |
+ 16 |   TBad1 = set of Integer;
+    |                  ^^^^^^^
+    |
+    = note: use a subrange type such as `0..255` as the base type
+
+error[E0737]: set base type `ShortInt` must have ordinal values in 0..65535
+   --> set_errors.pas:17:18
+    |
+ 17 |   TBad2 = set of ShortInt;
+    |                  ^^^^^^^^
+    |
+    = note: use a subrange type such as `0..255` as the base type
+
+error[E0737]: set base type `TBig` must have ordinal values in 0..65535
+   --> set_errors.pas:18:18
+    |
+ 18 |   TBad3 = set of TBig;
+    |                  ^^^^
+    |
+    = note: use a subrange type such as `0..255` as the base type
+
+error[E0737]: set base type `-1..5` must have ordinal values in 0..65535
+   --> set_errors.pas:19:18
+    |
+ 19 |   TBad4 = set of -1..5;
+    |                  ^^^^^
+    |
+    = note: use a subrange type such as `0..255` as the base type
+
+error[E0737]: set base type `string` must have ordinal values in 0..65535
+   --> set_errors.pas:20:18
+    |
+ 20 |   TBad5 = set of string;
+    |                  ^^^^^^
+    |
+    = note: use a subrange type such as `0..255` as the base type
+
+error[E0737]: set element 70000 is not in 0..65535
+   --> set_errors.pas:23:14
+    |
+ 23 |   Wide = [1, 70000];
+    |              ^^^^^
+    |
+    = note: a set without a written type of integers is `set of Word`
+
+error[E0737]: set element 70000 is not in 0..65535
+   --> set_errors.pas:31:15
+    |
+ 31 |   if 5 in [1, 70000] then
+    |               ^^^^^
+    |
+    = note: a set without a written type of integers is `set of Word`
+
+error[E0729]: cannot infer the type of an array constructor
+   --> set_errors.pas:33:6
+    |
+ 33 |   if [1] = [1] then
+    |      ^^^
+    |
+    = note: give the array a type, as in `var A: TArray<Integer> := [1, 2]`
+
+error[E0729]: cannot infer the type of an array constructor
+   --> set_errors.pas:35:8
+    |
+ 35 |   S := [TColor.Red] + [TColor.Blue];
+    |        ^^^^^^^^^^^^
+    |
+    = note: give the array a type, as in `var A: TArray<Integer> := [1, 2]`
+
+error[E0703]: operator `+` cannot be applied to `TDigits` and `set of Char`
+   --> set_errors.pas:36:10
+    |
+ 36 |   D := D + C;
+    |          ^
+
+error[E0703]: operator `=` cannot be applied to `TDigits` and `set of Char`
+   --> set_errors.pas:37:8
+    |
+ 37 |   if D = C then
+    |        ^
+
+error[E0703]: operator `<` cannot be applied to `TColors` and `TColors`
+   --> set_errors.pas:39:8
+    |
+ 39 |   if S < S then
+    |        ^
+
+error[E0703]: operator `in` cannot be applied to `Char` and `TDigits`
+   --> set_errors.pas:41:10
+    |
+ 41 |   if 'a' in D then
+    |          ^^
+
+error[E0714]: constant value 12 is out of range for `TDigits` (0..9)
+   --> set_errors.pas:43:12
+    |
+ 43 |   D := [1, 12];
+    |            ^^
+
+error[E0702]: type mismatch: expected `TColor`, found `Integer`
+   --> set_errors.pas:44:9
+    |
+ 44 |   S := [1];
+    |         ^
+
+error[E0714]: constant value 15 is out of range for `TDigits` (0..9)
+   --> set_errors.pas:45:14
+    |
+ 45 |   Include(D, 15);
+    |              ^^
+
+error[E0706]: argument 1 must be a variable (parameter `S` is `var`)
+   --> set_errors.pas:46:11
+    |
+ 46 |   Include(3, 1);
+    |           ^
+
+error[E0702]: type mismatch: expected a set, found `Integer` (argument 1, parameter `S`)
+   --> set_errors.pas:47:11
+    |
+ 47 |   Include(I, 1);
+    |           ^
+
+error[E0702]: type mismatch: expected `Integer`, found `TColor` (argument 2, parameter `X`)
+   --> set_errors.pas:48:14
+    |
+ 48 |   Exclude(D, TColor.Red);
+    |              ^^^^^^^^^^
+
+error[E0705]: wrong number of arguments: expected 2, found 1
+   --> set_errors.pas:49:3
+    |
+ 49 |   Include(D);
+    |   ^^^^^^^^^^
+
+error[E0718]: cannot write a value of type `TColors`
+   --> set_errors.pas:50:11
+    |
+ 50 |   WriteLn(S);
+    |           ^
+
+error: aborting due to 21 errors

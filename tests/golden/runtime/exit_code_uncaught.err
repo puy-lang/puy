@@ -1,0 +1,2 @@
+error: uncaught exception Exception: stop
+  at ExitCodeUncaught.<main> (exit_code_uncaught.pas:10)

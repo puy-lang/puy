@@ -1,9 +1,3 @@
-error[E3200]: `type` is not supported yet (planned for M2)
-  --> routine_local_sections.pas:7:1
-   |
- 7 | type
-   | ^^^^
-
 error[E3001]: `label` is not supported in Puy
    --> routine_local_sections.pas:17:1
     |
@@ -12,4 +6,4 @@ error[E3001]: `label` is not supported in Puy
     |
     = note: use `Break`, `Continue`, `Exit` or an exception instead
 
-error: aborting due to 2 errors
+error: aborting due to 1 error

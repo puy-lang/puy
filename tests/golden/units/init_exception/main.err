@@ -1,0 +1,2 @@
+error: uncaught exception ERangeError: array index 2 is out of range 0..1
+  at Bad.<init> (src/Bad.pas:13)

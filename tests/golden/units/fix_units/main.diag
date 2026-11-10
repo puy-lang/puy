@@ -1,0 +1,21 @@
+warning[W0004]: directive `{$APPTYPE CONSOLE}` is ignored (ignored-directive)
+  --> main.pas:3:1
+   |
+ 3 | {$APPTYPE CONSOLE}
+   | ^^^^^^^^^^^^^^^^^^
+   |
+   = note: Puy does not build native executables from directives; executable settings belong in `puy.toml`
+   = note: disable with `{$WARN ignored-directive OFF}`
+   = fix: remove `{$APPTYPE CONSOLE}`
+
+error[E0400]: expected `;`, found `WriteLn`
+   --> src/Greet.pas:13:19
+    |
+ 13 |   S := S + 'Hello'
+    |                   ^
+ 14 |   WriteLn(S);
+    |   ------- found here
+    |
+    = fix: insert `;`
+
+error: aborting due to 1 error; 1 warning emitted

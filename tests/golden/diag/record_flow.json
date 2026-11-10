@@ -1,0 +1,377 @@
+[
+  {
+    "schema": "puy.diagnostics/1",
+    "diagnostics": [
+      {
+        "code": "E2000",
+        "severity": "error",
+        "name": null,
+        "message": "variable `A` may be read before it is assigned",
+        "primary": {
+          "file": "record_flow.pas",
+          "start": 383,
+          "end": 384,
+          "line": 17,
+          "column": 3,
+          "end_line": 17,
+          "end_column": 4,
+          "label": "read here"
+        },
+        "secondary": [
+          {
+            "file": "record_flow.pas",
+            "start": 335,
+            "end": 336,
+            "line": 14,
+            "column": 3,
+            "end_line": 14,
+            "end_column": 4,
+            "label": "declared here"
+          }
+        ],
+        "notes": [
+          "Puy requires every local variable to be assigned before it is read"
+        ],
+        "fixes": [
+          {
+            "title": "add an initial value: `var A: TPoint = Default(TPoint);`",
+            "applicability": "safe",
+            "edits": [
+              {
+                "file": "record_flow.pas",
+                "start": 344,
+                "end": 344,
+                "line": 14,
+                "column": 12,
+                "end_line": 14,
+                "end_column": 12,
+                "original": "",
+                "replacement": " = Default(TPoint)"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E2000]: variable `A` may be read before it is assigned\n   --> record_flow.pas:17:3\n    |\n 14 |   A: TPoint;\n    |   - declared here\n...\n 17 |   A.X := 1;\n    |   ^ read here\n    |\n    = note: Puy requires every local variable to be assigned before it is read\n    = fix: add an initial value: `var A: TPoint = Default(TPoint);`"
+      },
+      {
+        "code": "E2000",
+        "severity": "error",
+        "name": null,
+        "message": "variable `B` may be read before it is assigned",
+        "primary": {
+          "file": "record_flow.pas",
+          "start": 395,
+          "end": 396,
+          "line": 18,
+          "column": 3,
+          "end_line": 18,
+          "end_column": 4,
+          "label": "read here"
+        },
+        "secondary": [
+          {
+            "file": "record_flow.pas",
+            "start": 348,
+            "end": 349,
+            "line": 15,
+            "column": 3,
+            "end_line": 15,
+            "end_column": 4,
+            "label": "declared here"
+          }
+        ],
+        "notes": [
+          "Puy requires every local variable to be assigned before it is read",
+          "declare a named type such as `TName` for `B` and initialize it with `Default(TName)`",
+          "or give it an initial value that lists every element, as in `(0, 0, 0)`"
+        ],
+        "fixes": [],
+        "rendered": "error[E2000]: variable `B` may be read before it is assigned\n   --> record_flow.pas:18:3\n    |\n 15 |   B: array[0..2] of Integer;\n    |   - declared here\n...\n 18 |   B[0] := 1;\n    |   ^ read here\n    |\n    = note: Puy requires every local variable to be assigned before it is read\n    = note: declare a named type such as `TName` for `B` and initialize it with `Default(TName)`\n    = note: or give it an initial value that lists every element, as in `(0, 0, 0)`"
+      },
+      {
+        "code": "E2000",
+        "severity": "error",
+        "name": null,
+        "message": "variable `A` may be read before it is assigned",
+        "primary": {
+          "file": "record_flow.pas",
+          "start": 416,
+          "end": 417,
+          "line": 19,
+          "column": 11,
+          "end_line": 19,
+          "end_column": 12,
+          "label": "read here"
+        },
+        "secondary": [
+          {
+            "file": "record_flow.pas",
+            "start": 335,
+            "end": 336,
+            "line": 14,
+            "column": 3,
+            "end_line": 14,
+            "end_column": 4,
+            "label": "declared here"
+          }
+        ],
+        "notes": [
+          "Puy requires every local variable to be assigned before it is read"
+        ],
+        "fixes": [
+          {
+            "title": "add an initial value: `var A: TPoint = Default(TPoint);`",
+            "applicability": "safe",
+            "edits": [
+              {
+                "file": "record_flow.pas",
+                "start": 344,
+                "end": 344,
+                "line": 14,
+                "column": 12,
+                "end_line": 14,
+                "end_column": 12,
+                "original": "",
+                "replacement": " = Default(TPoint)"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E2000]: variable `A` may be read before it is assigned\n   --> record_flow.pas:19:11\n    |\n 14 |   A: TPoint;\n    |   - declared here\n...\n 19 |   WriteLn(A.X, B[0]);\n    |           ^ read here\n    |\n    = note: Puy requires every local variable to be assigned before it is read\n    = fix: add an initial value: `var A: TPoint = Default(TPoint);`"
+      },
+      {
+        "code": "E2000",
+        "severity": "error",
+        "name": null,
+        "message": "variable `B` may be read before it is assigned",
+        "primary": {
+          "file": "record_flow.pas",
+          "start": 421,
+          "end": 422,
+          "line": 19,
+          "column": 16,
+          "end_line": 19,
+          "end_column": 17,
+          "label": "read here"
+        },
+        "secondary": [
+          {
+            "file": "record_flow.pas",
+            "start": 348,
+            "end": 349,
+            "line": 15,
+            "column": 3,
+            "end_line": 15,
+            "end_column": 4,
+            "label": "declared here"
+          }
+        ],
+        "notes": [
+          "Puy requires every local variable to be assigned before it is read",
+          "declare a named type such as `TName` for `B` and initialize it with `Default(TName)`",
+          "or give it an initial value that lists every element, as in `(0, 0, 0)`"
+        ],
+        "fixes": [],
+        "rendered": "error[E2000]: variable `B` may be read before it is assigned\n   --> record_flow.pas:19:16\n    |\n 15 |   B: array[0..2] of Integer;\n    |   - declared here\n...\n 19 |   WriteLn(A.X, B[0]);\n    |                ^ read here\n    |\n    = note: Puy requires every local variable to be assigned before it is read\n    = note: declare a named type such as `TName` for `B` and initialize it with `Default(TName)`\n    = note: or give it an initial value that lists every element, as in `(0, 0, 0)`"
+      },
+      {
+        "code": "E2001",
+        "severity": "error",
+        "name": null,
+        "message": "function `Make` may return without assigning `Result`",
+        "primary": {
+          "file": "record_flow.pas",
+          "start": 443,
+          "end": 447,
+          "line": 22,
+          "column": 10,
+          "end_line": 22,
+          "end_column": 14,
+          "label": ""
+        },
+        "secondary": [
+          {
+            "file": "record_flow.pas",
+            "start": 480,
+            "end": 483,
+            "line": 25,
+            "column": 1,
+            "end_line": 25,
+            "end_column": 4,
+            "label": "returns here"
+          }
+        ],
+        "notes": [
+          "Puy requires `Result` to be assigned on every path that returns"
+        ],
+        "fixes": [
+          {
+            "title": "add `Result := Default(TPoint);` at the start of the body",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "record_flow.pas",
+                "start": 462,
+                "end": 462,
+                "line": 23,
+                "column": 6,
+                "end_line": 23,
+                "end_column": 6,
+                "original": "",
+                "replacement": "\n  Result := Default(TPoint);"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E2001]: function `Make` may return without assigning `Result`\n   --> record_flow.pas:22:10\n    |\n 22 | function Make: TPoint;\n    |          ^^^^\n...\n 25 | end;\n    | --- returns here\n    |\n    = note: Puy requires `Result` to be assigned on every path that returns\n    = suggestion: add `Result := Default(TPoint);` at the start of the body"
+      },
+      {
+        "code": "E2000",
+        "severity": "error",
+        "name": null,
+        "message": "variable `Result` may be read before it is assigned",
+        "primary": {
+          "file": "record_flow.pas",
+          "start": 465,
+          "end": 471,
+          "line": 24,
+          "column": 3,
+          "end_line": 24,
+          "end_column": 9,
+          "label": "read here"
+        },
+        "secondary": [],
+        "notes": [
+          "Puy requires `Result` to be assigned before it is read"
+        ],
+        "fixes": [
+          {
+            "title": "add `Result := Default(TPoint);` at the start of the body",
+            "applicability": "safe",
+            "edits": [
+              {
+                "file": "record_flow.pas",
+                "start": 462,
+                "end": 462,
+                "line": 23,
+                "column": 6,
+                "end_line": 23,
+                "end_column": 6,
+                "original": "",
+                "replacement": "\n  Result := Default(TPoint);"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E2000]: variable `Result` may be read before it is assigned\n   --> record_flow.pas:24:3\n    |\n 24 |   Result.X := 1;\n    |   ^^^^^^ read here\n    |\n    = note: Puy requires `Result` to be assigned before it is read\n    = fix: add `Result := Default(TPoint);` at the start of the body"
+      },
+      {
+        "code": "E2000",
+        "severity": "error",
+        "name": null,
+        "message": "variable `Q` may be read before it is assigned",
+        "primary": {
+          "file": "record_flow.pas",
+          "start": 520,
+          "end": 521,
+          "line": 30,
+          "column": 3,
+          "end_line": 30,
+          "end_column": 4,
+          "label": "read here"
+        },
+        "secondary": [
+          {
+            "file": "record_flow.pas",
+            "start": 507,
+            "end": 508,
+            "line": 29,
+            "column": 7,
+            "end_line": 29,
+            "end_column": 8,
+            "label": "declared here"
+          }
+        ],
+        "notes": [
+          "Puy requires every local variable to be assigned before it is read"
+        ],
+        "fixes": [
+          {
+            "title": "add an initial value: `var Q: TPoint := Default(TPoint);`",
+            "applicability": "safe",
+            "edits": [
+              {
+                "file": "record_flow.pas",
+                "start": 516,
+                "end": 516,
+                "line": 29,
+                "column": 16,
+                "end_line": 29,
+                "end_column": 16,
+                "original": "",
+                "replacement": " := Default(TPoint)"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E2000]: variable `Q` may be read before it is assigned\n   --> record_flow.pas:30:3\n    |\n 29 |   var Q: TPoint;\n    |       - declared here\n 30 |   Q.X := Make.X;\n    |   ^ read here\n    |\n    = note: Puy requires every local variable to be assigned before it is read\n    = fix: add an initial value: `var Q: TPoint := Default(TPoint);`"
+      },
+      {
+        "code": "E2000",
+        "severity": "error",
+        "name": null,
+        "message": "variable `Q` may be read before it is assigned",
+        "primary": {
+          "file": "record_flow.pas",
+          "start": 545,
+          "end": 546,
+          "line": 31,
+          "column": 11,
+          "end_line": 31,
+          "end_column": 12,
+          "label": "read here"
+        },
+        "secondary": [
+          {
+            "file": "record_flow.pas",
+            "start": 507,
+            "end": 508,
+            "line": 29,
+            "column": 7,
+            "end_line": 29,
+            "end_column": 8,
+            "label": "declared here"
+          }
+        ],
+        "notes": [
+          "Puy requires every local variable to be assigned before it is read"
+        ],
+        "fixes": [
+          {
+            "title": "add an initial value: `var Q: TPoint := Default(TPoint);`",
+            "applicability": "safe",
+            "edits": [
+              {
+                "file": "record_flow.pas",
+                "start": 516,
+                "end": 516,
+                "line": 29,
+                "column": 16,
+                "end_line": 29,
+                "end_column": 16,
+                "original": "",
+                "replacement": " := Default(TPoint)"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E2000]: variable `Q` may be read before it is assigned\n   --> record_flow.pas:31:11\n    |\n 29 |   var Q: TPoint;\n    |       - declared here\n 30 |   Q.X := Make.X;\n 31 |   WriteLn(Q.X);\n    |           ^ read here\n    |\n    = note: Puy requires every local variable to be assigned before it is read\n    = fix: add an initial value: `var Q: TPoint := Default(TPoint);`"
+      }
+    ],
+    "summary": {
+      "errors": 8,
+      "warnings": 0,
+      "notes": 0
+    }
+  }
+]

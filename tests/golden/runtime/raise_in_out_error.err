@@ -1,0 +1,2 @@
+error: uncaught exception EInOutError: invalid integer input: 'five'
+  at raise_in_out_error.<main> (raise_in_out_error.pas:5)

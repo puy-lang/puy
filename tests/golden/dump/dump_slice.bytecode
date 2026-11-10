@@ -1,0 +1,130 @@
+; puyc format 2
+.const
+  0: str "abcdef"
+  1: utf8 "xyz"
+  2: str "\n"
+.type
+  64: dynarray TArray<Integer> slots=0 elem=val
+  65: array DumpSlice.TFive slots=5 elem=val
+.global
+  0: ref S
+  1: ref U
+  2: ref D
+  3: ref F
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpSlice file="dump_slice.pas" init=- fini=- entry=0
+.func 0 DumpSlice.<main> params=0 regs=29
+  .line 15
+  0000  LoadConst    r0, k0
+  0001  StoreGlobalRef r0, g0
+  .line 16
+  0002  LoadConst    r1, k1
+  0003  StoreGlobalRef r1, g1
+  .line 17
+  0004  LoadInt      r24, 1
+  0005  LoadInt      r25, 2
+  0006  LoadInt      r26, 3
+  0007  LoadInt      r27, 3
+  0008  NewArr       r27, ty64
+  0009  LoadZero     r28
+  000a  DynSet       r27, r28, r24
+  000b  LoadInt      r28, 1
+  000c  DynSet       r27, r28, r25
+  000d  LoadInt      r28, 2
+  000e  DynSet       r27, r28, r26
+  000f  MoveRef      r2, r27
+  0010  StoreGlobalRef r2, g2
+  .line 18
+  0011  Release      r3
+  0012  StoreGlobalRef r3, g3
+  .line 19
+  0013  LoadGlobalRef r5, g0
+  0014  Move         r24, r5
+  0015  StrLen       r28, r24
+  0016  LoadInt      r25, 2
+  0017  LoadInt      r26, 3
+  0018  LoadInt      r27, 1
+  0019  SliceRange   r28, r25
+  001a  AddIntI      r25, r25, 1
+  001b  StrCopy      r4, r24
+  001c  LoadGlobalRef r7, g0
+  001d  Move         r24, r7
+  001e  StrLen       r28, r24
+  001f  LoadInt      r25, 4
+  0020  Move         r26, r28
+  0021  LoadInt      r27, 1
+  0022  SliceRange   r28, r25
+  0023  AddIntI      r25, r25, 1
+  0024  StrCopy      r6, r24
+  0025  ConcatStr    r4, r4, r6
+  0026  LoadGlobalRef r9, g0
+  0027  Move         r24, r9
+  0028  StrLen       r28, r24
+  0029  LoadInt      r25, 1
+  002a  LoadInt      r26, 2
+  002b  LoadInt      r27, 1
+  002c  SliceRange   r28, r25
+  002d  AddIntI      r25, r25, 1
+  002e  StrCopy      r8, r24
+  002f  ConcatStr    r4, r4, r8
+  0030  LoadGlobalRef r11, g0
+  0031  Move         r24, r11
+  0032  StrLen       r28, r24
+  0033  LoadInt      r25, 1
+  0034  Move         r26, r28
+  0035  LoadInt      r27, 1
+  0036  SliceRange   r28, r25
+  0037  AddIntI      r25, r25, 1
+  0038  StrCopy      r10, r24
+  0039  ConcatStr    r4, r4, r10
+  003a  LoadConst    r12, k2
+  003b  ConcatStr    r4, r4, r12
+  003c  CallHost     r4, h0
+  .line 20
+  003d  LoadGlobalRef r15, g1
+  003e  Move         r24, r15
+  003f  U8Len        r28, r24
+  0040  LoadInt      r25, 2
+  0041  Move         r26, r28
+  0042  LoadInt      r27, 1
+  0043  SliceRange   r28, r25
+  0044  AddIntI      r25, r25, 1
+  0045  U8Copy       r14, r24
+  0046  U8ToStr      r13, r14
+  0047  LoadConst    r16, k2
+  0048  ConcatStr    r13, r13, r16
+  0049  CallHost     r13, h0
+  .line 21
+  004a  LoadGlobalRef r18, g2
+  004b  Move         r24, r18
+  004c  ArrLen       r28, r24
+  004d  LoadInt      r25, 1
+  004e  Move         r26, r28
+  004f  LoadZero     r27
+  0050  SliceRange   r28, r25
+  0051  ArrCopy      r24, ty64
+  0052  MoveRef      r17, r24
+  0053  StoreGlobalRef r17, g2
+  .line 22
+  0054  LoadGlobalRef r20, g3
+  0055  Materialize  r20, ty65
+  0056  Move         r24, r20
+  0057  LoadInt      r28, 5
+  0058  LoadInt      r25, 5
+  0059  LoadInt      r26, 6
+  005a  LoadInt      r27, 5
+  005b  SliceRange   r28, r25
+  005c  ArrCopy      r24, ty64
+  005d  MoveRef      r19, r24
+  005e  StoreGlobalRef r19, g2
+  .line 23
+  005f  LoadGlobalRef r22, g2
+  0060  ArrLen       r24, r22
+  0061  IntToStr     r21, r24
+  0062  LoadConst    r23, k2
+  0063  ConcatStr    r21, r21, r23
+  0064  CallHost     r21, h0
+  .line 24
+  0065  RetVoid
+.finally r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16, r17, r18, r19, r20, r21, r22, r23

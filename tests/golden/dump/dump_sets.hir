@@ -1,0 +1,81 @@
+program DumpSets
+.type TColor = (Red = 0, Green = 1, Blue = 2)
+.type TColors = set of TColor
+.type TChars = set of Char
+.global g0 S: TColors
+.global g1 C: TChars
+.global g2 B: set of Byte
+.global g3 X: TColor
+.global g4 I: Integer
+.global g5 Ch: Char
+.routine <main>
+  .var v0 -: TColors hidden
+  .var v1 -: Integer hidden
+  assign @27 R+
+    global g3 X
+    const TColor 2
+  assign @28 R+
+    global g0 S
+    set TColors
+      elem R-
+        const TColor 0
+      elem R-
+        global g3 X: TColor
+  assign @29 R+
+    global g5 Ch
+    const Char #122
+  assign @30 R+
+    global g1 C
+    binary TChars
+      const TChars [97, 101, 105, 111, 117]
+      + TChars set
+        set TChars
+          range R-
+            const Char #120
+            global g5 Ch: Char
+  assign @31 R+
+    global g4 I
+    const Integer 200
+  include @32 R+
+    global g2 B
+    global g4 I: Integer
+  assign @33 R+
+    global g1 C
+    binary TChars
+      global g1 C: TChars
+      + TChars set
+        const TChars [97, 101, 105, 111, 117]
+  if @34
+    cond
+      binary Boolean
+        binary Boolean
+          global g3 X: TColor
+          in Boolean in
+            global g0 S: TColors
+        and Boolean bool
+          binary Boolean
+            const Char #121
+            in Boolean in
+              global g1 C: TChars
+    then
+      for-in @35 coll=v0 idx=v1
+        global g3 X
+        in
+          global g0 S: TColors
+        body
+          writeln @36
+            arg
+              global g3 X: TColor
+  writeln @37
+    arg
+      binary Boolean
+        global g0 S: TColors
+        <= Boolean set
+          const TColors [0..2]
+    arg
+      const Char #32
+    arg
+      binary Boolean
+        global g1 C: TChars
+        = Boolean set
+          const TChars [97, 101, 105, 111, 117]

@@ -6,7 +6,7 @@
 //!    `puy fix` lines, usage error exit code 2, `--format json`, `-e`, stdin) with the arguments
 //!    in `<name>.cmd`.
 //!
-//! `PUY_UPDATE_GOLDEN=1` rewrites `.out` / `.err` / `.code` in `tests/cli/`.
+//! `PUY_UPDATE_GOLDEN=1` rewrites `.out` / `.err` / `.code` / `.fixed.pas` in `tests/cli/`.
 //! Native only (spawns child processes).
 
 #![cfg(not(target_os = "wasi"))]
@@ -115,6 +115,7 @@ fn parse_cmd(bytes: &[u8]) -> Vec<String> {
     args
 }
 
+/// Copies a directory, leaving out the expected results of `puy fix` (`*.fixed.pas`).
 fn copy_tree(from: &Path, to: &Path) {
     if from.is_dir() {
         fs::create_dir_all(to).unwrap();
@@ -122,9 +123,50 @@ fn copy_tree(from: &Path, to: &Path) {
             let p = entry.unwrap().path();
             copy_tree(&p, &to.join(p.file_name().unwrap()));
         }
-    } else {
+    } else if !is_fixed_expectation(from) {
         fs::copy(from, to).unwrap();
     }
+}
+
+fn is_fixed_expectation(p: &Path) -> bool {
+    p.file_name()
+        .is_some_and(|n| n.to_string_lossy().ends_with(".fixed.pas"))
+}
+
+/// The expected results of `puy fix` under `dir`, as paths relative to it.
+fn fixed_expectations(dir: &Path, rel: &Path, out: &mut Vec<PathBuf>) {
+    let mut entries: Vec<PathBuf> = fs::read_dir(dir.join(rel))
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .collect();
+    entries.sort();
+    for p in entries {
+        let r = rel.join(p.file_name().unwrap());
+        if p.is_dir() {
+            fixed_expectations(dir, &r, out);
+        } else if is_fixed_expectation(&p) {
+            out.push(r);
+        }
+    }
+}
+
+/// Makes the files named in `<name>.readonly` (one path per line) read-only, so that `puy fix`
+/// fails to write them. `false` if the files stay writable (running as root on Unix), when the
+/// case cannot be run.
+fn make_readonly(work: &Path, list: &[u8], readonly: bool) -> bool {
+    for line in String::from_utf8_lossy(list)
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+    {
+        let p = work.join(line.trim());
+        let mut perm = fs::metadata(&p).unwrap().permissions();
+        perm.set_readonly(readonly);
+        fs::set_permissions(&p, perm).unwrap();
+        if readonly && fs::OpenOptions::new().write(true).open(&p).is_ok() {
+            return false;
+        }
+    }
+    true
 }
 
 fn diff_message(what: &str, expected: &[u8], actual: &[u8]) -> String {
@@ -203,12 +245,13 @@ fn runner_cases_through_puy_run() {
     for pas in runnable_cases() {
         let src = fs::read(&pas).unwrap();
         let cfg = puy_testsuite::parse_config(&src).unwrap();
-        // Skip cases with conditions the CLI cannot set (host presence, limits, release)
+        // Skip cases with conditions the CLI cannot set (host presence, limits, release, merged stderr)
         if cfg.release
             || cfg.no_console
             || cfg.no_env
             || cfg.stack_limit.is_some()
             || cfg.memory_limit.is_some()
+            || cfg.merge_stderr
         {
             continue;
         }
@@ -221,6 +264,10 @@ fn runner_cases_through_puy_run() {
         }
         let name = pas.file_name().unwrap().to_string_lossy().to_string();
         let mut args = vec!["run".to_string()];
+        if let Some(b) = &cfg.stdout_buffering {
+            args.push("--stdout-buffering".into());
+            args.push(b.clone());
+        }
         for d in &cfg.defines {
             args.push("--define".into());
             args.push(d.clone());
@@ -252,6 +299,50 @@ fn runner_cases_through_puy_run() {
         count += 1;
     }
     assert!(count > 0, "no runnable cases found");
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// Every program in `examples/` runs to completion with exit code 0, prints something and writes
+/// nothing to stderr (no diagnostics or warnings), so the samples keep working as the language
+/// changes. A directory with `puy.toml` is a multi-file example, run as `puy run main.pas` inside
+/// it. `puy run` does not enable leak detection, so leaks are checked by the `puy-testsuite`
+/// runner, which also runs `examples/` (`docs/design/testing.md` 3.11).
+#[test]
+fn examples_run_cleanly() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples");
+    // (directory to run in, file to pass to `puy run`)
+    let mut programs: Vec<(PathBuf, String)> = Vec::new();
+    for e in fs::read_dir(&dir).unwrap() {
+        let p = e.unwrap().path();
+        let name = p.file_name().unwrap().to_string_lossy().to_string();
+        if p.is_dir() && p.join("puy.toml").is_file() {
+            programs.push((p, "main.pas".into()));
+        } else if name.ends_with(".pas") {
+            programs.push((dir.clone(), name));
+        }
+    }
+    programs.sort();
+    assert!(
+        programs.iter().any(|(d, _)| *d == dir),
+        "no single-file examples found"
+    );
+    assert!(
+        programs.iter().any(|(d, _)| *d != dir),
+        "no multi-file examples found"
+    );
+    let mut failures = Vec::new();
+    for (cwd, name) in &programs {
+        let r = run(cwd, &["run".into(), name.clone()], b"");
+        if r.code != 0 || !r.stderr.is_empty() || r.stdout.is_empty() {
+            failures.push(format!(
+                "[{}] exit code {}, stdout {} bytes\n{}",
+                cwd.join(name).display(),
+                r.code,
+                r.stdout.len(),
+                String::from_utf8_lossy(&r.stderr)
+            ));
+        }
+    }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
@@ -301,15 +392,25 @@ fn cli_cases() {
             let is_expectation = fname.starts_with(&format!("{name}."))
                 && matches!(
                     p.extension().and_then(|e| e.to_str()),
-                    Some("cmd" | "in" | "out" | "err" | "code")
-                )
-                || fname == format!("{name}.fixed.pas");
+                    Some("cmd" | "in" | "out" | "err" | "code" | "readonly")
+                );
             if !is_expectation {
                 copy_tree(&p, &work.join(&fname));
             }
         }
+        let readonly = fs::read(stem.with_extension("readonly")).ok();
+        if let Some(list) = &readonly
+            && !make_readonly(&work, list, true)
+        {
+            make_readonly(&work, list, false);
+            eprintln!("skipped (files stay writable for this user): {name}");
+            continue;
+        }
         let stdin = fs::read(stem.with_extension("in")).unwrap_or_default();
         let r = run(&work, &args, &stdin);
+        if let Some(list) = &readonly {
+            make_readonly(&work, list, false);
+        }
         let mut f = Vec::new();
         let out_path = stem.with_extension("out");
         let err_path = stem.with_extension("err");
@@ -340,11 +441,21 @@ fn cli_cases() {
                 f.push(format!("exit code: expected {want_code}, got {}\n", r.code));
             }
         }
-        // Result of `puy fix`
-        let fixed_path = dir.join(format!("{name}.fixed.pas"));
-        if let Ok(expected) = fs::read(&fixed_path) {
-            let actual = fs::read(work.join(format!("{name}.pas"))).unwrap_or_default();
-            compare("fixed file", &expected, &actual, Some(&fixed_path), &mut f);
+        // Result of `puy fix`: each `<path>.fixed.pas` is compared with `<path>.pas`
+        let mut fixed = Vec::new();
+        fixed_expectations(&dir, Path::new(""), &mut fixed);
+        for rel in fixed {
+            let fixed_path = dir.join(&rel);
+            let expected = fs::read(&fixed_path).unwrap();
+            let target = rel.to_string_lossy().replace(".fixed.pas", ".pas");
+            let actual = fs::read(work.join(&target)).unwrap_or_default();
+            compare(
+                &format!("fixed file {target}"),
+                &expected,
+                &actual,
+                Some(&fixed_path),
+                &mut f,
+            );
         }
         if !f.is_empty() {
             failures.push(format!("[{name}]\n{}", f.join("")));

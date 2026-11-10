@@ -1,0 +1,11 @@
+error[E0400]: expected `end`, found end of file
+   --> case_unclosed.pas:10:21
+    |
+  9 |   case I of
+    |   ---- block starts here
+ 10 |     1: WriteLn('a');
+    |                     ^
+    |
+    = fix: insert `end end`
+
+error: aborting due to 1 error

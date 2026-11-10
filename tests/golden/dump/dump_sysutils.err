@@ -1,0 +1,2 @@
+error: uncaught exception Exception: 12
+  at DumpSysUtils.<main> (dump_sysutils.pas:22)

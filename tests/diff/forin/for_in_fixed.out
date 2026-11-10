@@ -1,0 +1,4 @@
+set length: 1 2 3 (10)
+shared element: 1 2 30
+string value: a b c (abzxxx)
+evaluated once: 7 8 9 (1)

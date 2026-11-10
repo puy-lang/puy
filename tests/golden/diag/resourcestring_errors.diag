@@ -1,0 +1,47 @@
+error[E0416]: `resourcestring` is not allowed inside a routine
+   --> resourcestring_errors.pas:10:1
+    |
+ 10 | resourcestring
+    | ^^^^^^^^^^^^^^
+    |
+    = note: move the `resourcestring` section outside the routine
+
+error[E0416]: `resourcestring` is not allowed inside a routine
+   --> resourcestring_errors.pas:19:1
+    |
+ 19 | resourcestring
+    | ^^^^^^^^^^^^^^
+    |
+    = note: move the `resourcestring` section outside the routine
+
+error[E0417]: a `resourcestring` cannot have a type
+   --> resourcestring_errors.pas:30:11
+    |
+ 30 |   STyped: string = 'typed';
+    |           ^^^^^^
+    |
+    = note: a `resourcestring` is always of type `string`
+    = fix: remove the type
+
+error[E0417]: a `resourcestring` cannot have a type
+   --> resourcestring_errors.pas:31:16
+    |
+ 31 |   SWrongType : Integer = 'wrong';
+    |                ^^^^^^^
+    |
+    = note: a `resourcestring` is always of type `string`
+    = suggestion: remove the type
+
+error[E0702]: type mismatch: expected `string`, found `Integer`
+   --> resourcestring_errors.pas:32:13
+    |
+ 32 |   SNumber = 42;
+    |             ^^
+
+error[E0713]: constant expression required
+   --> resourcestring_errors.pas:33:15
+    |
+ 33 |   SVariable = G;
+    |               ^
+
+error: aborting due to 6 errors

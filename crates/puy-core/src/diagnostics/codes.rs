@@ -94,6 +94,8 @@ pub const CODES: &[CodeInfo] = &[
     e(413, 1),
     e(414, 1),
     e(415, 2),
+    e(416, 2),
+    e(417, 2),
     // 4.4 Semantic analysis
     e(700, 1),
     e(701, 1),

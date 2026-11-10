@@ -1,0 +1,10 @@
+warning[W0010]: hint directive `platform` is ignored (ignored-hint-directive)
+  --> main.pas:2:11
+   |
+ 2 | unit Main platform;
+   |           ^^^^^^^^
+   |
+   = note: disable with `{$WARN ignored-hint-directive OFF}`
+   = fix: remove `platform`
+
+warning: 1 warning emitted

@@ -1,9 +1,3 @@
-error[E3200]: nested routines are not supported yet (planned for M2)
-  --> nested_routine_script.pas:5:1
-   |
- 5 | procedure Q;
-   | ^^^^^^^^^
-
 error[E0400]: expected `begin`, found `WriteLn`
   --> nested_routine_script.pas:7:5
    |
@@ -14,4 +8,4 @@ error[E0400]: expected `begin`, found `WriteLn`
    |
    = note: a body starts with `begin`; in a script, statements after the declarations are top-level statements
 
-error: aborting due to 2 errors
+error: aborting due to 1 error

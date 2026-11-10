@@ -1,0 +1,10 @@
+1: value 12 is out of range for `TDigits` (0..9)
+2: value 20 is out of range for `TDigits` (0..9)
+3: value 20 is out of range for `TDigits` (0..9)
+4: empty range
+5: value 200 is out of range for `TDigits` (0..9)
+6: value 100 is out of range for `TDigits` (0..9)
+7: TRUE FALSE
+8: value #48 is out of range for `TLower` (#97..#122)
+9: value #33 is out of range for `TLower` (#97..#122)
+FALSE TRUE TRUE

@@ -94,7 +94,9 @@ fn undeclared_and_types() {
     );
     assert_clean("var U: UInt64 := 1; var B: Byte := 1; var X := U + B;");
     assert_eq!(codes("var X: string := 1;"), ["E0702"]);
-    assert_clean("var S: string := 'a'; var C: Char := 'b'; S := C; S := S + C; C := S[1];");
+    assert_clean(
+        "var S: string := 'a'; var C: Char := 'b'; S := C; S := S + C; C := S[1]; WriteLn(C);",
+    );
     assert_eq!(codes("var C: Char := 'ab';"), ["E0702"]);
     assert_eq!(codes("var X := Integer;"), ["E0708"]);
     assert_eq!(codes("var X := System;"), ["E0708"]);
@@ -103,12 +105,11 @@ fn undeclared_and_types() {
     assert_eq!(codes("var S := 'ab'; WriteLn(S[1, 2]);"), ["E0705"]);
     assert_eq!(codes("var N := 1; WriteLn(N[1]);"), ["E0720"]);
     assert_eq!(codes("var S := 'ab'; WriteLn(S['a']);"), ["E0719"]);
-    assert_eq!(codes("var X := 1.5;"), ["E3200"]);
-    assert_eq!(codes("var X := 1 / 2;"), ["E3200"]);
-    assert_eq!(codes("var X := Low(Integer);"), ["E3200"]);
+    assert_clean("var X := 1.5; var Y := 1 / 2;");
+    assert_eq!(codes("var X := ExceptObject;"), ["E3200"]);
     assert_eq!(
-        msgs("var X := Low(Integer);"),
-        ["`Low` is not supported yet (planned for M2)"]
+        msgs("var X := ExceptObject;"),
+        ["`ExceptObject` is not supported yet (planned for M2)"]
     );
     assert_eq!(codes("var P: Pointer;"), ["E3004"]);
     assert_eq!(codes("var S: AnsiString;"), ["E3003"]);
@@ -139,7 +140,7 @@ fn integer_rules() {
     assert_eq!(d.fixes[0].edits[0].replacement, "$FFFFFFFF");
     let d = find("var Z := SmallInt(-40000);", "E0714");
     assert_eq!(d.fixes[0].edits[0].replacement, "$63C0");
-    assert_eq!(codes("var Z := Byte(1.5);"), ["E3200"]);
+    assert_eq!(codes("var Z := Byte(1.5);"), ["E0724"]);
     assert_eq!(codes("var Z := Integer('a');"), Vec::<String>::new());
     assert_eq!(
         codes("var Z := Boolean(1); var W := Char(65); var V := string('a');"),
@@ -298,8 +299,7 @@ fn builtin_procs() {
         codes("var S := ''; ReadLn(S); var I := 0; ReadLn(I); ReadLn;"),
         Vec::<String>::new()
     );
-    assert_eq!(codes("var C := 'a'; ReadLn(C);"), ["E3200"]);
-    assert_eq!(codes("var A := 0; var B := 0; ReadLn(A, B);"), ["E3200"]);
+    assert_clean("var C := 'a'; ReadLn(C); var A := 0; var B := 0; ReadLn(A, B);");
     assert_eq!(codes("ReadLn('a');"), ["E0706"]);
     assert_clean(
         "Assert(1 = 1); Assert(True, 'msg'); if True then Halt; if True then Halt(2); Exit;",
@@ -307,7 +307,7 @@ fn builtin_procs() {
     assert_eq!(codes("Assert('x');"), ["E0702"]);
     assert_eq!(codes("WriteLn(1:2:3);"), ["E0717"]);
     assert_eq!(codes("WriteLn(1:'a');"), ["E0702"]);
-    assert_eq!(codes("WriteLn(ErrOutput, 1);"), ["E3200"]);
+    assert_clean("WriteLn(ErrOutput, 1); Flush(Output);");
     assert_clean("Write; Write(); WriteLn; WriteLn();");
     assert_eq!(
         codes("WriteLn(ParamCount, ParamStr(0), Length('a'), Copy('abc', 1, 2), Pos('b', 'abc'));"),
@@ -376,10 +376,10 @@ fn definite_assignment() {
     let d = check("begin var X: Integer; WriteLn(X); end;");
     assert_eq!(d[0].fixes[0].edits[0].replacement, " := 0");
     assert_eq!(
-        codes("procedure P; var S: string; begin S := S + 'x'; end;"),
+        codes("procedure P; var S: string; begin S := S + 'x'; WriteLn(S); end;"),
         ["E2000"]
     );
-    let d = check("procedure P; var S: string; begin S := S + 'x'; end;");
+    let d = check("procedure P; var S: string; begin S := S + 'x'; WriteLn(S); end;");
     assert_eq!(d[0].fixes[0].edits[0].replacement, " = ''");
     assert_eq!(
         d[0].fixes[0].title,
@@ -569,4 +569,23 @@ fn script_top_level_is_one_scope() {
     assert_clean(
         "var X := 1; procedure P(X: Integer); var Y: Integer; begin Y := X; WriteLn(Y); end;\nP(X);",
     );
+}
+
+#[test]
+fn unused_value_deeply_nested_loops() {
+    // W0002 walks each loop body once, so deeply nested loops stay fast; the value assigned
+    // in the innermost loop is read by the conditions of every enclosing loop
+    let depth = 64;
+    let mut src = String::from("var X := 0;\n");
+    for _ in 0..depth {
+        src.push_str("while X < 10 do begin X := X + 1;\n");
+    }
+    for _ in 0..depth {
+        src.push_str("end;\n");
+    }
+    src.push_str("WriteLn(X);\n");
+    assert_clean(&src);
+    // The same nesting with a value overwritten in the outermost loop
+    let src = src.replacen("X := X + 1;\n", "X := X + 1; X := 1;\n", 1);
+    assert_eq!(codes(&src), ["W0002"]);
 }

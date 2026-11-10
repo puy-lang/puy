@@ -1,0 +1,2 @@
+error: uncaught exception EAccessViolation: access to a nil reference
+  at raise_nil.<main> (raise_nil.pas:4)

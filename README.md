@@ -18,6 +18,16 @@ ported code.
 > units, classes and the standard library are not implemented yet; using them reports
 > a "not supported yet" error (E3200).
 
+## Installation
+
+Install the `puy` command from crates.io with Cargo (Rust 1.99 or later):
+
+```sh
+cargo install puy
+```
+
+To build it from a checkout of this repository instead, see [Building](#building).
+
 ## Example
 
 ```pascal
@@ -32,6 +42,22 @@ end.
 $ puy run hello.pas
 Hello, Puy!
 ```
+
+More samples are in [`examples/`](examples/):
+
+| File | Shows |
+|---|---|
+| `fizzbuzz.pas` | Script mode (no `program` header), `for var` |
+| `primes.pas` | Dynamic arrays, `for..in`, `Write` with a width |
+| `records.pas` | Records, value semantics, `var` and open-array parameters, `Format` |
+| `enums_sets.pas` | Enumerated types, sets, `case` |
+| `exceptions.pas` | Custom exception classes, `try..except`, `try..finally` |
+| `temperature.pas` | Floating point, `overload`, default parameters |
+| `strings.pas` | String routines from `System.SysUtils`, UTF-16 strings |
+| `nested.pas` | Nested routines that use the outer routine's variables and `Result` |
+| `arrays.pas` | Static arrays with subrange and multi-dimensional indexes, typed array constants, slices, `Insert` / `Delete` |
+| `invoice.pas` | `Currency`, `case` on strings, `UTF8String`, `AnsiUpperCase` / `AnsiSameText` |
+| `todo/` | A multi-file package: `puy.toml`, units under `src/` (`interface` / `implementation`, `initialization`), `uses … as`. Run `puy run examples/todo/main.pas` |
 
 ## Building
 

@@ -1,0 +1,125 @@
+; puyc format 2
+.const
+  0: str "a"
+  1: str "b"
+  2: str "x"
+  3: utf8 "u"
+.type
+  64: dynarray TArray<Integer> slots=0 elem=val
+.global
+  0: ref A
+  1: ref S
+  2: ref U
+  3: int C
+  4: exitcode ExitCode
+.host
+.unit DumpBuiltins file="dump_builtins.pas" init=- fini=- entry=0
+.func 0 DumpBuiltins.<main> params=0 regs=17
+  .line 13
+  0000  LoadGlobalRef r0, g0
+  0001  LoadInt      r11, 1
+  0002  LoadInt      r12, 1
+  0003  NewArr       r12, ty64
+  0004  LoadZero     r13
+  0005  DynSet       r12, r13, r11
+  0006  MoveRef      r1, r12
+  0007  Move         r11, r0
+  0008  Move         r12, r1
+  0009  ArrConcat    r11, ty64
+  000a  MoveRef      r0, r11
+  000b  StoreGlobalRef r0, g0
+  .line 14
+  000c  LoadInt      r11, 2
+  000d  LoadZero     r12
+  000e  LoadGlobal   r13, g0
+  000f  Move         r14, r13
+  0010  Move         r15, r11
+  0011  Move         r16, r12
+  0012  ArrInsert    r14, ty64
+  0013  Move         r13, r14
+  0014  StoreGlobal  r13, g0
+  .line 15
+  0015  LoadGlobalRef r2, g0
+  0016  LoadInt      r11, 1
+  0017  LoadGlobal   r12, g0
+  0018  Move         r13, r12
+  0019  Move         r14, r2
+  001a  Move         r15, r11
+  001b  ArrInsertArr r13, ty64
+  001c  Move         r12, r13
+  001d  StoreGlobal  r12, g0
+  .line 16
+  001e  LoadZero     r11
+  001f  LoadInt      r12, 1
+  0020  LoadGlobal   r13, g0
+  0021  Move         r14, r13
+  0022  Move         r15, r11
+  0023  Move         r16, r12
+  0024  ArrDelete    r14, ty64
+  0025  Move         r13, r14
+  0026  StoreGlobal  r13, g0
+  .line 17
+  0027  LoadConst    r3, k0
+  0028  LoadGlobalRef r4, g1
+  0029  ConcatStr    r3, r3, r4
+  002a  LoadConst    r5, k1
+  002b  ConcatStr    r3, r3, r5
+  002c  StoreGlobalRef r3, g1
+  .line 18
+  002d  LoadConst    r6, k2
+  002e  LoadInt      r11, 1
+  002f  LoadGlobal   r12, g1
+  0030  Move         r13, r6
+  0031  Move         r14, r11
+  0032  StrInsert    r12, r13
+  0033  StoreGlobal  r12, g1
+  .line 19
+  0034  LoadInt      r11, 1
+  0035  LoadInt      r12, 1
+  0036  LoadGlobal   r13, g1
+  0037  Move         r14, r11
+  0038  Move         r15, r12
+  0039  StrDelete    r13, r14
+  003a  StoreGlobal  r13, g1
+  .line 20
+  003b  LoadConst    r7, k3
+  003c  StoreGlobalRef r7, g2
+  .line 21
+  003d  LoadGlobalRef r8, g2
+  003e  LoadInt      r11, 1
+  003f  LoadGlobal   r12, g2
+  0040  Move         r13, r8
+  0041  Move         r14, r11
+  0042  U8Insert     r12, r13
+  0043  StoreGlobal  r12, g2
+  .line 22
+  0044  LoadInt      r11, 1
+  0045  LoadInt      r12, 1
+  0046  LoadGlobal   r13, g2
+  0047  Move         r14, r11
+  0048  Move         r15, r12
+  0049  U8Delete     r13, r14
+  004a  StoreGlobal  r13, g2
+  .line 23
+  004b  LoadGlobalRef r9, g1
+  004c  LoadInt      r13, 1
+  004d  StrIndex     r12, r9, r13
+  004e  UpCaseChar   r11, r12
+  004f  StoreGlobal  r11, g3
+  .line 24
+  0050  LoadGlobalRef r10, g0
+  0051  ArrLen       r12, r10
+  0052  LoadInt      r13, 1
+  0053  AndInt       r11, r12, r13
+  0054  JmpIfFalse   r11, -> 0058
+  .line 25
+  0055  LoadInt      r11, 2
+  0056  StoreGlobal  r11, g4
+  .line 24
+  0057  Jmp          -> 0058
+  .line 26
+  0058  LoadGlobal   r11, g4
+  0059  Halt         r11
+  .line 27
+  005a  RetVoid
+.finally r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10

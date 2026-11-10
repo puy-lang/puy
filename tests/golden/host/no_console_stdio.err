@@ -1,0 +1,2 @@
+error: uncaught exception ENotSupportedException: not supported on this target: Console.ReadLine
+  at NoConsoleStdio.<main> (no_console_stdio.pas:11)

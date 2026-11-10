@@ -1,0 +1,45 @@
+program DumpEnums
+.type TColor = (Red = 0, Green = 1, Blue = 2)
+.type TCode = (One = 1, Five = 5)
+.type TDigit = 0..9
+.type TWarm = TColor(0)..TColor(1)
+.global g0 C: TColor
+.global g1 D: TDigit
+.global g2 W: TWarm
+.global g3 N: Integer
+.routine <main>
+  assign @20 R+
+    global g0 C
+    const TColor 1
+  assign @21 R+
+    global g3 N
+    const Integer 4
+  assign @22 R+
+    global g1 D
+    convert range TDigit R+
+      global g3 N: Integer
+  assign @23 R+
+    global g2 W
+    convert range TWarm R+
+      global g0 C: TColor
+  if @24
+    cond
+      binary Boolean
+        global g0 C: TColor
+        > Boolean ord
+          const TColor 0
+    then
+      writeln @25
+        arg
+          global g0 C: TColor
+        arg
+          const Char #32
+        arg
+          binary Integer
+            global g1 D: Integer
+            + Integer int:Integer
+              const Integer 1
+        arg
+          const Char #32
+        arg
+          const TCode 5

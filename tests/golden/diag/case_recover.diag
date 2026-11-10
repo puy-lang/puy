@@ -1,0 +1,56 @@
+error[E0400]: expected `of`, found `1`
+   --> case_recover.pas:11:9
+    |
+ 11 |   case I
+    |         ^
+ 12 |     1: WriteLn('a');
+    |     - found here
+    |
+    = fix: insert `of`
+
+error[E0400]: expected `:`, found `WriteLn`
+   --> case_recover.pas:15:6
+    |
+ 15 |     1 WriteLn('a');
+    |      ^
+    |       ------- found here
+    |
+    = fix: insert `:`
+
+error[E0400]: expected `;`, found `3`
+   --> case_recover.pas:16:20
+    |
+ 16 |     2: WriteLn('b')
+    |                    ^
+ 17 |     3: WriteLn('c');
+    |     - found here
+    |
+    = fix: insert `;`
+
+error[E0403]: expected a case label
+   --> case_recover.pas:19:12
+    |
+ 19 |   case I of
+    |            ^
+ 20 |   end;
+    |   --- found here
+
+error[E0400]: expected `end`, found `WriteLn`
+   --> case_recover.pas:23:22
+    |
+ 23 |     2: WriteLn('b'); WriteLn('c');
+    |                      ^^^^^^^
+    |
+    = note: an arm of a `case` statement has one statement; put several statements in `begin … end`
+
+error[E0400]: expected `end`, found `until`
+   --> case_recover.pas:27:23
+    |
+ 27 |       1: WriteLn('a');
+    |                       ^
+ 28 |   until I > 0;
+    |   ----- found here
+    |
+    = fix: insert `end`
+
+error: aborting due to 6 errors

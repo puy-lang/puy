@@ -1,0 +1,4 @@
+init Sections 6
+init Legacy
+main 6
+fini Sections

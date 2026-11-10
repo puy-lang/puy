@@ -1,0 +1,10 @@
+error[E0400]: expected `]`, found `)`
+   --> slice_unclosed.pas:10:16
+    |
+ 10 |   WriteLn(S[1..);
+    |                ^
+    |                - found here
+    |
+    = fix: insert `]`
+
+error: aborting due to 1 error

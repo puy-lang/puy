@@ -1,0 +1,10 @@
+warning[W0002]: value assigned to `N` is never read (unused-value)
+   --> unused_value_try.pas:53:5
+    |
+ 53 |     N := 1;
+    |     ^
+    |
+    = note: remove the assignment if the value is not needed
+    = note: disable with `{$WARN unused-value OFF}`
+
+warning: 1 warning emitted

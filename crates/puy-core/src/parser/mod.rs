@@ -148,7 +148,7 @@ struct Parser<'a> {
     closing_all: bool,
     /// Reading the declaration part of a `program` (guesses a missing `begin`).
     in_program_decls: bool,
-    /// Number of routine bodies currently being read (used for E3200 on nested routines and the limit check).
+    /// Number of routine bodies currently being read (for the limit on nested routines).
     routine_depth: usize,
     /// Skipped to the end of the file at the nested-routine limit (E0413).
     routines_too_deep: bool,
@@ -182,6 +182,8 @@ fn is_sync(kind: SyntaxKind) -> bool {
             | BEGIN_KW
             | UNTIL_KW
             | ELSE_KW
+            | EXCEPT_KW
+            | FINALLY_KW
             | DOT
             | EOF
             | CONST_KW
@@ -196,6 +198,10 @@ fn is_sync(kind: SyntaxKind) -> bool {
             | USES_KW
             | PROGRAM_KW
             | UNIT_KW
+            | INTERFACE_KW
+            | IMPLEMENTATION_KW
+            | INITIALIZATION_KW
+            | FINALIZATION_KW
     )
 }
 
@@ -700,28 +706,19 @@ impl<'a> Parser<'a> {
         self.builder.start_node(SOURCE_FILE.into());
         match self.current() {
             PROGRAM_KW => self.parse_program(),
-            UNIT_KW | LIBRARY_KW => {
+            UNIT_KW => self.parse_unit(),
+            LIBRARY_KW => {
                 let tok = self.current_tok();
-                let kind = tok.kind;
                 self.start_node(SCRIPT);
-                if kind == UNIT_KW {
-                    self.error_at(
-                        Code::E(3200),
-                        "`unit` is not supported yet (planned for M2)",
-                        tok.range,
-                    );
-                } else {
-                    self.error_at(
-                        Code::E(3011),
-                        "`library` is not supported in Puy",
-                        tok.range,
-                    )
-                    .notes
-                    .push(
-                        "Puy has no DLLs; extend it with the Rust extension mechanism instead"
-                            .into(),
-                    );
-                }
+                self.error_at(
+                    Code::E(3011),
+                    "`library` is not supported in Puy",
+                    tok.range,
+                )
+                .notes
+                .push(
+                    "Puy has no DLLs; extend it with the Rust extension mechanism instead".into(),
+                );
                 self.start_node(ERROR_NODE);
                 while !self.at_eof() {
                     self.bump();
@@ -804,7 +801,13 @@ impl<'a> Parser<'a> {
             }
             break;
         }
-        // The final `.`
+        self.parse_final_dot("program");
+        self.bump_eof();
+        self.finish_node();
+    }
+
+    /// The final `.` after the last `end` of a program or unit, and anything after it (E0406, E0407).
+    fn parse_final_dot(&mut self, what: &str) {
         if self.at(DOT) {
             self.bump();
         } else if self.at(SEMICOLON) && self.nth(1) == EOF {
@@ -848,19 +851,204 @@ impl<'a> Parser<'a> {
             let tok = self.current_tok();
             self.error_at(
                 Code::E(407),
-                "unexpected content after the end of the program",
+                format!("unexpected content after the end of the {what}"),
                 tok.range,
             )
             .notes
-            .push("a program ends at the first `end.`; routines and blocks end with `end;`".into());
+            .push(format!(
+                "a {what} ends at the first `end.`; routines and blocks end with `end;`"
+            ));
             self.start_node(ERROR_NODE);
             while !self.at_eof() {
                 self.bump();
             }
             self.finish_node();
         }
+    }
+
+    // ---- Unit (`docs/spec/units.md` chapter 1) ----
+
+    fn parse_unit(&mut self) {
+        self.start_node(UNIT);
+        self.start_node(UNIT_HEADER);
+        self.bump(); // unit
+        if self.at(IDENT) {
+            self.parse_qualified_name();
+        } else {
+            self.supply_diag(Code::E(405), "expected an identifier".into(), None);
+        }
+        // Hint directives of the unit (`platform`, `deprecated`, `experimental`, `library`)
+        loop {
+            let kind = if self.at(LIBRARY_KW) {
+                Some(LIBRARY_KW)
+            } else if self.at(IDENT) {
+                match self.current_lower().as_str() {
+                    "platform" => Some(PLATFORM_KW),
+                    "deprecated" => Some(DEPRECATED_KW),
+                    "experimental" => Some(EXPERIMENTAL_KW),
+                    _ => None,
+                }
+            } else {
+                None
+            };
+            let Some(kind) = kind else { break };
+            self.start_node(ROUTINE_DIRECTIVE);
+            if kind == LIBRARY_KW {
+                self.bump();
+            } else {
+                self.bump_as(kind);
+            }
+            if kind == DEPRECATED_KW && self.at(STRING_LIT) {
+                self.bump();
+            }
+            self.finish_node();
+        }
+        self.expect(SEMICOLON, &[INTERFACE_KW, IMPLEMENTATION_KW], &[]);
+        self.finish_node(); // UNIT_HEADER
+        // interface
+        if self.at(INTERFACE_KW) {
+            self.start_node(INTERFACE_SECTION);
+            self.bump();
+            if self.at(USES_KW) {
+                self.parse_uses_clause();
+            }
+            self.parse_interface_decls();
+            self.finish_node();
+        } else {
+            self.supply_diag(
+                Code::E(400),
+                format!(
+                    "expected `interface`, found {}",
+                    self.found_text(self.current_tok())
+                ),
+                None,
+            );
+        }
+        // implementation
+        if self.at(IMPLEMENTATION_KW) {
+            self.start_node(IMPLEMENTATION_SECTION);
+            self.bump();
+            if self.at(USES_KW) {
+                self.parse_uses_clause();
+            }
+            loop {
+                self.parse_decl_sections();
+                if matches!(
+                    self.current(),
+                    INITIALIZATION_KW | FINALIZATION_KW | BEGIN_KW | END_KW | DOT
+                ) || self.at_eof()
+                {
+                    break;
+                }
+                // A token that can start no declaration: skip to a synchronizing token
+                let before = self.pos;
+                let tok = self.current_tok();
+                if !self.pending_has_lex_error() {
+                    let msg = format!("expected a declaration, found {}", self.found_text(tok));
+                    self.error_at(Code::E(400), msg, tok.range);
+                }
+                self.skip_until(Some(SEMICOLON), &[]);
+                if self.pos == before {
+                    self.start_node(ERROR_NODE);
+                    self.bump();
+                    self.finish_node();
+                }
+            }
+            self.finish_node();
+        } else {
+            self.supply_diag(
+                Code::E(400),
+                format!(
+                    "expected `implementation`, found {}",
+                    self.found_text(self.current_tok())
+                ),
+                None,
+            );
+        }
+        // initialization / finalization (`<init>` / `<fini>`; `docs/spec/units.md` 5.1)
+        match self.current() {
+            INITIALIZATION_KW => {
+                self.parse_unit_init_section(INIT_SECTION);
+                if self.at(FINALIZATION_KW) {
+                    self.parse_unit_init_section(FINAL_SECTION);
+                }
+            }
+            FINALIZATION_KW => self.parse_unit_init_section(FINAL_SECTION),
+            BEGIN_KW => self.parse_unit_init_section(INIT_SECTION),
+            _ => {}
+        }
+        // end .
+        if self.at(END_KW) {
+            self.bump();
+        } else {
+            self.supply_diag(
+                Code::E(400),
+                format!(
+                    "expected `end`, found {}",
+                    self.found_text(self.current_tok())
+                ),
+                Some("end"),
+            );
+        }
+        self.parse_final_dot("unit");
         self.bump_eof();
         self.finish_node();
+    }
+
+    /// `initialization` / `finalization` / `begin` (the old form) and its statements up to the
+    /// next section or the final `end` (`docs/spec/units.md` chapter 1).
+    fn parse_unit_init_section(&mut self, kind: SyntaxKind) {
+        self.start_node(kind);
+        let tok = self.current_tok();
+        if tok.kind == BEGIN_KW {
+            // W0020: the old form `begin … end.` means `initialization`
+            let d = Diagnostic::warning(
+                Code::W(20),
+                "use `initialization` instead of `begin`",
+                Stage::Parser,
+            )
+            .with_primary(self.span(tok.range), "")
+            .with_fix(Fix::safe(
+                "replace `begin` with `initialization`",
+                vec![TextEdit::replace(self.file, tok.range, "initialization")],
+            ));
+            self.push_diag(d);
+        }
+        self.bump();
+        self.parse_stmt_list_in(END_KW, &[FINALIZATION_KW]);
+        self.finish_node();
+    }
+
+    /// The declarations of the `interface` section: sections and routine headings.
+    fn parse_interface_decls(&mut self) {
+        loop {
+            match self.current() {
+                CONST_KW => self.parse_const_section(),
+                VAR_KW => self.parse_var_section(),
+                TYPE_KW => self.parse_type_section(),
+                RESOURCESTRING_KW => self.parse_resourcestring_section(),
+                USES_KW => self.parse_uses_clause(),
+                PROCEDURE_KW | FUNCTION_KW => self.parse_routine_heading_decl(),
+                LABEL_KW | THREADVAR_KW | EXPORTS_KW => self.skip_unsupported_section(),
+                IMPLEMENTATION_KW | INITIALIZATION_KW | FINALIZATION_KW | END_KW | DOT | EOF => {
+                    break;
+                }
+                _ => {
+                    let before = self.pos;
+                    let tok = self.current_tok();
+                    if !self.pending_has_lex_error() {
+                        let msg = format!("expected a declaration, found {}", self.found_text(tok));
+                        self.error_at(Code::E(400), msg, tok.range);
+                    }
+                    self.skip_until(Some(SEMICOLON), &[IMPLEMENTATION_KW]);
+                    if self.pos == before {
+                        self.start_node(ERROR_NODE);
+                        self.bump();
+                        self.finish_node();
+                    }
+                }
+            }
+        }
     }
 
     fn parse_ident_list_plain(&mut self) {
@@ -918,9 +1106,9 @@ impl<'a> Parser<'a> {
                 CONST_KW => self.parse_const_section(),
                 VAR_KW if self.script_var_is_section() => self.parse_var_section(),
                 PROCEDURE_KW | FUNCTION_KW => self.parse_routine_decl(true),
-                TYPE_KW | LABEL_KW | RESOURCESTRING_KW | THREADVAR_KW | EXPORTS_KW => {
-                    self.skip_unsupported_section()
-                }
+                TYPE_KW => self.parse_type_section(),
+                RESOURCESTRING_KW => self.parse_resourcestring_section(),
+                LABEL_KW | THREADVAR_KW | EXPORTS_KW => self.skip_unsupported_section(),
                 _ => {
                     let before = self.pos;
                     self.parse_statement_or_recover(true);
@@ -1104,24 +1292,46 @@ impl<'a> Parser<'a> {
                 VAR_KW => self.parse_var_section(),
                 PROCEDURE_KW | FUNCTION_KW => self.parse_routine_decl(false),
                 USES_KW => self.parse_uses_clause(),
-                TYPE_KW | LABEL_KW | RESOURCESTRING_KW | THREADVAR_KW | EXPORTS_KW => {
-                    self.skip_unsupported_section()
-                }
+                TYPE_KW => self.parse_type_section(),
+                RESOURCESTRING_KW => self.parse_resourcestring_section(),
+                LABEL_KW | THREADVAR_KW | EXPORTS_KW => self.skip_unsupported_section(),
                 _ => break,
             }
         }
     }
 
     fn parse_const_section(&mut self) {
-        self.start_node(CONST_SECTION);
-        self.bump(); // const
+        self.parse_const_like_section(CONST_SECTION);
+    }
+
+    /// `resourcestring ConstDecl {ConstDecl}` (1.3). Inside a routine body the section is read
+    /// as usual and E0416 is reported at `resourcestring`.
+    fn parse_resourcestring_section(&mut self) {
+        if self.routine_depth > 0 {
+            let tok = self.current_tok();
+            self.error_at(
+                Code::E(416),
+                "`resourcestring` is not allowed inside a routine",
+                tok.range,
+            )
+            .notes
+            .push("move the `resourcestring` section outside the routine".into());
+        }
+        self.parse_const_like_section(RESOURCESTRING_SECTION);
+    }
+
+    /// A `const` or `resourcestring` section: the reserved word followed by `ConstDecl`s.
+    fn parse_const_like_section(&mut self, kind: SyntaxKind) {
+        self.start_node(kind);
+        self.bump(); // const / resourcestring
+        let resource = kind == RESOURCESTRING_SECTION;
         let mut first = true;
         loop {
             if (self.at(IDENT) && (first || matches!(self.nth(1), COLON | EQ)))
                 || matches!(self.current(), COLON | EQ)
             {
                 // A declaration with no identifier starting with `:` / `=` (`const = 1;`) reports E0405 and reads on
-                self.parse_const_decl();
+                self.parse_const_decl(resource);
             } else if first {
                 self.supply_diag(Code::E(405), "expected an identifier".into(), None);
                 break;
@@ -1133,7 +1343,7 @@ impl<'a> Parser<'a> {
         self.finish_node();
     }
 
-    fn parse_const_decl(&mut self) {
+    fn parse_const_decl(&mut self, resource: bool) {
         let after_lex_error = self.pending_has_lex_error();
         self.start_node(CONST_DECL);
         if self.at(IDENT) {
@@ -1141,17 +1351,132 @@ impl<'a> Parser<'a> {
         } else if !after_lex_error {
             self.supply_diag(Code::E(405), "expected an identifier".into(), None);
         }
-        if self.at(COLON) {
+        let typed = self.at(COLON);
+        if typed {
+            let colon = self.current_tok().range;
             self.bump();
-            self.parse_type_ref(&[EQ, SEMICOLON]);
+            let type_start = self.current_tok().range.start();
+            self.parse_type_spec(&[EQ, SEMICOLON], TypeCtx::Decl);
+            if resource {
+                self.resourcestring_type_error(colon, type_start);
+            }
         }
         if self.expect(EQ, &[], &[])
             || can_start_expr(self.current())
             || self.pending_has_lex_error()
         {
-            self.parse_expr_or_missing(&[]);
+            self.parse_init_value(typed);
         }
         self.expect(SEMICOLON, &[IDENT, BEGIN_KW], &[]);
+        self.finish_node();
+    }
+
+    /// E0417: a type written on a `resourcestring` declaration (1.3). `colon` is the `:` before the type and
+    /// `type_start` the start of the type, which was just read. The fix removes `:` and the type; it is `safe` only when the type is `string` (removing another
+    /// type may reveal a type error in the value).
+    fn resourcestring_type_error(&mut self, colon: TextRange, type_start: TextSize) {
+        let end = TextSize::from(self.last_end);
+        if end <= type_start {
+            // No type was read (E0404 has been reported)
+            return;
+        }
+        let type_range = TextRange::new(type_start, end);
+        let is_string =
+            self.bytes[usize::from(type_start)..usize::from(end)].eq_ignore_ascii_case(b"string");
+        let edit = TextEdit::delete(
+            self.file,
+            crate::diagnostics::deletion_range(self.bytes, TextRange::new(colon.start(), end)),
+        );
+        let fix = if is_string {
+            Fix::safe("remove the type", vec![edit])
+        } else {
+            Fix::suggestion("remove the type", vec![edit])
+        };
+        let d = Diagnostic::error(
+            Code::E(417),
+            "a `resourcestring` cannot have a type",
+            Stage::Parser,
+        )
+        .with_primary(self.span(type_range), "")
+        .with_note("a `resourcestring` is always of type `string`")
+        .with_fix(fix);
+        self.push_diag(d);
+    }
+
+    /// The value of a declaration. After a written type, a parenthesized list is a constant shape
+    /// (`(1, 2)`, `(X: 1; Y: 2)`; `docs/spec/types.md` chapter 4); otherwise an expression.
+    fn parse_init_value(&mut self, typed: bool) {
+        if typed && self.at(L_PAREN) {
+            match self.paren_shape() {
+                Some(true) => return self.parse_record_const(),
+                Some(false) => return self.parse_array_const(),
+                None => {}
+            }
+        }
+        self.parse_expr_or_missing(&[]);
+    }
+
+    /// Looks ahead from `(`: `Some(true)` for a record shape (`(IDENT :`), `Some(false)` for an
+    /// array shape (a `,` at the top level), `None` for a parenthesized expression.
+    fn paren_shape(&self) -> Option<bool> {
+        if self.nth(1) == IDENT && self.nth(2) == COLON {
+            return Some(true);
+        }
+        let mut depth = 0i32;
+        let mut i = 0;
+        loop {
+            match self.nth(i) {
+                L_PAREN | L_BRACK => depth += 1,
+                R_PAREN | R_BRACK => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return None;
+                    }
+                }
+                COMMA if depth == 1 => return Some(false),
+                // A nested record shape has `;` inside its own parentheses
+                SEMICOLON if depth > 1 => {}
+                EOF => return None,
+                c if is_sync(c) => return None,
+                _ => {}
+            }
+            i += 1;
+        }
+    }
+
+    /// `"(" FieldConst {";" FieldConst} [";"] ")"` with `FieldConst = IDENT ":" Value`.
+    fn parse_record_const(&mut self) {
+        self.start_node(RECORD_CONST);
+        self.bump(); // (
+        while self.at(IDENT) {
+            self.start_node(FIELD_CONST);
+            self.bump();
+            self.expect(COLON, &[], &[R_PAREN, SEMICOLON]);
+            self.parse_init_value(true);
+            self.finish_node();
+            if self.at(SEMICOLON) {
+                self.bump();
+            } else {
+                break;
+            }
+        }
+        self.expect(R_PAREN, &[], &[R_PAREN, SEMICOLON]);
+        self.finish_node();
+    }
+
+    /// `"(" Value {"," Value} ")"`.
+    fn parse_array_const(&mut self) {
+        self.start_node(ARRAY_CONST);
+        self.bump(); // (
+        loop {
+            self.parse_init_value(true);
+            if self.at(COMMA) {
+                self.bump();
+                continue;
+            }
+            break;
+        }
+        self.expect(R_PAREN, &[], &[R_PAREN, SEMICOLON]);
         self.finish_node();
     }
 
@@ -1201,13 +1526,13 @@ impl<'a> Parser<'a> {
         self.finish_node();
         let had_colon = self.expect(COLON, &[IDENT, STRING_KW], &[]);
         if had_colon || self.at(IDENT) || self.at(STRING_KW) {
-            self.parse_type_ref(&[EQ, SEMICOLON]);
+            self.parse_type_spec(&[EQ, SEMICOLON], TypeCtx::Decl);
         }
         if self.at(EQ) {
             let eq = self.current_tok();
             self.bump();
             let start = self.last_end;
-            self.parse_expr_or_missing(&[]);
+            self.parse_init_value(had_colon);
             if count > 1 {
                 let range = TextRange::new(eq.range.start(), self.last_end.into());
                 let _ = start;
@@ -1237,6 +1562,524 @@ impl<'a> Parser<'a> {
         self.finish_node();
     }
 
+    /// `TypeSpec` (`docs/spec/types.md` chapter 1): a type name, or in a declaration an anonymous
+    /// `record` / `array` type. `stop` is the token ending this declaration (the skip target).
+    fn parse_type_spec(&mut self, stop: &[SyntaxKind], ctx: TypeCtx) {
+        let cur = self.current();
+        let ordinal = if ctx == TypeCtx::NameOnly {
+            None
+        } else {
+            self.ordinal_type_kind()
+        };
+        let anonymous =
+            matches!(cur, RECORD_KW | ARRAY_KW | PACKED_KW | SET_KW) || ordinal.is_some();
+        match ctx {
+            TypeCtx::Decl if cur == SET_KW => return self.parse_set_type(stop),
+            TypeCtx::Decl if ordinal == Some(ENUM_TYPE) => return self.parse_enum_type(),
+            TypeCtx::Decl if ordinal == Some(SUBRANGE_TYPE) => {
+                return self.parse_subrange_type(stop);
+            }
+            TypeCtx::Decl if anonymous => return self.parse_structured_type(stop),
+            TypeCtx::Param
+                if cur == ARRAY_KW && self.nth(1) == OF_KW && self.nth(2) == CONST_KW =>
+            {
+                // `array of const` declared by the user (M3; `docs/spec/semantics.md` 5.3)
+                let tok = self.current_tok();
+                self.error_at(
+                    Code::E(3200),
+                    "`array of const` parameters are not supported yet (planned for M3)",
+                    tok.range,
+                );
+                self.start_node(ERROR_NODE);
+                for _ in 0..3 {
+                    self.bump();
+                }
+                self.finish_node();
+                return;
+            }
+            TypeCtx::Param if cur == ARRAY_KW && self.nth(1) == OF_KW => {
+                // An open array parameter (`docs/spec/types.md` 2.4)
+                return self.parse_structured_type(stop);
+            }
+            TypeCtx::Param | TypeCtx::Return if anonymous => {
+                let tok = self.current_tok();
+                let what = if ctx == TypeCtx::Param {
+                    "a parameter type must be a type name"
+                } else {
+                    "a return type must be a type name"
+                };
+                self.error_at(Code::E(404), what, tok.range)
+                    .notes
+                    .push("declare the type in a `type` section and use its name".into());
+                return self.skip_type(stop);
+            }
+            _ => {}
+        }
+        self.parse_type_ref(stop);
+    }
+
+    /// Whether the type at the current token is an enumeration type (`ENUM_TYPE`) or a subrange
+    /// type (`SUBRANGE_TYPE`; `docs/spec/types.md` 8.2): a `(` whose matching `)` is followed by
+    /// `..` starts a subrange, any other `(` an enumeration; a literal or a sign starts a
+    /// subrange; a name is a subrange when a `..` follows it (or the expression it starts).
+    fn ordinal_type_kind(&self) -> Option<SyntaxKind> {
+        match self.current() {
+            L_PAREN => {
+                let mut depth = 0i32;
+                let mut k = 0;
+                loop {
+                    match self.nth(k) {
+                        L_PAREN | L_BRACK => depth += 1,
+                        R_PAREN | R_BRACK => {
+                            depth -= 1;
+                            if depth == 0 {
+                                break;
+                            }
+                        }
+                        EOF => return Some(ENUM_TYPE),
+                        c if is_sync(c) => return Some(ENUM_TYPE),
+                        _ => {}
+                    }
+                    k += 1;
+                }
+                if self.nth(k + 1) == DOTDOT {
+                    Some(SUBRANGE_TYPE)
+                } else {
+                    Some(ENUM_TYPE)
+                }
+            }
+            INT_LIT | STRING_LIT | MINUS | PLUS => Some(SUBRANGE_TYPE),
+            IDENT if !(self.current_lower() == "tarray" && self.nth(1) == LT) => {
+                let mut depth = 0i32;
+                let mut k = 0;
+                loop {
+                    match self.nth(k) {
+                        DOTDOT if depth == 0 => return Some(SUBRANGE_TYPE),
+                        L_PAREN | L_BRACK => depth += 1,
+                        R_PAREN | R_BRACK => {
+                            depth -= 1;
+                            if depth < 0 {
+                                return None;
+                            }
+                        }
+                        EQ | ASSIGN | COMMA | COLON | OF_KW | IN_KW | DO_KW | GT if depth == 0 => {
+                            return None;
+                        }
+                        // `.` qualifies a name here (`TDay.Mon`)
+                        DOT => {}
+                        EOF => return None,
+                        c if is_sync(c) => return None,
+                        _ => {}
+                    }
+                    k += 1;
+                }
+            }
+            _ => None,
+        }
+    }
+
+    /// `EnumType = "(" EnumValue {"," EnumValue} ")"`, `EnumValue = IDENT ["=" Expr]`.
+    fn parse_enum_type(&mut self) {
+        self.start_node(ENUM_TYPE);
+        self.bump(); // (
+        loop {
+            if self.at(IDENT) {
+                self.start_node(ENUM_VALUE);
+                self.bump();
+                if self.at(EQ) {
+                    self.bump();
+                    self.parse_expr_or_missing(&[COMMA, R_PAREN]);
+                }
+                self.finish_node();
+            } else {
+                self.supply_diag(Code::E(405), "expected an identifier".into(), None);
+                break;
+            }
+            if self.at(COMMA) {
+                self.bump();
+                continue;
+            }
+            break;
+        }
+        self.expect(R_PAREN, &[SEMICOLON], &[R_PAREN]);
+        self.finish_node();
+    }
+
+    /// `SetType = "set" "of" TypeSpec` (`docs/spec/types.md` 8.3).
+    fn parse_set_type(&mut self, stop: &[SyntaxKind]) {
+        self.start_node(SET_TYPE);
+        self.bump(); // set
+        if self.expect(
+            OF_KW,
+            &[IDENT, STRING_KW, L_PAREN, INT_LIT, STRING_LIT],
+            &[],
+        ) || matches!(
+            self.current(),
+            IDENT | STRING_KW | L_PAREN | INT_LIT | STRING_LIT | MINUS | PLUS
+        ) {
+            self.parse_type_spec(stop, TypeCtx::Decl);
+        }
+        self.finish_node();
+    }
+
+    /// `SubrangeType = Expr ".." Expr`. The bounds are read without the comparison operators, so
+    /// that the `=` of a typed constant (`const D: 0..9 = 5`) ends the type.
+    fn parse_subrange_type(&mut self, stop: &[SyntaxKind]) {
+        self.start_node(SUBRANGE_TYPE);
+        let mut sync: Vec<SyntaxKind> = stop.to_vec();
+        sync.push(DOTDOT);
+        self.parse_bound(&sync);
+        if self.expect(DOTDOT, &[], &sync) || can_start_expr(self.current()) {
+            self.parse_bound(stop);
+        }
+        self.finish_node();
+    }
+
+    /// A bound of a subrange type: an expression above the comparison operators.
+    fn parse_bound(&mut self, extra_sync: &[SyntaxKind]) {
+        if can_start_expr(self.current()) && !self.lex_hole_wanted() {
+            self.parse_expr(2, extra_sync);
+        } else {
+            self.parse_expr_or_missing(extra_sync);
+        }
+    }
+
+    /// Wraps a type that cannot be read here in an `ERROR` node, up to the end of the declaration.
+    fn skip_type(&mut self, stop: &[SyntaxKind]) {
+        self.start_node(ERROR_NODE);
+        let mut depth = 0i32;
+        while !self.at_eof() {
+            let c = self.current();
+            if depth == 0 && (stop.contains(&c) || c == SEMICOLON || c == R_PAREN) {
+                break;
+            }
+            if depth == 0
+                && matches!(
+                    c,
+                    BEGIN_KW | CONST_KW | VAR_KW | PROCEDURE_KW | FUNCTION_KW | TYPE_KW
+                )
+            {
+                break;
+            }
+            match c {
+                RECORD_KW | CLASS_KW | OBJECT_KW | INTERFACE_KW | BEGIN_KW | CASE_KW => depth += 1,
+                L_PAREN | L_BRACK => depth += 1,
+                R_PAREN | R_BRACK => depth -= 1,
+                END_KW => {
+                    depth -= 1;
+                    if depth < 0 {
+                        break;
+                    }
+                }
+                _ => {}
+            }
+            self.bump();
+        }
+        self.finish_node();
+    }
+
+    /// `RecordType` / `ArrayType`, with an optional `packed` in front (W0016).
+    fn parse_structured_type(&mut self, stop: &[SyntaxKind]) {
+        let packed = self.at(PACKED_KW).then(|| self.current_tok());
+        let kind = if packed.is_some() {
+            self.nth(1)
+        } else {
+            self.current()
+        };
+        match kind {
+            RECORD_KW => {
+                self.start_node(RECORD_TYPE);
+                if let Some(p) = packed {
+                    self.packed_warning(p);
+                    self.bump();
+                }
+                self.parse_record_body(stop);
+                self.finish_node();
+            }
+            ARRAY_KW => {
+                self.start_node(ARRAY_TYPE);
+                if let Some(p) = packed {
+                    self.packed_warning(p);
+                    self.bump();
+                }
+                self.parse_array_body(stop);
+                self.finish_node();
+            }
+            _ => {
+                // `packed` before something else: the M1 rule for the rest of the declaration
+                self.parse_type_ref(stop);
+            }
+        }
+    }
+
+    /// W0016: `packed` is ignored. The fix removes `packed` and the whitespace after it.
+    fn packed_warning(&mut self, tok: Token) {
+        let mut end = tok.range.end();
+        let rest = &self.bytes[usize::from(end)..];
+        let ws = rest
+            .iter()
+            .take_while(|b| matches!(b, b' ' | b'\t'))
+            .count();
+        end += TextSize::from(ws as u32);
+        let d = Diagnostic::warning(Code::W(16), "`packed` is ignored", Stage::Parser)
+            .with_primary(self.span(tok.range), "")
+            .with_note("Puy chooses the memory layout of records and arrays itself")
+            .with_fix(Fix::safe(
+                "remove `packed`",
+                vec![TextEdit::delete(
+                    self.file,
+                    TextRange::new(tok.range.start(), end),
+                )],
+            ));
+        self.push_diag(d);
+    }
+
+    /// `"record" {FieldDecl} "end"`.
+    fn parse_record_body(&mut self, stop: &[SyntaxKind]) {
+        let record = self.current_tok();
+        self.bump(); // record
+        self.open_blocks.push((RECORD_KW, record.range));
+        loop {
+            match self.current() {
+                END_KW => {
+                    self.bump();
+                    break;
+                }
+                IDENT
+                    if matches!(
+                        self.current_lower().as_str(),
+                        "private" | "protected" | "public" | "published" | "strict"
+                    ) && !matches!(self.nth(1), COLON | COMMA) =>
+                {
+                    self.skip_record_members()
+                }
+                IDENT => self.parse_field_decl(),
+                CASE_KW => {
+                    // A variant part (E3005): up to the `end` of the record
+                    let tok = self.current_tok();
+                    self.error_at(
+                        Code::E(3005),
+                        "variant records are not supported in Puy",
+                        tok.range,
+                    )
+                    .notes
+                    .push("use inheritance instead".into());
+                    self.start_node(ERROR_NODE);
+                    let mut depth = 0i32;
+                    while !self.at_eof() {
+                        match self.current() {
+                            L_PAREN | RECORD_KW => depth += 1,
+                            R_PAREN => depth -= 1,
+                            END_KW if depth > 0 => depth -= 1,
+                            END_KW => break,
+                            _ => {}
+                        }
+                        self.bump();
+                    }
+                    self.finish_node();
+                }
+                PROCEDURE_KW | FUNCTION_KW | PROPERTY_KW | CONSTRUCTOR_KW | DESTRUCTOR_KW
+                | CLASS_KW | CONST_KW | VAR_KW | TYPE_KW => self.skip_record_members(),
+                SEMICOLON => {
+                    // An empty field declaration (`;;`)
+                    self.bump();
+                }
+                c if c == EOF || stop.contains(&c) || is_sync(c) => {
+                    // Unclosed record: supply `end`
+                    self.supply_diag(
+                        Code::E(400),
+                        format!(
+                            "expected `end`, found {}",
+                            self.found_text(self.current_tok())
+                        ),
+                        Some("end"),
+                    );
+                    break;
+                }
+                _ => {
+                    let tok = self.current_tok();
+                    if !self.pending_has_lex_error() {
+                        let msg = format!("expected a field name, found {}", self.found_text(tok));
+                        self.error_at(Code::E(405), msg, tok.range);
+                    }
+                    self.start_node(ERROR_NODE);
+                    self.bump();
+                    self.finish_node();
+                }
+            }
+        }
+        self.open_blocks.pop();
+    }
+
+    /// Methods, properties and visibility sections in a record (M3; E3200): skips up to the `end`
+    /// of the record, keeping nested `begin` / `case` / `record` / `try` balanced.
+    fn skip_record_members(&mut self) {
+        let tok = self.current_tok();
+        self.error_at(
+            Code::E(3200),
+            "methods and visibility sections in records are not supported yet (planned for M3)",
+            tok.range,
+        );
+        self.start_node(ERROR_NODE);
+        let mut depth = 0i32;
+        while !self.at_eof() {
+            match self.current() {
+                BEGIN_KW | CASE_KW | RECORD_KW | TRY_KW => depth += 1,
+                END_KW if depth > 0 => depth -= 1,
+                END_KW => break,
+                _ => {}
+            }
+            self.bump();
+        }
+        self.finish_node();
+    }
+
+    /// `FieldDecl = IdentList ":" TypeSpec [";"]` (the last `;` before `end` may be omitted).
+    fn parse_field_decl(&mut self) {
+        self.start_node(FIELD_DECL);
+        self.start_node(IDENT_LIST);
+        self.bump();
+        while self.at(COMMA) {
+            self.bump();
+            if self.at(IDENT) {
+                self.bump();
+            } else {
+                self.supply_diag(Code::E(405), "expected an identifier".into(), None);
+                break;
+            }
+        }
+        self.finish_node();
+        if self.expect(
+            COLON,
+            &[IDENT, STRING_KW, RECORD_KW, ARRAY_KW, PACKED_KW],
+            &[],
+        ) || matches!(
+            self.current(),
+            IDENT | STRING_KW | RECORD_KW | ARRAY_KW | PACKED_KW
+        ) {
+            self.parse_type_spec(&[SEMICOLON, END_KW], TypeCtx::Decl);
+        }
+        if !self.at(END_KW) {
+            self.expect(SEMICOLON, &[IDENT, END_KW, CASE_KW], &[]);
+        }
+        self.finish_node();
+    }
+
+    /// `"array" ["[" IndexRange {"," IndexRange} "]"] "of" TypeSpec`.
+    fn parse_array_body(&mut self, stop: &[SyntaxKind]) {
+        self.bump(); // array
+        if self.at(L_BRACK) {
+            self.bump();
+            loop {
+                self.start_node(INDEX_RANGE);
+                self.parse_expr_or_missing(&[DOTDOT, COMMA, R_BRACK]);
+                if self.at(DOTDOT) {
+                    self.bump();
+                    self.parse_expr_or_missing(&[COMMA, R_BRACK]);
+                }
+                self.finish_node();
+                if self.at(COMMA) {
+                    self.bump();
+                    continue;
+                }
+                break;
+            }
+            self.expect(R_BRACK, &[OF_KW], &[R_BRACK]);
+        }
+        if self.expect(OF_KW, &[IDENT, STRING_KW, RECORD_KW, ARRAY_KW], &[])
+            || matches!(
+                self.current(),
+                IDENT | STRING_KW | RECORD_KW | ARRAY_KW | PACKED_KW
+            )
+        {
+            self.parse_type_spec(stop, TypeCtx::Decl);
+        }
+    }
+
+    /// `TypeSection = "type" TypeDecl {TypeDecl}`.
+    fn parse_type_section(&mut self) {
+        self.start_node(TYPE_SECTION);
+        self.bump(); // type
+        let mut first = true;
+        loop {
+            if (self.at(IDENT) && (first || self.nth(1) == EQ)) || self.at(EQ) {
+                self.parse_type_decl();
+            } else if first {
+                self.supply_diag(Code::E(405), "expected an identifier".into(), None);
+                break;
+            } else {
+                break;
+            }
+            first = false;
+        }
+        self.finish_node();
+    }
+
+    /// `TypeDecl = IDENT "=" TypeDef ";"`.
+    fn parse_type_decl(&mut self) {
+        self.start_node(TYPE_DECL);
+        if self.at(IDENT) {
+            self.bump();
+        } else {
+            self.supply_diag(Code::E(405), "expected an identifier".into(), None);
+        }
+        self.expect(EQ, &[IDENT, STRING_KW, RECORD_KW, ARRAY_KW, PACKED_KW], &[]);
+        if self.at(TYPE_KW) {
+            // `type X = type Y` (a distinct type; decided in M4)
+            let tok = self.current_tok();
+            self.error_at(
+                Code::E(3200),
+                "distinct types (`type X = type Y`) are not supported yet (planned for M4)",
+                tok.range,
+            );
+            self.start_node(ERROR_NODE);
+            self.bump();
+            self.finish_node();
+            self.parse_type_ref(&[SEMICOLON]);
+        } else if self.at_exception_class() {
+            self.parse_class_type();
+        } else {
+            self.parse_type_spec(&[SEMICOLON], TypeCtx::Decl);
+        }
+        self.expect(SEMICOLON, &[IDENT, BEGIN_KW], &[]);
+        self.finish_node();
+    }
+
+    /// Whether the type definition is an exception class: `class "(" TypeRef ")" ["end"] ";"`
+    /// with a (qualified) name as the parent (`docs/spec/exceptions.md` chapter 3). Other `class`
+    /// forms are E3200 (M3).
+    fn at_exception_class(&self) -> bool {
+        if !self.at(CLASS_KW) || self.nth(1) != L_PAREN || !matches!(self.nth(2), IDENT | STRING_KW)
+        {
+            return false;
+        }
+        let mut k = 3;
+        while self.nth(k) == DOT && self.nth(k + 1) == IDENT {
+            k += 2;
+        }
+        if self.nth(k) != R_PAREN {
+            return false;
+        }
+        match self.nth(k + 1) {
+            SEMICOLON => true,
+            END_KW => self.nth(k + 2) == SEMICOLON,
+            _ => false,
+        }
+    }
+
+    /// `ExceptionClassType = "class" "(" TypeRef ")" ["end"]`.
+    fn parse_class_type(&mut self) {
+        self.start_node(CLASS_TYPE);
+        self.bump(); // class
+        self.bump(); // (
+        self.parse_type_ref(&[R_PAREN, SEMICOLON]);
+        self.expect(R_PAREN, &[SEMICOLON], &[]);
+        if self.at(END_KW) {
+            self.bump();
+        }
+        self.finish_node();
+    }
+
     /// `TypeRef`. `stop` is the token ending this declaration (the skip target).
     fn parse_type_ref(&mut self, stop: &[SyntaxKind]) {
         let cur = self.current();
@@ -1263,6 +2106,19 @@ impl<'a> Parser<'a> {
                     }
                     self.bump();
                 }
+                self.finish_node();
+            }
+            IDENT if self.current_lower() == "tarray" && self.nth(1) == LT => {
+                // `TArray<T>` (`docs/spec/types.md` chapter 1)
+                self.start_node(GENERIC_TYPE_REF);
+                self.parse_qualified_name();
+                self.bump(); // <
+                if matches!(self.current(), IDENT | STRING_KW) {
+                    self.parse_type_ref(&[GT]);
+                } else {
+                    self.supply_diag(Code::E(404), "expected a type".into(), None);
+                }
+                self.expect(GT, &[], &[GT]);
                 self.finish_node();
             }
             IDENT => {
@@ -1296,9 +2152,36 @@ impl<'a> Parser<'a> {
                     self.finish_node();
                 }
             }
-            ARRAY_KW | SET_KW | RECORD_KW | CLASS_KW | INTERFACE_KW | PACKED_KW | PROCEDURE_KW
-            | FUNCTION_KW | INT_LIT | STRING_LIT | MINUS | L_PAREN | CARET | FILE_KW
-            | OBJECT_KW => {
+            CLASS_KW | INTERFACE_KW | DISPINTERFACE_KW | OBJECT_KW => {
+                let tok = self.current_tok();
+                match cur {
+                    OBJECT_KW => {
+                        self.error_at(Code::E(3002), "`object` is not supported in Puy", tok.range)
+                            .notes
+                            .push("use a `record` or a `class` instead".into());
+                    }
+                    DISPINTERFACE_KW => {
+                        self.error_at(
+                            Code::E(3010),
+                            "`dispinterface` is not supported in Puy",
+                            tok.range,
+                        )
+                        .notes
+                        .push("Puy does not support COM".into());
+                    }
+                    _ => {
+                        let text = self.text_of(tok).to_ascii_lowercase();
+                        self.error_at(
+                            Code::E(3200),
+                            format!("`{text}` is not supported yet (planned for M3)"),
+                            tok.range,
+                        );
+                    }
+                }
+                recovery::skip_type_body(self);
+            }
+            ARRAY_KW | SET_KW | RECORD_KW | PACKED_KW | PROCEDURE_KW | FUNCTION_KW | INT_LIT
+            | STRING_LIT | MINUS | L_PAREN | CARET | FILE_KW => {
                 let tok = self.current_tok();
                 let text = self.text_of(tok).to_ascii_lowercase();
                 let is_reference = self.at_ident("reference");
@@ -1322,20 +2205,25 @@ impl<'a> Parser<'a> {
                             .push("use a `record` or a `class` instead".into());
                     }
                     _ => {
-                        let what = match cur {
-                            INT_LIT | STRING_LIT | MINUS => "subrange type".to_string(),
-                            L_PAREN => "enumeration type".to_string(),
-                            _ => format!("`{text}`"),
-                        };
-                        let m = match cur {
-                            CLASS_KW | INTERFACE_KW => "M3",
-                            _ => "M2",
-                        };
-                        self.error_at(
-                            Code::E(3200),
-                            format!("{what} is not supported yet (planned for {m})"),
-                            tok.range,
-                        );
+                        if matches!(cur, INT_LIT | STRING_LIT | MINUS | L_PAREN | SET_KW) {
+                            // An enumeration, subrange or set type where only a name can be
+                            // written (a `for var` loop variable, the argument of `TArray<…>`)
+                            self.error_at(Code::E(404), "expected a type name", tok.range)
+                                .notes
+                                .push(
+                                    "declare the type in a `type` section and use its name".into(),
+                                );
+                        } else {
+                            let m = match cur {
+                                CLASS_KW | INTERFACE_KW => "M3",
+                                _ => "M2",
+                            };
+                            self.error_at(
+                                Code::E(3200),
+                                format!("`{text}` is not supported yet (planned for {m})"),
+                                tok.range,
+                            );
+                        }
                     }
                 }
                 self.start_node(ERROR_NODE);
@@ -1380,14 +2268,6 @@ impl<'a> Parser<'a> {
         let tok = self.current_tok();
         let kind = tok.kind;
         match kind {
-            TYPE_KW | RESOURCESTRING_KW => {
-                let name = self.text_of(tok).to_ascii_lowercase();
-                self.error_at(
-                    Code::E(3200),
-                    format!("`{name}` is not supported yet (planned for M2)"),
-                    tok.range,
-                );
-            }
             LABEL_KW => {
                 self.error_at(Code::E(3001), "`label` is not supported in Puy", tok.range)
                     .notes
@@ -1420,7 +2300,21 @@ impl<'a> Parser<'a> {
     // ---- Routines ----
 
     fn parse_routine_decl(&mut self, in_script: bool) {
-        self.start_node(ROUTINE_DECL);
+        self.parse_routine_decl_in(in_script, false);
+    }
+
+    /// A routine heading in the `interface` section (`ROUTINE_HEADER_DECL`; `docs/spec/units.md`
+    /// chapter 1). A body written after it is E0415 and goes into an `ERROR` node.
+    fn parse_routine_heading_decl(&mut self) {
+        self.parse_routine_decl_in(false, true);
+    }
+
+    fn parse_routine_decl_in(&mut self, in_script: bool, interface: bool) {
+        self.start_node(if interface {
+            ROUTINE_HEADER_DECL
+        } else {
+            ROUTINE_DECL
+        });
         let decl_start = self.current_tok().range.start();
         // Heading
         self.start_node(ROUTINE_HEADER);
@@ -1445,7 +2339,7 @@ impl<'a> Parser<'a> {
                 || self.at(STRING_KW))
         {
             self.start_node(RETURN_TYPE);
-            self.parse_type_ref(&[SEMICOLON]);
+            self.parse_type_spec(&[SEMICOLON], TypeCtx::Return);
             self.finish_node();
         }
         self.finish_node(); // ROUTINE_HEADER
@@ -1491,15 +2385,42 @@ impl<'a> Parser<'a> {
             self.expect(SEMICOLON, &[BEGIN_KW, CONST_KW, VAR_KW, IDENT], &[]);
         }
         let semi_end = self.last_end;
+        if interface {
+            // Only `begin` can be told apart from the next section here (`var` / `const` start the
+            // next section of the `interface` part)
+            if self.at(BEGIN_KW) {
+                let tok = self.current_tok();
+                self.error_at(
+                    Code::E(415),
+                    "a routine body is not allowed in the interface section",
+                    tok.range,
+                )
+                .notes
+                .push("write the body in the `implementation` section".into());
+                self.start_node(ERROR_NODE);
+                self.parse_compound_stmt();
+                self.finish_node();
+                self.expect_semicolon_after_body();
+            }
+            self.finish_node(); // ROUTINE_HEADER_DECL
+            return;
+        }
         // Body
         if has_forward {
             // Do not read a body
         } else if matches!(
             self.current(),
-            CONST_KW | VAR_KW | TYPE_KW | LABEL_KW | BEGIN_KW | PROCEDURE_KW | FUNCTION_KW
+            CONST_KW
+                | VAR_KW
+                | TYPE_KW
+                | LABEL_KW
+                | RESOURCESTRING_KW
+                | BEGIN_KW
+                | PROCEDURE_KW
+                | FUNCTION_KW
         ) {
-            // A body starting with `procedure` / `function` (nested routine, E3200) or with a local
-            // `type` / `label` section (E3200 / E3001) (1.3)
+            // A body starting with `procedure` / `function` (a nested routine) or with a local
+            // `type` / `label` / `resourcestring` section (E3001 / E0416) (1.3)
             if self.parse_routine_body(false, in_script) {
                 self.expect_semicolon_after_body();
             }
@@ -1612,22 +2533,12 @@ impl<'a> Parser<'a> {
         }
         if self.at(COLON) {
             self.bump();
-            self.parse_type_ref(&[R_PAREN, SEMICOLON, EQ]);
+            self.parse_type_spec(&[R_PAREN, SEMICOLON, EQ], TypeCtx::Param);
             if self.at(EQ) {
-                let tok = self.current_tok();
-                self.error_at(
-                    Code::E(3200),
-                    "default parameter values are not supported yet (planned for M2)",
-                    tok.range,
-                );
-                self.start_node(ERROR_NODE);
-                while !self.at(R_PAREN)
-                    && !self.at(SEMICOLON)
-                    && !self.at_eof()
-                    && !is_sync(self.current())
-                {
-                    self.bump();
-                }
+                // A default value (`docs/spec/semantics.md` 4.8)
+                self.start_node(DEFAULT_VALUE);
+                self.bump();
+                self.parse_expr_or_missing(&[R_PAREN, SEMICOLON]);
                 self.finish_node();
             }
         } else if matches!(self.current(), SEMICOLON | R_PAREN) {
@@ -1651,7 +2562,7 @@ impl<'a> Parser<'a> {
         } else {
             self.expect(COLON, &[IDENT, STRING_KW], &[R_PAREN]);
             if self.at(IDENT) || self.at(STRING_KW) {
-                self.parse_type_ref(&[R_PAREN, SEMICOLON, EQ]);
+                self.parse_type_spec(&[R_PAREN, SEMICOLON, EQ], TypeCtx::Param);
             }
         }
         self.finish_node();
@@ -1673,23 +2584,12 @@ impl<'a> Parser<'a> {
                         self.skip_too_deep_routines();
                         break;
                     }
-                    // Nested routine: read it, then wrap it in an ERROR node. E3200 is reported only for the outermost
-                    // nesting (a nested routine inside a nested routine continues the same error; 1.3)
-                    if self.routine_depth == 1 {
-                        let tok = self.current_tok();
-                        self.error_at(
-                            Code::E(3200),
-                            "nested routines are not supported yet (planned for M2)",
-                            tok.range,
-                        );
-                    }
-                    self.start_node(ERROR_NODE);
+                    // A nested routine (`docs/spec/semantics.md` 4.9)
                     self.parse_routine_decl(false);
-                    self.finish_node();
                 }
-                TYPE_KW | LABEL_KW | RESOURCESTRING_KW | THREADVAR_KW | EXPORTS_KW => {
-                    self.skip_unsupported_section()
-                }
+                TYPE_KW => self.parse_type_section(),
+                RESOURCESTRING_KW => self.parse_resourcestring_section(),
+                LABEL_KW | THREADVAR_KW | EXPORTS_KW => self.skip_unsupported_section(),
                 _ => break,
             }
         }
@@ -1775,12 +2675,18 @@ impl<'a> Parser<'a> {
 
     /// `StmtList`. `closer` is `end` or `until`.
     fn parse_stmt_list(&mut self, closer: SyntaxKind) {
+        self.parse_stmt_list_in(closer, &[]);
+    }
+
+    /// `StmtList` that also ends before any of `stops` (the body of `try` ends at `except` / `finally`,
+    /// an `except` block at `finally`).
+    fn parse_stmt_list_in(&mut self, closer: SyntaxKind, stops: &[SyntaxKind]) {
         loop {
             if self.closing_all {
                 return;
             }
             let cur = self.current();
-            if cur == closer {
+            if cur == closer || stops.contains(&cur) {
                 return;
             }
             match cur {
@@ -1829,6 +2735,7 @@ impl<'a> Parser<'a> {
             } else if self.at(closer)
                 || self.at_eof()
                 || matches!(self.current(), DOT | END_KW | UNTIL_KW)
+                || stops.contains(&self.current())
             {
             } else if is_stmt_start(self.current()) {
                 self.supply(";");
@@ -1840,7 +2747,9 @@ impl<'a> Parser<'a> {
                     let msg = format!("expected `;`, found {}", self.found_text(tok));
                     self.error_at(Code::E(400), msg, tok.range);
                 }
-                let consumed = self.skip_until(Some(SEMICOLON), &[closer]);
+                let mut sync = vec![closer];
+                sync.extend_from_slice(stops);
+                let consumed = self.skip_until(Some(SEMICOLON), &sync);
                 if !consumed && self.pos == before {
                     self.unexpected_token_progress();
                 }
@@ -1866,7 +2775,10 @@ impl<'a> Parser<'a> {
             self.push_diag(d);
         }
         let outer = &self.open_blocks[..self.open_blocks.len() - 1];
-        let open_begins = outer.iter().filter(|(k, _)| *k == BEGIN_KW).count();
+        let open_begins = outer
+            .iter()
+            .filter(|(k, _)| matches!(*k, BEGIN_KW | CASE_KW))
+            .count();
         if self.end_is_surplus(open_begins) {
             self.start_node(ERROR_NODE);
             self.bump();
@@ -1943,8 +2855,13 @@ impl<'a> Parser<'a> {
             d = d.with_secondary(self.span(found.range), "found here");
         }
         d = d.with_secondary(self.span(start), "block starts here");
-        let _ = kind;
-        if self.open_blocks.iter().all(|(k, _)| *k == BEGIN_KW) {
+        if kind == TRY_KW {
+            // The missing part of a `try` is not a single token; report it without a fix
+        } else if self
+            .open_blocks
+            .iter()
+            .all(|(k, _)| matches!(*k, BEGIN_KW | CASE_KW))
+        {
             let n = self.open_blocks.len();
             let text = " end".repeat(n);
             d = d.with_fix(Fix::safe(
@@ -1994,7 +2911,10 @@ impl<'a> Parser<'a> {
             FOR_KW => self.parse_for_stmt(),
             VAR_KW => self.parse_inline_var_decl(),
             CONST_KW => self.parse_inline_const_decl(),
-            CASE_KW | TRY_KW | RAISE_KW | WITH_KW | GOTO_KW | ASM_KW => {
+            RAISE_KW => self.parse_raise_stmt(),
+            TRY_KW => self.parse_try_stmt(),
+            CASE_KW => self.parse_case_stmt(),
+            WITH_KW | GOTO_KW | ASM_KW => {
                 let tok = self.current_tok();
                 match cur {
                     WITH_KW => {
@@ -2036,6 +2956,356 @@ impl<'a> Parser<'a> {
             }
         }
         true
+    }
+
+    /// `RaiseStmt = "raise" [ Expr [ "at" Expr ] ]`. The `at` part is E3004 (`docs/spec/exceptions.md` 4).
+    fn parse_raise_stmt(&mut self) {
+        self.start_node(RAISE_STMT);
+        self.bump(); // raise
+        if matches!(
+            self.current(),
+            IDENT
+                | STRING_KW
+                | INT_LIT
+                | FLOAT_LIT
+                | STRING_LIT
+                | NIL_KW
+                | L_PAREN
+                | INHERITED_KW
+                | NOT_KW
+                | MINUS
+                | PLUS
+                | AT
+                | L_BRACK
+        ) || self.pending_has_lex_error()
+        {
+            self.parse_expr_or_missing(&[]);
+            if self.at_ident("at") {
+                let tok = self.current_tok();
+                self.error_at(Code::E(3004), "`at` is not supported in Puy", tok.range)
+                    .notes
+                    .push("use a class, a dynamic array or a `var` parameter instead".into());
+                self.start_node(ERROR_NODE);
+                // To the end of the statement
+                while !matches!(
+                    self.current(),
+                    SEMICOLON | END_KW | ELSE_KW | UNTIL_KW | EOF
+                ) {
+                    self.bump();
+                }
+                self.finish_node();
+            }
+        }
+        self.finish_node();
+    }
+
+    /// `TryStmt` (`docs/spec/exceptions.md` 4). The bodies of `try`, `except`, `finally`, the handler
+    /// `else` and each `on` count toward the nesting depth.
+    fn parse_try_stmt(&mut self) {
+        self.start_node(TRY_STMT);
+        let tok = self.current_tok();
+        self.bump(); // try
+        self.open_blocks.push((TRY_KW, tok.range));
+        self.parse_nested_stmt_list(EXCEPT_KW, &[FINALLY_KW, END_KW]);
+        if !self.closing_all {
+            match self.current() {
+                EXCEPT_KW => self.parse_except_block(),
+                FINALLY_KW => {
+                    self.start_node(FINALLY_BLOCK);
+                    self.bump(); // finally
+                    self.parse_nested_stmt_list(END_KW, &[]);
+                    self.finish_node();
+                }
+                _ => {
+                    // Only `end` reaches here (`try X; end`): report the missing `except` without a fix
+                    let msg = format!(
+                        "expected `except`, found {}",
+                        self.found_text(self.current_tok())
+                    );
+                    self.supply_diag(Code::E(400), msg, None);
+                }
+            }
+        }
+        self.open_blocks.pop();
+        if self.at(END_KW) {
+            self.bump();
+        }
+        self.finish_node();
+    }
+
+    /// `CaseStmt` (`docs/spec/semantics.md` 4.10). The body of each arm and the `else` part count
+    /// toward the nesting depth.
+    fn parse_case_stmt(&mut self) {
+        self.start_node(CASE_STMT);
+        let tok = self.current_tok();
+        self.bump(); // case
+        self.parse_expr_or_missing(&[OF_KW, COLON]);
+        if !self.at(OF_KW) && can_start_expr(self.current()) {
+            // `case X 1: …`: the first label follows
+            self.supply("of");
+        } else {
+            self.expect(OF_KW, &[], &[OF_KW, COLON]);
+        }
+        self.open_blocks.push((CASE_KW, tok.range));
+        if matches!(self.current(), END_KW | ELSE_KW) {
+            // A `case` needs at least one arm
+            self.supply_diag(Code::E(403), "expected a case label".into(), None);
+        }
+        loop {
+            if self.closing_all {
+                break;
+            }
+            match self.current() {
+                END_KW => break,
+                ELSE_KW => {
+                    self.start_node(CASE_ELSE);
+                    self.bump(); // else
+                    self.parse_nested_stmt_list(END_KW, &[]);
+                    self.finish_node();
+                    break;
+                }
+                SEMICOLON => self.bump(),
+                EOF | DOT => {
+                    self.unclosed_block(END_KW);
+                    break;
+                }
+                IDENT
+                    if self.at_ident("otherwise")
+                        && !matches!(self.nth(1), COLON | COMMA | DOTDOT) =>
+                {
+                    self.case_otherwise();
+                    break;
+                }
+                IDENT if self.case_stray_statement() => {
+                    // A second statement in an arm (`1: A; B;`)
+                    let tok = self.current_tok();
+                    let msg = format!("expected `end`, found {}", self.found_text(tok));
+                    self.error_at(Code::E(400), msg, tok.range).notes.push(
+                        "an arm of a `case` statement has one statement; put several statements in `begin … end`"
+                            .into(),
+                    );
+                    self.start_node(ERROR_NODE);
+                    self.parse_statement_or_recover(true);
+                    self.finish_node();
+                }
+                cur if can_start_expr(cur) || self.pending_has_lex_error() => {
+                    self.parse_case_arm();
+                    if self.closing_all {
+                        break;
+                    }
+                    if !self.at(SEMICOLON)
+                        && !matches!(self.current(), END_KW | ELSE_KW | EOF | DOT)
+                        && can_start_expr(self.current())
+                    {
+                        // `1: A 2: B`: the `;` between arms is supplied
+                        self.supply(";");
+                    }
+                }
+                UNTIL_KW | EXCEPT_KW | FINALLY_KW => {
+                    // The closer of an enclosing statement: the `end` of the `case` is missing
+                    self.supply("end");
+                    break;
+                }
+                _ => {
+                    let tok = self.current_tok();
+                    if !self.pending_has_lex_error() {
+                        let msg = format!("expected `end`, found {}", self.found_text(tok));
+                        self.error_at(Code::E(400), msg, tok.range);
+                    }
+                    self.start_node(ERROR_NODE);
+                    let before = self.pos;
+                    if !self.parse_statement_or_recover(true) && self.pos == before {
+                        self.bump();
+                    }
+                    self.finish_node();
+                }
+            }
+        }
+        self.open_blocks.pop();
+        if self.at(END_KW) {
+            self.bump();
+        }
+        self.finish_node();
+    }
+
+    /// Whether the tokens from the current one read as a statement rather than the labels of an
+    /// arm: no `:` at depth 0 before the end of the statement (`:=`, `;`, `end`, `else`, ...).
+    fn case_stray_statement(&self) -> bool {
+        let mut depth = 0usize;
+        for tok in &self.tokens[self.index_of_nth(0)..] {
+            let k = tok.kind;
+            if k.is_skipped_by_parser() {
+                continue;
+            }
+            match k {
+                L_PAREN | L_BRACK => depth += 1,
+                R_PAREN | R_BRACK => depth = depth.saturating_sub(1),
+                COLON if depth == 0 => return false,
+                ASSIGN if depth == 0 => return true,
+                // A qualified name (`TColor.Red`); the `.` that ends the program is followed by EOF
+                DOT => {}
+                _ if is_sync(k) => return true,
+                _ => {}
+            }
+        }
+        true
+    }
+
+    /// `CaseArm = CaseLabel {"," CaseLabel} ":" Statement`.
+    fn parse_case_arm(&mut self) {
+        self.start_node(CASE_ARM);
+        loop {
+            self.start_node(CASE_LABEL);
+            self.parse_expr_or_missing(&[DOTDOT, COLON, COMMA, OF_KW]);
+            if self.at(DOTDOT) {
+                self.bump();
+                self.parse_expr_or_missing(&[COLON, COMMA, OF_KW]);
+            }
+            self.finish_node();
+            if self.at(COMMA) {
+                self.bump();
+                continue;
+            }
+            break;
+        }
+        if self.expect(COLON, &[IDENT], &[COLON]) || !matches!(self.current(), SEMICOLON) {
+            self.parse_body_stmt();
+        }
+        self.finish_node();
+    }
+
+    /// `otherwise` (FPC) in place of `else`: E0400 with a fix to `else`, then the statements are
+    /// read as the `else` part (`docs/spec/semantics.md` 4.10).
+    fn case_otherwise(&mut self) {
+        let tok = self.current_tok();
+        let d = Diagnostic::error(
+            Code::E(400),
+            "expected `else`, found `otherwise`",
+            Stage::Parser,
+        )
+        .with_primary(self.span(tok.range), "")
+        .with_note("Puy writes the default part of a `case` statement with `else`")
+        .with_fix(Fix::safe(
+            "replace `otherwise` with `else`",
+            vec![TextEdit::replace(self.file, tok.range, "else")],
+        ));
+        self.push_diag(d);
+        self.start_node(CASE_ELSE);
+        self.start_node(ERROR_NODE);
+        self.bump(); // otherwise
+        self.finish_node();
+        self.parse_nested_stmt_list(END_KW, &[]);
+        self.finish_node();
+    }
+
+    /// A `StmtList` one nesting level deeper (the bodies of `try`).
+    fn parse_nested_stmt_list(&mut self, closer: SyntaxKind, stops: &[SyntaxKind]) {
+        if self.enter() {
+            self.parse_stmt_list_in(closer, stops);
+            self.leave();
+        } else {
+            while !self.at_eof() && !self.at(closer) && !stops.contains(&self.current()) {
+                recovery::skip_nested_statement(self);
+                if self.at(SEMICOLON) {
+                    self.bump();
+                }
+            }
+        }
+    }
+
+    /// `"except" ExceptBlock`: handlers if the first token is `on`, otherwise a statement list.
+    fn parse_except_block(&mut self) {
+        self.start_node(EXCEPT_BLOCK);
+        self.bump(); // except
+        if self.at_ident("on") {
+            loop {
+                if self.closing_all {
+                    break;
+                }
+                if self.at_ident("on") {
+                    self.parse_exception_handler();
+                    if self.at(SEMICOLON) {
+                        self.bump();
+                    } else if self.at_ident("on") {
+                        // `on X do A on Y do B`: the `;` between handlers is supplied
+                        self.supply(";");
+                    }
+                    continue;
+                }
+                match self.current() {
+                    END_KW | FINALLY_KW => break,
+                    EOF | DOT => {
+                        self.unclosed_block(END_KW);
+                        break;
+                    }
+                    ELSE_KW => {
+                        self.start_node(HANDLER_ELSE);
+                        self.bump(); // else
+                        self.parse_nested_stmt_list(END_KW, &[FINALLY_KW]);
+                        self.finish_node();
+                        break;
+                    }
+                    SEMICOLON => self.bump(),
+                    _ => {
+                        // A statement mixed into the handlers (`docs/spec/exceptions.md` 4)
+                        let tok = self.current_tok();
+                        if !self.pending_has_lex_error() {
+                            let msg = format!("expected `on`, found {}", self.found_text(tok));
+                            self.error_at(Code::E(400), msg, tok.range);
+                        }
+                        self.start_node(ERROR_NODE);
+                        let before = self.pos;
+                        if !self.parse_statement_or_recover(true) && self.pos == before {
+                            self.bump();
+                        }
+                        self.finish_node();
+                    }
+                }
+            }
+        } else {
+            self.parse_nested_stmt_list(END_KW, &[FINALLY_KW]);
+        }
+        self.finish_node();
+        if self.at(FINALLY_KW) && !self.closing_all {
+            // `try..except..finally..end` (`docs/spec/exceptions.md` 4)
+            let tok = self.current_tok();
+            let msg = format!("expected `end`, found {}", self.found_text(tok));
+            self.error_at(Code::E(400), msg, tok.range).notes.push(
+                "to use both, put a `try..except` statement inside a `try..finally` statement"
+                    .into(),
+            );
+            self.start_node(ERROR_NODE);
+            self.bump(); // finally
+            self.parse_nested_stmt_list(END_KW, &[]);
+            self.finish_node();
+        }
+    }
+
+    /// `Handler = "on" [IDENT ":"] TypeRef "do" [Statement]`.
+    fn parse_exception_handler(&mut self) {
+        self.start_node(EXCEPTION_HANDLER);
+        self.bump_as(ON_KW);
+        if self.at(IDENT) && self.nth(1) == COLON {
+            self.bump();
+            self.bump(); // :
+        }
+        if matches!(self.current(), IDENT | STRING_KW) {
+            self.parse_type_ref(&[DO_KW]);
+        } else {
+            self.supply_diag(Code::E(404), "expected a type".into(), None);
+        }
+        if self.expect(
+            DO_KW,
+            &[
+                IDENT, BEGIN_KW, IF_KW, WHILE_KW, REPEAT_KW, FOR_KW, VAR_KW, CONST_KW,
+            ],
+            &[DO_KW],
+        ) || !matches!(self.current(), SEMICOLON | END_KW | ELSE_KW)
+        {
+            self.check_empty_statement("do");
+            self.parse_body_stmt();
+        }
+        self.finish_node();
     }
 
     /// Assignment or expression statement.
@@ -2087,12 +3357,12 @@ impl<'a> Parser<'a> {
         }
         if self.at(COLON) {
             self.bump();
-            self.parse_type_ref(&[ASSIGN, SEMICOLON]);
+            self.parse_type_spec(&[ASSIGN, SEMICOLON], TypeCtx::Decl);
             has_type = true;
         }
         if self.at(ASSIGN) {
             self.bump();
-            self.parse_expr_or_missing(&[]);
+            self.parse_init_value(has_type);
             has_init = true;
         } else if self.at(EQ) {
             // `var X: T = 1` is a VarSection in a script, but what reaches here is `var X = 1`
@@ -2120,15 +3390,16 @@ impl<'a> Parser<'a> {
         } else {
             self.supply_diag(Code::E(405), "expected an identifier".into(), None);
         }
-        if self.at(COLON) {
+        let typed = self.at(COLON);
+        if typed {
             self.bump();
-            self.parse_type_ref(&[EQ, SEMICOLON]);
+            self.parse_type_spec(&[EQ, SEMICOLON], TypeCtx::Decl);
         }
         if self.expect(EQ, &[], &[])
             || can_start_expr(self.current())
             || self.pending_has_lex_error()
         {
-            self.parse_expr_or_missing(&[]);
+            self.parse_init_value(typed);
         }
         self.finish_node();
     }
@@ -2271,7 +3542,7 @@ impl<'a> Parser<'a> {
             }
             if self.at(COLON) {
                 self.bump();
-                self.parse_type_ref(&[ASSIGN, DO_KW]);
+                self.parse_type_spec(&[ASSIGN, IN_KW, DO_KW], TypeCtx::NameOnly);
             }
         } else if self.at(IDENT) {
             self.bump();
@@ -2280,17 +3551,9 @@ impl<'a> Parser<'a> {
         }
         self.finish_node();
         if self.at(IN_KW) {
-            let tok = self.current_tok();
-            self.error_at(
-                Code::E(3200),
-                "`for..in` is not supported yet (planned for M2)",
-                tok.range,
-            );
-            self.start_node(ERROR_NODE);
-            while !self.at(DO_KW) && !self.at_eof() && !is_sync(self.current()) {
-                self.bump();
-            }
-            self.finish_node();
+            // `for X in C` (`docs/spec/types.md` chapter 5)
+            self.bump();
+            self.parse_expr_or_missing(&[DO_KW]);
         } else {
             if self.expect(ASSIGN, &[], &[DO_KW, TO_KW, DOWNTO_KW])
                 || can_start_expr(self.current())
@@ -2431,6 +3694,26 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// One item of an index: an expression, or a slice `[L] ".." [H]` wrapped in `SLICE`
+    /// (`docs/spec/types.md` 8.7).
+    fn parse_index_item(&mut self) {
+        let cp = self.checkpoint();
+        if !self.at(DOTDOT) {
+            self.parse_expr_or_missing(&[R_BRACK, COMMA, DOTDOT]);
+            if !self.at(DOTDOT) {
+                return;
+            }
+        }
+        self.start_node_at(cp, SLICE);
+        self.bump(); // ..
+        // The upper bound may be left out (`X[L..]`); a token that cannot start one is left to
+        // the closing `]`
+        if can_start_expr(self.current()) || self.lex_hole_wanted() {
+            self.parse_expr_or_missing(&[R_BRACK, COMMA]);
+        }
+        self.finish_node();
+    }
+
     fn parse_postfix(&mut self, extra_sync: &[SyntaxKind]) -> ExprShape {
         let cp = self.checkpoint();
         let mut shape = self.parse_primary(extra_sync);
@@ -2447,7 +3730,7 @@ impl<'a> Parser<'a> {
                     self.bump();
                     if self.enter() {
                         loop {
-                            self.parse_expr_or_missing(&[R_BRACK, COMMA]);
+                            self.parse_index_item();
                             if self.at(COMMA) {
                                 self.bump();
                                 continue;
@@ -2575,30 +3858,34 @@ impl<'a> Parser<'a> {
                 ExprShape::NotCallable
             }
             L_BRACK => {
-                let tok = self.current_tok();
-                self.error_at(
-                    Code::E(3200),
-                    "set and array constructors are not supported yet (planned for M2)",
-                    tok.range,
-                );
-                self.start_node(ERROR_NODE);
-                let mut depth = 0;
-                while !self.at_eof() {
-                    match self.current() {
-                        L_BRACK => depth += 1,
-                        R_BRACK => {
-                            depth -= 1;
-                            if depth == 0 {
+                // An array constructor (`docs/spec/types.md` chapter 4); a range `L..H` is read for
+                // set constructors (M2b)
+                self.start_node(ARRAY_CTOR);
+                self.bump(); // [
+                if !self.at(R_BRACK) {
+                    if self.enter() {
+                        loop {
+                            let cp = self.checkpoint();
+                            self.parse_expr_or_missing(&[R_BRACK, COMMA, DOTDOT]);
+                            if self.at(DOTDOT) {
+                                self.start_node_at(cp, INDEX_RANGE);
                                 self.bump();
-                                break;
+                                self.parse_expr_or_missing(&[R_BRACK, COMMA]);
+                                self.finish_node();
                             }
+                            if self.at(COMMA) {
+                                self.bump();
+                                continue;
+                            }
+                            break;
                         }
-                        c if depth == 0 && (is_sync(c) || extra_sync.contains(&c)) => break,
-                        c if is_sync(c) && c != BEGIN_KW && c != IF_KW => break,
-                        _ => {}
+                        self.leave();
+                    } else {
+                        recovery::skip_expr(self, &[R_BRACK]);
                     }
-                    self.bump();
                 }
+                let _ = extra_sync;
+                self.expect(R_BRACK, &[], &[R_BRACK, R_PAREN, COMMA, SEMICOLON]);
                 self.finish_node();
                 ExprShape::NotCallable
             }
@@ -2638,7 +3925,32 @@ impl<'a> Parser<'a> {
             let Some(parent) = tok.parent() else { continue };
             let boundary = match parent.kind() {
                 SOURCE_FILE | PROGRAM | SCRIPT | USES_CLAUSE | CONST_SECTION | VAR_SECTION
-                | PARAM_LIST | ROUTINE_DECL | ROUTINE_BODY | COMPOUND_STMT => true,
+                | TYPE_SECTION | RESOURCESTRING_SECTION | PARAM_LIST | ROUTINE_DECL | ROUTINE_BODY | COMPOUND_STMT
+                // Between the statements of a `try` and the handlers of an `except` block
+                // (`docs/spec/directives.md` 3.1)
+                | TRY_STMT | EXCEPT_BLOCK | FINALLY_BLOCK | HANDLER_ELSE
+                // The statements of the `else` part of a `case`
+                | CASE_ELSE
+                // Around the sections of a unit and between the declarations of its sections
+                // (`docs/spec/directives.md` 3.1)
+                | UNIT | INTERFACE_SECTION | IMPLEMENTATION_SECTION | INIT_SECTION | FINAL_SECTION
+                | ROUTINE_HEADER_DECL => true,
+                CASE_STMT => {
+                    // Between the arms: after `of` (`docs/spec/directives.md` 3.1)
+                    let of = parent
+                        .children_with_tokens()
+                        .filter_map(|e| e.into_token())
+                        .find(|t| t.kind() == OF_KW);
+                    of.is_some_and(|o| o.text_range().end() <= tok.text_range().start())
+                }
+                RECORD_TYPE => {
+                    // Between the fields: after `record` (`docs/spec/types.md` chapter 1)
+                    let record = parent
+                        .children_with_tokens()
+                        .filter_map(|e| e.into_token())
+                        .find(|t| t.kind() == RECORD_KW);
+                    record.is_some_and(|r| r.text_range().end() <= tok.text_range().start())
+                }
                 REPEAT_STMT => {
                     // Before `until` counts as between statements
                     let until = parent
@@ -2758,18 +4070,32 @@ impl<'a> Parser<'a> {
     /// E0414: `uses` not at the start.
     fn check_uses_position(&self, root: &SyntaxNode) -> Vec<Diagnostic> {
         let mut out = Vec::new();
-        let Some(container) = root
-            .children()
-            .find(|n| matches!(n.kind(), PROGRAM | SCRIPT))
-        else {
-            return out;
-        };
+        for top in root.children() {
+            match top.kind() {
+                PROGRAM | SCRIPT => self.check_uses_in(root, &top, &mut out),
+                // In a unit, each section has its own leading `uses` (`docs/spec/units.md` chapter 1)
+                UNIT => {
+                    for sec in top
+                        .children()
+                        .filter(|n| matches!(n.kind(), INTERFACE_SECTION | IMPLEMENTATION_SECTION))
+                    {
+                        self.check_uses_in(root, &sec, &mut out);
+                    }
+                }
+                _ => {}
+            }
+        }
+        out
+    }
+
+    /// E0414 for the `uses` clauses of one container (a program, a script, or a section of a unit).
+    fn check_uses_in(&self, root: &SyntaxNode, container: &SyntaxNode, out: &mut Vec<Diagnostic>) {
         let uses: Vec<SyntaxNode> = container
             .children()
             .filter(|n| n.kind() == USES_CLAUSE)
             .collect();
         if uses.is_empty() {
-            return out;
+            return;
         }
         // The leading uses: in PROGRAM, right after PROGRAM_HEADER; in SCRIPT, the first child
         let first_ok = {
@@ -2802,6 +4128,11 @@ impl<'a> Parser<'a> {
                         .children()
                         .find(|n| n.kind() == PROGRAM_HEADER)
                         .map(|h| h.text_range().end())
+                        .unwrap_or(container.text_range().start()),
+                    // Right after the section's reserved word
+                    INTERFACE_SECTION | IMPLEMENTATION_SECTION => container
+                        .first_token()
+                        .map(|t| t.text_range().end())
                         .unwrap_or(container.text_range().start()),
                     _ => self.script_uses_insert_pos(root),
                 },
@@ -2845,7 +4176,7 @@ impl<'a> Parser<'a> {
                 if !items.is_empty() {
                     let text = if head.is_some() {
                         format!(", {}", items.join(", "))
-                    } else if container.kind() == PROGRAM {
+                    } else if container.kind() != SCRIPT {
                         // Placed on a new line after the `program` heading (same form as inserting `uses` for E0700)
                         format!("\nuses {};", items.join(", "))
                     } else {
@@ -2858,7 +4189,6 @@ impl<'a> Parser<'a> {
             }
             out.push(d);
         }
-        out
     }
 
     /// Position to insert `uses` in a script (start of the file, after BOM, shebang, and inline metadata).
@@ -2889,6 +4219,19 @@ impl<'a> Parser<'a> {
         }
         pos.into()
     }
+}
+
+/// Where a type is written (which forms `parse_type_spec` accepts; `docs/spec/types.md` chapter 1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TypeCtx {
+    /// A variable, constant, field, element or `type` declaration: names and anonymous types.
+    Decl,
+    /// A parameter: names (and, from M2-13, open arrays).
+    Param,
+    /// A return type: names only.
+    Return,
+    /// A `for var` loop variable: names (the M1 rule).
+    NameOnly,
 }
 
 /// Shape of an expression in statement position (for the E0402 check).

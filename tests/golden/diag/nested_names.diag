@@ -1,0 +1,100 @@
+error[E0701]: `A` is already declared
+   --> nested_names.pas:14:19
+    |
+  8 | procedure Outer(A: Integer);
+    |                 - declared here
+...
+ 14 |   procedure Inner(A: Integer);
+    |                   ^ declared again here
+
+error[E0701]: `B` is already declared
+   --> nested_names.pas:16:5
+    |
+ 12 |   B: Integer;
+    |   - declared here
+...
+ 16 |     B: string;
+    |     ^ declared again here
+
+error[E0701]: `K` is already declared
+   --> nested_names.pas:18:5
+    |
+ 10 |   K = 1;
+    |   - declared here
+...
+ 18 |     K = 2;
+    |     ^ declared again here
+
+error[E0701]: `K` is already declared
+   --> nested_names.pas:23:13
+    |
+ 10 |   K = 1;
+    |   - declared here
+...
+ 23 |   procedure K;
+    |             ^ declared again here
+
+error[E0710]: `Result` can only be used in a function
+   --> nested_names.pas:56:5
+    |
+ 54 |   procedure Q;
+    |             - declared here
+ 55 |   begin
+ 56 |     Result := 1;
+    |     ^^^^^^
+
+error[E0707]: cannot assign to `S`
+   --> nested_names.pas:57:5
+    |
+ 50 | procedure P(const S: string);
+    |                   - declared here
+...
+ 57 |     S := 'x';
+    |     ^ a `const` parameter
+
+error[E0722]: loop variable must be a local variable of an ordinal type
+   --> nested_names.pas:58:9
+    |
+ 52 |   I: Integer;
+    |   - declared here
+...
+ 58 |     for I := 1 to 2 do
+    |         ^
+    |
+    = note: a variable of an enclosing routine cannot be a loop variable; use a local variable of this routine
+
+error[E0704]: recursive call to `F` needs parentheses
+   --> nested_names.pas:74:10
+    |
+ 68 | function F: Integer;
+    |          - declared here
+...
+ 74 |     X := F;
+    |          ^
+    |
+    = suggestion: replace with `Result`
+    = suggestion: replace with `F()`
+
+error[E0704]: recursive call to `F` needs parentheses
+   --> nested_names.pas:80:15
+    |
+ 68 | function F: Integer;
+    |          - declared here
+...
+ 80 |     Result := F;
+    |               ^
+    |
+    = suggestion: replace with `F()`
+
+error[E0707]: cannot assign to `J`
+    --> nested_names.pas:102:5
+     |
+ 102 |     J := 100;
+     |     ^ the loop variable of the enclosing routine
+...
+ 108 |   for J := 1 to 10 do
+     |       - used as the loop variable here
+     |
+     = note: a nested routine cannot write a variable its enclosing routine uses as a `for` loop variable
+
+error: aborting due to 10 errors

@@ -1,0 +1,9 @@
+warning[W0003]: unreachable code (unreachable-code)
+   --> src/Second.pas:14:3
+    |
+ 14 |   WriteLn('not reached');
+    |   ^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: disable with `{$WARN unreachable-code OFF}`
+
+warning: 1 warning emitted

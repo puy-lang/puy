@@ -1,0 +1,7 @@
+EC 1
+  EB 1
+  EA
+replaced 0 FALSE
+same 0 TRUE
+  at ExcSuppressedMembers.TraceKept (exc_suppressed_members.pas:53)
+  at ExcSuppressedMembers.<main> (exc_suppressed_members.pas:85)

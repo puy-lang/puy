@@ -52,6 +52,7 @@ fn compile_block(b: &Block) -> puy_core::driver::CompileOutput {
         extra_diagnostics: Vec::new(),
         script_name: None,
         extra_files: Vec::new(),
+        ..Default::default()
     };
     let mut provider = MemorySourceProvider::new();
     compile(

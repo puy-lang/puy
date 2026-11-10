@@ -1,0 +1,70 @@
+program DumpDynArray
+.type TInts = array of Integer
+.type TGrid = TArray<TInts>
+.global g0 A: TInts
+.global g1 G: TGrid
+.routine f0 Total(const A: array of Integer): Integer
+  .var v0 A: array of Integer const param
+  .var v1 Result: Integer result
+  .var v2 I: Integer local
+  assign @15 R+
+    var v1 Result
+    const Integer 0
+  for @16 to Q+R+
+    var v2 I
+    from
+      const Integer 0
+    to
+      builtin High Integer
+        var v0 A: array of Integer
+    body
+      assign @17 R+
+        var v1 Result
+        binary Integer
+          var v1 Result: Integer
+          + Integer int:Integer
+            index Integer
+              var v0 A: array of Integer
+              var v2 I: Int64
+.routine <main>
+  assign @24 R+
+    global g0 A
+    array TInts
+      const Integer 1
+      const Integer 2
+  setlength @25
+    global g1 G
+    const Int64 2
+    const Int64 3
+  assign @26 R+
+    index Integer
+      index TInts
+        global g1 G
+        const Int64 1
+      const Int64 2
+    call f0 Total: Integer
+      global g0 A: TInts
+  assign @27 R+
+    global g0 A
+    builtin Copy TInts
+      index TInts
+        global g1 G: TGrid
+        const Int64 1
+  if @28
+    cond
+      binary Boolean
+        builtin Assigned Boolean
+          global g0 A: TInts
+        and Boolean bool
+          binary Boolean
+            global g0 A: TInts
+            <> Boolean ref
+              const TInts nil
+    then
+      writeln @29
+        arg
+          call f0 Total: Integer
+            global g0 A: TInts
+  assign @30 R+
+    global g0 A
+    const TInts nil

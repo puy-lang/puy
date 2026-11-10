@@ -1,0 +1,39 @@
+error[E0701]: `Shared` is already the name of a used unit
+  --> main.pas:3:9
+   |
+ 3 | program Shared;
+   |         ^^^^^^
+ 4 |
+ 5 | uses Shared, Other, System.SysUtils;
+   |      ------ unit used here
+
+error[E2502]: `Limit` is declared in several units; qualify it
+  --> main.pas:9:11
+   |
+ 9 |   WriteLn(Limit);
+   |           ^^^^^
+  ::: src/Shared.pas:6:3
+ 6 |   Limit = 10;
+   |   ----- declared here
+  ::: src/Other.pas:9:3
+ 9 |   Limit: Integer;
+   |   ----- declared here
+   |
+   = note: Puy does not let a later unit in `uses` hide an earlier one
+   = suggestion: replace with `Shared.Limit`
+   = suggestion: replace with `Other.Limit`
+
+error[E2502]: `IntToStr` is declared in several units; qualify it
+   --> main.pas:10:11
+    |
+ 10 |   WriteLn(IntToStr(1));
+    |           ^^^^^^^^
+   ::: src/Shared.pas:8:10
+  8 | function IntToStr(N: Integer): string;
+    |          -------- declared here
+    |
+    = note: Puy does not let a later unit in `uses` hide an earlier one
+    = suggestion: replace with `Shared.IntToStr`
+    = suggestion: replace with `System.SysUtils.IntToStr`
+
+error: aborting due to 3 errors

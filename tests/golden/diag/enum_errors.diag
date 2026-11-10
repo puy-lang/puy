@@ -1,0 +1,140 @@
+error[E0701]: `Apple` is already declared
+   --> enum_errors.pas:10:26
+    |
+ 10 |   TFruit = (Apple, Pear, Apple);
+    |                          ^^^^^ declared again here
+    |             ----- declared here
+
+error[E0714]: constant value 2147483648 is out of range for `Integer` (-2147483648..2147483647)
+   --> enum_errors.pas:11:18
+    |
+ 11 |   TBig = (Huge = 2147483648);
+    |                  ^^^^^^^^^^
+
+error[E0728]: invalid subrange bounds `5..1`
+   --> enum_errors.pas:12:10
+    |
+ 12 |   TBad = 5..1;
+    |          ^^^^
+
+error[E0728]: invalid subrange bounds `#122..#97`
+   --> enum_errors.pas:13:14
+    |
+ 13 |   TBadChar = 'z'..'a';
+    |              ^^^^^^^^
+
+error[E0702]: type mismatch: the bounds have types `Integer` and `Char`
+   --> enum_errors.pas:14:10
+    |
+ 14 |   TMix = 1..'z';
+    |          ^^^^^^
+
+error[E0404]: a parameter type must be a type name
+   --> enum_errors.pas:26:16
+    |
+ 26 | procedure P(X: 0..9);
+    |                ^
+    |
+    = note: declare the type in a `type` section and use its name
+
+error[E0404]: a return type must be a type name
+   --> enum_errors.pas:30:13
+    |
+ 30 | function F: (A, B);
+    |             ^
+    |
+    = note: declare the type in a `type` section and use its name
+
+error[E0702]: type mismatch: expected `TColor`, found `Integer`
+   --> enum_errors.pas:39:8
+    |
+ 39 |   C := 1;
+    |        ^
+
+error[E0702]: type mismatch: expected `Integer`, found `TColor`
+   --> enum_errors.pas:40:8
+    |
+ 40 |   N := C;
+    |        ^
+
+error[E0703]: operator `+` cannot be applied to `TColor` and `Integer`
+   --> enum_errors.pas:41:10
+    |
+ 41 |   N := C + 1;
+    |          ^
+
+error[E0703]: operator `-` cannot be applied to `TColor`
+   --> enum_errors.pas:42:8
+    |
+ 42 |   C := -C;
+    |        ^
+
+error[E0700]: `TColor` has no member `Purple`
+   --> enum_errors.pas:43:15
+    |
+ 43 |   C := TColor.Purple;
+    |               ^^^^^^
+
+error[E0714]: constant value 12 is out of range for `TDigit` (0..9)
+   --> enum_errors.pas:44:15
+    |
+ 44 |   D := TDigit(12);
+    |               ^^
+
+error[E0714]: constant value 10 is out of range for `TDigit` (0..9)
+   --> enum_errors.pas:45:8
+    |
+ 45 |   D := 10;
+    |        ^^
+
+error[E0714]: constant value #65 is out of range for `TLower` (#97..#122)
+   --> enum_errors.pas:46:8
+    |
+ 46 |   L := 'A';
+    |        ^^^
+
+error[E0714]: constant value 3 is out of range for `TColor` (0..2)
+   --> enum_errors.pas:47:15
+    |
+ 47 |   C := TColor(3);
+    |               ^
+
+error[E0714]: constant value 3 is out of range for `TColor` (0..2)
+   --> enum_errors.pas:48:12
+    |
+ 48 |   N := Ord(Succ(TColor.Blue));
+    |            ^^^^^^^^^^^^^^^^^
+
+error[E0714]: constant value -1 is out of range for `TColor` (0..2)
+   --> enum_errors.pas:49:12
+    |
+ 49 |   N := Ord(Pred(Low(TColor)));
+    |            ^^^^^^^^^^^^^^^^^
+
+error[E0719]: index type mismatch: expected `TColor`, found `Integer`
+   --> enum_errors.pas:50:9
+    |
+ 50 |   Names[0] := 'x';
+    |         ^
+
+error[E0714]: constant value 5 is out of range for `TColor` (0..2)
+   --> enum_errors.pas:51:16
+    |
+ 51 |   Names[TColor(5)] := 'y';
+    |                ^
+
+error[E0702]: type mismatch: expected `Integer`, found `TDigit` (argument 1, parameter `X`)
+   --> enum_errors.pas:52:11
+    |
+ 52 |   TakeInt(D);
+    |           ^
+    |
+    = note: a `var` parameter needs a variable of exactly the same type
+
+error[E0724]: a value of type `Char` cannot be converted to `TColor`
+   --> enum_errors.pas:53:8
+    |
+ 53 |   C := TColor('a');
+    |        ^^^^^^^^^^^
+
+error: aborting due to 22 errors

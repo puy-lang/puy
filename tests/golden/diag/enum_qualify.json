@@ -1,0 +1,203 @@
+[
+  {
+    "schema": "puy.diagnostics/1",
+    "diagnostics": [
+      {
+        "code": "E0736",
+        "severity": "error",
+        "name": null,
+        "message": "an enumeration type must be declared with a name",
+        "primary": {
+          "file": "enum_qualify.pas",
+          "start": 468,
+          "end": 474,
+          "line": 16,
+          "column": 6,
+          "end_line": 16,
+          "end_column": 12,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "declare the enumeration as a named type, as in `type TColor = (Red, Green, Blue)`"
+        ],
+        "fixes": [],
+        "rendered": "error[E0736]: an enumeration type must be declared with a name\n   --> enum_qualify.pas:16:6\n    |\n 16 |   V: (P, Q);\n    |      ^^^^^^\n    |\n    = note: declare the enumeration as a named type, as in `type TColor = (Red, Green, Blue)`"
+      },
+      {
+        "code": "E0736",
+        "severity": "error",
+        "name": null,
+        "message": "enumeration value `Right` must be qualified with its type",
+        "primary": {
+          "file": "enum_qualify.pas",
+          "start": 570,
+          "end": 575,
+          "line": 25,
+          "column": 8,
+          "end_line": 25,
+          "end_column": 13,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [],
+        "fixes": [
+          {
+            "title": "replace with `TSide.Right`",
+            "applicability": "safe",
+            "edits": [
+              {
+                "file": "enum_qualify.pas",
+                "start": 570,
+                "end": 575,
+                "line": 25,
+                "column": 8,
+                "end_line": 25,
+                "end_column": 13,
+                "original": "Right",
+                "replacement": "TSide.Right"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E0736]: enumeration value `Right` must be qualified with its type\n   --> enum_qualify.pas:25:8\n    |\n 25 |   S := Right;\n    |        ^^^^^\n    |\n    = fix: replace with `TSide.Right`"
+      },
+      {
+        "code": "E0736",
+        "severity": "error",
+        "name": null,
+        "message": "enumeration value `Green` must be qualified with its type",
+        "primary": {
+          "file": "enum_qualify.pas",
+          "start": 615,
+          "end": 620,
+          "line": 30,
+          "column": 8,
+          "end_line": 30,
+          "end_column": 13,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [],
+        "fixes": [
+          {
+            "title": "replace with `TColor.Green`",
+            "applicability": "safe",
+            "edits": [
+              {
+                "file": "enum_qualify.pas",
+                "start": 615,
+                "end": 620,
+                "line": 30,
+                "column": 8,
+                "end_line": 30,
+                "end_column": 13,
+                "original": "Green",
+                "replacement": "TColor.Green"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E0736]: enumeration value `Green` must be qualified with its type\n   --> enum_qualify.pas:30:8\n    |\n 30 |   C := Green;\n    |        ^^^^^\n    |\n    = fix: replace with `TColor.Green`"
+      },
+      {
+        "code": "E0736",
+        "severity": "error",
+        "name": null,
+        "message": "enumeration value `Amber` must be qualified with its type",
+        "primary": {
+          "file": "enum_qualify.pas",
+          "start": 629,
+          "end": 634,
+          "line": 31,
+          "column": 8,
+          "end_line": 31,
+          "end_column": 13,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [],
+        "fixes": [
+          {
+            "title": "replace with `TLight.Amber`",
+            "applicability": "safe",
+            "edits": [
+              {
+                "file": "enum_qualify.pas",
+                "start": 629,
+                "end": 634,
+                "line": 31,
+                "column": 8,
+                "end_line": 31,
+                "end_column": 13,
+                "original": "Amber",
+                "replacement": "TLight.Amber"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E0736]: enumeration value `Amber` must be qualified with its type\n   --> enum_qualify.pas:31:8\n    |\n 31 |   L := Amber;\n    |        ^^^^^\n    |\n    = fix: replace with `TLight.Amber`"
+      },
+      {
+        "code": "E0736",
+        "severity": "error",
+        "name": null,
+        "message": "enumeration value `Red` must be qualified with its type",
+        "primary": {
+          "file": "enum_qualify.pas",
+          "start": 643,
+          "end": 646,
+          "line": 32,
+          "column": 8,
+          "end_line": 32,
+          "end_column": 11,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [],
+        "fixes": [
+          {
+            "title": "replace with `TColor.Red`",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "enum_qualify.pas",
+                "start": 643,
+                "end": 646,
+                "line": 32,
+                "column": 8,
+                "end_line": 32,
+                "end_column": 11,
+                "original": "Red",
+                "replacement": "TColor.Red"
+              }
+            ]
+          },
+          {
+            "title": "replace with `TLight.Red`",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "enum_qualify.pas",
+                "start": 643,
+                "end": 646,
+                "line": 32,
+                "column": 8,
+                "end_line": 32,
+                "end_column": 11,
+                "original": "Red",
+                "replacement": "TLight.Red"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E0736]: enumeration value `Red` must be qualified with its type\n   --> enum_qualify.pas:32:8\n    |\n 32 |   C := Red;\n    |        ^^^\n    |\n    = suggestion: replace with `TColor.Red`\n    = suggestion: replace with `TLight.Red`"
+      }
+    ],
+    "summary": {
+      "errors": 5,
+      "warnings": 0,
+      "notes": 0
+    }
+  }
+]

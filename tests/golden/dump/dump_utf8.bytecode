@@ -1,0 +1,86 @@
+; puyc format 2
+.const
+  0: utf8 "é"
+  1: str "x"
+  2: str "\n"
+.global
+  0: ref U
+  1: ref V
+  2: ref S
+  3: int N
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpUtf8 file="dump_utf8.pas" init=- fini=- entry=0
+.func 0 DumpUtf8.<main> params=0 regs=29
+  .line 12
+  0000  LoadConst    r0, k0
+  0001  StoreGlobalRef r0, g0
+  .line 13
+  0002  LoadConst    r1, k1
+  0003  StoreGlobalRef r1, g2
+  .line 14
+  0004  LoadGlobalRef r3, g2
+  0005  StrToU8      r2, r3
+  0006  StoreGlobalRef r2, g1
+  .line 15
+  0007  LoadGlobalRef r4, g0
+  0008  LoadGlobalRef r5, g1
+  0009  ConcatU8     r4, r4, r5
+  000a  StoreGlobalRef r4, g1
+  .line 16
+  000b  LoadGlobalRef r7, g0
+  000c  U8ToStr      r6, r7
+  000d  LoadGlobalRef r8, g2
+  000e  ConcatStr    r6, r6, r8
+  000f  StoreGlobalRef r6, g2
+  .line 17
+  0010  LoadGlobalRef r9, g1
+  0011  U8Len        r24, r9
+  0012  LoadGlobalRef r10, g1
+  0013  LoadInt      r26, 1
+  0014  U8Index      r25, r10, r26
+  0015  AddInt       r24, r24, r25
+  0016  NarrowOvf    r24, r24, 4
+  0017  LoadGlobalRef r11, g0
+  0018  Move         r27, r11
+  0019  LoadGlobalRef r12, g1
+  001a  Move         r28, r12
+  001b  U8Pos        r26, r27
+  001c  AddInt       r24, r24, r26
+  001d  NarrowOvf    r24, r24, 4
+  001e  StoreGlobal  r24, g3
+  .line 18
+  001f  LoadGlobalRef r13, g0
+  0020  LoadGlobalRef r14, g1
+  0021  CmpU8        r24, r13, r14
+  0022  LoadZero     r25
+  0023  JmpIfLeInt   r25, r24, -> 002b
+  .line 19
+  0024  LoadGlobalRef r16, g1
+  0025  Move         r24, r16
+  0026  LoadInt      r25, 1
+  0027  LoadInt      r26, 2
+  0028  U8Copy       r15, r24
+  0029  StoreGlobalRef r15, g1
+  .line 18
+  002a  Jmp          -> 002b
+  .line 20
+  002b  LoadGlobal   r24, g3
+  002c  LoadGlobal   r25, g1
+  002d  U8SetLen     r25, r24
+  002e  StoreGlobal  r25, g1
+  .line 21
+  002f  LoadGlobalRef r18, g1
+  0030  U8ToStr      r17, r18
+  0031  LoadGlobalRef r20, g2
+  0032  LoadGlobalRef r22, g0
+  0033  U8ToStr      r21, r22
+  0034  EqStr        r24, r20, r21
+  0035  BoolToStr    r19, r24
+  0036  ConcatStr    r17, r17, r19
+  0037  LoadConst    r23, k2
+  0038  ConcatStr    r17, r17, r23
+  0039  CallHost     r17, h0
+  .line 22
+  003a  RetVoid
+.finally r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16, r17, r18, r19, r20, r21, r22, r23

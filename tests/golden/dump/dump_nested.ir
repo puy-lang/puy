@@ -1,0 +1,88 @@
+; puy ir 1
+.global
+.func f0 DumpNested.<main> params=0
+  .reg t0: Integer temp
+bb0:
+  .line 42
+  LoadInt      t0, 21
+  Call         -, f2(t0)
+  .line 43
+  RetVoid
+.finally
+.func f1 DumpNested.Show params=1
+  .reg v0 T: string const param
+  .reg t0: string temp
+  .reg t1: string temp
+bb0:
+  .line 12
+  AssignRef    t0, v0
+  LoadConst    t1, "\n"
+  ConcatStr    t0, t0, t1
+  CallHost     -, h0(t0)
+  .line 13
+  RetVoid
+.finally t0, t1
+.func f2 DumpNested.Run params=1
+  .reg v0 N: Integer param
+  .reg v1 S: string local
+  .reg t0: - ref
+  .reg t1: string temp
+  .reg t2: string temp
+bb0:
+  .line 36
+  LoadConst    v1, "n="
+  .line 37
+  OuterRef     t0, 0, 0
+  Call         -, f4(t0)
+  .line 38
+  AssignRef    t2, v1
+  Move         t1, t2
+  Call         -, f1(t1)
+  .line 39
+  RetVoid
+.finally v1, t2
+.func f3 DumpNested.Run.Twice params=1
+  .reg v0 K: Integer param
+  .reg v1 Result: Integer result
+  .reg t0: Integer temp
+bb0:
+  .line 21
+  Move         v1, v0
+  LoadInt      t0, 2
+  MulInt       v1, v1, t0
+  NarrowOvf    v1, v1, 4
+  .line 22
+  Ret          v1
+.finally
+.func f4 DumpNested.Run.Middle params=1 outer=f2
+  .reg link
+  .reg t0: - ref
+bb0:
+  .line 32
+  OuterRef     t0, 0, 0
+  Call         -, f5(t0)
+  .line 33
+  RetVoid
+.finally
+.func f5 DumpNested.Run.Middle.Deep params=1 outer=f4
+  .reg link
+  .reg v0 S: string outer v1 up=2
+  .reg v1 N: Integer outer v0 up=2
+  .reg t0: string temp
+  .reg t1: string temp
+  .reg t2: Int64 temp
+  .reg t3: Integer temp
+bb0:
+  .line 26
+  OuterRef     v0, 1, 2
+  OuterRef     v1, 0, 2
+  .line 28
+  LoadRefRef   t0, v0
+  LoadRef      t3, v1
+  Call         t2, f3(t3)
+  IntToStr     t1, t2
+  ConcatStr    t0, t0, t1
+  StoreRefRef  v0, t0
+  .line 29
+  RetVoid
+.finally t0, t1

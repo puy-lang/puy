@@ -1,0 +1,23 @@
+EConvertError: format '%d' invalid or incompatible with argument [%d]
+EConvertError: format '%d %d' invalid or incompatible with argument [%d %d]
+EConvertError: format '%s' invalid or incompatible with argument [%s]
+EConvertError: format '%d' invalid or incompatible with argument [%d]
+EConvertError: format '%f' invalid or incompatible with argument [%f]
+EConvertError: format '%1:s %2:s' invalid or incompatible with argument [%1:s %2:s]
+EConvertError: format '%2:s' invalid or incompatible with argument [%2:s]
+EConvertError: format '%m' invalid or incompatible with argument [%m]
+EConvertError: format '%p' invalid or incompatible with argument [%p]
+EConvertError: format '%' invalid or incompatible with argument [%]
+EConvertError: format '%5' invalid or incompatible with argument [%5]
+EConvertError: format '%*d' invalid or incompatible with argument [%*d]
+EConvertError: format '%-1:d' invalid or incompatible with argument [%-1:d]
+EOutOfMemory: out of memory
+EOutOfMemory: out of memory
+a
+EConvertError: format '%.2147483600z' invalid or incompatible with argument [%.2147483600z]
+0.1000000000000000055511151231257827021181583404541015625
+ok %
+[ü] [  ü]
+EConvertError: 'yes' is not a valid boolean value [yes]
+TRUE FALSE TRUE
+TRUE FALSE

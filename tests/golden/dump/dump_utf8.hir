@@ -1,0 +1,68 @@
+program DumpUtf8
+.global g0 U: UTF8String
+.global g1 V: UTF8String
+.global g2 S: string
+.global g3 N: Integer
+.routine <main>
+  assign @12 R+
+    global g0 U
+    const UTF8String utf8 "é"
+  assign @13 R+
+    global g2 S
+    const string "x"
+  assign @14 R+
+    global g1 V
+    convert string->utf8
+      global g2 S: string
+  assign @15 R+
+    global g1 V
+    binary UTF8String
+      global g0 U: UTF8String
+      + UTF8String utf8
+        global g1 V: UTF8String
+  assign @16 R+
+    global g2 S
+    binary string
+      convert utf8->string
+        global g0 U: UTF8String
+      + string str
+        global g2 S: string
+  assign @17 R+
+    global g3 N
+    binary Integer
+      builtin Length Integer
+        global g1 V: UTF8String
+      + Integer int:Integer
+        index Byte
+          global g1 V: UTF8String
+          const Integer 1
+      + Integer int:Integer
+        builtin Pos Integer
+          global g0 U: UTF8String
+          global g1 V: UTF8String
+  if @18
+    cond
+      binary Boolean
+        global g0 U: UTF8String
+        < Boolean utf8
+          global g1 V: UTF8String
+    then
+      assign @19 R+
+        global g1 V
+        builtin Copy UTF8String
+          global g1 V: UTF8String
+          const Integer 1
+          const Integer 2
+  setlength @20
+    global g1 V
+    global g3 N: Int64
+  writeln @21
+    arg
+      convert utf8->string
+        global g1 V: UTF8String
+    arg
+      binary Boolean
+        global g2 S: string
+        = Boolean str
+          convert utf8->string
+            global g0 U: UTF8String

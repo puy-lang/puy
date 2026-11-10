@@ -1,0 +1,83 @@
+program DumpTry
+.type EAppError = class(Exception)
+.routine f0 Handle(N: Integer)
+  .var v0 N: Integer param
+  .var v1 E: EAppError exception
+  try @13
+    body
+      if @14
+        cond
+          binary Boolean
+            var v0 N: Integer
+            > Boolean int:Integer
+              const Integer 0
+        then
+          raise @15
+            new EAppError
+              const string "app"
+    on v1 E: EAppError
+      raise-outer @18
+        new Exception
+          binary string
+            const string "wrapped "
+            + string str
+              member string Message
+                var v1 E: EAppError
+    on EConvertError
+      raise @20
+    else
+      writeln @22
+        arg
+          const string "other"
+.routine f1 Count(N: Integer): Integer
+  .var v0 N: Integer param
+  .var v1 Result: Integer result
+  .var v2 I: Integer local
+  assign @30 R+
+    var v1 Result
+    const Integer 0
+  for @31 to Q+R+
+    var v2 I
+    from
+      const Integer 1
+    to
+      var v0 N: Integer
+    body
+      try @32
+        body
+          if @33
+            cond
+              binary Boolean
+                var v2 I: Integer
+                = Boolean int:Integer
+                  const Integer 3
+            then
+              break @34
+          if @35
+            cond
+              binary Boolean
+                var v2 I: Integer
+                = Boolean int:Integer
+                  const Integer 5
+            then
+              exit @36
+          inc @37 calc=Integer Q+R+
+            var v1 Result
+        finally
+          writeln @39
+            arg
+              var v2 I: Integer
+.routine <main>
+  try @44
+    body
+      expr @45
+        call f0 Handle: -
+          const Integer 0
+    except
+      writeln @47
+        arg
+          const string "caught"
+  writeln @49
+    arg
+      call f1 Count: Integer
+        const Integer 4

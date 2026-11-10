@@ -1,0 +1,73 @@
+; puyc format 2
+.const
+  0: str "e\n"
+  1: str "\n"
+.global
+  0: int I
+  1: int C
+  2: ref S
+  3: int D
+  4: int M
+.host
+  0: Console.WriteError params=1 ret=0
+  1: Console.Write params=1 ret=0
+.unit DumpStdio file="dump_stdio.pas" init=- fini=- entry=0
+.func 0 DumpStdio.<main> params=0 regs=16
+  .line 14
+  0000  ReadLnBegin
+  0001  ReadWord     r0
+  0002  StrToIntIO   r13, r0, 4
+  0003  StoreGlobal  r13, g0
+  0004  ReadChar     r14
+  0005  StoreGlobal  r14, g1
+  0006  ReadRest     r1
+  0007  StoreGlobalRef r1, g2
+  0008  ReadLnEnd
+  .line 15
+  0009  ReadWord     r2
+  000a  StrToFloatIO r13, r2, 0
+  000b  StoreGlobal  r13, g3
+  000c  ReadWord     r3
+  000d  StrToIntIO   r14, r3, 4
+  000e  StoreGlobal  r14, g0
+  000f  ReadWord     r4
+  0010  StrToFloatIO r15, r4, 2
+  0011  StoreGlobal  r15, g4
+  .line 16
+  0012  ReadLnBegin
+  0013  ReadLnEnd
+  .line 17
+  0014  LoadConst    r5, k0
+  0015  LoadGlobal   r13, g0
+  0016  IntToStr     r6, r13
+  0017  ConcatStr    r5, r5, r6
+  0018  LoadConst    r7, k1
+  0019  ConcatStr    r5, r5, r7
+  001a  CallHost     r5, h0
+  .line 18
+  001b  LoadGlobal   r13, g1
+  001c  StrFromChar  r8, r13
+  001d  LoadGlobal   r14, g3
+  001e  F64ToStr     r9, r14
+  001f  ConcatStr    r8, r8, r9
+  0020  LoadGlobal   r15, g4
+  0021  CurrToStr    r10, r15
+  0022  ConcatStr    r8, r8, r10
+  0023  CallHost     r8, h1
+  .line 19
+  0024  FlushOut
+  .line 21
+  0025  InEof        r13
+  0026  JmpIfTrue    r13, -> 0029
+  0027  InEoln       r13
+  0028  JmpIfFalse   r13, -> 002e
+  .line 22
+  0029  LoadGlobalRef r11, g2
+  002a  LoadConst    r12, k1
+  002b  ConcatStr    r11, r11, r12
+  002c  CallHost     r11, h1
+  .line 21
+  002d  Jmp          -> 002e
+  .line 23
+  002e  RetVoid
+.finally r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12

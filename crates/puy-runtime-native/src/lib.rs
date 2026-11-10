@@ -163,6 +163,35 @@ impl SourceProvider for FileSourceProvider {
     fn read(&mut self, path: &str) -> Result<Vec<u8>, HostError> {
         read_source_file(path)
     }
+
+    fn list(&mut self, dir: &str) -> Result<Vec<String>, HostError> {
+        fn walk(base: &std::path::Path, rel: &str, out: &mut Vec<String>) -> std::io::Result<()> {
+            for e in std::fs::read_dir(base)? {
+                let e = e?;
+                let Some(name) = e.file_name().to_str().map(str::to_string) else {
+                    continue;
+                };
+                let path = if rel.is_empty() {
+                    name.clone()
+                } else {
+                    format!("{rel}/{name}")
+                };
+                if e.file_type()?.is_dir() {
+                    walk(&e.path(), &path, out)?;
+                } else {
+                    out.push(path);
+                }
+            }
+            Ok(())
+        }
+        let mut out = Vec::new();
+        let dir = if dir.is_empty() { "." } else { dir };
+        match walk(std::path::Path::new(dir), "", &mut out) {
+            Ok(()) => Ok(out),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+            Err(e) => Err(HostError::from_io(&e)),
+        }
+    }
 }
 
 /// Reads a source file (checks the size limit before reading).
@@ -192,7 +221,12 @@ pub fn read_stdin_all() -> Result<Vec<u8>, HostError> {
 
 /// Result of a run.
 pub enum RunResult {
-    Exit(ExitStatus),
+    Exit {
+        /// The first `Finished`: how the program ended (its uncaught exception is reported first).
+        program: Box<ExitStatus>,
+        /// The `Finished` after the finishing stage: the final exit code, leaks, and flush failure.
+        last: Box<ExitStatus>,
+    },
     Fatal(VmError),
 }
 
@@ -206,9 +240,20 @@ pub fn run_module(
     let budget = config.budget_default;
     let mut iso = Isolate::new(module, host, config)?;
     iso.start_main(args)?;
+    let mut program = None;
     loop {
         match iso.run(budget) {
-            RunOutcome::Finished(st) => return Ok(RunResult::Exit(st)),
+            RunOutcome::Finished(st) if program.is_none() => {
+                program = Some(st);
+                iso.finish();
+            }
+            RunOutcome::Finished(last) => {
+                let program = program.expect("checked by the arm above");
+                return Ok(RunResult::Exit {
+                    program: Box::new(program),
+                    last: Box::new(last),
+                });
+            }
             RunOutcome::BudgetExhausted => continue,
             RunOutcome::Waiting => continue, // does not happen in M1 (futures complete immediately)
             RunOutcome::Fatal(e) => return Ok(RunResult::Fatal(e)),

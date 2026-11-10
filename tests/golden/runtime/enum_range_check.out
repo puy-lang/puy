@@ -1,0 +1,9 @@
+ERangeError: value 5 is out of range for `TColor` (0..2)
+ERangeError: value 3 is out of range for `TColor` (0..2)
+ERangeError: value -1 is out of range for `TColor` (0..2)
+ERangeError: value 10 is out of range for `TDigit` (0..9)
+ERangeError: value 10 is out of range for `TDigit` (0..9)
+ERangeError: value -1 is out of range for `TDigit` (0..9)
+ERangeError: value #65 is out of range for `TLower` (#97..#122)
+ERangeError: value 2 is out of range for `TWarm` (0..1)
+10

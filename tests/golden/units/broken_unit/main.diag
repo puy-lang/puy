@@ -1,0 +1,18 @@
+error[E0001]: source is not valid UTF-8
+  --> src/Bad.pas:6:11
+   |
+ 6 |   Name = '�';
+   |           ^
+   |
+   = note: Puy reads source files as UTF-8 only
+   = note: UTF-8 files saved by Delphi 2009 or later (with a BOM) need no change
+   = note: convert an older ANSI source (such as Shift_JIS) to UTF-8 before compiling
+
+error[E0403]: expected an expression
+   --> src/Rough.pas:14:16
+    |
+ 14 |   Result := 1 +;
+    |                ^
+    |                - found here
+
+error: aborting due to 2 errors

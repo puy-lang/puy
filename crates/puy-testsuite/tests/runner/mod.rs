@@ -93,7 +93,7 @@ fn run_case_inner(case: &Case) -> Result<(), String> {
     }
     let update = std::env::var_os("PUY_UPDATE_GOLDEN").is_some_and(|v| v == "1");
     let mut failures: Vec<String> = Vec::new();
-    let path = format!("{}.pas", case.name);
+    let path = format!("{}.pas", case.stem);
     let mut provider = MemorySourceProvider::new();
     for (name, bytes) in case.includes() {
         provider = provider.with_file(name, bytes.to_vec());
@@ -106,10 +106,18 @@ fn run_case_inner(case: &Case) -> Result<(), String> {
             ..Default::default()
         },
         extra_diagnostics: Vec::new(),
-        script_name: Some(script_name(case.name)),
+        script_name: Some(script_name(case.stem)),
         extra_files: Vec::new(),
+        package: case.package.then(|| puy_core::driver::PackageRoot {
+            levels: 0,
+            file: Some(path.clone()),
+        }),
+        ..Default::default()
     };
     let out = compile(&path, src.to_vec(), &mut provider, &opts);
+    if case.group == "examples" {
+        return run_example(case, &cfg, &out, &path);
+    }
     let has_errors = out.diagnostics.iter().any(|d| d.is_error());
     let is_diff = case.group == "diff";
 
@@ -136,6 +144,12 @@ fn run_case_inner(case: &Case) -> Result<(), String> {
         let actual =
             puy_core::sema::dump::dump_hir(p, out.sources.get(puy_core::source::FileId(0)));
         compare_text(case, "hir", actual.as_bytes(), update, false, &mut failures);
+    }
+    if let Some(m) = &out.stages.ir {
+        let actual = puy_core::ir::dump_ir(m);
+        compare_text(case, "ir", actual.as_bytes(), update, false, &mut failures);
+    } else if case.file("ir").is_some() {
+        failures.push("expected an .ir dump but compilation produced no IR".into());
     }
     if let Some(m) = &out.stages.module {
         let actual = puy_core::bytecode::disassemble(m);
@@ -167,16 +181,39 @@ fn run_case_inner(case: &Case) -> Result<(), String> {
     if !out.diagnostics.is_empty() {
         json_parts.push(json::diagnostics_json(&out.diagnostics, &out.sources));
     }
-    // Applying fix suggestions
-    if case.file("fixed.pas").is_some() || update {
+    // Applying fix suggestions: to the program, and in a package to the units too
+    // (`docs/spec/units.md` 8.3). A package always runs it, so that a unit rewritten without an
+    // expectation fails without `PUY_UPDATE_GOLDEN=1` too.
+    let fixed_units = case.fixed_units();
+    if case.file("fixed.pas").is_some() || case.package || update {
         let mut provider2 = MemorySourceProvider::new();
         for (name, bytes) in case.includes() {
             provider2 = provider2.with_file(name, bytes.to_vec());
         }
         let r = puy_core::fix::fix(&path, src.to_vec(), &mut provider2, &opts, false);
-        let fixed = puy_core::fix::normalize_newlines(&r.bytes);
-        if case.file("fixed.pas").is_some() || (update && !r.applied.is_empty()) {
+        let fixed = puy_core::fix::normalize_newlines(r.fixed(&path).unwrap_or(src));
+        if case.file("fixed.pas").is_some() || (update && r.fixed(&path).is_some()) {
             compare_text(case, "fixed.pas", &fixed, update, false, &mut failures);
+        }
+        for f in r.files.iter().filter(|f| f.path != path) {
+            let actual = puy_core::fix::normalize_newlines(&f.bytes);
+            let expected = fixed_units
+                .iter()
+                .find(|(p, _)| *p == f.path)
+                .map(|(_, b)| *b);
+            compare_unit_fixed(case, &f.path, expected, &actual, update, &mut failures);
+        }
+        // An expectation for a unit that `puy fix` leaves as it is
+        for (unit, expected) in &fixed_units {
+            if r.fixed(unit).is_none() {
+                let original = case
+                    .files
+                    .iter()
+                    .find(|(n, _)| n == unit)
+                    .map(|(_, b)| puy_core::fix::normalize_newlines(b))
+                    .unwrap_or_default();
+                compare_unit_fixed(case, unit, Some(expected), &original, update, &mut failures);
+            }
         }
     }
 
@@ -192,14 +229,15 @@ fn run_case_inner(case: &Case) -> Result<(), String> {
             "the case has compile errors but also expects a run (.out / .code / .err)".into(),
         );
     }
-    if !has_errors && (wants_run || !is_diff) {
+    // A unit is checked, not run (`docs/spec/units.md` 1)
+    if !has_errors && !out.is_unit && (wants_run || !is_diff) {
         let module_bytes = out
             .module
             .as_deref()
             .expect("a module when there are no errors");
         {
-            let (stdout, stderr, status) = execute(case, &cfg, module_bytes, &path);
-            let code = status.exit_code();
+            let (stdout, stderr, status, last) = execute(case, &cfg, module_bytes, &path);
+            let code = last.exit_code();
             if is_diff || case.file("out").is_some() || update {
                 if is_diff {
                     compare_text_required(case, "out", &stdout, update, &mut failures);
@@ -230,6 +268,19 @@ fn run_case_inner(case: &Case) -> Result<(), String> {
             if let ExitKind::UncaughtException(rep) = &status.kind {
                 json_parts.push(rep.to_json());
             }
+            for rep in &status.halt_exceptions {
+                json_parts.push(rep.to_halt_json());
+            }
+            for rep in &last.fini_exceptions {
+                json_parts.push(rep.to_json());
+            }
+            for rep in &last.halt_exceptions {
+                json_parts.push(rep.to_halt_json());
+            }
+            compare_leaks(case, &last.leaks, update, &mut failures);
+            if !last.leaks.is_empty() {
+                json_parts.push(puy_core::vm::leaks_json(&last.leaks));
+            }
         }
     }
     if !is_diff {
@@ -239,6 +290,45 @@ fn run_case_inner(case: &Case) -> Result<(), String> {
         Ok(())
     } else {
         Err(format!("case `{}`:\n{}", case.name, failures.join("\n")))
+    }
+}
+
+/// An example in `examples/` (a program or a package directory; `docs/design/testing.md` 3.11):
+/// compiles without diagnostics, runs to completion with exit code 0, prints something, writes
+/// nothing to stderr and frees every heap block. There are no expectation files.
+fn run_example(
+    case: &Case,
+    cfg: &CaseConfig,
+    out: &puy_core::driver::CompileOutput,
+    path: &str,
+) -> Result<(), String> {
+    let name = case.name.strip_prefix("example_").unwrap_or(case.name);
+    let fail = |what: String| Err(format!("example `{name}`: {what}"));
+    if !out.diagnostics.is_empty() {
+        return fail(format!(
+            "examples must compile without diagnostics:\n{}",
+            render::render_all(&out.diagnostics, &out.sources)
+        ));
+    }
+    let Some(module_bytes) = out.module.as_deref() else {
+        return fail("compilation produced no module".into());
+    };
+    let (stdout, stderr, _, last) = execute(case, cfg, module_bytes, path);
+    let mut failures = Vec::new();
+    if last.exit_code() != 0 {
+        failures.push(format!("exit code {}", last.exit_code()));
+    }
+    if stdout.is_empty() {
+        failures.push("nothing was written to stdout".into());
+    }
+    if !stderr.is_empty() {
+        failures.push(format!("stderr:\n{}", String::from_utf8_lossy(&stderr)));
+    }
+    compare_leaks(case, &last.leaks, false, &mut failures);
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        fail(failures.join("\n"))
     }
 }
 
@@ -255,13 +345,30 @@ fn script_name(name: &str) -> String {
     }
 }
 
-/// Runs with a host that captures the module. Returns (stdout, the text the runtime writes to stderr, exit status).
+/// Compares the leak report with `.leak` (`docs/design/lifetime.md` 3.12). Without the file no block may be left.
+/// Only `lifetime/` cases may expect leaks.
+fn compare_leaks(case: &Case, leaks: &[(String, u64)], update: bool, failures: &mut Vec<String>) {
+    let actual = puy_core::vm::render_leaks(leaks);
+    if case.group != "lifetime" {
+        if case.file("leak").is_some() {
+            failures.push(".leak is only allowed in lifetime/ cases".into());
+        }
+        if !actual.is_empty() {
+            failures.push(format!("heap blocks were not freed:\n{actual}"));
+        }
+        return;
+    }
+    compare_text_required(case, "leak", actual.as_bytes(), update, failures);
+}
+
+/// Runs with a host that captures the module, including the finishing stage (`Isolate::finish`).
+/// Returns (stdout, the text the runtime writes to stderr, the program's exit status, the status after the finishing stage).
 fn execute(
     case: &Case,
     cfg: &CaseConfig,
     module_bytes: &[u8],
     path: &str,
-) -> (Vec<u8>, Vec<u8>, ExitStatus) {
+) -> (Vec<u8>, Vec<u8>, ExitStatus, ExitStatus) {
     let module =
         Arc::new(Module::decode(module_bytes, puy_core::VERSION).expect("module verifies"));
     let stdout = Rc::new(RefCell::new(Vec::new()));
@@ -275,7 +382,12 @@ fn execute(
         } else {
             Some(Box::new(CaptureConsole {
                 stdout: stdout.clone(),
-                stderr: stderr.clone(),
+                // `merge-stderr`: one capture in the order of the writes
+                stderr: if cfg.merge_stderr {
+                    stdout.clone()
+                } else {
+                    stderr.clone()
+                },
                 stdin,
             }))
         },
@@ -296,7 +408,12 @@ fn execute(
         stack_limit: cfg.stack_limit.unwrap_or(256 * 1024 * 1024),
         hash_seed: HashSeed::Fixed(0),
         budget_default: 10_000,
-        stdout_buffering: StdoutBuffering::Full,
+        stdout_buffering: match cfg.stdout_buffering.as_deref() {
+            Some("line") => StdoutBuffering::Line,
+            Some("none") => StdoutBuffering::None,
+            _ => StdoutBuffering::Full,
+        },
+        leak_check: true,
     };
     let mut iso = Isolate::new(module, host, config).expect("isolate");
     let mut args = vec![path.to_string()];
@@ -304,33 +421,66 @@ fn execute(
         args.extend(String::from_utf8_lossy(a).lines().map(|l| l.to_string()));
     }
     iso.start_main(args).expect("start");
-    let status = loop {
+    let run = |iso: &mut Isolate| loop {
         match iso.run(10_000) {
             RunOutcome::Finished(st) => break st,
             RunOutcome::BudgetExhausted | RunOutcome::Waiting => continue,
             RunOutcome::Fatal(e) => panic!("fatal: {}", e.message),
         }
     };
-    // Build the stderr text the same way as the runtime loop
-    let mut err_text: Vec<u8> = Vec::new();
+    let status = run(&mut iso);
+    iso.finish();
+    let last = run(&mut iso);
+    // What the program wrote to stderr (`ErrOutput`), then the reports, built the same way as the
+    // runtime loop
+    let mut err_text: Vec<u8> = stderr.borrow().clone();
     if let ExitKind::UncaughtException(rep) = &status.kind {
         err_text.extend_from_slice(rep.render().as_bytes());
     }
-    if let Some(e) = &status.stdout_error {
+    for rep in &status.halt_exceptions {
+        err_text.extend_from_slice(rep.render_halt().as_bytes());
+    }
+    for rep in &last.fini_exceptions {
+        err_text.extend_from_slice(rep.render().as_bytes());
+    }
+    for rep in &last.halt_exceptions {
+        err_text.extend_from_slice(rep.render_halt().as_bytes());
+    }
+    if let Some(e) = status.stdout_error.as_ref().or(last.stdout_error.as_ref()) {
         err_text.extend_from_slice(
             format!("error: failed to write to stdout: {}\n", e.message).as_bytes(),
         );
     }
     let out = stdout.borrow().clone();
-    (out, err_text, status)
+    (out, err_text, status, last)
 }
 
 fn expected_path(case: &Case, ext: &str) -> std::path::PathBuf {
     let dir = std::path::Path::new(puy_testsuite::TESTS_DIR).join(case.group);
+    if case.package {
+        // `<group>/…/<name>/main.<ext>`: find the package directory by its `main.pas`
+        let pkg = find_dir(&dir, case.name).unwrap_or_else(|| dir.join(case.name));
+        return pkg.join(format!("main.{ext}"));
+    }
     // Case in a subfolder: find where the .pas is
     let want = format!("{}.pas", case.name);
     let found = find_file(&dir, &want).unwrap_or_else(|| dir.join(&want));
     found.with_file_name(format!("{}.{ext}", case.name))
+}
+
+fn find_dir(dir: &std::path::Path, name: &str) -> Option<std::path::PathBuf> {
+    for e in std::fs::read_dir(dir).ok()?.flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            if p.file_name().is_some_and(|n| n == name) && p.join("puy.toml").is_file() {
+                return Some(p);
+            }
+            if let Some(f) = find_dir(&p, name) {
+                return Some(f);
+            }
+        }
+    }
+    None
 }
 
 fn find_file(dir: &std::path::Path, name: &str) -> Option<std::path::PathBuf> {
@@ -381,6 +531,37 @@ fn compare_text(
                 write_expected(case, ext, actual);
             }
         }
+    }
+}
+
+/// Compares the result of `puy fix` on a unit of a package with `<path without .pas>.fixed.pas`.
+/// A unit rewritten without an expectation is a failure (written under `PUY_UPDATE_GOLDEN=1`), so
+/// that a case cannot rewrite a unit unnoticed.
+fn compare_unit_fixed(
+    case: &Case,
+    unit: &str,
+    expected: Option<&[u8]>,
+    actual: &[u8],
+    update: bool,
+    failures: &mut Vec<String>,
+) {
+    let rel = format!("{}.fixed.pas", unit.strip_suffix(".pas").unwrap_or(unit));
+    if expected == Some(actual) {
+        return;
+    }
+    if update {
+        let pkg = std::path::Path::new(puy_testsuite::TESTS_DIR).join(case.group);
+        let pkg = find_dir(&pkg, case.name).unwrap_or_else(|| pkg.join(case.name));
+        let p = pkg.join(&rel);
+        std::fs::write(&p, actual).unwrap_or_else(|e| panic!("cannot write {}: {e}", p.display()));
+        return;
+    }
+    match expected {
+        Some(e) => failures.push(diff_message_for(&rel, e, actual)),
+        None => failures.push(format!(
+            "`puy fix` rewrites `{unit}` but there is no `{rel}`:\n{}",
+            String::from_utf8_lossy(actual)
+        )),
     }
 }
 
@@ -443,10 +624,15 @@ fn pretty_json(parts: &[serde_json::Value]) -> String {
 }
 
 fn diff_message(ext: &str, expected: &[u8], actual: &[u8]) -> String {
+    diff_message_for(&format!(".{ext}"), expected, actual)
+}
+
+/// The difference between an expectation file (`what`) and the actual output.
+fn diff_message_for(what: &str, expected: &[u8], actual: &[u8]) -> String {
     let e = String::from_utf8_lossy(expected);
     let a = String::from_utf8_lossy(actual);
     let mut msg =
-        format!(".{ext} differs\n--- expected\n{e}\n--- actual\n{a}\n--- first difference:\n");
+        format!("{what} differs\n--- expected\n{e}\n--- actual\n{a}\n--- first difference:\n");
     let el: Vec<&str> = e.lines().collect();
     let al: Vec<&str> = a.lines().collect();
     for i in 0..el.len().max(al.len()) {
@@ -461,4 +647,88 @@ fn diff_message(ext: &str, expected: &[u8], actual: &[u8]) -> String {
         }
     }
     msg
+}
+
+#[cfg(test)]
+mod leak_tests {
+    use super::*;
+
+    const LEAK_TEXT: &[u8] =
+        b"warning: 3 heap blocks were not freed\n  Hello.TNode: 2\n  string: 1\n";
+
+    fn leaks() -> Vec<(String, u64)> {
+        vec![("Hello.TNode".into(), 2), ("string".into(), 1)]
+    }
+
+    fn check(case: &Case, leaks: &[(String, u64)]) -> Vec<String> {
+        let mut failures = Vec::new();
+        compare_leaks(case, leaks, false, &mut failures);
+        failures
+    }
+
+    // A lifetime/ case passes when the report matches its .leak byte for byte.
+    #[test]
+    fn leak_matches_expectation() {
+        let case = Case {
+            group: "lifetime",
+            name: "cycle",
+            stem: "cycle",
+            package: false,
+            files: &[("cycle.leak", LEAK_TEXT)],
+        };
+        assert_eq!(check(&case, &leaks()), Vec::<String>::new());
+    }
+
+    // A different report (count or type) fails against .leak, and so does no leak at all.
+    #[test]
+    fn leak_differs_from_expectation() {
+        let case = Case {
+            group: "lifetime",
+            name: "cycle",
+            stem: "cycle",
+            package: false,
+            files: &[("cycle.leak", LEAK_TEXT)],
+        };
+        let fewer = vec![("Hello.TNode".into(), 1), ("string".into(), 1)];
+        assert_eq!(check(&case, &fewer).len(), 1);
+        assert_eq!(check(&case, &[]).len(), 1);
+    }
+
+    // Without .leak a lifetime/ case must leave no block.
+    #[test]
+    fn missing_leak_file_requires_no_leaks() {
+        let case = Case {
+            group: "lifetime",
+            name: "plain",
+            stem: "plain",
+            package: false,
+            files: &[],
+        };
+        assert_eq!(check(&case, &[]), Vec::<String>::new());
+        assert_eq!(check(&case, &leaks()).len(), 1);
+    }
+
+    // golden/ and diff/ cases must leave no block and may not carry a .leak file.
+    #[test]
+    fn other_groups_require_no_leaks() {
+        for group in ["golden", "diff"] {
+            let plain = Case {
+                group,
+                name: "plain",
+                stem: "plain",
+                package: false,
+                files: &[],
+            };
+            assert_eq!(check(&plain, &[]), Vec::<String>::new(), "{group}");
+            assert_eq!(check(&plain, &leaks()).len(), 1, "{group}");
+            let with_file = Case {
+                group,
+                name: "cycle",
+                stem: "cycle",
+                package: false,
+                files: &[("cycle.leak", LEAK_TEXT)],
+            };
+            assert_eq!(check(&with_file, &leaks()).len(), 2, "{group}");
+        }
+    }
 }

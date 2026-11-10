@@ -1,0 +1,8 @@
+init Gamma gamma
+init Alpha
+init Beta
+main
+fini Beta
+fini Alpha
+fini Delta
+fini Gamma gamma

@@ -1,0 +1,49 @@
+error[E3002]: `object` is not supported in Puy
+  --> removed_features_decls.pas:5:10
+   |
+ 5 |   TOld = object
+   |          ^^^^^^
+   |
+   = note: use a `record` or a `class` instead
+
+error[E3012]: `threadvar` is not supported in Puy
+  --> removed_features_decls.pas:9:1
+   |
+ 9 | threadvar
+   | ^^^^^^^^^
+   |
+   = note: use a global variable; each isolate has its own copy
+
+error[E3002]: `object` is not supported in Puy
+   --> removed_features_decls.pas:13:6
+    |
+ 13 |   V: object X: Integer; end;
+    |      ^^^^^^
+    |
+    = note: use a `record` or a `class` instead
+
+error[E3015]: `TVarRec` is not supported in Puy
+   --> removed_features_decls.pas:14:6
+    |
+ 14 |   R: TVarRec;
+    |      ^^^^^^^
+    |
+    = note: use `TValue` instead
+
+error[E3016]: `AcquireExceptionObject` is not supported in Puy
+   --> removed_features_decls.pas:18:3
+    |
+ 18 |   AcquireExceptionObject;
+    |   ^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: store a reference to the exception in a variable instead; exception objects are reference counted
+
+error[E3016]: `ReleaseExceptionObject` is not supported in Puy
+   --> removed_features_decls.pas:19:3
+    |
+ 19 |   ReleaseExceptionObject;
+    |   ^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: store a reference to the exception in a variable instead; exception objects are reference counted
+
+error: aborting due to 6 errors

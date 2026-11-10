@@ -1,0 +1,91 @@
+; puyc format 2
+.const
+  0: int 1
+  1: str "a"
+  2: agg ty64 (k0, k1)
+  3: str "b"
+  4: str "`TRow` (1..2)"
+  5: str "\n"
+.type
+  64: record DumpTypes.TPoint slots=2 refs=1
+  65: array DumpTypes.TRow slots=2 elem=ref
+.global
+  0: ref P
+  1: ref R
+  2: int I
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpTypes file="dump_types.pas" init=- fini=- entry=0
+.func 0 DumpTypes.<main> params=0 regs=15
+  .line 26
+  0000  LoadInt      r7, 1
+  0001  LoadGlobal   r8, g0
+  0002  Unique       r8, ty64
+  0003  StoreGlobal  r8, g0
+  0004  FieldSet     r8, 0, r7
+  .line 27
+  0005  LoadConst    r0, k2
+  0006  StoreGlobalRef r0, g0
+  .line 28
+  0007  LoadInt      r7, 2
+  0008  StoreGlobal  r7, g2
+  .line 29
+  0009  LoadGlobal   r7, g2
+  000a  AddIntI      r7, r7, -1
+  000b  LoadConst    r1, k3
+  000c  LoadInt      r8, 2
+  000d  ChkIndex     r7, r8, k4
+  000e  LoadGlobal   r9, g1
+  000f  Unique       r9, ty65
+  0010  StoreGlobal  r9, g1
+  0011  ValGet       r10, r9, r7
+  0012  Unique       r10, ty64
+  0013  ValSet       r9, r7, r10
+  0014  FieldSetRef  r10, 1, r1
+  .line 30
+  0015  LoadZero     r8
+  0016  LoadGlobal   r9, g1
+  0017  Unique       r9, ty65
+  0018  StoreGlobal  r9, g1
+  0019  ValGet       r10, r9, r8
+  001a  Unique       r10, ty64
+  001b  ValSet       r9, r8, r10
+  001c  MakeGlobalRef r11, g1
+  001d  Move         r13, r8
+  001e  LoadZero     r14
+  001f  LoadZero     r12
+  0020  MakeCell     r12, r11, 2
+  0021  MoveRef      r2, r12
+  0022  Move         r7, r2
+  0023  Call         r7, f1
+  .line 31
+  0024  LoadGlobal   r8, g0
+  0025  FieldGet     r7, r8, 0
+  0026  IntToStr     r3, r7
+  0027  LoadGlobal   r9, g1
+  0028  LoadZero     r10
+  0029  ValGet       r11, r9, r10
+  002a  FieldGet     r8, r11, 0
+  002b  IntToStr     r4, r8
+  002c  ConcatStr    r3, r3, r4
+  002d  LoadGlobal   r9, g1
+  002e  LoadGlobal   r10, g2
+  002f  AddIntI      r10, r10, -1
+  0030  LoadInt      r11, 2
+  0031  ChkIndex     r10, r11, k4
+  0032  ValGet       r12, r9, r10
+  0033  FieldGetRef  r5, r12, 1
+  0034  ConcatStr    r3, r3, r5
+  0035  LoadConst    r6, k5
+  0036  ConcatStr    r3, r3, r6
+  0037  CallHost     r3, h0
+  .line 32
+  0038  RetVoid
+.finally r0, r1, r2, r3, r4, r5, r6
+.func 1 DumpTypes.Fill params=1 regs=2
+  .local r0 N
+  .line 18
+  0000  LoadInt      r1, 3
+  0001  StoreRef     r0, r1
+  .line 19
+  0002  RetVoid

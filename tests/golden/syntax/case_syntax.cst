@@ -1,0 +1,112 @@
+SOURCE_FILE@0..262
+  PROGRAM@0..262
+    PROGRAM_HEADER@0..19
+      PROGRAM_KW@0..7 "program"
+      WHITESPACE@7..8 " "
+      IDENT@8..18 "CaseSyntax"
+      SEMICOLON@18..19 ";"
+    NEWLINE@19..20 "\n"
+    NEWLINE@20..21 "\n"
+    LINE_COMMENT@21..116 "// The syntax tree of `case` (semantics.md 4.10): CASE_STMT, CASE_ARM, CASE_LABEL (a value or a"
+    NEWLINE@116..117 "\n"
+    LINE_COMMENT@117..141 "// range) and CASE_ELSE."
+    NEWLINE@141..142 "\n"
+    NEWLINE@142..143 "\n"
+    VAR_SECTION@143..160
+      VAR_KW@143..146 "var"
+      NEWLINE@146..147 "\n"
+      WHITESPACE@147..149 "  "
+      VAR_DECL@149..160
+        IDENT_LIST@149..150
+          IDENT@149..150 "I"
+        COLON@150..151 ":"
+        WHITESPACE@151..152 " "
+        TYPE_REF@152..159
+          QUALIFIED_NAME@152..159
+            IDENT@152..159 "Integer"
+        SEMICOLON@159..160 ";"
+    NEWLINE@160..161 "\n"
+    COMPOUND_STMT@161..260
+      BEGIN_KW@161..166 "begin"
+      NEWLINE@166..167 "\n"
+      WHITESPACE@167..169 "  "
+      ASSIGN_STMT@169..175
+        NAME_REF@169..170
+          IDENT@169..170 "I"
+        WHITESPACE@170..171 " "
+        ASSIGN@171..173 ":="
+        WHITESPACE@173..174 " "
+        LITERAL@174..175
+          INT_LIT@174..175 "2"
+      SEMICOLON@175..176 ";"
+      NEWLINE@176..177 "\n"
+      WHITESPACE@177..179 "  "
+      CASE_STMT@179..255
+        CASE_KW@179..183 "case"
+        WHITESPACE@183..184 " "
+        NAME_REF@184..185
+          IDENT@184..185 "I"
+        WHITESPACE@185..186 " "
+        OF_KW@186..188 "of"
+        NEWLINE@188..189 "\n"
+        WHITESPACE@189..193 "    "
+        CASE_ARM@193..214
+          CASE_LABEL@193..194
+            LITERAL@193..194
+              INT_LIT@193..194 "1"
+          COMMA@194..195 ","
+          WHITESPACE@195..196 " "
+          CASE_LABEL@196..200
+            LITERAL@196..197
+              INT_LIT@196..197 "3"
+            DOTDOT@197..199 ".."
+            LITERAL@199..200
+              INT_LIT@199..200 "4"
+          COLON@200..201 ":"
+          WHITESPACE@201..202 " "
+          EXPR_STMT@202..214
+            CALL_EXPR@202..214
+              NAME_REF@202..209
+                IDENT@202..209 "WriteLn"
+              ARG_LIST@209..214
+                L_PAREN@209..210 "("
+                ARG@210..213
+                  LITERAL@210..213
+                    STRING_LIT@210..213 "'a'"
+                R_PAREN@213..214 ")"
+        SEMICOLON@214..215 ";"
+        NEWLINE@215..216 "\n"
+        WHITESPACE@216..220 "    "
+        CASE_ARM@220..222
+          CASE_LABEL@220..221
+            LITERAL@220..221
+              INT_LIT@220..221 "2"
+          COLON@221..222 ":"
+        WHITESPACE@222..223 " "
+        SEMICOLON@223..224 ";"
+        NEWLINE@224..225 "\n"
+        WHITESPACE@225..227 "  "
+        CASE_ELSE@227..249
+          ELSE_KW@227..231 "else"
+          NEWLINE@231..232 "\n"
+          WHITESPACE@232..236 "    "
+          EXPR_STMT@236..248
+            CALL_EXPR@236..248
+              NAME_REF@236..243
+                IDENT@236..243 "WriteLn"
+              ARG_LIST@243..248
+                L_PAREN@243..244 "("
+                ARG@244..247
+                  LITERAL@244..247
+                    STRING_LIT@244..247 "'b'"
+                R_PAREN@247..248 ")"
+          SEMICOLON@248..249 ";"
+        NEWLINE@249..250 "\n"
+        WHITESPACE@250..252 "  "
+        END_KW@252..255 "end"
+      SEMICOLON@255..256 ";"
+      NEWLINE@256..257 "\n"
+      END_KW@257..260 "end"
+    DOT@260..261 "."
+    NEWLINE@261..262 "\n"
+    EOF@262..262 ""

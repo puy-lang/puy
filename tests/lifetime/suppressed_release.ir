@@ -1,0 +1,138 @@
+; puy ir 1
+.global
+.func f0 SuppressedRelease.<main> params=0
+  .reg v0 E: EA exception
+  .reg t0: Exception exception
+  .reg t1: - temp
+  .reg t2: Integer temp
+  .reg t3: string temp
+  .reg t4: string temp
+  .reg t5: string temp
+  .reg t6: Exception temp
+  .reg t7: string temp
+  .reg t8: string temp
+  .reg t9: TArray<Exception> temp
+  .reg t10: Exception temp
+  .reg t11: Int64 temp
+  .reg t12: Exception temp
+  .reg t13: string temp
+  .try bb0..bb0 except bb1..bb3 t0
+bb0:
+  .line 35
+  Call         -, f2()
+  .line 34
+  Jmp          bb4
+bb1:
+  .line 37
+  ExcClass     t2, t0
+  ClassIs      t2, SuppressedRelease.EA
+  JmpIfFalse   t2, bb3, bb2
+bb2:
+  .line 37
+  Move         v0, t0
+  .line 38
+  ExcGet       t3, v0, 0
+  LoadConst    t4, " "
+  ConcatStr    t3, t3, t4
+  ExcGet       t6, v0, 1
+  ExcGet       t5, t6, 0
+  ConcatStr    t3, t3, t5
+  LoadConst    t7, " "
+  ConcatStr    t3, t3, t7
+  ExcGet       t10, v0, 1
+  ExcInfo      t9, t10, 1
+  LoadZero     t11
+  DynGet       t12, t9, t11
+  ExcGet       t8, t12, 0
+  ConcatStr    t3, t3, t8
+  LoadConst    t13, "\n"
+  ConcatStr    t3, t3, t13
+  CallHost     -, h0(t3)
+  .line 34
+  Release      t0
+  Jmp          bb4
+bb3:
+  .line 34
+  Raise        t0
+bb4:
+  .line 40
+  RetVoid
+.finally t0, t3, t4, t5, t6, t7, t8, t9, t10, t13
+.func f1 SuppressedRelease.Layers params=0
+  .reg t0: - state
+  .reg t1: Exception exception
+  .reg t2: - state
+  .reg t3: Exception exception
+  .reg t4: EA temp
+  .reg t5: EA temp
+  .reg t6: string temp
+  .try bb1..bb1 finally bb2..bb3 t2, t3
+  .try bb0..bb4 finally bb5..bb5 t0, t1
+bb0:
+  .line 13
+  Jmp          bb1
+bb1:
+  .line 14
+  LoadConst    t4, "a"
+  NewExc       t4, SuppressedRelease.EA
+  Raise        t4
+bb2:
+  .line 16
+  LoadConst    t5, "b"
+  NewExc       t5, SuppressedRelease.EA
+  Raise        t5
+bb3:
+  .line 13
+  EndFinally   t2, bb4
+bb4:
+  .line 12
+  LoadZero     t0
+  Jmp          bb5
+bb5:
+  .line 19
+  LoadConst    t6, "outer finally\n"
+  CallHost     -, h0(t6)
+  .line 12
+  EndFinally   t0, bb6
+bb6:
+  .line 21
+  RetVoid
+.finally t1, t3, t4, t5, t6
+.func f2 SuppressedRelease.Wrap params=0
+  .reg v0 E: EA exception
+  .reg t0: Exception exception
+  .reg t1: - temp
+  .reg t2: Integer temp
+  .reg t3: EA temp
+  .reg t4: string temp
+  .try bb0..bb0 except bb1..bb4 t0
+bb0:
+  .line 26
+  Call         -, f1()
+  .line 25
+  Jmp          bb5
+bb1:
+  .line 28
+  ExcClass     t2, t0
+  ClassIs      t2, SuppressedRelease.EA
+  JmpIfFalse   t2, bb4, bb2
+bb2:
+  .line 28
+  Move         v0, t0
+  .line 29
+  LoadConst    t3, "wrapped "
+  ExcGet       t4, v0, 0
+  ConcatStr    t3, t3, t4
+  NewExc       t3, SuppressedRelease.EA
+  RaiseOuter   t3, t0
+bb3:
+  .line 25
+  Release      t0
+  Jmp          bb5
+bb4:
+  .line 25
+  Raise        t0
+bb5:
+  .line 31
+  RetVoid
+.finally t0, t3, t4

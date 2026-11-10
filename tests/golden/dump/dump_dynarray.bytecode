@@ -1,0 +1,113 @@
+; puyc format 2
+.const
+  0: str "\n"
+.type
+  64: dynarray DumpDynArray.TInts slots=0 elem=val
+  65: dynarray DumpDynArray.TGrid slots=0 elem=ref
+.global
+  0: ref A
+  1: ref G
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpDynArray file="dump_dynarray.pas" init=- fini=- entry=0
+.func 0 DumpDynArray.<main> params=0 regs=20
+  .line 24
+  0000  LoadInt      r11, 1
+  0001  LoadInt      r12, 2
+  0002  LoadInt      r13, 2
+  0003  NewArr       r13, ty64
+  0004  LoadZero     r14
+  0005  DynSet       r13, r14, r11
+  0006  LoadInt      r14, 1
+  0007  DynSet       r13, r14, r12
+  0008  MoveRef      r0, r13
+  0009  StoreGlobalRef r0, g0
+  .line 25
+  000a  LoadInt      r11, 2
+  000b  LoadInt      r12, 3
+  000c  LoadGlobal   r13, g1
+  000d  Move         r14, r13
+  000e  Move         r15, r11
+  000f  SetLen       r14, ty65
+  0010  Move         r13, r14
+  0011  LoadZero     r16
+  0012  JmpIfLeInt   r11, r16, -> 001b
+  0013  DynGet       r17, r13, r16
+  0014  Move         r18, r17
+  0015  Move         r19, r12
+  0016  SetLen       r18, ty64
+  0017  Move         r17, r18
+  0018  DynSet       r13, r16, r17
+  0019  AddIntI      r16, r16, 1
+  001a  Jmp          -> 0012
+  001b  StoreGlobal  r13, g1
+  .line 26
+  001c  LoadInt      r11, 1
+  001d  LoadInt      r12, 2
+  001e  LoadGlobalRef r1, g0
+  001f  Move         r14, r1
+  0020  Call         r14, f1
+  0021  Move         r13, r14
+  0022  LoadGlobal   r14, g1
+  0023  DynGet       r15, r14, r11
+  0024  DynSet       r15, r12, r13
+  .line 27
+  0025  LoadGlobal   r14, g1
+  0026  LoadInt      r15, 1
+  0027  DynGetRef    r3, r14, r15
+  0028  Move         r11, r3
+  0029  LoadZero     r12
+  002a  ArrLen       r13, r11
+  002b  ArrCopy      r11, ty64
+  002c  MoveRef      r2, r11
+  002d  StoreGlobalRef r2, g0
+  .line 28
+  002e  LoadGlobalRef r4, g0
+  002f  LoadZero     r12
+  0030  EqInt        r11, r4, r12
+  0031  NotBool      r11, r11
+  0032  JmpIfFalse   r11, -> 003f
+  0033  LoadGlobalRef r5, g0
+  0034  Release      r6
+  0035  JmpIfEqInt   r5, r6, -> 003f
+  .line 29
+  0036  LoadGlobalRef r8, g0
+  0037  Move         r12, r8
+  0038  Call         r12, f1
+  0039  Move         r11, r12
+  003a  IntToStr     r7, r11
+  003b  LoadConst    r9, k0
+  003c  ConcatStr    r7, r7, r9
+  003d  CallHost     r7, h0
+  .line 28
+  003e  Jmp          -> 003f
+  .line 30
+  003f  Release      r10
+  0040  StoreGlobalRef r10, g0
+  .line 31
+  0041  RetVoid
+.finally r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10
+.func 1 DumpDynArray.Total params=1 regs=7
+  .local r0 A
+  .local r1 Result
+  .local r2 I
+  .line 15
+  0000  LoadZero     r1
+  .line 16
+  0001  LoadZero     r2
+  0002  ArrLen       r3, r0
+  0003  AddIntI      r3, r3, -1
+  0004  JmpIfLtInt   r3, r2, -> 000e
+  .line 17
+  0005  Move         r4, r1
+  0006  Move         r6, r2
+  0007  DynGet       r5, r0, r6
+  0008  AddInt       r4, r4, r5
+  0009  NarrowOvf    r4, r4, 4
+  000a  Move         r1, r4
+  .line 16
+  000b  JmpIfEqInt   r2, r3, -> 000e
+  000c  AddIntI      r2, r2, 1
+  000d  Jmp          -> 0005
+  .line 18
+  000e  Ret          r1

@@ -1,0 +1,152 @@
+; puyc format 2
+.const
+  0: str "abc"
+  1: str "big "
+  2: str "\n"
+  3: str "small\n"
+  4: str " "
+.global
+  0: int G
+  1: ref S
+  2: int N
+  3: int C
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpIr file="dump_ir.pas" init=- fini=- entry=0
+.func 0 DumpIr.<main> params=0 regs=19
+  .line 25
+  0000  LoadConst    r1, k0
+  0001  StoreGlobalRef r1, g1
+  .line 26
+  0002  LoadInt      r16, 2
+  0003  LoadInt      r17, 120
+  0004  LoadGlobalRef r2, g1
+  0005  StrSetIndex  r2, r16, r17
+  0006  StoreGlobalRef r2, g1
+  .line 27
+  0007  LoadInt      r17, 3
+  0008  Call         r17, f1
+  0009  Move         r16, r17
+  000a  StoreGlobal  r16, g2
+  .line 28
+  000b  MakeGlobalRef r16, g2
+  000c  MakeGlobalRef r17, g3
+  000d  LoadGlobalRef r3, g1
+  000e  Move         r18, r3
+  000f  Call         r16, f2
+  .line 29
+  0010  LoadGlobal   r16, g2
+  0011  LoadInt      r17, 5
+  0012  JmpIfLeInt   r16, r17, -> 001e
+  0013  LoadGlobal   r16, g3
+  0014  LoadInt      r17, 1
+  0015  JmpIfNeInt   r16, r17, -> 001e
+  .line 30
+  0016  LoadConst    r4, k1
+  0017  LoadGlobal   r16, g2
+  0018  IntToStr     r5, r16
+  0019  ConcatStr    r4, r4, r5
+  001a  LoadConst    r6, k2
+  001b  ConcatStr    r4, r4, r6
+  001c  CallHost     r4, h0
+  .line 29
+  001d  Jmp          -> 0020
+  .line 32
+  001e  LoadConst    r7, k3
+  001f  CallHost     r7, h0
+  .line 33
+  0020  LoadGlobal   r16, g2
+  0021  LoadZero     r17
+  0022  JmpIfLeInt   r16, r17, -> 0028
+  .line 34
+  0023  LoadGlobal   r16, g2
+  0024  AddIntI      r16, r16, -4
+  0025  NarrowOvf    r16, r16, 4
+  0026  StoreGlobal  r16, g2
+  .line 33
+  0027  Jmp          -> 0020
+  .line 36
+  0028  LoadGlobal   r16, g2
+  0029  AddIntI      r16, r16, 1
+  002a  NarrowOvf    r16, r16, 4
+  002b  StoreGlobal  r16, g2
+  .line 37
+  002c  LoadGlobal   r16, g2
+  002d  LoadInt      r17, 2
+  002e  JmpIfNeInt   r16, r17, -> 0031
+  .line 38
+  002f  Jmp          -> 0031
+  .line 37
+  0030  Jmp          -> 0031
+  .line 39
+  0031  LoadGlobal   r16, g2
+  0032  LoadInt      r17, 3
+  0033  JmpIfLtInt   r16, r17, -> 0028
+  .line 40
+  0034  LoadInt      r0, 1
+  0035  LoadInt      r16, 3
+  0036  JmpIfLtInt   r16, r0, -> 0044
+  0037  StoreGlobal  r0, g0
+  .line 42
+  0038  LoadGlobal   r17, g0
+  0039  LoadInt      r18, 2
+  003a  JmpIfNeInt   r17, r18, -> 003d
+  .line 43
+  003b  Jmp          -> 0043
+  .line 42
+  003c  Jmp          -> 003d
+  .line 44
+  003d  LoadGlobal   r17, g0
+  003e  IntToStr     r8, r17
+  003f  CallHost     r8, h0
+  .line 40
+  0040  JmpIfEqInt   r0, r16, -> 0043
+  0041  AddIntI      r0, r0, 1
+  0042  Jmp          -> 0037
+  0043  StoreGlobal  r0, g0
+  .line 46
+  0044  LoadConst    r9, k2
+  0045  CallHost     r9, h0
+  .line 47
+  0046  LoadGlobalRef r10, g1
+  0047  LoadConst    r11, k4
+  0048  ConcatStr    r10, r10, r11
+  0049  LoadGlobal   r16, g2
+  004a  IntToStr     r12, r16
+  004b  ConcatStr    r10, r10, r12
+  004c  LoadConst    r13, k4
+  004d  ConcatStr    r10, r10, r13
+  004e  LoadGlobal   r17, g3
+  004f  IntToStr     r14, r17
+  0050  ConcatStr    r10, r10, r14
+  0051  LoadConst    r15, k2
+  0052  ConcatStr    r10, r10, r15
+  0053  CallHost     r10, h0
+  .line 48
+  0054  RetVoid
+.finally r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15
+.func 1 DumpIr.Twice params=1 regs=3
+  .local r0 X
+  .local r1 Result
+  .line 12
+  0000  Move         r1, r0
+  0001  LoadInt      r2, 2
+  0002  MulInt       r1, r1, r2
+  0003  NarrowOvf    r1, r1, 4
+  .line 13
+  0004  Ret          r1
+.func 2 DumpIr.Fill params=3 regs=5
+  .local r0 Total
+  .local r1 Count
+  .local r2 Tag
+  .line 17
+  0000  LoadRef      r3, r0
+  0001  StrLen       r4, r2
+  0002  AddInt       r3, r3, r4
+  0003  NarrowOvf    r3, r3, 4
+  0004  StoreRef     r0, r3
+  .line 18
+  0005  LoadInt      r3, 1
+  0006  StoreRef     r1, r3
+  .line 19
+  0007  RetVoid

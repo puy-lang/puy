@@ -1,0 +1,269 @@
+; puy ir 1
+.global
+  g0 Kept: Exception
+.func f0 ExceptRelease.<main> params=0
+  .reg t0: Integer temp
+  .reg t1: Integer temp
+  .reg t2: string temp
+  .reg t3: Exception temp
+  .reg t4: string temp
+  .reg t5: - temp
+  .reg t6: - temp
+bb0:
+  .line 65
+  LoadZero     t0
+  Call         -, f1(t0)
+  .line 66
+  LoadInt      t1, 1
+  Call         -, f1(t1)
+  .line 67
+  LoadGlobal   t3, g0
+  ExcGet       t2, t3, 0
+  LoadConst    t4, "\n"
+  ConcatStr    t2, t2, t4
+  CallHost     -, h0(t2)
+  .line 68
+  Call         -, f2()
+  .line 69
+  Call         -, f3()
+  .line 70
+  RetVoid
+.finally t2, t4
+.func f1 ExceptRelease.Leave params=1
+  .reg v0 N: Integer param
+  .reg v1 I: Integer local
+  .reg v2 E: EStep exception
+  .reg t0: Integer temp
+  .reg t1: Exception exception
+  .reg t2: EStep temp
+  .reg t3: Integer temp
+  .reg t4: Integer temp
+  .reg t5: Integer temp
+  .reg t6: Integer temp
+  .reg t7: Integer temp
+  .reg t8: Exception temp
+  .try bb3..bb4 except bb5..bb20 t1
+bb0:
+  .line 18
+  LoadInt      v1, 1
+  LoadInt      t0, 3
+  JmpIfLtInt   t0, v1, bb24, bb1
+bb1:
+  .line 18
+  Jmp          bb2
+bb2:
+  .line 19
+  Jmp          bb3
+bb3:
+  .line 20
+  LoadConst    t2, "step"
+  NewExc       t2, ExceptRelease.EStep
+  Raise        t2
+bb4:
+  .line 19
+  Jmp          bb21
+bb5:
+  .line 22
+  ExcClass     t3, t1
+  ClassIs      t3, ExceptRelease.EStep
+  JmpIfFalse   t3, bb20, bb6
+bb6:
+  .line 22
+  Move         v2, t1
+  .line 24
+  LoadInt      t4, 1
+  JmpIfNeInt   v1, t4, bb9, bb7
+bb7:
+  .line 25
+  Release      t1
+  Jmp          bb22
+bb8:
+  .line 24
+  Jmp          bb10
+bb9:
+  .line 24
+  Jmp          bb10
+bb10:
+  .line 26
+  LoadInt      t5, 2
+  JmpIfNeInt   v1, t5, bb14, bb11
+bb11:
+  .line 26
+  LoadZero     t6
+  JmpIfNeInt   v0, t6, bb14, bb12
+bb12:
+  .line 27
+  Release      t1
+  Jmp          bb24
+bb13:
+  .line 26
+  Jmp          bb15
+bb14:
+  .line 26
+  Jmp          bb15
+bb15:
+  .line 28
+  LoadInt      t7, 3
+  JmpIfNeInt   v1, t7, bb18, bb16
+bb16:
+  .line 29
+  Release      t1
+  RetVoid
+bb17:
+  .line 28
+  Jmp          bb19
+bb18:
+  .line 28
+  Jmp          bb19
+bb19:
+  .line 30
+  AssignRef    t8, v2
+  StoreGlobalRef t8, g0
+  .line 19
+  Release      t1
+  Jmp          bb21
+bb20:
+  .line 19
+  Raise        t1
+bb21:
+  .line 18
+  Jmp          bb22
+bb22:
+  .line 18
+  JmpIfEqInt   v1, t0, bb24, bb23
+bb23:
+  .line 18
+  AddIntI      v1, v1, 1
+  Jmp          bb2
+bb24:
+  .line 33
+  RetVoid
+.finally t1, t2, t8
+.func f2 ExceptRelease.Replace params=0
+  .reg v0 E: EStep exception
+  .reg v1 E: EStep exception
+  .reg t0: Exception exception
+  .reg t1: Exception exception
+  .reg t2: EStep temp
+  .reg t3: Integer temp
+  .reg t4: EStep temp
+  .reg t5: string temp
+  .reg t6: Integer temp
+  .reg t7: string temp
+  .reg t8: string temp
+  .try bb1..bb2 except bb3..bb6 t1
+  .try bb0..bb7 except bb8..bb10 t0
+bb0:
+  .line 38
+  Jmp          bb1
+bb1:
+  .line 39
+  LoadConst    t2, "first"
+  NewExc       t2, ExceptRelease.EStep
+  Raise        t2
+bb2:
+  .line 38
+  Jmp          bb7
+bb3:
+  .line 41
+  ExcClass     t3, t1
+  ClassIs      t3, ExceptRelease.EStep
+  JmpIfFalse   t3, bb6, bb4
+bb4:
+  .line 41
+  Move         v0, t1
+  .line 42
+  LoadConst    t4, "second "
+  ExcGet       t5, v0, 0
+  ConcatStr    t4, t4, t5
+  NewExc       t4, ExceptRelease.EStep
+  Raise        t4
+bb5:
+  .line 38
+  Release      t1
+  Jmp          bb7
+bb6:
+  .line 38
+  Raise        t1
+bb7:
+  .line 37
+  Jmp          bb11
+bb8:
+  .line 45
+  ExcClass     t6, t0
+  ClassIs      t6, ExceptRelease.EStep
+  JmpIfFalse   t6, bb10, bb9
+bb9:
+  .line 45
+  Move         v1, t0
+  .line 46
+  ExcGet       t7, v1, 0
+  LoadConst    t8, "\n"
+  ConcatStr    t7, t7, t8
+  CallHost     -, h0(t7)
+  .line 37
+  Release      t0
+  Jmp          bb11
+bb10:
+  .line 37
+  Raise        t0
+bb11:
+  .line 48
+  RetVoid
+.finally t0, t1, t2, t4, t5, t7, t8
+.func f3 ExceptRelease.Again params=0
+  .reg v0 E: Exception exception
+  .reg t0: Exception exception
+  .reg t1: Exception exception
+  .reg t2: EStep temp
+  .reg t3: Exception temp
+  .reg t4: Integer temp
+  .reg t5: string temp
+  .reg t6: string temp
+  .try bb1..bb2 except bb3..bb4 t1
+  .try bb0..bb5 except bb6..bb8 t0
+bb0:
+  .line 53
+  Jmp          bb1
+bb1:
+  .line 54
+  LoadConst    t2, "again"
+  NewExc       t2, ExceptRelease.EStep
+  Raise        t2
+bb2:
+  .line 53
+  Jmp          bb5
+bb3:
+  .line 56
+  AssignRef    t3, t1
+  Raise        t3
+bb4:
+  .line 53
+  Release      t1
+  Jmp          bb5
+bb5:
+  .line 52
+  Jmp          bb9
+bb6:
+  .line 59
+  ExcClass     t4, t0
+  ClassIs      t4, Exception
+  JmpIfFalse   t4, bb8, bb7
+bb7:
+  .line 59
+  Move         v0, t0
+  .line 60
+  ExcGet       t5, v0, 0
+  LoadConst    t6, "\n"
+  ConcatStr    t5, t5, t6
+  CallHost     -, h0(t5)
+  .line 52
+  Release      t0
+  Jmp          bb9
+bb8:
+  .line 52
+  Raise        t0
+bb9:
+  .line 62
+  RetVoid
+.finally t0, t1, t2, t3, t5, t6

@@ -1,0 +1,20 @@
+[
+  {
+    "schema": "puy.exception/1",
+    "class": "EInOutError",
+    "message": "invalid integer input: 'five'",
+    "stack": [
+      {
+        "function": "raise_in_out_error.<main>",
+        "file": "raise_in_out_error.pas",
+        "line": 5
+      }
+    ],
+    "omitted": 0,
+    "properties": {
+      "ErrorCode": 0
+    },
+    "suppressed": [],
+    "inner": null
+  }
+]

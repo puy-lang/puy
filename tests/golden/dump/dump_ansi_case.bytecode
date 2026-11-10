@@ -1,0 +1,48 @@
+; puyc format 2
+.const
+  0: str "Aß"
+  1: str "\n"
+  2: str "aSS"
+  3: str "b"
+.global
+  0: ref S
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpAnsiCase file="dump_ansi_case.pas" init=- fini=- entry=0
+.func 0 DumpAnsiCase.<main> params=0 regs=18
+  .line 12
+  0000  LoadConst    r0, k0
+  0001  StoreGlobalRef r0, g0
+  .line 13
+  0002  LoadGlobalRef r2, g0
+  0003  LoadZero     r13
+  0004  StrUpper     r1, r2, r13
+  0005  LoadGlobalRef r4, g0
+  0006  LoadInt      r13, 1
+  0007  StrLower     r3, r4, r13
+  0008  ConcatStr    r1, r1, r3
+  0009  LoadConst    r5, k1
+  000a  ConcatStr    r1, r1, r5
+  000b  CallHost     r1, h0
+  .line 14
+  000c  LoadGlobalRef r7, g0
+  000d  Move         r14, r7
+  000e  LoadConst    r8, k2
+  000f  Move         r15, r8
+  0010  LoadZero     r16
+  0011  AnsiSameText r13, r14
+  0012  BoolToStr    r6, r13
+  0013  LoadGlobalRef r10, g0
+  0014  Move         r15, r10
+  0015  LoadConst    r11, k3
+  0016  Move         r16, r11
+  0017  LoadInt      r17, 1
+  0018  AnsiCompareText r14, r15
+  0019  IntToStr     r9, r14
+  001a  ConcatStr    r6, r6, r9
+  001b  LoadConst    r12, k1
+  001c  ConcatStr    r6, r6, r12
+  001d  CallHost     r6, h0
+  .line 15
+  001e  RetVoid
+.finally r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12

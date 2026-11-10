@@ -1,0 +1,115 @@
+; puy ir 1
+.global
+  g0 R: TRec
+.func f0 CellAliasWrite.<main> params=0
+  .reg t0: TRec temp
+  .reg t1: string temp
+  .reg t2: TRec temp
+  .reg t3: - ref
+  .reg t4: - ref
+  .reg t5: TRec temp
+  .reg t6: - ref
+  .reg t7: - temp
+  .reg t8: Int64 temp
+  .reg t9: - cell
+  .reg t10: TRec temp
+  .reg t11: - ref
+  .reg t12: - temp
+  .reg t13: Int64 temp
+  .reg t14: - cell
+  .reg t15: string temp
+  .reg t16: Integer temp
+  .reg t17: TRec temp
+  .reg t18: string temp
+  .reg t19: string temp
+  .reg t20: Integer temp
+  .reg t21: TRec temp
+  .reg t22: string temp
+  .reg t23: string temp
+  .reg t24: TRec temp
+  .reg t25: string temp
+bb0:
+  .line 26
+  Release      t0
+  StoreGlobalRef t0, g0
+  .line 27
+  LoadConst    t1, "s"
+  LoadGlobal   t2, g0
+  Unique       t2, CellAliasWrite.TRec
+  StoreGlobal  t2, g0
+  FieldSetRef  t2, 2, t1
+  .line 28
+  LoadGlobal   t5, g0
+  Unique       t5, CellAliasWrite.TRec
+  StoreGlobal  t5, g0
+  MakeGlobalRef t6, g0
+  LoadZero     t8
+  LoadZero     t7
+  MakeCell     t7, t6, 1, t8
+  MoveRef      t9, t7
+  Move         t3, t9
+  LoadGlobal   t10, g0
+  Unique       t10, CellAliasWrite.TRec
+  StoreGlobal  t10, g0
+  MakeGlobalRef t11, g0
+  LoadInt      t13, 2
+  LoadZero     t12
+  MakeCell     t12, t11, 1, t13
+  MoveRef      t14, t12
+  Move         t4, t14
+  Call         -, f1(t3, t4)
+  .line 29
+  LoadGlobal   t17, g0
+  FieldGet     t16, t17, 0
+  IntToStr     t15, t16
+  LoadConst    t18, " "
+  ConcatStr    t15, t15, t18
+  LoadGlobal   t21, g0
+  FieldGet     t20, t21, 1
+  IntToStr     t19, t20
+  ConcatStr    t15, t15, t19
+  LoadConst    t22, " "
+  ConcatStr    t15, t15, t22
+  LoadGlobal   t24, g0
+  FieldGetRef  t23, t24, 2
+  ConcatStr    t15, t15, t23
+  LoadConst    t25, "\n"
+  ConcatStr    t15, t15, t25
+  CallHost     -, h0(t15)
+  .line 30
+  RetVoid
+.finally t0, t1, t9, t14, t15, t18, t19, t22, t23, t25
+.func f1 CellAliasWrite.Touch params=2
+  .reg v0 X: Integer var param
+  .reg v1 T: string var param
+  .reg t0: Integer temp
+  .reg t1: TRec temp
+  .reg t2: string temp
+  .reg t3: TRec temp
+  .reg t4: Integer temp
+  .reg t5: string temp
+  .reg t6: string temp
+bb0:
+  .line 19
+  LoadInt      t0, 1
+  LoadGlobal   t1, g0
+  Unique       t1, CellAliasWrite.TRec
+  StoreGlobal  t1, g0
+  FieldSet     t1, 1, t0
+  .line 20
+  LoadConst    t2, "g"
+  LoadGlobal   t3, g0
+  Unique       t3, CellAliasWrite.TRec
+  StoreGlobal  t3, g0
+  FieldSetRef  t3, 2, t2
+  .line 21
+  LoadInt      t4, 5
+  StoreRef     v0, t4
+  .line 22
+  LoadRefRef   t5, v1
+  LoadConst    t6, "!"
+  ConcatStr    t5, t5, t6
+  StoreRefRef  v1, t5
+  .line 23
+  RetVoid
+.finally t2, t5, t6

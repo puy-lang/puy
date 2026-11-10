@@ -1,0 +1,69 @@
+; puy ir 1
+.global
+  g0 I: Integer
+  g1 Acc: string
+  g2 Part: string
+.func f0 LoopSubstring.<main> params=0
+  .reg v0 -: Int64 hidden
+  .reg t0: string temp
+  .reg t1: Integer temp
+  .reg t2: string temp
+  .reg t3: string temp
+  .reg t4: Integer temp
+  .reg t5: Integer temp
+  .reg t6: string temp
+  .reg t7: string temp
+  .reg t8: string temp
+  .reg t9: string temp
+  .reg t10: string temp
+  .reg t11: string temp
+bb0:
+  .line 10
+  Release      t0
+  StoreGlobalRef t0, g1
+  .line 11
+  LoadInt      v0, 1
+  LoadInt      t1, 5
+  JmpIfLtInt   t1, v0, bb6, bb1
+bb1:
+  .line 11
+  Jmp          bb2
+bb2:
+  .line 11
+  StoreGlobal  v0, g0
+  .line 13
+  LoadConst    t6, "abcdef"
+  Move         t3, t6
+  LoadGlobal   t4, g0
+  LoadInt      t5, 2
+  StrCopy      t2, t3, t4, t5
+  StoreGlobalRef t2, g2
+  .line 14
+  LoadGlobalRef t7, g1
+  LoadGlobalRef t8, g2
+  ConcatStr    t7, t7, t8
+  LoadConst    t9, "/"
+  ConcatStr    t7, t7, t9
+  StoreGlobalRef t7, g1
+  .line 11
+  Jmp          bb3
+bb3:
+  .line 11
+  JmpIfEqInt   v0, t1, bb5, bb4
+bb4:
+  .line 11
+  AddIntI      v0, v0, 1
+  Jmp          bb2
+bb5:
+  .line 11
+  StoreGlobal  v0, g0
+  Jmp          bb6
+bb6:
+  .line 16
+  LoadGlobalRef t10, g1
+  LoadConst    t11, "\n"
+  ConcatStr    t10, t10, t11
+  CallHost     -, h0(t10)
+  .line 17
+  RetVoid
+.finally t0, t2, t6, t7, t8, t9, t10, t11

@@ -1,0 +1,2 @@
+error: uncaught exception EEncodingError: UTF8String cut inside a multibyte character at byte 6
+  at Utf8InsertDelete.<main> (utf8_insert_delete.pas:31)

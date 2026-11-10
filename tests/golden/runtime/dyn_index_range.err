@@ -1,0 +1,2 @@
+error: uncaught exception ERangeError: array index 3 is out of range 0..2
+  at DynIndexRange.<main> (dyn_index_range.pas:15)

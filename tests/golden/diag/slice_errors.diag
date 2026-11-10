@@ -1,0 +1,58 @@
+error[E0720]: a slice is only allowed as the last index
+   --> slice_errors.pas:29:20
+    |
+ 29 |   WriteLn(Length(G[0..1, 2]));
+    |                    ^^^^
+
+error[E0707]: cannot assign to `S[1..2]`
+   --> slice_errors.pas:30:3
+    |
+ 30 |   S[1..2] := 'ab';
+    |   ^^^^^^^ a slice
+
+error[E0707]: cannot assign to `D[0..1][0]`
+   --> slice_errors.pas:31:3
+    |
+ 31 |   D[0..1][0] := 1;
+    |   ^^^^^^^^^^ a slice
+
+error[E0706]: argument 1 must be a variable (parameter `X` is `var`)
+   --> slice_errors.pas:32:10
+    |
+ 12 | procedure Change(var X: string);
+    |                      - declared here
+...
+ 32 |   Change(S[1..2]);
+    |          ^^^^^^^
+
+error[E0706]: argument 1 must be a variable (parameter `X` is `var`)
+   --> slice_errors.pas:33:7
+    |
+ 33 |   Inc(D[..1][0]);
+    |       ^^^^^^^^^
+
+error[E0719]: index type mismatch: expected `Integer`, found `Char`
+   --> slice_errors.pas:34:13
+    |
+ 34 |   WriteLn(S['a'..]);
+    |             ^^^
+
+error[E0719]: index type mismatch: expected `TColor`, found `Integer`
+   --> slice_errors.pas:35:20
+    |
+ 35 |   WriteLn(Length(C[0..1]));
+    |                    ^
+
+error[E0719]: index type mismatch: expected `TColor`, found `Integer`
+   --> slice_errors.pas:35:23
+    |
+ 35 |   WriteLn(Length(C[0..1]));
+    |                       ^
+
+error[E0720]: cannot index a value of type `Integer`
+   --> slice_errors.pas:36:11
+    |
+ 36 |   WriteLn(N[1..2]);
+    |           ^^^^^^^
+
+error: aborting due to 9 errors

@@ -6,6 +6,8 @@ edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 license.workspace = true
+# The public README (publish/README.md, exported to the root of the public repository)
+readme = "../../README.md"
 
 [dependencies]
 puy-core.workspace = true

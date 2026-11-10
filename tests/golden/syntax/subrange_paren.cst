@@ -1,0 +1,311 @@
+SOURCE_FILE@0..595
+  PROGRAM@0..595
+    PROGRAM_HEADER@0..22
+      PROGRAM_KW@0..7 "program"
+      WHITESPACE@7..8 " "
+      IDENT@8..21 "SubrangeParen"
+      SEMICOLON@21..22 ";"
+    NEWLINE@22..23 "\n"
+    NEWLINE@23..24 "\n"
+    LINE_COMMENT@24..115 "// A type that starts with `(` is a subrange when the matching `)` is followed by `..`, and"
+    NEWLINE@115..116 "\n"
+    LINE_COMMENT@116..207 "// an enumeration otherwise (types.md 8.2). A bound ends before `=`, so a typed constant of"
+    NEWLINE@207..208 "\n"
+    LINE_COMMENT@208..252 "// a subrange type reads its value after it."
+    NEWLINE@252..253 "\n"
+    NEWLINE@253..254 "\n"
+    CONST_SECTION@254..268
+      CONST_KW@254..259 "const"
+      NEWLINE@259..260 "\n"
+      WHITESPACE@260..262 "  "
+      CONST_DECL@262..268
+        IDENT@262..263 "A"
+        WHITESPACE@263..264 " "
+        EQ@264..265 "="
+        WHITESPACE@265..266 " "
+        LITERAL@266..267
+          INT_LIT@266..267 "1"
+        SEMICOLON@267..268 ";"
+    NEWLINE@268..269 "\n"
+    NEWLINE@269..270 "\n"
+    TYPE_SECTION@270..343
+      TYPE_KW@270..274 "type"
+      NEWLINE@274..275 "\n"
+      WHITESPACE@275..277 "  "
+      TYPE_DECL@277..301
+        IDENT@277..287 "TFromParen"
+        WHITESPACE@287..288 " "
+        EQ@288..289 "="
+        WHITESPACE@289..290 " "
+        SUBRANGE_TYPE@290..300
+          PAREN_EXPR@290..297
+            L_PAREN@290..291 "("
+            BINARY_EXPR@291..296
+              NAME_REF@291..292
+                IDENT@291..292 "A"
+              WHITESPACE@292..293 " "
+              PLUS@293..294 "+"
+              WHITESPACE@294..295 " "
+              LITERAL@295..296
+                INT_LIT@295..296 "1"
+            R_PAREN@296..297 ")"
+          DOTDOT@297..299 ".."
+          LITERAL@299..300
+            INT_LIT@299..300 "5"
+        SEMICOLON@300..301 ";"
+      NEWLINE@301..302 "\n"
+      WHITESPACE@302..304 "  "
+      TYPE_DECL@304..319
+        IDENT@304..309 "TEnum"
+        WHITESPACE@309..310 " "
+        EQ@310..311 "="
+        WHITESPACE@311..312 " "
+        ENUM_TYPE@312..318
+          L_PAREN@312..313 "("
+          ENUM_VALUE@313..314
+            IDENT@313..314 "B"
+          COMMA@314..315 ","
+          WHITESPACE@315..316 " "
+          ENUM_VALUE@316..317
+            IDENT@316..317 "C"
+          R_PAREN@317..318 ")"
+        SEMICOLON@318..319 ";"
+      NEWLINE@319..320 "\n"
+      WHITESPACE@320..322 "  "
+      TYPE_DECL@322..343
+        IDENT@322..331 "TFromName"
+        WHITESPACE@331..332 " "
+        EQ@332..333 "="
+        WHITESPACE@333..334 " "
+        SUBRANGE_TYPE@334..342
+          NAME_REF@334..335
+            IDENT@334..335 "A"
+          DOTDOT@335..337 ".."
+          BINARY_EXPR@337..342
+            NAME_REF@337..338
+              IDENT@337..338 "A"
+            WHITESPACE@338..339 " "
+            PLUS@339..340 "+"
+            WHITESPACE@340..341 " "
+            LITERAL@341..342
+              INT_LIT@341..342 "2"
+        SEMICOLON@342..343 ";"
+    NEWLINE@343..344 "\n"
+    NEWLINE@344..345 "\n"
+    CONST_SECTION@345..371
+      CONST_KW@345..350 "const"
+      NEWLINE@350..351 "\n"
+      WHITESPACE@351..353 "  "
+      CONST_DECL@353..371
+        IDENT@353..354 "X"
+        COLON@354..355 ":"
+        WHITESPACE@355..356 " "
+        SUBRANGE_TYPE@356..366
+          PAREN_EXPR@356..363
+            L_PAREN@356..357 "("
+            BINARY_EXPR@357..362
+              NAME_REF@357..358
+                IDENT@357..358 "A"
+              WHITESPACE@358..359 " "
+              PLUS@359..360 "+"
+              WHITESPACE@360..361 " "
+              LITERAL@361..362
+                INT_LIT@361..362 "1"
+            R_PAREN@362..363 ")"
+          DOTDOT@363..365 ".."
+          LITERAL@365..366
+            INT_LIT@365..366 "5"
+        WHITESPACE@366..367 " "
+        EQ@367..368 "="
+        WHITESPACE@368..369 " "
+        LITERAL@369..370
+          INT_LIT@369..370 "4"
+        SEMICOLON@370..371 ";"
+    NEWLINE@371..372 "\n"
+    NEWLINE@372..373 "\n"
+    VAR_SECTION@373..409
+      VAR_KW@373..376 "var"
+      NEWLINE@376..377 "\n"
+      WHITESPACE@377..379 "  "
+      VAR_DECL@379..393
+        IDENT_LIST@379..380
+          IDENT@379..380 "P"
+        COLON@380..381 ":"
+        WHITESPACE@381..382 " "
+        TYPE_REF@382..392
+          QUALIFIED_NAME@382..392
+            IDENT@382..392 "TFromParen"
+        SEMICOLON@392..393 ";"
+      NEWLINE@393..394 "\n"
+      WHITESPACE@394..396 "  "
+      VAR_DECL@396..409
+        IDENT_LIST@396..397
+          IDENT@396..397 "N"
+        COLON@397..398 ":"
+        WHITESPACE@398..399 " "
+        TYPE_REF@399..408
+          QUALIFIED_NAME@399..408
+            IDENT@399..408 "TFromName"
+        SEMICOLON@408..409 ";"
+    NEWLINE@409..410 "\n"
+    NEWLINE@410..411 "\n"
+    COMPOUND_STMT@411..593
+      BEGIN_KW@411..416 "begin"
+      NEWLINE@416..417 "\n"
+      WHITESPACE@417..419 "  "
+      ASSIGN_STMT@419..425
+        NAME_REF@419..420
+          IDENT@419..420 "P"
+        WHITESPACE@420..421 " "
+        ASSIGN@421..423 ":="
+        WHITESPACE@423..424 " "
+        LITERAL@424..425
+          INT_LIT@424..425 "2"
+      SEMICOLON@425..426 ";"
+      NEWLINE@426..427 "\n"
+      WHITESPACE@427..429 "  "
+      ASSIGN_STMT@429..435
+        NAME_REF@429..430
+          IDENT@429..430 "N"
+        WHITESPACE@430..431 " "
+        ASSIGN@431..433 ":="
+        WHITESPACE@433..434 " "
+        LITERAL@434..435
+          INT_LIT@434..435 "3"
+      SEMICOLON@435..436 ";"
+      NEWLINE@436..437 "\n"
+      WHITESPACE@437..439 "  "
+      EXPR_STMT@439..494
+        CALL_EXPR@439..494
+          NAME_REF@439..446
+            IDENT@439..446 "WriteLn"
+          ARG_LIST@446..494
+            L_PAREN@446..447 "("
+            ARG@447..462
+              CALL_EXPR@447..462
+                NAME_REF@447..450
+                  IDENT@447..450 "Low"
+                ARG_LIST@450..462
+                  L_PAREN@450..451 "("
+                  ARG@451..461
+                    NAME_REF@451..461
+                      IDENT@451..461 "TFromParen"
+                  R_PAREN@461..462 ")"
+            COMMA@462..463 ","
+            WHITESPACE@463..464 " "
+            ARG@464..467
+              LITERAL@464..467
+                STRING_LIT@464..467 "' '"
+            COMMA@467..468 ","
+            WHITESPACE@468..469 " "
+            ARG@469..485
+              CALL_EXPR@469..485
+                NAME_REF@469..473
+                  IDENT@469..473 "High"
+                ARG_LIST@473..485
+                  L_PAREN@473..474 "("
+                  ARG@474..484
+                    NAME_REF@474..484
+                      IDENT@474..484 "TFromParen"
+                  R_PAREN@484..485 ")"
+            COMMA@485..486 ","
+            WHITESPACE@486..487 " "
+            ARG@487..490
+              LITERAL@487..490
+                STRING_LIT@487..490 "' '"
+            COMMA@490..491 ","
+            WHITESPACE@491..492 " "
+            ARG@492..493
+              NAME_REF@492..493
+                IDENT@492..493 "P"
+            R_PAREN@493..494 ")"
+      SEMICOLON@494..495 ";"
+      NEWLINE@495..496 "\n"
+      WHITESPACE@496..498 "  "
+      EXPR_STMT@498..551
+        CALL_EXPR@498..551
+          NAME_REF@498..505
+            IDENT@498..505 "WriteLn"
+          ARG_LIST@505..551
+            L_PAREN@505..506 "("
+            ARG@506..520
+              CALL_EXPR@506..520
+                NAME_REF@506..509
+                  IDENT@506..509 "Low"
+                ARG_LIST@509..520
+                  L_PAREN@509..510 "("
+                  ARG@510..519
+                    NAME_REF@510..519
+                      IDENT@510..519 "TFromName"
+                  R_PAREN@519..520 ")"
+            COMMA@520..521 ","
+            WHITESPACE@521..522 " "
+            ARG@522..525
+              LITERAL@522..525
+                STRING_LIT@522..525 "' '"
+            COMMA@525..526 ","
+            WHITESPACE@526..527 " "
+            ARG@527..542
+              CALL_EXPR@527..542
+                NAME_REF@527..531
+                  IDENT@527..531 "High"
+                ARG_LIST@531..542
+                  L_PAREN@531..532 "("
+                  ARG@532..541
+                    NAME_REF@532..541
+                      IDENT@532..541 "TFromName"
+                  R_PAREN@541..542 ")"
+            COMMA@542..543 ","
+            WHITESPACE@543..544 " "
+            ARG@544..547
+              LITERAL@544..547
+                STRING_LIT@544..547 "' '"
+            COMMA@547..548 ","
+            WHITESPACE@548..549 " "
+            ARG@549..550
+              NAME_REF@549..550
+                IDENT@549..550 "N"
+            R_PAREN@550..551 ")"
+      SEMICOLON@551..552 ";"
+      NEWLINE@552..553 "\n"
+      WHITESPACE@553..555 "  "
+      EXPR_STMT@555..588
+        CALL_EXPR@555..588
+          NAME_REF@555..562
+            IDENT@555..562 "WriteLn"
+          ARG_LIST@562..588
+            L_PAREN@562..563 "("
+            ARG@563..579
+              CALL_EXPR@563..579
+                NAME_REF@563..566
+                  IDENT@563..566 "Ord"
+                ARG_LIST@566..579
+                  L_PAREN@566..567 "("
+                  ARG@567..578
+                    CALL_EXPR@567..578
+                      NAME_REF@567..571
+                        IDENT@567..571 "High"
+                      ARG_LIST@571..578
+                        L_PAREN@571..572 "("
+                        ARG@572..577
+                          NAME_REF@572..577
+                            IDENT@572..577 "TEnum"
+                        R_PAREN@577..578 ")"
+                  R_PAREN@578..579 ")"
+            COMMA@579..580 ","
+            WHITESPACE@580..581 " "
+            ARG@581..584
+              LITERAL@581..584
+                STRING_LIT@581..584 "' '"
+            COMMA@584..585 ","
+            WHITESPACE@585..586 " "
+            ARG@586..587
+              NAME_REF@586..587
+                IDENT@586..587 "X"
+            R_PAREN@587..588 ")"
+      SEMICOLON@588..589 ";"
+      NEWLINE@589..590 "\n"
+      END_KW@590..593 "end"
+    DOT@593..594 "."
+    NEWLINE@594..595 "\n"
+    EOF@595..595 ""

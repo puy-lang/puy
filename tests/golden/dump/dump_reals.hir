@@ -1,0 +1,126 @@
+program DumpReals uses=System.SysUtils
+.type TPoint = record
+  .field 0 X: Single
+  .field 1 Y: Double
+.global g0 D: Double
+.global g1 S: Single
+.global g2 C: Currency
+.global g3 I: Integer
+.global g4 P: TPoint
+.routine <main>
+  assign @26 R+
+    global g3 I
+    const Integer 3
+  assign @27 R+
+    global g1 S
+    const Single 0.1
+  assign @28 R+
+    global g0 D
+    binary Double
+      convert num->Double
+        global g3 I: Integer
+      / Double real:Double
+        const Double 2
+      + Double real:Double
+        convert num->Double
+          global g1 S: Single
+  assign @29 R+
+    global g2 C
+    const Currency 1.5
+  assign @30 R+
+    global g2 C
+    convert num->Currency
+      binary Double
+        convert num->Double
+          binary Currency
+            global g2 C: Currency
+            * Currency curr
+              convert num->Currency
+                global g3 I: Integer
+        - Double real:Double
+          const Double 0.25
+  assign @31 R+
+    global g4 P
+    const TPoint (X: 0.5; Y: -1.25)
+  if @32
+    cond
+      binary Boolean
+        global g0 D: Double
+        >= Boolean real:Double
+          field Double Y #1
+            global g4 P: TPoint
+    then
+      writeln @33
+        arg
+          global g0 D: Double
+        width
+          const Int64 8
+        precision
+          const Int64 2
+        arg
+          const Char #32
+        arg
+          unary neg Currency curr
+            global g2 C: Currency
+        arg
+          const Char #32
+        arg
+          builtin Trunc Int64
+            global g0 D: Double
+        arg
+          const Char #32
+        arg
+          builtin Round Int64
+            global g2 C: Currency
+        arg
+          const Char #32
+        arg
+          field Single X #0
+            global g4 P: TPoint
+  writeln @34
+    arg
+      builtin Sqrt Double
+        global g0 D: Double
+    arg
+      const Char #32
+    arg
+      builtin Abs Single
+        unary neg Single real:Single
+          global g1 S: Single
+    arg
+      const Char #32
+    arg
+      builtin Sqr Currency
+        global g2 C: Currency
+    arg
+      const Char #32
+    arg
+      builtin FloatToStr string
+        global g1 S: Single
+    arg
+      const Char #32
+    arg
+      builtin StrToFloat Double
+        const string "2.5"
+  writeln @35
+    arg
+      binary Boolean
+        global g0 D: Double
+        <> Boolean real:Double
+          global g0 D: Double
+    arg
+      const Char #32
+    arg
+      binary Boolean
+        global g2 C: Currency
+        = Boolean curr
+          convert num->Currency
+            global g3 I: Integer
+    arg
+      const Char #32
+    arg
+      const Double INF
+    arg
+      const Char #32
+    arg
+      const Double 3.141592653589793

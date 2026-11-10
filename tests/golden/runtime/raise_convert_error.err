@@ -1,0 +1,2 @@
+error: uncaught exception EConvertError: 'x1' is not a valid integer
+  at raise_convert_error.<main> (raise_convert_error.pas:6)

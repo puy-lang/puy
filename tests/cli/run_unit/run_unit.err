@@ -1,0 +1,9 @@
+error[E0408]: a unit cannot be run as a program
+  --> run_unit.pas:2:1
+   |
+ 2 | unit RunUnit;
+   | ^^^^
+   |
+   = note: run a program that uses this unit, or check it with `puy check`
+
+error: aborting due to 1 error

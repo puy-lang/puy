@@ -1,0 +1,19 @@
+error[E2505]: units `A` and `B` depend on each other
+  --> src/C.pas:5:6
+   |
+ 5 | uses A;
+   |      ^
+   |
+   = note: `A` -> `B` -> `C` -> `A`
+   = note: move the shared declarations to a separate unit
+
+error[E2505]: units `Loop.Back` and `Loop.Back` depend on each other
+  --> src/Loop.Back.pas:5:6
+   |
+ 5 | uses Loop.Back;
+   |      ^^^^^^^^^
+   |
+   = note: `Loop.Back` -> `Loop.Back`
+   = note: move the shared declarations to a separate unit
+
+error: aborting due to 2 errors

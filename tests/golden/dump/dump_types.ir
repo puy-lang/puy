@@ -1,0 +1,114 @@
+; puy ir 1
+.global
+  g0 P: TPoint
+  g1 R: TRow
+  g2 I: Integer
+.func f0 DumpTypes.<main> params=0
+  .reg t0: Integer temp
+  .reg t1: TPoint temp
+  .reg t2: TPoint temp
+  .reg t3: Integer temp
+  .reg t4: Int64 temp
+  .reg t5: string temp
+  .reg t6: Int64 temp
+  .reg t7: TRow temp
+  .reg t8: TPoint temp
+  .reg t9: - ref
+  .reg t10: Int64 temp
+  .reg t11: TRow temp
+  .reg t12: TPoint temp
+  .reg t13: - ref
+  .reg t14: - temp
+  .reg t15: Int64 temp
+  .reg t16: Int64 temp
+  .reg t17: - cell
+  .reg t18: string temp
+  .reg t19: Integer temp
+  .reg t20: TPoint temp
+  .reg t21: string temp
+  .reg t22: Integer temp
+  .reg t23: TRow temp
+  .reg t24: Int64 temp
+  .reg t25: TPoint temp
+  .reg t26: string temp
+  .reg t27: TRow temp
+  .reg t28: Int64 temp
+  .reg t29: Int64 temp
+  .reg t30: TPoint temp
+  .reg t31: string temp
+bb0:
+  .line 26
+  LoadInt      t0, 1
+  LoadGlobal   t1, g0
+  Unique       t1, DumpTypes.TPoint
+  StoreGlobal  t1, g0
+  FieldSet     t1, 0, t0
+  .line 27
+  LoadConst    t2, DumpTypes.TPoint (X: 1; Name: "a")
+  StoreGlobalRef t2, g0
+  .line 28
+  LoadInt      t3, 2
+  StoreGlobal  t3, g2
+  .line 29
+  LoadGlobal   t4, g2
+  AddIntI      t4, t4, -1
+  LoadConst    t5, "b"
+  LoadInt      t6, 2
+  ChkIndex     t4, t6, "`TRow` (1..2)"
+  LoadGlobal   t7, g1
+  Unique       t7, DumpTypes.TRow
+  StoreGlobal  t7, g1
+  ValGet       t8, t7, t4
+  Unique       t8, DumpTypes.TPoint
+  ValSet       t7, t4, t8
+  FieldSetRef  t8, 1, t5
+  .line 30
+  LoadZero     t10
+  LoadGlobal   t11, g1
+  Unique       t11, DumpTypes.TRow
+  StoreGlobal  t11, g1
+  ValGet       t12, t11, t10
+  Unique       t12, DumpTypes.TPoint
+  ValSet       t11, t10, t12
+  MakeGlobalRef t13, g1
+  Move         t15, t10
+  LoadZero     t16
+  LoadZero     t14
+  MakeCell     t14, t13, 2, t15, t16
+  MoveRef      t17, t14
+  Move         t9, t17
+  Call         -, f1(t9)
+  .line 31
+  LoadGlobal   t20, g0
+  FieldGet     t19, t20, 0
+  IntToStr     t18, t19
+  LoadGlobal   t23, g1
+  LoadZero     t24
+  ValGet       t25, t23, t24
+  FieldGet     t22, t25, 0
+  IntToStr     t21, t22
+  ConcatStr    t18, t18, t21
+  LoadGlobal   t27, g1
+  LoadGlobal   t28, g2
+  AddIntI      t28, t28, -1
+  LoadInt      t29, 2
+  ChkIndex     t28, t29, "`TRow` (1..2)"
+  ValGet       t30, t27, t28
+  FieldGetRef  t26, t30, 1
+  ConcatStr    t18, t18, t26
+  LoadConst    t31, "\n"
+  ConcatStr    t18, t18, t31
+  CallHost     -, h0(t18)
+  .line 32
+  RetVoid
+.finally t2, t5, t17, t18, t21, t26, t31
+.func f1 DumpTypes.Fill params=1
+  .reg v0 N: Integer var param
+  .reg t0: Integer temp
+bb0:
+  .line 18
+  LoadInt      t0, 3
+  StoreRef     v0, t0
+  .line 19
+  RetVoid
+.finally

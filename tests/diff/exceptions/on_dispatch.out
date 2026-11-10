@@ -1,0 +1,21 @@
+no exception
+EParse: parse (EParse)
+EEmpty: empty
+else branch
+integer error: EDivByZero
+conversion failed
+else branch
+Reraise
+  first handler: parse
+  outer handler: EParse parse
+  first handler: empty
+  outer handler: EEmpty empty
+  outer handler: EOther other
+NotMatched
+  passed through: other
+Bare
+  start caught
+Replace
+  EOther: replaced parse
+Saved
+  TRUE

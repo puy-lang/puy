@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/*"]
 
 [workspace.package]
-version = "0.0.2"
+version = "0.0.3"
 edition = "2024"
 rust-version = "1.99"
 repository = "https://github.com/puy-lang/puy"
@@ -13,11 +13,11 @@ license = "MIT"
 # crates.io needs a version on each path dependency; keep it equal to `workspace.package.version`.
 # puy-testsuite is not published and only used as a dev-dependency, so it has no version
 # (`cargo publish` drops such dev-dependencies).
-puy-core = { path = "crates/puy-core", version = "0.0.2" }
-puy-host = { path = "crates/puy-host", version = "0.0.2" }
-puy-fmt = { path = "crates/puy-fmt", version = "0.0.2" }
-puy-runtime-native = { path = "crates/puy-runtime-native", version = "0.0.2" }
-puy-runtime-wasi = { path = "crates/puy-runtime-wasi", version = "0.0.2" }
+puy-core = { path = "crates/puy-core", version = "0.0.3" }
+puy-host = { path = "crates/puy-host", version = "0.0.3" }
+puy-fmt = { path = "crates/puy-fmt", version = "0.0.3" }
+puy-runtime-native = { path = "crates/puy-runtime-native", version = "0.0.3" }
+puy-runtime-wasi = { path = "crates/puy-runtime-wasi", version = "0.0.3" }
 puy-testsuite = { path = "crates/puy-testsuite" }
 
 # The CST of puy-core (docs/design/compiler-pipeline.md 3.1). MIT / Apache-2.0. Works on WASM

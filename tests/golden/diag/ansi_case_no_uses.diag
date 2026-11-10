@@ -1,0 +1,17 @@
+error[E0700]: undeclared identifier `TCaseMapping`
+  --> ansi_case_no_uses.pas:4:8
+   |
+ 4 | var M: TCaseMapping := TCaseMapping.cmFull;
+   |        ^^^^^^^^^^^^
+   |
+   = fix: add `uses System.SysUtils`
+
+error[E0700]: undeclared identifier `TCaseMapping`
+  --> ansi_case_no_uses.pas:4:24
+   |
+ 4 | var M: TCaseMapping := TCaseMapping.cmFull;
+   |                        ^^^^^^^^^^^^
+   |
+   = fix: add `uses System.SysUtils`
+
+error: aborting due to 2 errors

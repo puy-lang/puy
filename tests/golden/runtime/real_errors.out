@@ -1,0 +1,16 @@
+NAN NAN INF
+1: EInvalidOp: invalid floating-point operation: Trunc(NAN)
+2: EInvalidOp: invalid floating-point operation: Round(INF)
+3: EInvalidOp: invalid floating-point operation: Trunc(-INF)
+4: EInvalidOp: invalid floating-point operation: Round(9.3E18)
+5: EOverflow: Currency overflow
+6: EOverflow: Currency overflow
+7: EOverflow: Currency overflow
+8: EOverflow: Currency overflow
+9: EOverflow: Currency overflow
+10: EOverflow: Currency overflow
+11: EZeroDivide: division by zero
+-922337203685477.5808
+12: EOverflow: Currency overflow
+-9200000000000000000 9200000000000000000
+-2 -2

@@ -1,0 +1,127 @@
+; puy ir 1
+.global
+  g0 A: string
+.func f0 ReturnValues.<main> params=0
+  .reg t0: string temp
+  .reg t1: string temp
+  .reg t2: string temp
+  .reg t3: string temp
+  .reg t4: string temp
+  .reg t5: string temp
+  .reg t6: string temp
+  .reg t7: string temp
+  .reg t8: string temp
+  .reg t9: string temp
+  .reg t10: string temp
+  .reg t11: string temp
+  .reg t12: string temp
+  .reg t13: string temp
+  .reg t14: string temp
+  .reg t15: string temp
+  .reg t16: string temp
+bb0:
+  .line 29
+  LoadConst    t2, "World"
+  Move         t1, t2
+  Call         t1, f1(t1)
+  MoveRef      t0, t1
+  StoreGlobalRef t0, g0
+  .line 30
+  LoadGlobalRef t3, g0
+  LoadConst    t4, "\n"
+  ConcatStr    t3, t3, t4
+  CallHost     -, h0(t3)
+  .line 31
+  LoadZero     t6
+  LoadGlobalRef t6, g0
+  Call         t6, f2(t6)
+  MoveRef      t5, t6
+  LoadConst    t7, "\n"
+  ConcatStr    t5, t5, t7
+  CallHost     -, h0(t5)
+  .line 32
+  LoadZero     t9
+  LoadGlobalRef t9, g0
+  Call         t9, f3(t9)
+  MoveRef      t8, t9
+  LoadConst    t10, "\n"
+  ConcatStr    t8, t8, t10
+  CallHost     -, h0(t8)
+  .line 33
+  LoadZero     t12
+  LoadConst    t12, "single"
+  Call         t12, f3(t12)
+  MoveRef      t11, t12
+  LoadConst    t13, "\n"
+  ConcatStr    t11, t11, t13
+  CallHost     -, h0(t11)
+  .line 34
+  LoadConst    t16, "discarded"
+  Move         t15, t16
+  Call         t15, f1(t15)
+  MoveRef      t14, t15
+  .line 35
+  RetVoid
+.finally t0, t2, t3, t4, t5, t7, t8, t10, t11, t13, t14, t16
+.func f1 ReturnValues.Greet params=1
+  .reg v0 Name: string const param
+  .reg v1 Result: string result
+bb0:
+  .line 8
+  LoadConst    v1, "Hello, "
+  ConcatStr    v1, v1, v0
+  .line 9
+  Ret          v1
+.finally v1
+.func f2 ReturnValues.Same params=1
+  .reg v0 S: string param
+  .reg v1 Result: string result
+bb0:
+  .line 13
+  AssignRef    v1, v0
+  .line 14
+  Ret          v1
+.finally v0, v1
+.func f3 ReturnValues.FirstWord params=1
+  .reg v0 S: string param
+  .reg v1 Result: string result
+  .reg v2 P: Integer local
+  .reg t0: string temp
+  .reg t1: string temp
+  .reg t2: string temp
+  .reg t3: Integer temp
+  .reg t4: string temp
+  .reg t5: Integer temp
+  .reg t6: Integer temp
+  .reg t7: Integer temp
+bb0:
+  .line 20
+  LoadConst    t2, " "
+  Move         t0, t2
+  Move         t1, v0
+  StrPos       v2, t0, t1
+  .line 21
+  LoadZero     t3
+  JmpIfNeInt   v2, t3, bb3, bb1
+bb1:
+  .line 22
+  AssignRef    v1, v0
+  Ret          v1
+bb2:
+  .line 21
+  Jmp          bb4
+bb3:
+  .line 21
+  Jmp          bb4
+bb4:
+  .line 23
+  Move         t4, v0
+  LoadInt      t5, 1
+  Move         t6, v2
+  LoadInt      t7, 1
+  SubInt       t6, t6, t7
+  NarrowOvf    t6, t6, 4
+  StrCopy      v1, t4, t5, t6
+  .line 24
+  Ret          v1
+.finally v0, v1, t2

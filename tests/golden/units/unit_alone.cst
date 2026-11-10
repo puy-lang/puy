@@ -1,0 +1,145 @@
+SOURCE_FILE@0..428
+  LINE_COMMENT@0..97 "// A unit checked on its own (no puy.toml): its syntax, E0414 per section, and the initialization"
+  NEWLINE@97..98 "\n"
+  LINE_COMMENT@98..154 "// sections that are still E3200 (docs/spec/units.md 1)."
+  NEWLINE@154..155 "\n"
+  UNIT@155..428
+    UNIT_HEADER@155..170
+      UNIT_KW@155..159 "unit"
+      WHITESPACE@159..160 " "
+      QUALIFIED_NAME@160..169
+        IDENT@160..169 "UnitAlone"
+      SEMICOLON@169..170 ";"
+    NEWLINE@170..171 "\n"
+    NEWLINE@171..172 "\n"
+    INTERFACE_SECTION@172..254
+      INTERFACE_KW@172..181 "interface"
+      NEWLINE@181..182 "\n"
+      NEWLINE@182..183 "\n"
+      CONST_SECTION@183..203
+        CONST_KW@183..188 "const"
+        NEWLINE@188..189 "\n"
+        WHITESPACE@189..191 "  "
+        CONST_DECL@191..203
+          IDENT@191..197 "Answer"
+          WHITESPACE@197..198 " "
+          EQ@198..199 "="
+          WHITESPACE@199..200 " "
+          LITERAL@200..202
+            INT_LIT@200..202 "42"
+          SEMICOLON@202..203 ";"
+      NEWLINE@203..204 "\n"
+      NEWLINE@204..205 "\n"
+      USES_CLAUSE@205..226
+        USES_KW@205..209 "uses"
+        WHITESPACE@209..210 " "
+        USES_ITEM@210..225
+          QUALIFIED_NAME@210..225
+            IDENT@210..216 "System"
+            DOT@216..217 "."
+            IDENT@217..225 "SysUtils"
+        SEMICOLON@225..226 ";"
+      NEWLINE@226..227 "\n"
+      NEWLINE@227..228 "\n"
+      ROUTINE_HEADER_DECL@228..254
+        ROUTINE_HEADER@228..253
+          FUNCTION_KW@228..236 "function"
+          WHITESPACE@236..237 " "
+          QUALIFIED_NAME@237..245
+            IDENT@237..245 "Describe"
+          COLON@245..246 ":"
+          WHITESPACE@246..247 " "
+          RETURN_TYPE@247..253
+            TYPE_REF@247..253
+              STRING_KW@247..253 "string"
+        SEMICOLON@253..254 ";"
+    NEWLINE@254..255 "\n"
+    NEWLINE@255..256 "\n"
+    IMPLEMENTATION_SECTION@256..354
+      IMPLEMENTATION_KW@256..270 "implementation"
+      NEWLINE@270..271 "\n"
+      NEWLINE@271..272 "\n"
+      USES_CLAUSE@272..285
+        USES_KW@272..276 "uses"
+        WHITESPACE@276..277 " "
+        USES_ITEM@277..284
+          QUALIFIED_NAME@277..284
+            IDENT@277..284 "Missing"
+        SEMICOLON@284..285 ";"
+      NEWLINE@285..286 "\n"
+      NEWLINE@286..287 "\n"
+      ROUTINE_DECL@287..354
+        ROUTINE_HEADER@287..312
+          FUNCTION_KW@287..295 "function"
+          WHITESPACE@295..296 " "
+          QUALIFIED_NAME@296..304
+            IDENT@296..304 "Describe"
+          COLON@304..305 ":"
+          WHITESPACE@305..306 " "
+          RETURN_TYPE@306..312
+            TYPE_REF@306..312
+              STRING_KW@306..312 "string"
+        SEMICOLON@312..313 ";"
+        NEWLINE@313..314 "\n"
+        ROUTINE_BODY@314..353
+          COMPOUND_STMT@314..353
+            BEGIN_KW@314..319 "begin"
+            NEWLINE@319..320 "\n"
+            WHITESPACE@320..322 "  "
+            ASSIGN_STMT@322..348
+              NAME_REF@322..328
+                IDENT@322..328 "Result"
+              WHITESPACE@328..329 " "
+              ASSIGN@329..331 ":="
+              WHITESPACE@331..332 " "
+              CALL_EXPR@332..348
+                NAME_REF@332..340
+                  IDENT@332..340 "IntToStr"
+                ARG_LIST@340..348
+                  L_PAREN@340..341 "("
+                  ARG@341..347
+                    NAME_REF@341..347
+                      IDENT@341..347 "Answer"
+                  R_PAREN@347..348 ")"
+            SEMICOLON@348..349 ";"
+            NEWLINE@349..350 "\n"
+            END_KW@350..353 "end"
+        SEMICOLON@353..354 ";"
+    NEWLINE@354..355 "\n"
+    NEWLINE@355..356 "\n"
+    INIT_SECTION@356..391
+      INITIALIZATION_KW@356..370 "initialization"
+      NEWLINE@370..371 "\n"
+      WHITESPACE@371..373 "  "
+      EXPR_STMT@373..390
+        CALL_EXPR@373..390
+          NAME_REF@373..380
+            IDENT@373..380 "WriteLn"
+          ARG_LIST@380..390
+            L_PAREN@380..381 "("
+            ARG@381..389
+              NAME_REF@381..389
+                IDENT@381..389 "Describe"
+            R_PAREN@389..390 ")"
+      SEMICOLON@390..391 ";"
+    NEWLINE@391..392 "\n"
+    FINAL_SECTION@392..422
+      FINALIZATION_KW@392..404 "finalization"
+      NEWLINE@404..405 "\n"
+      WHITESPACE@405..407 "  "
+      EXPR_STMT@407..421
+        CALL_EXPR@407..421
+          NAME_REF@407..414
+            IDENT@407..414 "WriteLn"
+          ARG_LIST@414..421
+            L_PAREN@414..415 "("
+            ARG@415..420
+              LITERAL@415..420
+                STRING_LIT@415..420 "'bye'"
+            R_PAREN@420..421 ")"
+      SEMICOLON@421..422 ";"
+    NEWLINE@422..423 "\n"
+    END_KW@423..426 "end"
+    DOT@426..427 "."
+    NEWLINE@427..428 "\n"
+    EOF@428..428 ""

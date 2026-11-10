@@ -272,11 +272,13 @@ fn expressions() {
     assert_eq!(rhs.children().nth(1).unwrap().kind(), NAME_REF);
     let p = parse_src(b"X := @Y^;");
     assert_eq!(codes(&p), ["E3004", "E3004"]);
-    let p = parse_src(b"X := [1, 2];");
-    assert_eq!(codes(&p), ["E3200"]);
-    assert!(p.cst.contains("ERROR@5..11"), "{}", p.cst);
-    let p = parse_src(b"Format('%d', [X]);");
-    assert_eq!(codes(&p), ["E3200"]);
+    // Array constructors (types.md chapter 4), with the ranges of set constructors (M2b)
+    let p = assert_clean("X := [1, 2];");
+    assert!(p.cst.contains("ARRAY_CTOR@5..11"), "{}", p.cst);
+    let p = assert_clean("X := ['a'..'z', B];");
+    assert!(p.cst.contains("INDEX_RANGE@6..14"), "{}", p.cst);
+    assert_clean("Format('%d', [X]);");
+    assert_clean("X := [];");
     let p = parse_src(b"X := ;");
     assert_eq!(msgs(&p), ["expected an expression"]);
     assert_eq!(
@@ -318,18 +320,17 @@ fn statements() {
     let p = parse_src(b"begin if X then Y; else Z; end;");
     assert_eq!(codes(&p), ["E0410"]);
     assert!(p.cst.contains("IF_STMT@6..25"), "{}", p.cst);
-    let p = parse_src(b"for I in L do X;");
-    assert_eq!(codes(&p), ["E3200"]);
-    assert!(p.cst.contains("DO_KW"));
+    assert_clean("for I in L do X;");
+    assert_clean("for var S: string in Names do WriteLn(S);");
+    let p = parse_src(b"for var C in do X;");
+    assert_eq!(codes(&p), ["E0403"]);
+    assert!(p.cst.contains("DO_KW"), "{}", p.cst);
     let p = parse_src(b"begin ) end;");
     assert_eq!(codes(&p), ["E0402"]);
-    let p = parse_src(b"try X; except on E: Exception do Y; end;\nZ;");
-    assert_eq!(codes(&p), ["E3200"]);
-    assert!(p.cst.contains("EXPR_STMT"), "{}", p.cst);
+    assert_clean("try X; except on E: Exception do Y; end;\nZ;");
     let p = parse_src(b"with X do begin A := 1; end;\nZ;");
     assert_eq!(codes(&p), ["E3000"]);
-    let p = parse_src(b"case X of 1: Y; else Z; end;\nW;");
-    assert_eq!(codes(&p), ["E3200"]);
+    let p = assert_clean("case X of 1: Y; else Z; end;\nW;");
     assert_eq!(
         p.root
             .children()
@@ -352,8 +353,10 @@ fn declarations() {
     let p = parse_src(b"program P;\nvar I: UInt32 absolute F;\nbegin end.");
     assert_eq!(codes(&p), ["E3005"]);
     assert!(p.cst.contains("ABSOLUTE_KW"));
-    let p = parse_src(b"program P;\nvar A: array of Integer;\nbegin end.");
-    assert_eq!(codes(&p), ["E3200"]);
+    // A set type is read here; its base type is checked by semantic analysis (E0737)
+    let p = parse_src(b"program P;\nvar A: set of Integer;\nbegin end.");
+    assert!(codes(&p).is_empty());
+    assert!(p.cst.contains("SET_TYPE"));
     let p = parse_src(b"program P;\nvar S: string[20];\nbegin end.");
     assert_eq!(codes(&p), ["E3003"]);
     let p = parse_src(b"program P;\nvar X: ;\nbegin end.");
@@ -376,8 +379,10 @@ fn routines() {
     assert_eq!(codes(&p), ["E3005"]);
     let p = parse_src(b"procedure P(Buf);\nbegin end;");
     assert_eq!(codes(&p), ["E0400"]);
+    // A default value is a DEFAULT_VALUE node (semantics.md 4.8)
     let p = parse_src(b"procedure P(X: Integer = 1);\nbegin end;");
-    assert_eq!(codes(&p), ["E3200"]);
+    assert!(codes(&p).is_empty());
+    assert!(p.cst.contains("DEFAULT_VALUE"));
     // Missing begin in a program
     let p = parse_src(b"program P;\nprocedure Q;\nWriteLn('x');\nend;\nbegin\nend.");
     assert_eq!(msgs(&p), ["expected `begin`, found `WriteLn`"]);
@@ -404,15 +409,16 @@ fn routines() {
     let p = parse_src(b"procedure Q;\nX;\nprocedure R;\nbegin end;");
     assert_eq!(codes(&p), ["E0411"]);
     assert!(p.diags[0].fixes.is_empty());
-    // Nested routines
+    // Nested routines are read as declarations of the body
     let p = parse_src(b"procedure Outer;\nvar X: Integer;\n  procedure Inner;\n  begin\n  end;\nbegin\n  Inner;\nend;");
-    assert_eq!(codes(&p), ["E3200"]);
+    assert!(p.diags.is_empty(), "{:?}", p.diags);
     assert!(
         p.cst
-            .contains("ERROR@35..66\n          ROUTINE_DECL@35..66"),
+            .contains("      ROUTINE_BODY@17..85\n        VAR_SECTION@17..32"),
         "{}",
         p.cst
     );
+    assert!(p.cst.contains("        ROUTINE_DECL@35..66"), "{}", p.cst);
     // Directives
     let p = parse_src(b"procedure P; stdcall; deprecated 'x'; external 'a' name 'b'; forward;\nX;");
     assert!(p.diags.is_empty(), "{:?}", p.diags);
@@ -494,22 +500,25 @@ fn nesting_limit() {
 #[test]
 fn nested_routine_limit() {
     let chain = |n: usize| format!("{}{}", "procedure P;\n".repeat(n), "begin end;\n".repeat(n));
-    assert_eq!(codes(&parse_src(chain(256).as_bytes())), ["E3200"]);
-    // Past the limit, the rest is skipped so that diagnostics such as the `begin` at the end of the file do not cascade
-    assert_eq!(codes(&parse_src(chain(257).as_bytes())), ["E3200", "E0413"]);
     assert_eq!(
-        codes(&parse_src(chain(20000).as_bytes())),
-        ["E3200", "E0413"]
+        codes(&parse_src(chain(256).as_bytes())),
+        Vec::<String>::new()
     );
+    // Past the limit, the rest is skipped so that diagnostics such as the `begin` at the end of the file do not cascade
+    assert_eq!(codes(&parse_src(chain(257).as_bytes())), ["E0413"]);
+    assert_eq!(codes(&parse_src(chain(20000).as_bytes())), ["E0413"]);
 }
 
+// A file starting with `unit` is read as a unit (`docs/spec/units.md` chapter 1; M1 made it E3200).
 #[test]
 fn unit_file() {
     let p = parse_src(b"unit Foo;\ninterface\nimplementation\nend.");
-    assert_eq!(codes(&p), ["E3200"]);
+    assert_eq!(codes(&p), Vec::<String>::new());
     assert!(
         p.cst
-            .starts_with("SOURCE_FILE@0..39\n  SCRIPT@0..39\n    ERROR@0..39")
+            .starts_with("SOURCE_FILE@0..39\n  UNIT@0..39\n    UNIT_HEADER@0..9\n"),
+        "{}",
+        p.cst
     );
 }
 
@@ -544,4 +553,31 @@ fn lossless_under_errors() {
         assert_eq!(p.root.text().to_string(), src, "lossless: {src}");
         assert!(!p.diags.is_empty(), "{src}");
     }
+}
+
+#[test]
+// `TArray<T>` in type positions (a variable, a parameter, a return type, nested) and open array
+// parameters read as types; `array of const` parameters are E3200 (types.md chapter 1, 2.4).
+fn generic_and_open_array_types() {
+    let p = assert_clean(
+        "program P;\nfunction F(A: array of Integer; const B: TArray<TArray<string>>): TArray<Integer>; begin end;\nvar X: TArray<Integer>;\nbegin end.",
+    );
+    assert_eq!(p.cst.matches("GENERIC_TYPE_REF@").count(), 4, "{}", p.cst);
+    assert!(p.cst.contains("ARRAY_TYPE@"), "{}", p.cst);
+    let p = parse_src(b"program P;\nprocedure Q(const A: array of const); begin end;\nbegin end.");
+    assert_eq!(codes(&p), ["E3200"]);
+}
+
+#[test]
+fn slice_index_items() {
+    // A `..` inside an index makes a SLICE node spanning the bounds that are written
+    // (types.md 8.7); the other items of the index stay plain expressions.
+    let p = assert_clean("X := S[1..2];");
+    assert!(p.cst.contains("SLICE@7..11"), "{}", p.cst);
+    let p = assert_clean("X := S[..];");
+    assert!(p.cst.contains("SLICE@7..9"), "{}", p.cst);
+    let p = assert_clean("X := A[I, ..H];");
+    assert!(p.cst.contains("SLICE@10..13"), "{}", p.cst);
+    let p = assert_clean("X := A[L.., J];");
+    assert!(p.cst.contains("SLICE@7..10"), "{}", p.cst);
 }

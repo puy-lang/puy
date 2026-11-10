@@ -55,11 +55,30 @@ ast_node!(UsesItem, USES_ITEM);
 ast_node!(QualifiedName, QUALIFIED_NAME);
 ast_node!(ConstSection, CONST_SECTION);
 ast_node!(ConstDecl, CONST_DECL);
+ast_node!(ResStringSection, RESOURCESTRING_SECTION);
 ast_node!(VarSection, VAR_SECTION);
 ast_node!(VarDecl, VAR_DECL);
 ast_node!(IdentList, IDENT_LIST);
 ast_node!(TypeRef, TYPE_REF);
-ast_node!(RoutineDecl, ROUTINE_DECL);
+/// A routine declaration (`ROUTINE_DECL`), or a heading in the `interface` section of a unit
+/// (`ROUTINE_HEADER_DECL`, which has no body; `docs/spec/units.md` chapter 1).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct RoutineDecl(SyntaxNode);
+
+impl AstNode for RoutineDecl {
+    fn cast(node: SyntaxNode) -> Option<Self> {
+        matches!(node.kind(), ROUTINE_DECL | ROUTINE_HEADER_DECL).then_some(RoutineDecl(node))
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.0
+    }
+}
+ast_node!(Unit, UNIT);
+ast_node!(UnitHeader, UNIT_HEADER);
+ast_node!(InterfaceSection, INTERFACE_SECTION);
+ast_node!(ImplementationSection, IMPLEMENTATION_SECTION);
+ast_node!(InitSection, INIT_SECTION);
+ast_node!(FinalSection, FINAL_SECTION);
 ast_node!(RoutineHeader, ROUTINE_HEADER);
 ast_node!(ParamList, PARAM_LIST);
 ast_node!(ParamGroup, PARAM_GROUP);
@@ -91,6 +110,33 @@ ast_node!(DerefExpr, DEREF_EXPR);
 ast_node!(NilExpr, NIL_EXPR);
 ast_node!(InheritedExpr, INHERITED_EXPR);
 ast_node!(ErrorNode, ERROR_NODE);
+ast_node!(TypeSection, TYPE_SECTION);
+ast_node!(TypeDecl, TYPE_DECL);
+ast_node!(RecordType, RECORD_TYPE);
+ast_node!(FieldDecl, FIELD_DECL);
+ast_node!(ArrayType, ARRAY_TYPE);
+ast_node!(IndexRange, INDEX_RANGE);
+ast_node!(Slice, SLICE);
+ast_node!(RecordConst, RECORD_CONST);
+ast_node!(FieldConst, FIELD_CONST);
+ast_node!(ArrayConst, ARRAY_CONST);
+ast_node!(ArrayCtor, ARRAY_CTOR);
+ast_node!(GenericTypeRef, GENERIC_TYPE_REF);
+ast_node!(RaiseStmt, RAISE_STMT);
+ast_node!(ClassType, CLASS_TYPE);
+ast_node!(TryStmt, TRY_STMT);
+ast_node!(ExceptBlock, EXCEPT_BLOCK);
+ast_node!(FinallyBlock, FINALLY_BLOCK);
+ast_node!(ExceptionHandler, EXCEPTION_HANDLER);
+ast_node!(HandlerElse, HANDLER_ELSE);
+ast_node!(EnumType, ENUM_TYPE);
+ast_node!(EnumValue, ENUM_VALUE);
+ast_node!(SubrangeType, SUBRANGE_TYPE);
+ast_node!(SetType, SET_TYPE);
+ast_node!(CaseStmt, CASE_STMT);
+ast_node!(CaseArm, CASE_ARM);
+ast_node!(CaseLabel, CASE_LABEL);
+ast_node!(CaseElse, CASE_ELSE);
 
 impl SourceFile {
     pub fn program(&self) -> Option<Program> {
@@ -98,6 +144,83 @@ impl SourceFile {
     }
     pub fn script(&self) -> Option<Script> {
         child(&self.0)
+    }
+    pub fn unit(&self) -> Option<Unit> {
+        child(&self.0)
+    }
+}
+
+impl Unit {
+    pub fn header(&self) -> Option<UnitHeader> {
+        child(&self.0)
+    }
+    pub fn interface(&self) -> Option<InterfaceSection> {
+        child(&self.0)
+    }
+    pub fn implementation(&self) -> Option<ImplementationSection> {
+        child(&self.0)
+    }
+    /// `initialization` (or the old form `begin`).
+    pub fn initialization(&self) -> Option<InitSection> {
+        child(&self.0)
+    }
+    pub fn finalization(&self) -> Option<FinalSection> {
+        child(&self.0)
+    }
+    /// The final `end`.
+    pub fn end_token(&self) -> Option<SyntaxToken> {
+        token(&self.0, END_KW)
+    }
+    /// The `unit` keyword.
+    pub fn unit_token(&self) -> Option<SyntaxToken> {
+        self.header().and_then(|h| token(&h.0, UNIT_KW))
+    }
+}
+
+impl UnitHeader {
+    pub fn name(&self) -> Option<QualifiedName> {
+        child(&self.0)
+    }
+    pub fn directives(&self) -> impl Iterator<Item = RoutineDirective> {
+        children(&self.0)
+    }
+}
+
+impl InterfaceSection {
+    /// The declarations, including `uses` (headings are `Item::Routine`).
+    pub fn items(&self) -> impl Iterator<Item = Item> {
+        self.0.children().filter_map(Item::cast)
+    }
+    pub fn keyword(&self) -> Option<SyntaxToken> {
+        token(&self.0, INTERFACE_KW)
+    }
+}
+
+impl InitSection {
+    pub fn stmts(&self) -> impl Iterator<Item = Stmt> {
+        self.0.children().filter_map(Stmt::cast)
+    }
+    /// `initialization` or `begin`.
+    pub fn keyword(&self) -> Option<SyntaxToken> {
+        token(&self.0, INITIALIZATION_KW).or_else(|| token(&self.0, BEGIN_KW))
+    }
+}
+
+impl FinalSection {
+    pub fn stmts(&self) -> impl Iterator<Item = Stmt> {
+        self.0.children().filter_map(Stmt::cast)
+    }
+    pub fn keyword(&self) -> Option<SyntaxToken> {
+        token(&self.0, FINALIZATION_KW)
+    }
+}
+
+impl ImplementationSection {
+    pub fn items(&self) -> impl Iterator<Item = Item> {
+        self.0.children().filter_map(Item::cast)
+    }
+    pub fn keyword(&self) -> Option<SyntaxToken> {
+        token(&self.0, IMPLEMENTATION_KW)
     }
 }
 
@@ -134,7 +257,9 @@ impl Script {
 pub enum Item {
     Uses(UsesClause),
     Const(ConstSection),
+    ResString(ResStringSection),
     Var(VarSection),
+    Type(TypeSection),
     Routine(RoutineDecl),
     Error(ErrorNode),
 }
@@ -144,8 +269,10 @@ impl Item {
         Some(match node.kind() {
             USES_CLAUSE => Item::Uses(UsesClause(node)),
             CONST_SECTION => Item::Const(ConstSection(node)),
+            RESOURCESTRING_SECTION => Item::ResString(ResStringSection(node)),
             VAR_SECTION => Item::Var(VarSection(node)),
-            ROUTINE_DECL => Item::Routine(RoutineDecl(node)),
+            TYPE_SECTION => Item::Type(TypeSection(node)),
+            ROUTINE_DECL | ROUTINE_HEADER_DECL => Item::Routine(RoutineDecl(node)),
             ERROR_NODE => Item::Error(ErrorNode(node)),
             _ => return None,
         })
@@ -157,7 +284,9 @@ impl Item {
 pub enum ScriptItem {
     Uses(UsesClause),
     Const(ConstSection),
+    ResString(ResStringSection),
     Var(VarSection),
+    Type(TypeSection),
     Routine(RoutineDecl),
     Stmt(Stmt),
     Error(ErrorNode),
@@ -168,7 +297,9 @@ impl ScriptItem {
         Some(match node.kind() {
             USES_CLAUSE => ScriptItem::Uses(UsesClause(node)),
             CONST_SECTION => ScriptItem::Const(ConstSection(node)),
+            RESOURCESTRING_SECTION => ScriptItem::ResString(ResStringSection(node)),
             VAR_SECTION => ScriptItem::Var(VarSection(node)),
+            TYPE_SECTION => ScriptItem::Type(TypeSection(node)),
             ROUTINE_DECL => ScriptItem::Routine(RoutineDecl(node)),
             ERROR_NODE => ScriptItem::Error(ErrorNode(node)),
             _ => ScriptItem::Stmt(Stmt::cast(node)?),
@@ -223,12 +354,18 @@ impl ConstSection {
     }
 }
 
+impl ResStringSection {
+    pub fn decls(&self) -> impl Iterator<Item = ConstDecl> {
+        children(&self.0)
+    }
+}
+
 impl ConstDecl {
     pub fn name(&self) -> Option<SyntaxToken> {
         token(&self.0, IDENT)
     }
-    pub fn type_ref(&self) -> Option<TypeRef> {
-        child(&self.0)
+    pub fn type_ref(&self) -> Option<TypeSpec> {
+        self.0.children().find_map(TypeSpec::cast)
     }
     pub fn value(&self) -> Option<Expr> {
         self.0.children().find_map(Expr::cast)
@@ -250,8 +387,8 @@ impl VarDecl {
             .map(|l| l.idents().collect())
             .unwrap_or_default()
     }
-    pub fn type_ref(&self) -> Option<TypeRef> {
-        child(&self.0)
+    pub fn type_ref(&self) -> Option<TypeSpec> {
+        self.0.children().find_map(TypeSpec::cast)
     }
     pub fn eq_token(&self) -> Option<SyntaxToken> {
         token(&self.0, EQ)
@@ -271,6 +408,309 @@ impl VarDecl {
 impl IdentList {
     pub fn idents(&self) -> impl Iterator<Item = SyntaxToken> {
         tokens(&self.0, IDENT)
+    }
+}
+
+/// A type written in a declaration: a name, or an anonymous `record` / `array` type (`docs/spec/types.md` chapter 1).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum TypeSpec {
+    Ref(TypeRef),
+    /// `TArray<T>` (`docs/spec/types.md` chapter 1).
+    Generic(GenericTypeRef),
+    Record(RecordType),
+    Array(ArrayType),
+    /// `class(Parent)`: an exception class (`docs/spec/exceptions.md` chapter 3).
+    Class(ClassType),
+    /// `(Red, Green, Blue)` (`docs/spec/types.md` 8.1).
+    Enum(EnumType),
+    /// `0..9` (`docs/spec/types.md` 8.2).
+    Subrange(SubrangeType),
+    /// `set of T` (`docs/spec/types.md` 8.3).
+    Set(SetType),
+}
+
+impl TypeSpec {
+    pub fn cast(node: SyntaxNode) -> Option<TypeSpec> {
+        Some(match node.kind() {
+            TYPE_REF => TypeSpec::Ref(TypeRef(node)),
+            GENERIC_TYPE_REF => TypeSpec::Generic(GenericTypeRef(node)),
+            RECORD_TYPE => TypeSpec::Record(RecordType(node)),
+            ARRAY_TYPE => TypeSpec::Array(ArrayType(node)),
+            CLASS_TYPE => TypeSpec::Class(ClassType(node)),
+            ENUM_TYPE => TypeSpec::Enum(EnumType(node)),
+            SUBRANGE_TYPE => TypeSpec::Subrange(SubrangeType(node)),
+            SET_TYPE => TypeSpec::Set(SetType(node)),
+            _ => return None,
+        })
+    }
+    pub fn syntax(&self) -> &SyntaxNode {
+        match self {
+            TypeSpec::Ref(n) => &n.0,
+            TypeSpec::Generic(n) => &n.0,
+            TypeSpec::Record(n) => &n.0,
+            TypeSpec::Array(n) => &n.0,
+            TypeSpec::Class(n) => &n.0,
+            TypeSpec::Enum(n) => &n.0,
+            TypeSpec::Subrange(n) => &n.0,
+            TypeSpec::Set(n) => &n.0,
+        }
+    }
+    /// The type name, if the type is written as a name.
+    pub fn as_ref(&self) -> Option<&TypeRef> {
+        match self {
+            TypeSpec::Ref(r) => Some(r),
+            _ => None,
+        }
+    }
+    /// The spelling as written (for fix messages).
+    pub fn text(&self) -> String {
+        match self {
+            TypeSpec::Ref(r) => r.text(),
+            _ => self.syntax().text().to_string(),
+        }
+    }
+}
+
+impl TypeSection {
+    pub fn decls(&self) -> impl Iterator<Item = TypeDecl> {
+        children(&self.0)
+    }
+}
+
+impl TypeDecl {
+    pub fn name(&self) -> Option<SyntaxToken> {
+        token(&self.0, IDENT)
+    }
+    pub fn type_spec(&self) -> Option<TypeSpec> {
+        self.0.children().find_map(TypeSpec::cast)
+    }
+}
+
+impl EnumType {
+    pub fn values(&self) -> impl Iterator<Item = EnumValue> {
+        children(&self.0)
+    }
+}
+
+impl EnumValue {
+    pub fn name(&self) -> Option<SyntaxToken> {
+        token(&self.0, IDENT)
+    }
+    /// The ordinal written after `=`.
+    pub fn value(&self) -> Option<Expr> {
+        self.0.children().find_map(Expr::cast)
+    }
+}
+
+impl SubrangeType {
+    /// The two bounds.
+    pub fn bounds(&self) -> (Option<Expr>, Option<Expr>) {
+        let mut it = self.0.children().filter_map(Expr::cast);
+        (it.next(), it.next())
+    }
+}
+
+impl RecordType {
+    pub fn packed_token(&self) -> Option<SyntaxToken> {
+        token(&self.0, PACKED_KW)
+    }
+    pub fn record_token(&self) -> Option<SyntaxToken> {
+        token(&self.0, RECORD_KW)
+    }
+    pub fn fields(&self) -> impl Iterator<Item = FieldDecl> {
+        children(&self.0)
+    }
+}
+
+impl FieldDecl {
+    pub fn names(&self) -> Vec<SyntaxToken> {
+        child::<IdentList>(&self.0)
+            .map(|l| l.idents().collect())
+            .unwrap_or_default()
+    }
+    pub fn type_spec(&self) -> Option<TypeSpec> {
+        self.0.children().find_map(TypeSpec::cast)
+    }
+}
+
+impl ArrayType {
+    pub fn array_token(&self) -> Option<SyntaxToken> {
+        token(&self.0, ARRAY_KW)
+    }
+    /// The index ranges in brackets (empty for `array of T`).
+    pub fn ranges(&self) -> Vec<IndexRange> {
+        children(&self.0).collect()
+    }
+    /// Whether the type has brackets (a static array).
+    pub fn has_brackets(&self) -> bool {
+        token(&self.0, L_BRACK).is_some()
+    }
+    pub fn element(&self) -> Option<TypeSpec> {
+        self.0.children().find_map(TypeSpec::cast)
+    }
+}
+
+impl SetType {
+    pub fn set_token(&self) -> Option<SyntaxToken> {
+        token(&self.0, SET_KW)
+    }
+    /// The base type after `of`.
+    pub fn base(&self) -> Option<TypeSpec> {
+        self.0.children().find_map(TypeSpec::cast)
+    }
+}
+
+impl IndexRange {
+    /// `L..H`: the two bounds. A single expression (a type name) has only `low`.
+    pub fn bounds(&self) -> (Option<Expr>, Option<Expr>) {
+        let mut it = self.0.children().filter_map(Expr::cast);
+        (it.next(), it.next())
+    }
+    pub fn is_range(&self) -> bool {
+        token(&self.0, DOTDOT).is_some()
+    }
+}
+
+impl RecordConst {
+    pub fn fields(&self) -> impl Iterator<Item = FieldConst> {
+        children(&self.0)
+    }
+}
+
+impl FieldConst {
+    pub fn name(&self) -> Option<SyntaxToken> {
+        token(&self.0, IDENT)
+    }
+    pub fn value(&self) -> Option<Expr> {
+        self.0.children().find_map(Expr::cast)
+    }
+}
+
+impl ArrayConst {
+    pub fn elements(&self) -> impl Iterator<Item = Expr> {
+        self.0.children().filter_map(Expr::cast)
+    }
+}
+
+/// One element of an array constructor: an expression, or a range `L..H` (a set constructor, M2b).
+#[derive(Debug, Clone)]
+pub enum CtorElem {
+    Expr(Expr),
+    Range(IndexRange),
+}
+
+impl ArrayCtor {
+    pub fn l_brack(&self) -> Option<SyntaxToken> {
+        token(&self.0, L_BRACK)
+    }
+    pub fn elements(&self) -> Vec<CtorElem> {
+        self.0
+            .children()
+            .filter_map(|n| match n.kind() {
+                INDEX_RANGE => Some(CtorElem::Range(IndexRange(n))),
+                _ => Expr::cast(n).map(CtorElem::Expr),
+            })
+            .collect()
+    }
+}
+
+impl ClassType {
+    /// The parent class.
+    pub fn parent(&self) -> Option<TypeRef> {
+        child(&self.0)
+    }
+    pub fn class_token(&self) -> Option<SyntaxToken> {
+        token(&self.0, CLASS_KW)
+    }
+}
+
+impl RaiseStmt {
+    /// The raised expression (`None` for `raise;`).
+    pub fn expr(&self) -> Option<Expr> {
+        self.0.children().find_map(Expr::cast)
+    }
+    pub fn raise_token(&self) -> Option<SyntaxToken> {
+        token(&self.0, RAISE_KW)
+    }
+}
+
+impl TryStmt {
+    pub fn try_token(&self) -> Option<SyntaxToken> {
+        token(&self.0, TRY_KW)
+    }
+    /// The statements of the body (between `try` and `except` / `finally`).
+    pub fn body(&self) -> impl Iterator<Item = Stmt> {
+        self.0.children().filter_map(Stmt::cast)
+    }
+    pub fn except_block(&self) -> Option<ExceptBlock> {
+        child(&self.0)
+    }
+    pub fn finally_block(&self) -> Option<FinallyBlock> {
+        child(&self.0)
+    }
+}
+
+impl ExceptBlock {
+    pub fn except_token(&self) -> Option<SyntaxToken> {
+        token(&self.0, EXCEPT_KW)
+    }
+    /// The statements of a bare `except` (no handlers).
+    pub fn stmts(&self) -> impl Iterator<Item = Stmt> {
+        self.0.children().filter_map(Stmt::cast)
+    }
+    pub fn handlers(&self) -> impl Iterator<Item = ExceptionHandler> {
+        children(&self.0)
+    }
+    pub fn else_branch(&self) -> Option<HandlerElse> {
+        child(&self.0)
+    }
+}
+
+impl FinallyBlock {
+    pub fn finally_token(&self) -> Option<SyntaxToken> {
+        token(&self.0, FINALLY_KW)
+    }
+    pub fn stmts(&self) -> impl Iterator<Item = Stmt> {
+        self.0.children().filter_map(Stmt::cast)
+    }
+}
+
+impl ExceptionHandler {
+    pub fn on_token(&self) -> Option<SyntaxToken> {
+        token(&self.0, ON_KW)
+    }
+    /// The exception variable (`E` in `on E: T do`).
+    pub fn name(&self) -> Option<SyntaxToken> {
+        token(&self.0, IDENT)
+    }
+    pub fn type_ref(&self) -> Option<TypeRef> {
+        child(&self.0)
+    }
+    pub fn body(&self) -> Option<Stmt> {
+        self.0.children().find_map(Stmt::cast)
+    }
+}
+
+impl HandlerElse {
+    pub fn else_token(&self) -> Option<SyntaxToken> {
+        token(&self.0, ELSE_KW)
+    }
+    pub fn stmts(&self) -> impl Iterator<Item = Stmt> {
+        self.0.children().filter_map(Stmt::cast)
+    }
+}
+
+impl GenericTypeRef {
+    /// The generic type's name (`TArray`).
+    pub fn name(&self) -> Option<QualifiedName> {
+        child(&self.0)
+    }
+    /// The type argument.
+    pub fn arg(&self) -> Option<TypeSpec> {
+        self.0.children().find_map(TypeSpec::cast)
+    }
+    pub fn lt_token(&self) -> Option<SyntaxToken> {
+        token(&self.0, LT)
     }
 }
 
@@ -330,8 +770,8 @@ impl RoutineHeader {
             .map(|l| l.groups().collect())
             .unwrap_or_default()
     }
-    pub fn return_type(&self) -> Option<TypeRef> {
-        child::<ReturnType>(&self.0).and_then(|r| child(&r.0))
+    pub fn return_type(&self) -> Option<TypeSpec> {
+        child::<ReturnType>(&self.0).and_then(|r| r.0.children().find_map(TypeSpec::cast))
     }
 }
 
@@ -367,8 +807,16 @@ impl ParamGroup {
             .map(|l| l.idents().collect())
             .unwrap_or_default()
     }
-    pub fn type_ref(&self) -> Option<TypeRef> {
-        child(&self.0)
+    pub fn type_ref(&self) -> Option<TypeSpec> {
+        self.0.children().find_map(TypeSpec::cast)
+    }
+    /// The `DEFAULT_VALUE` node (`"=" Expr`; `docs/spec/semantics.md` 4.8).
+    pub fn default_node(&self) -> Option<SyntaxNode> {
+        self.0.children().find(|n| n.kind() == DEFAULT_VALUE)
+    }
+    /// The expression of the default value.
+    pub fn default_value(&self) -> Option<Expr> {
+        self.default_node()?.children().find_map(Expr::cast)
     }
 }
 
@@ -410,6 +858,9 @@ pub enum Stmt {
     While(WhileStmt),
     Repeat(RepeatStmt),
     For(ForStmt),
+    Raise(RaiseStmt),
+    Try(TryStmt),
+    Case(CaseStmt),
     Error(ErrorNode),
 }
 
@@ -425,6 +876,9 @@ impl Stmt {
             WHILE_STMT => Stmt::While(WhileStmt(node)),
             REPEAT_STMT => Stmt::Repeat(RepeatStmt(node)),
             FOR_STMT => Stmt::For(ForStmt(node)),
+            RAISE_STMT => Stmt::Raise(RaiseStmt(node)),
+            TRY_STMT => Stmt::Try(TryStmt(node)),
+            CASE_STMT => Stmt::Case(CaseStmt(node)),
             ERROR_NODE => Stmt::Error(ErrorNode(node)),
             _ => return None,
         })
@@ -441,6 +895,9 @@ impl Stmt {
             Stmt::While(n) => &n.0,
             Stmt::Repeat(n) => &n.0,
             Stmt::For(n) => &n.0,
+            Stmt::Raise(n) => &n.0,
+            Stmt::Try(n) => &n.0,
+            Stmt::Case(n) => &n.0,
             Stmt::Error(n) => &n.0,
         }
     }
@@ -480,8 +937,8 @@ impl InlineVarDecl {
     pub fn name(&self) -> Option<SyntaxToken> {
         token(&self.0, IDENT)
     }
-    pub fn type_ref(&self) -> Option<TypeRef> {
-        child(&self.0)
+    pub fn type_ref(&self) -> Option<TypeSpec> {
+        self.0.children().find_map(TypeSpec::cast)
     }
     pub fn initializer(&self) -> Option<Expr> {
         token(&self.0, ASSIGN)?;
@@ -493,8 +950,8 @@ impl InlineConstDecl {
     pub fn name(&self) -> Option<SyntaxToken> {
         token(&self.0, IDENT)
     }
-    pub fn type_ref(&self) -> Option<TypeRef> {
-        child(&self.0)
+    pub fn type_ref(&self) -> Option<TypeSpec> {
+        self.0.children().find_map(TypeSpec::cast)
     }
     pub fn value(&self) -> Option<Expr> {
         self.0.children().find_map(Expr::cast)
@@ -513,6 +970,66 @@ impl IfStmt {
     }
     pub fn then_token(&self) -> Option<SyntaxToken> {
         token(&self.0, THEN_KW)
+    }
+}
+
+impl CaseStmt {
+    pub fn case_token(&self) -> Option<SyntaxToken> {
+        token(&self.0, CASE_KW)
+    }
+    /// The selector (the expression between `case` and `of`).
+    pub fn selector(&self) -> Option<Expr> {
+        self.0.children().find_map(Expr::cast)
+    }
+    pub fn arms(&self) -> impl Iterator<Item = CaseArm> {
+        children(&self.0)
+    }
+    pub fn else_branch(&self) -> Option<CaseElse> {
+        child(&self.0)
+    }
+}
+
+impl CaseArm {
+    pub fn labels(&self) -> impl Iterator<Item = CaseLabel> {
+        children(&self.0)
+    }
+    pub fn colon_token(&self) -> Option<SyntaxToken> {
+        token(&self.0, COLON)
+    }
+    /// The statement after `:` (the last statement child: an `ERROR` node before `:` is not it).
+    pub fn body(&self) -> Option<Stmt> {
+        let colon = self.colon_token()?.text_range().end();
+        self.0
+            .children()
+            .filter(|n| n.text_range().start() >= colon)
+            .find_map(Stmt::cast)
+    }
+}
+
+impl CaseLabel {
+    /// The value, or the lower bound of a range.
+    pub fn low(&self) -> Option<Expr> {
+        self.0.children().find_map(Expr::cast)
+    }
+    /// The upper bound of a range (`None` for a single value).
+    pub fn high(&self) -> Option<Expr> {
+        let dots = token(&self.0, DOTDOT)?.text_range().end();
+        self.0
+            .children()
+            .filter(|n| n.text_range().start() >= dots)
+            .find_map(Expr::cast)
+    }
+    pub fn is_range(&self) -> bool {
+        token(&self.0, DOTDOT).is_some()
+    }
+}
+
+impl CaseElse {
+    pub fn else_token(&self) -> Option<SyntaxToken> {
+        token(&self.0, ELSE_KW)
+    }
+    pub fn stmts(&self) -> impl Iterator<Item = Stmt> {
+        self.0.children().filter_map(Stmt::cast)
     }
 }
 
@@ -564,6 +1081,10 @@ impl ForStmt {
     pub fn is_downto(&self) -> bool {
         token(&self.0, DOWNTO_KW).is_some()
     }
+    /// `for X in C` (`docs/spec/types.md` chapter 5); the collection is `from()`.
+    pub fn is_in(&self) -> bool {
+        token(&self.0, IN_KW).is_some()
+    }
     pub fn body(&self) -> Option<Stmt> {
         self.0.children().find_map(Stmt::cast)
     }
@@ -579,8 +1100,8 @@ impl ForVar {
     pub fn name(&self) -> Option<SyntaxToken> {
         token(&self.0, IDENT)
     }
-    pub fn type_ref(&self) -> Option<TypeRef> {
-        child(&self.0)
+    pub fn type_ref(&self) -> Option<TypeSpec> {
+        self.0.children().find_map(TypeSpec::cast)
     }
 }
 
@@ -599,6 +1120,9 @@ pub enum Expr {
     Deref(DerefExpr),
     Nil(NilExpr),
     Inherited(InheritedExpr),
+    RecordConst(RecordConst),
+    ArrayConst(ArrayConst),
+    ArrayCtor(ArrayCtor),
     Error(ErrorNode),
 }
 
@@ -616,6 +1140,9 @@ impl Expr {
             DEREF_EXPR => Expr::Deref(DerefExpr(node)),
             NIL_EXPR => Expr::Nil(NilExpr(node)),
             INHERITED_EXPR => Expr::Inherited(InheritedExpr(node)),
+            RECORD_CONST => Expr::RecordConst(RecordConst(node)),
+            ARRAY_CONST => Expr::ArrayConst(ArrayConst(node)),
+            ARRAY_CTOR => Expr::ArrayCtor(ArrayCtor(node)),
             ERROR_NODE => Expr::Error(ErrorNode(node)),
             _ => return None,
         })
@@ -634,6 +1161,9 @@ impl Expr {
             Expr::Deref(n) => &n.0,
             Expr::Nil(n) => &n.0,
             Expr::Inherited(n) => &n.0,
+            Expr::RecordConst(n) => &n.0,
+            Expr::ArrayConst(n) => &n.0,
+            Expr::ArrayCtor(n) => &n.0,
             Expr::Error(n) => &n.0,
         }
     }
@@ -740,11 +1270,56 @@ impl IndexExpr {
     pub fn base(&self) -> Option<Expr> {
         self.0.children().filter_map(Expr::cast).next()
     }
-    pub fn indices(&self) -> Vec<Expr> {
-        self.0.children().filter_map(Expr::cast).skip(1).collect()
+    /// The items between the brackets: expressions and slices (`docs/spec/types.md` 8.7).
+    pub fn indices(&self) -> Vec<IndexItem> {
+        self.0
+            .children()
+            .skip_while(|n| Expr::cast(n.clone()).is_none())
+            .skip(1)
+            .filter_map(|n| match n.kind() {
+                SLICE => Some(IndexItem::Slice(Slice(n))),
+                _ => Expr::cast(n).map(IndexItem::Expr),
+            })
+            .collect()
     }
     pub fn l_brack(&self) -> Option<SyntaxToken> {
         token(&self.0, L_BRACK)
+    }
+}
+
+/// One item of an index.
+#[derive(Debug, Clone)]
+pub enum IndexItem {
+    Expr(Expr),
+    Slice(Slice),
+}
+
+impl IndexItem {
+    pub fn syntax(&self) -> &SyntaxNode {
+        match self {
+            IndexItem::Expr(e) => e.syntax(),
+            IndexItem::Slice(s) => &s.0,
+        }
+    }
+}
+
+impl Slice {
+    /// `L..H`: the bounds before and after `..` (either may be left out).
+    pub fn bounds(&self) -> (Option<Expr>, Option<Expr>) {
+        let Some(dots) = token(&self.0, DOTDOT) else {
+            return (None, None);
+        };
+        let at = dots.text_range().start();
+        let mut low = None;
+        let mut high = None;
+        for e in self.0.children().filter_map(Expr::cast) {
+            if e.syntax().text_range().start() < at {
+                low = Some(e);
+            } else {
+                high = Some(e);
+            }
+        }
+        (low, high)
     }
 }
 

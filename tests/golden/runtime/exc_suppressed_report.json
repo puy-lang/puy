@@ -1,0 +1,80 @@
+[
+  {
+    "schema": "puy.exception/1",
+    "class": "EIOError",
+    "message": "connection reset",
+    "stack": [
+      {
+        "function": "exc_suppressed_report.Close",
+        "file": "exc_suppressed_report.pas",
+        "line": 29
+      },
+      {
+        "function": "exc_suppressed_report.<main>",
+        "file": "exc_suppressed_report.pas",
+        "line": 34
+      }
+    ],
+    "omitted": 0,
+    "properties": {},
+    "suppressed": [
+      {
+        "class": "EParseError",
+        "message": "bad input",
+        "stack": [
+          {
+            "function": "exc_suppressed_report.Parse",
+            "file": "exc_suppressed_report.pas",
+            "line": 20
+          },
+          {
+            "function": "exc_suppressed_report.Close",
+            "file": "exc_suppressed_report.pas",
+            "line": 27
+          },
+          {
+            "function": "exc_suppressed_report.<main>",
+            "file": "exc_suppressed_report.pas",
+            "line": 34
+          }
+        ],
+        "omitted": 0,
+        "properties": {},
+        "suppressed": [],
+        "inner": {
+          "class": "EConvertError",
+          "message": "'x' is not a valid integer",
+          "stack": [
+            {
+              "function": "exc_suppressed_report.ReadPort",
+              "file": "exc_suppressed_report.pas",
+              "line": 12
+            },
+            {
+              "function": "exc_suppressed_report.Parse",
+              "file": "exc_suppressed_report.pas",
+              "line": 18
+            },
+            {
+              "function": "exc_suppressed_report.Close",
+              "file": "exc_suppressed_report.pas",
+              "line": 27
+            },
+            {
+              "function": "exc_suppressed_report.<main>",
+              "file": "exc_suppressed_report.pas",
+              "line": 34
+            }
+          ],
+          "omitted": 0,
+          "properties": {
+            "Value": "x"
+          },
+          "suppressed": [],
+          "inner": null
+        }
+      }
+    ],
+    "inner": null
+  }
+]

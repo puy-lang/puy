@@ -1,0 +1,9 @@
+warning[W0005]: directive `{$IFDEF NEVER}` is not at a declaration or statement boundary (directive-placement)
+   --> dir_case_boundaries.pas:31:10
+    |
+ 31 |   case I {$IFDEF NEVER} + 1 {$ENDIF} of
+    |          ^^^^^^^^^^^^^^
+    |
+    = note: disable with `{$WARN directive-placement OFF}`
+
+warning: 1 warning emitted

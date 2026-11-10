@@ -1,0 +1,23 @@
+[
+  {
+    "schema": "puy.exception/1",
+    "class": "EEmptyInput",
+    "message": "the input is empty",
+    "stack": [
+      {
+        "function": "raise_declared.Parse",
+        "file": "raise_declared.pas",
+        "line": 10
+      },
+      {
+        "function": "raise_declared.<main>",
+        "file": "raise_declared.pas",
+        "line": 15
+      }
+    ],
+    "omitted": 0,
+    "properties": {},
+    "suppressed": [],
+    "inner": null
+  }
+]

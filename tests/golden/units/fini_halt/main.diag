@@ -1,0 +1,9 @@
+warning[W0003]: unreachable code (unreachable-code)
+   --> src/High.pas:15:3
+    |
+ 15 |   WriteLn('not reached');
+    |   ^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: disable with `{$WARN unreachable-code OFF}`
+
+warning: 1 warning emitted

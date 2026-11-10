@@ -87,14 +87,15 @@ fn bold_message(rest: &str) -> String {
     }
 }
 
-/// Emits compile diagnostics. `to_stdout` is for `puy check` JSON (stdout). `fix_hint` is set when
-/// a file was given.
+/// Emits compile diagnostics. `to_stdout` is for `puy check` JSON (stdout). `fix_files` are the
+/// files `puy fix` would rewrite (`CompileOutput::files`), when a file was given: the `puy fix`
+/// hint counts the fixes in them.
 pub fn emit_diagnostics(
     diags: &[Diagnostic],
     sources: &SourceMap,
     opts: &Options,
     to_stdout: bool,
-    fix_hint: bool,
+    fix_files: Option<&[puy_core::source::FileId]>,
 ) {
     match opts.format {
         Format::Json => {
@@ -107,8 +108,8 @@ pub fn emit_diagnostics(
         }
         Format::Text => {
             let mut text = render::render_all(diags, sources);
-            if fix_hint {
-                let n = puy_core::fix::applicable_fix_count(diags);
+            if let Some(files) = fix_files {
+                let n = puy_core::fix::applicable_fix_count(diags, files);
                 if n > 0 {
                     text.push_str(&format!(
                         "help: {n} fix{} can be applied with `puy fix`\n",
@@ -213,6 +214,22 @@ pub fn emit_exception(report: &ExceptionReport, opts: &Options) {
     }
 }
 
+/// An exception that left a `finally` block while `Halt` was unwinding (`docs/spec/exceptions.md` 7.1).
+pub fn emit_halt_exception(report: &ExceptionReport, opts: &Options) {
+    match opts.format {
+        Format::Json => eprintln!("{}", report.to_halt_json()),
+        Format::Text => {
+            let text = report.render_halt();
+            let text = if use_color(opts) {
+                colorize(&text)
+            } else {
+                text
+            };
+            let _ = std::io::stderr().write_all(text.as_bytes());
+        }
+    }
+}
+
 /// Failure to flush stdout at exit (`semantics.md` 7.2).
 pub fn emit_stdout_error(e: &puy_host::HostError, opts: &Options) {
     let d = Diagnostic {
@@ -228,27 +245,51 @@ pub fn emit_stdout_error(e: &puy_host::HostError, opts: &Options) {
     emit_standalone(&d, opts, false);
 }
 
-/// Output of `puy fix` (10.7).
-pub fn emit_fix_result(r: &FixResult, path: &str, written: bool, opts: &Options) {
+/// Output of `puy fix` (10.7). `written` are the files written, in order. With `failure` (F0002
+/// for a file that could not be written), it stands in for the remaining diagnostics, which point
+/// into sources not all written (`docs/spec/units.md` 8.3).
+pub fn emit_fix_result(
+    r: &FixResult,
+    written: &[String],
+    failure: Option<&Diagnostic>,
+    opts: &Options,
+) {
+    let no_sources = SourceMap::new();
+    let (diags, diag_sources) = match failure {
+        Some(d) => (std::slice::from_ref(d), &no_sources),
+        None => (r.diagnostics.as_slice(), &r.sources),
+    };
+    let applied = r.applied.iter().filter(|a| written.contains(&a.file));
     match opts.format {
         Format::Json => {
             let mut w = json::JsonWriter::new();
             w.begin_object();
             w.field_string("schema", "puy.fix/1");
             w.field_array("applied");
-            for a in &r.applied {
+            for a in applied {
                 let mut sources = SourceMap::new();
                 sources.add(puy_core::source::SourceFile::new(
-                    path,
+                    a.file.as_str(),
                     a.source_before.clone(),
                 ));
+                // The edits' file ids are those of the round's compilation; their positions are
+                // looked up in `source_before`, the only file here
+                let edits: Vec<_> = a
+                    .edits
+                    .iter()
+                    .map(|e| {
+                        let mut e = e.clone();
+                        e.file = puy_core::source::FileId(0);
+                        e
+                    })
+                    .collect();
                 w.begin_object();
                 w.field_string("code", &a.code);
-                w.field_string("file", path);
+                w.field_string("file", &a.file);
                 w.field_number("round", a.round);
                 w.field_string("title", &a.title);
                 w.field_array("edits");
-                for e in &a.edits {
+                for e in &edits {
                     json::write_edit(&mut w, &sources, e);
                 }
                 w.end_array().end_field();
@@ -275,20 +316,25 @@ pub fn emit_fix_result(r: &FixResult, path: &str, written: bool, opts: &Options)
             w.field_number("rounds", r.rounds);
             w.field_bool("converged", r.converged);
             w.key("diagnostics")
-                .raw(&json::diagnostics_json(&r.diagnostics, &r.sources))
+                .raw(&json::diagnostics_json(diags, diag_sources))
                 .end_field();
             w.end_object();
             println!("{}", w.finish());
         }
         Format::Text => {
-            let mut text = render::render_all(&r.diagnostics, &r.sources);
-            if written {
-                let n = r.applied.len();
+            let mut text = match failure {
+                // Like F0002 for a file that cannot be read (10.5): one line, no summary
+                Some(d) => format!("{}\n", render::render_diagnostic(d, &no_sources)),
+                None => render::render_all(diags, diag_sources),
+            };
+            for path in written {
+                let n = r.applied.iter().filter(|a| &a.file == path).count();
                 text.push_str(&format!(
                     "fixed {path} ({n} fix{})\n",
                     if n == 1 { "" } else { "es" }
                 ));
-            } else {
+            }
+            if written.is_empty() && failure.is_none() {
                 text.push_str("nothing to fix\n");
             }
             if !r.skipped.is_empty() {
@@ -309,7 +355,7 @@ pub fn emit_fix_result(r: &FixResult, path: &str, written: bool, opts: &Options)
             if !r.converged {
                 text.push_str("note: stopped after 10 rounds; run `puy fix` again to continue\n");
             }
-            text.push_str(&explain_hint(&r.diagnostics));
+            text.push_str(&explain_hint(diags));
             let text = if use_color(opts) {
                 colorize(&text)
             } else {

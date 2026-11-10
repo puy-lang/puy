@@ -1,0 +1,119 @@
+; puyc format 2
+.const
+  0: set ty64 [97, 101, 105, 111, 117]
+  1: str "`set of Byte` (0..255)"
+  2: str "\n"
+  3: str " "
+.type
+  64: set DumpSets.TChars slots=65536
+  65: set set of Byte slots=256
+  66: enum DumpSets.TColor slots=0 values=0:Red,1:Green,2:Blue
+.global
+  0: int S
+  1: ref C
+  2: ref B
+  3: int X
+  4: int I
+  5: int Ch
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpSets file="dump_sets.pas" init=- fini=- entry=0
+.func 0 DumpSets.<main> params=0 regs=21
+  .line 27
+  0000  LoadInt      r16, 2
+  0001  StoreGlobal  r16, g3
+  .line 28
+  0002  LoadZero     r17
+  0003  LoadGlobal   r18, g3
+  0004  LoadZero     r19
+  0005  SetRange     r20, r17, r17
+  0006  OrInt        r19, r19, r20
+  0007  SetRange     r20, r18, r18
+  0008  OrInt        r19, r19, r20
+  0009  Move         r16, r19
+  000a  StoreGlobal  r16, g0
+  .line 29
+  000b  LoadInt      r16, 122
+  000c  StoreGlobal  r16, g5
+  .line 30
+  000d  LoadConst    r2, k0
+  000e  LoadInt      r16, 120
+  000f  LoadGlobal   r17, g5
+  0010  LoadZero     r18
+  0011  Unique       r18, ty64
+  0012  SetIncl      r18, r16, r17
+  0013  MoveRef      r3, r18
+  0014  Unique       r2, ty64
+  0015  SetUnion     r2, r3
+  0016  StoreGlobalRef r2, g1
+  .line 31
+  0017  LoadInt      r16, 200
+  0018  StoreGlobal  r16, g4
+  .line 32
+  0019  LoadGlobal   r16, g4
+  001a  Move         r17, r16
+  001b  LoadInt      r18, 256
+  001c  ChkRange     r17, r18, k1
+  001d  LoadGlobalRef r4, g2
+  001e  Unique       r4, ty65
+  001f  SetIncl      r4, r16, r16
+  0020  StoreGlobalRef r4, g2
+  .line 33
+  0021  LoadGlobalRef r5, g1
+  0022  LoadConst    r6, k0
+  0023  Unique       r5, ty64
+  0024  SetUnion     r5, r6
+  0025  StoreGlobalRef r5, g1
+  .line 34
+  0026  LoadGlobal   r16, g3
+  0027  LoadGlobal   r17, g0
+  0028  SetIn        r16, r16, r17
+  0029  JmpIfFalse   r16, -> 0041
+  002a  LoadInt      r16, 121
+  002b  LoadGlobalRef r7, g1
+  002c  SetInBig     r16, r16, r7
+  002d  JmpIfFalse   r16, -> 0041
+  .line 35
+  002e  LoadGlobal   r0, g0
+  002f  LoadInt      r1, -1
+  0030  AddIntI      r16, r1, 1
+  0031  SetNext      r16, r0, r16
+  0032  LoadZero     r17
+  0033  JmpIfLtInt   r16, r17, -> 003d
+  0034  Move         r1, r16
+  0035  Move         r18, r1
+  0036  StoreGlobal  r18, g3
+  .line 36
+  0037  LoadGlobal   r18, g3
+  0038  EnumToStr    r8, r18, ty66
+  0039  LoadConst    r9, k2
+  003a  ConcatStr    r8, r8, r9
+  003b  CallHost     r8, h0
+  .line 35
+  003c  Jmp          -> 0030
+  003d  JmpIfLtInt   r1, r17, -> 0040
+  003e  Move         r18, r1
+  003f  StoreGlobal  r18, g3
+  .line 34
+  0040  Jmp          -> 0041
+  .line 37
+  0041  LoadGlobal   r16, g0
+  0042  LoadInt      r17, 7
+  0043  NotInt       r18, r17
+  0044  AndInt       r18, r16, r18
+  0045  LoadZero     r19
+  0046  EqInt        r16, r18, r19
+  0047  BoolToStr    r10, r16
+  0048  LoadConst    r11, k3
+  0049  ConcatStr    r10, r10, r11
+  004a  LoadGlobalRef r13, g1
+  004b  LoadConst    r14, k0
+  004c  SetEq        r17, r13, r14
+  004d  BoolToStr    r12, r17
+  004e  ConcatStr    r10, r10, r12
+  004f  LoadConst    r15, k2
+  0050  ConcatStr    r10, r10, r15
+  0051  CallHost     r10, h0
+  .line 38
+  0052  RetVoid
+.finally r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15

@@ -1,0 +1,72 @@
+; puyc format 2
+.const
+  0: str "\n"
+  1: str "n="
+.global
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpNested file="dump_nested.pas" init=- fini=- entry=0
+.func 0 DumpNested.<main> params=0 regs=1
+  .line 42
+  0000  LoadInt      r0, 21
+  0001  Call         r0, f2
+  .line 43
+  0002  RetVoid
+.func 1 DumpNested.Show params=1 regs=3
+  .local r0 T
+  .line 12
+  0000  AssignRef    r1, r0
+  0001  LoadConst    r2, k0
+  0002  ConcatStr    r1, r1, r2
+  0003  CallHost     r1, h0
+  .line 13
+  0004  RetVoid
+.finally r1, r2
+.func 2 DumpNested.Run params=1 regs=4
+  .local r0 N
+  .local r1 S
+  .line 36
+  0000  LoadConst    r1, k1
+  .line 37
+  0001  OuterRef     r3, 0, 0
+  0002  Call         r3, f4
+  .line 38
+  0003  AssignRef    r2, r1
+  0004  Move         r3, r2
+  0005  Call         r3, f1
+  .line 39
+  0006  RetVoid
+.finally r1, r2
+.func 3 DumpNested.Run.Twice params=1 regs=3
+  .local r0 K
+  .local r1 Result
+  .line 21
+  0000  Move         r1, r0
+  0001  LoadInt      r2, 2
+  0002  MulInt       r1, r1, r2
+  0003  NarrowOvf    r1, r1, 4
+  .line 22
+  0004  Ret          r1
+.func 4 DumpNested.Run.Middle params=1 regs=2 outer=2
+  .line 32
+  0000  OuterRef     r1, 0, 0
+  0001  Call         r1, f5
+  .line 33
+  0002  RetVoid
+.func 5 DumpNested.Run.Middle.Deep params=1 regs=7 outer=4
+  .local r1 S
+  .local r2 N
+  .line 26
+  0000  OuterRef     r1, 1, 2
+  0001  OuterRef     r2, 0, 2
+  .line 28
+  0002  LoadRefRef   r3, r1
+  0003  LoadRef      r6, r2
+  0004  Call         r6, f3
+  0005  Move         r5, r6
+  0006  IntToStr     r4, r5
+  0007  ConcatStr    r3, r3, r4
+  0008  StoreRefRef  r1, r3
+  .line 29
+  0009  RetVoid
+.finally r3, r4

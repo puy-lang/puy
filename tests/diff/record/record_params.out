@@ -1,0 +1,9 @@
+[g] 8
+keep: [local] 18
+[g] 8
+reset 0
+[a] 2
+[b] 4
+[c] 6
+256 255
+local: 1 4

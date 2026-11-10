@@ -1,0 +1,21 @@
+error[E0700]: undeclared identifier `Hidden`
+  --> main.pas:9:11
+   |
+ 9 |   WriteLn(Hidden);
+   |           ^^^^^^
+
+error[E0700]: undeclared identifier `BaseValue`
+   --> main.pas:10:11
+    |
+ 10 |   WriteLn(BaseValue);
+    |           ^^^^^^^^^
+    |
+    = fix: add `uses Base`
+
+error[E0700]: undeclared identifier `BaseValue`
+  --> src/Mid.pas:6:11
+   |
+ 6 |   Early = BaseValue;
+   |           ^^^^^^^^^
+
+error: aborting due to 3 errors

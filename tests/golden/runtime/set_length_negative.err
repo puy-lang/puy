@@ -1,0 +1,2 @@
+error: uncaught exception ERangeError: invalid length -1
+  at SetLengthNegative.<main> (set_length_negative.pas:12)

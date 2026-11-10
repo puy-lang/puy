@@ -1,0 +1,27 @@
+warning[W0017]: unused parameter `Unused` (unused-parameter)
+  --> nested_warnings.pas:6:18
+   |
+ 6 | procedure Use(A, Unused: Integer);
+   |                  ^^^^^^ declared here
+   |
+   = note: disable with `{$WARN unused-parameter OFF}`
+
+warning[W0001]: unused variable `Never` (unused-variable)
+  --> nested_warnings.pas:9:3
+   |
+ 9 |   Never: Integer;
+   |   ^^^^^ declared here
+   |
+   = note: remove `Never` and its assignments if the value is not needed
+   = note: disable with `{$WARN unused-variable OFF}`
+
+warning[W0002]: value assigned to `Z` is never read (unused-value)
+   --> nested_warnings.pas:29:3
+    |
+ 29 |   Z := 1;
+    |   ^
+    |
+    = note: remove the assignment if the value is not needed
+    = note: disable with `{$WARN unused-value OFF}`
+
+warning: 3 warnings emitted

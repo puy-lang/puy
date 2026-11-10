@@ -1,0 +1,7 @@
+error[E0400]: expected `;`, found `<`
+   --> tarray_declared.pas:12:12
+    |
+ 12 |   A: TArray<Integer>;                   // E0400
+    |            ^
+
+error: aborting due to 1 error

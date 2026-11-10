@@ -1,0 +1,20 @@
+[
+  {
+    "schema": "puy.exception/1",
+    "class": "EConvertError",
+    "message": "'x1' is not a valid integer",
+    "stack": [
+      {
+        "function": "raise_convert_error.<main>",
+        "file": "raise_convert_error.pas",
+        "line": 6
+      }
+    ],
+    "omitted": 0,
+    "properties": {
+      "Value": "x1"
+    },
+    "suppressed": [],
+    "inner": null
+  }
+]

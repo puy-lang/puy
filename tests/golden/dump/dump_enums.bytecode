@@ -1,0 +1,58 @@
+; puyc format 2
+.const
+  0: str "`TDigit` (0..9)"
+  1: str "`TWarm` (0..1)"
+  2: str " "
+  3: str " Five\n"
+.type
+  64: enum DumpEnums.TColor slots=0 values=0:Red,1:Green,2:Blue
+.global
+  0: int C
+  1: int D
+  2: int W
+  3: int N
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpEnums file="dump_enums.pas" init=- fini=- entry=0
+.func 0 DumpEnums.<main> params=0 regs=7
+  .line 20
+  0000  LoadInt      r4, 1
+  0001  StoreGlobal  r4, g0
+  .line 21
+  0002  LoadInt      r4, 4
+  0003  StoreGlobal  r4, g3
+  .line 22
+  0004  LoadGlobal   r4, g3
+  0005  Move         r5, r4
+  0006  LoadInt      r6, 10
+  0007  ChkRange     r5, r6, k0
+  0008  StoreGlobal  r4, g1
+  .line 23
+  0009  LoadGlobal   r4, g0
+  000a  Move         r5, r4
+  000b  LoadInt      r6, 2
+  000c  ChkRange     r5, r6, k1
+  000d  StoreGlobal  r4, g2
+  .line 24
+  000e  LoadGlobal   r4, g0
+  000f  LoadZero     r5
+  0010  JmpIfLeInt   r4, r5, -> 001f
+  .line 25
+  0011  LoadGlobal   r4, g0
+  0012  EnumToStr    r0, r4, ty64
+  0013  LoadConst    r1, k2
+  0014  ConcatStr    r0, r0, r1
+  0015  LoadGlobal   r5, g1
+  0016  LoadInt      r6, 1
+  0017  AddInt       r5, r5, r6
+  0018  NarrowOvf    r5, r5, 4
+  0019  IntToStr     r2, r5
+  001a  ConcatStr    r0, r0, r2
+  001b  LoadConst    r3, k3
+  001c  ConcatStr    r0, r0, r3
+  001d  CallHost     r0, h0
+  .line 24
+  001e  Jmp          -> 001f
+  .line 26
+  001f  RetVoid
+.finally r0, r1, r2, r3

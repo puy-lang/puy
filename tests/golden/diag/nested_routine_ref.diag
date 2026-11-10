@@ -1,7 +1,7 @@
-error[E3200]: nested routines are not supported yet (planned for M2)
-   --> nested_routine_ref.pas:10:3
+error[E0707]: cannot assign to `Twice`
+   --> nested_routine_ref.pas:16:7
     |
- 10 |   function Twice(X: Integer): Integer;
-    |   ^^^^^^^^
+ 16 |   for Twice := 1 to 2 do
+    |       ^^^^^ not a variable
 
 error: aborting due to 1 error

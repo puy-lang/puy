@@ -1,0 +1,54 @@
+program DumpSysUtils uses=System.SysUtils
+.global g0 V: Integer
+.global g1 S: ShortInt
+.global g2 U: UTF8String
+.routine <main>
+  assign @15 R+
+    global g1 S
+    const ShortInt -1
+  assign @16 R+
+    global g2 U
+    const UTF8String utf8 "u"
+  writeln @17
+    arg
+      builtin Format string
+        const string "%d %s %s %g %s"
+        global g0 V: Integer
+        const Char #97
+        global g2 U: UTF8String
+        const Double 1.5
+        const Char #99
+  if @18
+    cond
+      builtin TryStrToInt Boolean
+        const string "12"
+        out
+          global g0 V
+    then
+      writeln @19
+        arg
+          global g0 V: Integer
+  writeln @20
+    arg
+      builtin BoolToStr string
+        binary Boolean
+          global g0 V: Integer
+          > Boolean int:Integer
+            const Integer 0
+        const Boolean False
+    arg
+      builtin IntToHex string
+        global g1 S: ShortInt
+        const Integer 2
+  writeln @21
+    arg
+      builtin StringReplace string
+        const string "aXa"
+        const string "x"
+        const string "-"
+        const TReplaceFlags [0..1]
+  raise @22
+    new Exception
+      builtin Format string
+        const string "%d"
+        global g0 V: Integer

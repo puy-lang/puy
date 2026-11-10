@@ -1,0 +1,121 @@
+; puy ir 1
+.global
+  g0 A: array of string
+  g1 P: TPair
+  g2 S: string
+.func f0 DynLifetime.<main> params=0
+  .reg t0: string temp
+  .reg t1: array of string temp
+  .reg t2: string temp
+  .reg t3: string temp
+  .reg t4: array of string temp
+  .reg t5: Int64 temp
+  .reg t6: Int64 temp
+  .reg t7: array of string temp
+  .reg t8: array of string temp
+  .reg t9: Int64 temp
+  .reg t10: Int64 temp
+  .reg t11: string temp
+  .reg t12: array of string temp
+  .reg t13: Int64 temp
+  .reg t14: array of string temp
+  .reg t15: - ref
+  .reg t16: Int64 temp
+  .reg t17: array of string temp
+  .reg t18: - temp
+  .reg t19: Int64 temp
+  .reg t20: - cell
+  .reg t21: string temp
+  .reg t22: array of string temp
+  .reg t23: Int64 temp
+  .reg t24: string temp
+  .reg t25: Integer temp
+  .reg t26: TPair temp
+  .reg t27: TPair temp
+  .reg t28: string temp
+  .reg t29: Integer temp
+  .reg t30: array of string temp
+  .reg t31: array of string temp
+  .reg t32: string temp
+bb0:
+  .line 27
+  LoadConst    t0, "x"
+  StoreGlobalRef t0, g2
+  .line 28
+  LoadGlobalRef t2, g2
+  LoadConst    t3, "y"
+  LoadInt      t4, 2
+  NewArr       t4, array of string
+  LoadZero     t5
+  DynSetRef    t4, t5, t2
+  LoadInt      t5, 1
+  DynSetRef    t4, t5, t3
+  MoveRef      t1, t4
+  StoreGlobalRef t1, g0
+  .line 29
+  LoadInt      t6, 3
+  LoadGlobal   t7, g0
+  Move         t8, t7
+  Move         t9, t6
+  SetLen       t8, array of string, t9
+  Move         t7, t8
+  StoreGlobal  t7, g0
+  .line 30
+  LoadInt      t10, 2
+  LoadGlobal   t12, g0
+  LoadZero     t13
+  DynGetRef    t11, t12, t13
+  LoadGlobal   t14, g0
+  DynSetRef    t14, t10, t11
+  .line 31
+  LoadInt      t16, 1
+  LoadGlobal   t17, g0
+  Move         t19, t16
+  LoadZero     t18
+  MakeCell     t18, t17, 1, t19
+  MoveRef      t20, t18
+  Move         t15, t20
+  Call         -, f1(t15)
+  .line 32
+  LoadGlobal   t22, g0
+  LoadInt      t23, 1
+  DynGetRef    t21, t22, t23
+  LoadGlobalRef t27, g1
+  Materialize  t27, DynLifetime.TPair
+  Move         t26, t27
+  Call         t25, f2(t26)
+  IntToStr     t24, t25
+  ConcatStr    t21, t21, t24
+  LoadGlobalRef t31, g0
+  Move         t30, t31
+  Call         t29, f2(t30)
+  IntToStr     t28, t29
+  ConcatStr    t21, t21, t28
+  LoadConst    t32, "\n"
+  ConcatStr    t21, t21, t32
+  CallHost     -, h0(t21)
+  .line 33
+  RetVoid
+.finally t0, t1, t2, t3, t11, t20, t21, t24, t27, t28, t31, t32
+.func f1 DynLifetime.Touch params=1
+  .reg v0 S: string var param
+  .reg t0: string temp
+  .reg t1: string temp
+bb0:
+  .line 14
+  LoadRefRef   t0, v0
+  LoadConst    t1, "!"
+  ConcatStr    t0, t0, t1
+  StoreRefRef  v0, t0
+  .line 15
+  RetVoid
+.finally t0, t1
+.func f2 DynLifetime.Count params=1
+  .reg v0 A: array of string const param
+  .reg v1 Result: Integer result
+bb0:
+  .line 19
+  ArrLen       v1, v0
+  .line 20
+  Ret          v1
+.finally

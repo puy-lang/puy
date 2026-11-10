@@ -1,0 +1,2 @@
+error: uncaught exception ERangeError: index #122 is out of range for `TCounts` (#97..#99)
+  at ArrayCharIndexRange.<main> (array_char_index_range.pas:14)

@@ -1,0 +1,59 @@
+program DumpSlice
+.type TFive = array[5..9] of Integer
+.global g0 S: string
+.global g1 U: UTF8String
+.global g2 D: TArray<Integer>
+.global g3 F: TFive
+.routine <main>
+  assign @15 R+
+    global g0 S
+    const string "abcdef"
+  assign @16 R+
+    global g1 U
+    const UTF8String utf8 "xyz"
+  assign @17 R+
+    global g2 D
+    array TArray<Integer>
+      const Integer 1
+      const Integer 2
+      const Integer 3
+  assign @18 R+
+    global g3 F
+    builtin Default TFive
+  writeln @19
+    arg
+      slice string L..H
+        global g0 S: string
+        const Int64 2
+        const Int64 3
+    arg
+      slice string L..
+        global g0 S: string
+        const Int64 4
+    arg
+      slice string ..H
+        global g0 S: string
+        const Int64 2
+    arg
+      slice string ..
+        global g0 S: string
+  writeln @20
+    arg
+      convert utf8->string
+        slice UTF8String L..
+          global g1 U: UTF8String
+          const Int64 2
+  assign @21 R+
+    global g2 D
+    slice TArray<Integer> L..
+      global g2 D: TArray<Integer>
+      const Int64 1
+  assign @22 R+
+    global g2 D
+    slice TArray<Integer> ..H
+      global g3 F: TFive
+      const Int64 6
+  writeln @23
+    arg
+      builtin Length Integer
+        global g2 D: TArray<Integer>

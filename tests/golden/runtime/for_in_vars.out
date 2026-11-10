@@ -1,0 +1,10 @@
+ab cd ef 
+xx yy zz 
+10000000000 20000000000 30000000000 
+[ab][cd][ef]
+[p][q]
+abcdef
+after: ef
+after break: cd
+after no break: ef
+empty: kept

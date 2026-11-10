@@ -1,0 +1,69 @@
+program DumpBuiltins
+.global g0 A: TArray<Integer>
+.global g1 S: string
+.global g2 U: UTF8String
+.global g3 C: Char
+.global g4 ExitCode: Integer
+.routine <main>
+  assign @13 R+
+    global g0 A
+    binary TArray<Integer>
+      global g0 A: TArray<Integer>
+      + TArray<Integer> arr
+        array TArray<Integer>
+          const Integer 1
+  insert @14
+    const Integer 2
+    global g0 A
+    const Int64 0
+  insert @15 array
+    global g0 A: TArray<Integer>
+    global g0 A
+    const Int64 1
+  delete @16
+    global g0 A
+    const Int64 0
+    const Int64 1
+  assign @17 R+
+    global g1 S
+    binary string
+      const string "a"
+      + string str
+        global g1 S: string
+      + string str
+        const string "b"
+  insert @18
+    const string "x"
+    global g1 S
+    const Int64 1
+  delete @19
+    global g1 S
+    const Int64 1
+    const Int64 1
+  assign @20 R+
+    global g2 U
+    const UTF8String utf8 "u"
+  insert @21
+    global g2 U: UTF8String
+    global g2 U
+    const Int64 1
+  delete @22
+    global g2 U
+    const Int64 1
+    const Int64 1
+  assign @23 R+
+    global g3 C
+    builtin UpCase Char
+      index Char
+        global g1 S: string
+        const Integer 1
+  if @24
+    cond
+      builtin Odd Boolean
+        builtin Length Integer
+          global g0 A: TArray<Integer>
+    then
+      assign @25 R+
+        global g4 ExitCode
+        const Integer 2
+  halt @26

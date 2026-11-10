@@ -1,25 +1,28 @@
 [
   {
+    "schema": "puy.exception/1",
     "class": "EDivByZero",
     "message": "division by zero",
-    "omitted": 0,
-    "schema": "puy.exception/1",
     "stack": [
       {
-        "file": "div_zero.pas",
         "function": "DivZero.Divide",
+        "file": "div_zero.pas",
         "line": 5
       },
       {
-        "file": "div_zero.pas",
         "function": "DivZero.Run",
+        "file": "div_zero.pas",
         "line": 11
       },
       {
-        "file": "div_zero.pas",
         "function": "DivZero.<main>",
+        "file": "div_zero.pas",
         "line": 16
       }
-    ]
+    ],
+    "omitted": 0,
+    "properties": {},
+    "suppressed": [],
+    "inner": null
   }
 ]

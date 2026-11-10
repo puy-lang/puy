@@ -1,0 +1,134 @@
+; puyc format 2
+.const
+  0: str "caught\n"
+  1: str "\n"
+  2: str "app"
+  3: str "wrapped "
+  4: str "other\n"
+.type
+  64: exception DumpTry.EAppError slots=2 refs=0,1 parent=ty0
+.global
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpTry file="dump_try.pas" init=- fini=- entry=0
+.func 0 DumpTry.<main> params=0 regs=6
+  .try 0000..0003 except 0003..0006 r0
+  .line 45
+  0000  LoadZero     r4
+  0001  Call         r4, f1
+  .line 44
+  0002  Jmp          -> 0006
+  .line 47
+  0003  LoadConst    r1, k0
+  0004  CallHost     r1, h0
+  .line 44
+  0005  Release      r0
+  .line 49
+  0006  LoadInt      r5, 4
+  0007  Call         r5, f2
+  0008  Move         r4, r5
+  0009  IntToStr     r2, r4
+  000a  LoadConst    r3, k1
+  000b  ConcatStr    r2, r2, r3
+  000c  CallHost     r2, h0
+  .line 50
+  000d  RetVoid
+.finally r0, r1, r2, r3
+.func 1 DumpTry.Handle params=1 regs=9
+  .local r0 N
+  .local r1 E
+  .try 0000..0007 except 0007..001c r2
+  .line 14
+  0000  LoadZero     r8
+  0001  JmpIfLeInt   r0, r8, -> 0006
+  .line 15
+  0002  LoadConst    r3, k2
+  0003  NewExc       r3, ty64
+  0004  Raise        r3
+  .line 14
+  0005  Jmp          -> 0006
+  .line 13
+  0006  Jmp          -> 001c
+  .line 17
+  0007  ExcClass     r8, r2
+  0008  ClassIs      r8, ty64
+  0009  JmpIfFalse   r8, -> 0012
+  000a  Move         r1, r2
+  .line 18
+  000b  LoadConst    r4, k3
+  000c  ExcGet       r5, r1, 0
+  000d  ConcatStr    r4, r4, r5
+  000e  NewExc       r4, ty0
+  000f  RaiseOuter   r4, r2
+  .line 13
+  0010  Release      r2
+  0011  Jmp          -> 001c
+  .line 19
+  0012  ExcClass     r8, r2
+  0013  ClassIs      r8, ty5
+  0014  JmpIfFalse   r8, -> 0019
+  .line 20
+  0015  AssignRef    r6, r2
+  0016  Raise        r6
+  .line 13
+  0017  Release      r2
+  0018  Jmp          -> 001c
+  .line 22
+  0019  LoadConst    r7, k4
+  001a  CallHost     r7, h0
+  .line 13
+  001b  Release      r2
+  .line 24
+  001c  RetVoid
+.finally r2, r3, r4, r5, r6, r7
+.func 2 DumpTry.Count params=1 regs=9
+  .local r0 N
+  .local r1 Result
+  .local r2 I
+  .try 0004..0011 finally 0011..0015 r3
+  .line 30
+  0000  LoadZero     r1
+  .line 31
+  0001  LoadInt      r2, 1
+  0002  Move         r7, r0
+  0003  JmpIfLtInt   r7, r2, -> 001e
+  .line 33
+  0004  LoadInt      r8, 3
+  0005  JmpIfNeInt   r2, r8, -> 0009
+  .line 34
+  0006  LoadInt      r3, 3
+  0007  Jmp          -> 0011
+  .line 33
+  0008  Jmp          -> 0009
+  .line 35
+  0009  LoadInt      r8, 5
+  000a  JmpIfNeInt   r2, r8, -> 000e
+  .line 36
+  000b  LoadInt      r3, 4
+  000c  Jmp          -> 0011
+  .line 35
+  000d  Jmp          -> 000e
+  .line 37
+  000e  AddIntI      r1, r1, 1
+  000f  NarrowOvf    r1, r1, 4
+  .line 32
+  0010  LoadZero     r3
+  .line 39
+  0011  IntToStr     r5, r2
+  0012  LoadConst    r6, k1
+  0013  ConcatStr    r5, r5, r6
+  0014  CallHost     r5, h0
+  .line 32
+  0015  EndFinally   r3, 2
+  0016  Jmp          -> 0019
+  0017  Jmp          -> 001a
+  0018  Jmp          -> 001b
+  0019  Jmp          -> 001e
+  001a  Ret          r1
+  .line 31
+  001b  JmpIfEqInt   r2, r7, -> 001e
+  001c  AddIntI      r2, r2, 1
+  001d  Jmp          -> 0004
+  .line 41
+  001e  Ret          r1
+.finally r4, r5, r6

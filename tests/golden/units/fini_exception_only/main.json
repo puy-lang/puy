@@ -1,0 +1,35 @@
+[
+  {
+    "schema": "puy.exception/1",
+    "class": "EInvalidOp",
+    "message": "from finalization",
+    "stack": [
+      {
+        "function": "Outer.<fini>",
+        "file": "src/Outer.pas",
+        "line": 13
+      }
+    ],
+    "omitted": 0,
+    "properties": {},
+    "suppressed": [],
+    "inner": null
+  },
+  {
+    "schema": "puy.exception/1",
+    "halt": true,
+    "class": "Exception",
+    "message": "dropped",
+    "stack": [
+      {
+        "function": "Inner.<fini>",
+        "file": "src/Inner.pas",
+        "line": 12
+      }
+    ],
+    "omitted": 0,
+    "properties": {},
+    "suppressed": [],
+    "inner": null
+  }
+]

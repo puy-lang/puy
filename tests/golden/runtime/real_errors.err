@@ -1,0 +1,2 @@
+error: uncaught exception EZeroDivide: division by zero
+  at RealErrors.<main> (real_errors.pas:59)

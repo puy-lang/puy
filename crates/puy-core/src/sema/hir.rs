@@ -2,8 +2,8 @@
 //!
 //! Left-leaning chains (chains of left operands of binary operators, `else if` chains) are stored as sequences.
 
-use super::types::{Const, Ty};
-use crate::source::{TextRange, TextSize};
+use super::types::{Const, Ty, TypeTable};
+use crate::source::{FileId, TextRange, TextSize};
 use crate::syntax::ast::ParamMode;
 
 /// The whole program.
@@ -12,6 +12,8 @@ pub struct Program {
     /// Program name (prefix of the routines' fully qualified names).
     pub name: String,
     pub globals: Vec<Global>,
+    /// The `System` global `ExitCode` (`docs/spec/semantics.md` 5.3), if the program uses it.
+    pub exit_code: Option<GlobalId>,
     /// Routines (in declaration order; a `forward` routine is placed at its first heading).
     pub routines: Vec<Routine>,
     /// `<main>`.
@@ -20,13 +22,61 @@ pub struct Program {
     pub init: Option<Routine>,
     /// Whether `System.SysUtils` is in `uses`.
     pub uses_sysutils: bool,
+    /// Records and static arrays (`docs/spec/types.md` 1.2).
+    pub types: TypeTable,
+    /// The units of the compilation in initialization order (`docs/spec/units.md` 5.2); the
+    /// file passed to `puy` is the last. Routines and globals refer to them by index.
+    pub units: Vec<UnitHir>,
+    /// The `type` sections to show in the `hir` dump, in declaration order: (routine index or
+    /// `None` for the program, name, type).
+    pub type_decls: Vec<TypeDeclInfo>,
+}
+
+/// A unit of the compilation, or the program (`docs/spec/units.md` chapter 5).
+#[derive(Debug)]
+pub struct UnitHir {
+    /// The name (the unit's name as written in its heading, or the program's name).
+    pub name: String,
+    pub file: FileId,
+    /// A program or a script (`<main>` is `Program::main`), as opposed to a unit.
+    pub is_program: bool,
+    /// `<init>`: the initial values of the unit's global variables, then the `initialization`
+    /// statements. For the program it is `Program::init`.
+    pub init: Option<Routine>,
+    /// `<fini>`: the `finalization` statements of a unit.
+    pub fini: Option<Routine>,
+    /// The unit's global variables: they are numbered `first_global..first_global + global_count`
+    /// (`docs/spec/units.md` 6.2, 6.3; includes `ExitCode` if this file used it first).
+    pub first_global: u32,
+    pub global_count: u32,
+    /// The units named in `uses`, as written (for the `hir` dump).
+    pub uses: Vec<String>,
+}
+
+/// A declared type for the `hir` dump (`docs/spec/semantics.md` 9.1).
+#[derive(Debug, Clone)]
+pub struct TypeDeclInfo {
+    /// The unit declaring it (index into `Program::units`).
+    pub unit: u32,
+    /// `None` for a type of the program; otherwise the routine's short name.
+    pub routine: Option<String>,
+    pub name: String,
+    /// The type the name denotes.
+    pub ty: Ty,
+    /// The declaration defines this type (a `record` / `array`), as opposed to naming another type.
+    pub defines: bool,
+    /// A dynamic array declared as `TArray<T>` (the `hir` dump shows the written form).
+    pub generic: bool,
 }
 
 #[derive(Debug, Clone)]
 pub struct Global {
     pub name: String,
     pub ty: Ty,
-    pub span: TextRange,
+    /// The declaring identifier (`None` for `ExitCode`).
+    pub span: Option<TextRange>,
+    /// The unit declaring it (`None` for `ExitCode` of `System`).
+    pub unit: Option<u32>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -46,6 +96,16 @@ pub enum VarKind {
     Local,
     /// A hidden (unnamed) variable, e.g. the iteration count of a `for` whose loop variable is a global.
     Hidden,
+    /// The `E` of `on E: T do` (`docs/spec/exceptions.md` 5.2). It borrows the exception the
+    /// `except` block holds, so it is not released on its own.
+    Exception,
+    /// A variable of an enclosing routine that a nested routine uses (`docs/spec/semantics.md`
+    /// 4.9): variable `var` of the routine `up` levels out. It holds a reference to that
+    /// variable, made when the nested routine is entered, and is used like a `var` parameter.
+    Outer {
+        up: u32,
+        var: VarId,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -62,6 +122,13 @@ pub struct Var {
     pub is_for_var: bool,
     /// Used as a `for` loop variable (exempt from W0001).
     pub is_loop_var: bool,
+    /// Used by a nested routine (`docs/spec/semantics.md` 4.9): a `const` argument is not lent
+    /// without `AddRef` (`docs/design/lifetime.md` 3.3), and W0002 does not look at it.
+    pub captured: bool,
+    /// Read by a nested routine (a read for W0001 and W0017).
+    pub read_by_nested: bool,
+    /// Where a nested routine first writes it (it cannot be a `for` loop variable; E0707).
+    pub written_by_nested: Option<TextRange>,
 }
 
 #[derive(Debug)]
@@ -84,6 +151,13 @@ pub struct Routine {
     pub has_syntax_errors: bool,
     /// Contains semantic errors (code generation is skipped).
     pub has_errors: bool,
+    /// The unit declaring it (index into `Program::units`).
+    pub unit: u32,
+    /// The routine it is nested in (`docs/spec/semantics.md` 4.9).
+    pub parent: Option<RoutineId>,
+    /// Takes the static link as a hidden first argument (`docs/spec/semantics.md` 4.9). Set by
+    /// `sema::finish`.
+    pub link: bool,
 }
 
 impl Routine {
@@ -105,6 +179,71 @@ pub enum Place {
         /// Position of `[` (the line for `ERangeError`).
         span: TextRange,
     },
+    /// `R.F` (a field of a record place).
+    Field {
+        base: Box<Place>,
+        /// The field's number (0-based, declaration order).
+        index: u32,
+        /// The field's type.
+        ty: Ty,
+        /// The field name (for the dump).
+        name: String,
+    },
+    /// `A[I]` (an element of a static array, dynamic array or open array place).
+    Elem {
+        base: Box<Place>,
+        index: Box<Expr>,
+        /// The element type.
+        ty: Ty,
+        /// Position of `[` (the line for `ERangeError`).
+        span: TextRange,
+    },
+    /// `E.Message` written to (`docs/spec/exceptions.md` 2.1): the exception object is a reference,
+    /// so the place reads `base` and writes the object's slot.
+    ExcMember {
+        base: Box<Expr>,
+        member: ExcMember,
+    },
+}
+
+/// A member of an exception object (`docs/spec/exceptions.md` 2.1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ExcMember {
+    Message,
+    StackTrace,
+    Suppressed,
+    InnerException,
+    ClassName,
+    /// `EConvertError.Value`.
+    Value,
+    /// `EInOutError.ErrorCode`.
+    ErrorCode,
+}
+
+impl ExcMember {
+    pub fn name(self) -> &'static str {
+        match self {
+            ExcMember::Message => "Message",
+            ExcMember::StackTrace => "StackTrace",
+            ExcMember::Suppressed => "Suppressed",
+            ExcMember::InnerException => "InnerException",
+            ExcMember::ClassName => "ClassName",
+            ExcMember::Value => "Value",
+            ExcMember::ErrorCode => "ErrorCode",
+        }
+    }
+}
+
+impl Place {
+    /// The variable or global the place starts from.
+    pub fn root(&self) -> &Place {
+        match self {
+            Place::StrIndex { base, .. } | Place::Field { base, .. } | Place::Elem { base, .. } => {
+                base.root()
+            }
+            _ => self,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -149,6 +288,26 @@ pub enum StmtKind {
         downto: bool,
         body: Box<Stmt>,
         checks: Checks,
+        /// The hidden variable counting the iterations when the loop variable is a global.
+        counter: Option<VarId>,
+    },
+    /// `for X in C` over an array or a string (`docs/spec/types.md` chapter 5).
+    ForIn {
+        var: ForVar,
+        /// Position of `FOR_VAR` (for `assigned by this loop` in E2004).
+        var_span: TextRange,
+        /// The collection, evaluated once on entry.
+        coll: Expr,
+        /// The hidden variable holding the collection during the loop.
+        coll_var: VarId,
+        /// The hidden variable with the position of the next element (0-based for arrays,
+        /// 1-based for strings).
+        idx_var: VarId,
+        /// The element type (`Char` for a string).
+        elem: Ty,
+        /// The conversion of an element to the loop variable's type (assignment compatibility).
+        conv: Option<Conversion>,
+        body: Box<Stmt>,
     },
     Break,
     Continue,
@@ -166,37 +325,128 @@ pub enum StmtKind {
         calc: Ty,
         checks: Checks,
     },
-    /// `ReadLn([variable])`.
-    ReadLn(Option<Place>),
+    /// `Read(variables)` / `ReadLn([variables])` (`docs/spec/semantics.md` 6.2).
+    Read {
+        targets: Vec<Place>,
+        newline: bool,
+    },
     /// `Write` / `WriteLn`.
     Write {
         args: Vec<WriteArg>,
         newline: bool,
+        /// Written to standard error (`Write(ErrOutput, …)`; `docs/spec/semantics.md` 6.1).
+        err: bool,
     },
+    /// `Flush(Output)`: writes out the standard output buffer.
+    Flush,
     Assert {
         cond: Expr,
         message: Option<Expr>,
         /// Source text of the condition.
         text: String,
     },
+    /// `SetLength(target, N[, M…])` (`docs/spec/types.md` 2.3, chapter 7): a string or a dynamic
+    /// array; one length per dimension of nested dynamic arrays.
+    SetLength {
+        target: Place,
+        lens: Vec<Expr>,
+    },
+    /// `raise X` (`docs/spec/exceptions.md` 5.1). `None` for `raise;` (re-raises the exception of the
+    /// lexically innermost `except` block).
+    Raise(Option<Expr>),
+    /// `Exception.RaiseOuterException(E)` inside an `except` block (`docs/spec/exceptions.md` 5.4).
+    RaiseOuter(Expr),
+    /// `try..except` / `try..finally` (`docs/spec/exceptions.md` 5.2, 5.3).
+    Try {
+        body: Vec<Stmt>,
+        handler: TryHandler,
+    },
+    /// `case` (`docs/spec/semantics.md` 4.10). The selector is evaluated once; the labels are
+    /// compared in order, and the first arm with a matching label runs.
+    Case {
+        selector: Expr,
+        arms: Vec<CaseArm>,
+        /// The `else` part, if any.
+        else_body: Option<Vec<Stmt>>,
+    },
+    /// `Include(S, X)` / `Exclude(S, X)` (`docs/spec/types.md` 8.3): `X` is the ordinal value;
+    /// `check` (`{$R+}`) checks it against the set's range first.
+    SetElem {
+        target: Place,
+        elem: Expr,
+        exclude: bool,
+        check: bool,
+    },
+    /// `Insert(source, target, index)` (`docs/spec/semantics.md` 5.3, `docs/spec/types.md` 8.6).
+    /// The source has the target's type (a string), or is an element of the dynamic array or,
+    /// with `whole`, an array of the same element type.
+    Insert {
+        source: Expr,
+        target: Place,
+        index: Expr,
+        whole: bool,
+    },
+    /// `Delete(target, index, count)`.
+    Delete {
+        target: Place,
+        index: Expr,
+        count: Expr,
+    },
     /// Does nothing (`Assert` under `{$C-}`, an empty `Write`).
     Nop,
 }
 
+/// `CaseLabel {, CaseLabel} : Statement`.
 #[derive(Debug, Clone)]
+pub struct CaseArm {
+    pub labels: Vec<CaseLabel>,
+    pub body: Option<Box<Stmt>>,
+}
+
+/// A label of a `case` arm: a constant of the selector's type, or a range of them.
+#[derive(Debug, Clone)]
+pub struct CaseLabel {
+    pub low: Expr,
+    pub high: Option<Expr>,
+}
+
+/// What follows the body of a `try`.
+#[derive(Debug, Clone)]
+pub enum TryHandler {
+    /// `except`. A bare `except` has no handlers and its statements in `else_body`; with handlers,
+    /// `else_body` is the `else` part, if any.
+    Except {
+        handlers: Vec<Handler>,
+        else_body: Option<Vec<Stmt>>,
+    },
+    Finally(Vec<Stmt>),
+}
+
+/// `on [E:] T do Statement`.
+#[derive(Debug, Clone)]
+pub struct Handler {
+    /// The exception variable (`VarKind::Exception`).
+    pub var: Option<VarId>,
+    /// The exception class (`Ty::Exception`, or `Ty::Error` after E0733).
+    pub class: Ty,
+    pub body: Option<Box<Stmt>>,
+    /// Position of `on` (the line of the dispatch).
+    pub span: TextRange,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub enum ForVar {
     Local(VarId),
-    /// A global variable inside `<main>`. `counter` is a hidden variable.
-    Global {
-        id: GlobalId,
-        counter: VarId,
-    },
+    /// A global variable inside `<main>`.
+    Global(GlobalId),
 }
 
 #[derive(Debug, Clone)]
 pub struct WriteArg {
     pub value: Expr,
     pub width: Option<Expr>,
+    /// `D` of `X:W:D` (a real or `Currency`; `docs/spec/semantics.md` 6.1).
+    pub precision: Option<Expr>,
 }
 
 /// Switches in effect at that statement (`{$Q}` / `{$R}`).
@@ -221,12 +471,16 @@ pub enum BinOp {
     Sub,
     Mul,
     Div,
+    /// `/` (`docs/spec/types.md` 8.4): always a real or `Currency` division.
+    Slash,
     Mod,
     And,
     Or,
     Xor,
     Shl,
     Shr,
+    /// `X in S` (`docs/spec/types.md` 8.3).
+    In,
     Eq,
     Ne,
     Lt,
@@ -249,12 +503,14 @@ impl BinOp {
             BinOp::Sub => "-",
             BinOp::Mul => "*",
             BinOp::Div => "div",
+            BinOp::Slash => "/",
             BinOp::Mod => "mod",
             BinOp::And => "and",
             BinOp::Or => "or",
             BinOp::Xor => "xor",
             BinOp::Shl => "shl",
             BinOp::Shr => "shr",
+            BinOp::In => "in",
             BinOp::Eq => "=",
             BinOp::Ne => "<>",
             BinOp::Lt => "<",
@@ -292,8 +548,27 @@ pub enum Calc {
     Bool,
     /// String concatenation / comparison (a `Char` is converted to `string` first).
     Str,
+    /// Concatenation / comparison of two `UTF8String`s (by bytes; `docs/spec/types.md` 8.5).
+    U8,
     /// Comparison between `Char`s (by code unit value).
     Char,
+    /// Comparison between values of the same enumeration type (by ordinal; `docs/spec/types.md` 8.1).
+    Ord,
+    /// `=` / `<>` of a dynamic array and `nil` (`docs/spec/types.md` 2.3): the references compared.
+    Ref,
+    /// Set operations and comparisons (`docs/spec/types.md` 8.3). For `+`, `-`, `*` both operands
+    /// have the result's type; a comparison may have a small and a big set of different types.
+    Set,
+    /// `X in S`: the right operand is a set, the left one an ordinal.
+    SetIn,
+    /// A real operation in `Single` or `Double` (`docs/spec/types.md` 8.4): both operands have that
+    /// type (IEEE 754; no `{$Q}` / `{$R}`).
+    Real(Ty),
+    /// A `Currency` operation: both operands are `Currency` (overflow is always `EOverflow`).
+    Curr,
+    /// `+` of two dynamic arrays of one element type (`docs/spec/types.md` 8.6): a new dynamic
+    /// array (the step's type).
+    Arr,
 }
 
 #[derive(Debug, Clone)]
@@ -317,6 +592,33 @@ pub enum ExprKind {
         base: Box<Expr>,
         index: Box<Expr>,
     },
+    /// `R.F` (read; `docs/spec/types.md` 2.1).
+    Field {
+        base: Box<Expr>,
+        /// The field's number (0-based, declaration order).
+        index: u32,
+        name: String,
+    },
+    /// `A[I]` (read; an element of a static array, `docs/spec/types.md` 2.2, or of a dynamic array
+    /// or open array, 2.3, 2.4: the base's type tells which).
+    Elem {
+        base: Box<Expr>,
+        index: Box<Expr>,
+    },
+    /// `X[L..H]` (`docs/spec/types.md` 8.7): a copy of part of a string or an array (the
+    /// expression's type is the string type or the element type's dynamic array). A bound left out
+    /// is `None`; the bounds are `Int64`, or the index type of a static array whose index type is
+    /// not an integer.
+    Slice {
+        base: Box<Expr>,
+        low: Option<Box<Expr>>,
+        high: Option<Box<Expr>>,
+    },
+    /// An array constructor `[…]` (`docs/spec/types.md` chapter 4); the expression's type is the
+    /// array type the context gives (a dynamic array for an open array parameter).
+    ArrayCtor(Vec<Expr>),
+    /// A set constructor `[E, L..H]` (`docs/spec/types.md` 8.3) of the expression's set type.
+    SetCtor(Vec<SetCtorElem>),
     /// A routine call.
     Call {
         routine: RoutineId,
@@ -332,8 +634,34 @@ pub enum ExprKind {
         operand: Box<Expr>,
         kind: Conversion,
     },
+    /// `T.Create(Msg)`: a new exception object of class `class` (`docs/spec/exceptions.md` 5.6;
+    /// the expression's type may be an ancestor after a conversion).
+    NewExc {
+        class: Ty,
+        msg: Box<Expr>,
+    },
+    /// A member of an exception object read (`docs/spec/exceptions.md` 2.1).
+    ExcMember {
+        base: Box<Expr>,
+        member: ExcMember,
+    },
+    /// `TryStrToInt(S, Value)` (`docs/spec/semantics.md` 5.3): `Value` is an `out` argument of
+    /// type `Integer`.
+    TryStrToInt {
+        s: Box<Expr>,
+        target: Place,
+    },
     /// An expression whose type could not be determined.
     Error,
+}
+
+/// An element of a set constructor: the ordinal `low`, or the range `low..high`. `check` (`{$R+}`)
+/// checks a non-empty range (or the element) against the set's range.
+#[derive(Debug, Clone)]
+pub struct SetCtorElem {
+    pub low: Expr,
+    pub high: Option<Expr>,
+    pub check: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -349,7 +677,9 @@ pub enum CallArg {
 /// Built-in functions (those that return a value).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Builtin {
+    /// `Length` of a string or an array (`docs/spec/types.md` chapter 7).
     Length,
+    /// `Copy` of a string, or of an array (`docs/spec/types.md` chapter 7; 1 to 3 arguments).
     Copy,
     Pos,
     Ord,
@@ -366,6 +696,70 @@ pub enum Builtin {
     LowerCase,
     Trim,
     GetEnvironmentVariable,
+    /// `Default(T)` (`docs/spec/types.md` chapter 7): the default value of the expression's type.
+    Default,
+    /// `Low(X)` / `High(X)`. Folded into a constant by semantic analysis (static arrays and
+    /// ordinal types; `docs/spec/types.md` chapter 7), except `High` of a dynamic or open array.
+    Low,
+    High,
+    /// `Assigned(X)` of a dynamic array or an exception: `X <> nil` (`docs/spec/types.md` chapter 7,
+    /// `docs/spec/exceptions.md` chapter 1).
+    Assigned,
+    /// `Succ(X)` / `Pred(X)` (`docs/spec/semantics.md` 5.3). Only a name: sema lowers the call to
+    /// `X + 1` / `X - 1` converted back to the type of `X`.
+    Succ,
+    Pred,
+    /// `Sqrt(X)` of a `Double` (`docs/spec/semantics.md` 5.3).
+    Sqrt,
+    /// `Sqr(X)`: `X * X` in the type of `X` (integers: the computation type of `*`); lower emits
+    /// the multiplication, evaluating `X` once.
+    Sqr,
+    /// `Pi`: folded into a constant.
+    Pi,
+    /// `Trunc(X)` / `Round(X)` of a real or a `Currency` (the argument keeps its type).
+    Trunc,
+    Round,
+    /// `FloatToStr(X)` of a `Single` or a `Double` (the argument keeps its type).
+    FloatToStr,
+    StrToFloat,
+    /// `Odd(X)` of an integer: `X and 1` (`docs/spec/semantics.md` 5.3).
+    Odd,
+    /// `UpCase(C)` of a `Char` (ASCII letters only).
+    UpCase,
+    /// `SizeOf(T)`: only a name; folded into a constant.
+    SizeOf,
+    /// `Concat(…)`: only a name; sema builds the `+` chain.
+    Concat,
+    /// `Format(Fmt, […])` (`docs/spec/semantics.md` 5.3): the format, then the elements of the
+    /// `array of const`, each of its own type.
+    Format,
+    /// `IntToHex(X, Digits)`: `X` of any integer type (its width decides negative values).
+    IntToHex,
+    StrToBool,
+    /// `BoolToStr(B[, UseBoolStrs])`: always with both arguments (sema adds `False`).
+    BoolToStr,
+    TrimLeft,
+    TrimRight,
+    SameText,
+    CompareText,
+    CompareStr,
+    /// `StringReplace(S, Old, New, Flags)` (`Flags` of `TReplaceFlags`).
+    StringReplace,
+    StringOfChar,
+    QuotedStr,
+    /// Only while resolving: a call becomes [`ExprKind::TryStrToInt`].
+    TryStrToInt,
+    /// `AnsiUpperCase(S[, Mapping])` / `AnsiLowerCase(S[, Mapping])` (`docs/spec/semantics.md`
+    /// 5.3): always with both arguments (sema adds `TCaseMapping.cmSimple`).
+    AnsiUpperCase,
+    AnsiLowerCase,
+    /// `AnsiSameText(S1, S2[, Fold])` / `AnsiCompareText(S1, S2[, Fold])`: always with the three
+    /// arguments (sema adds `TCaseFold.cfLower`).
+    AnsiSameText,
+    AnsiCompareText,
+    /// `Eof` / `Eoln` of standard input (`docs/spec/semantics.md` 6.2).
+    Eof,
+    Eoln,
 }
 
 /// Kind of conversion.
@@ -375,10 +769,23 @@ pub enum Conversion {
     Int { to: Ty, check: bool },
     /// `Char` → `string`.
     CharToStr,
+    /// `string` → `UTF8String` (`docs/spec/types.md` 8.5): lone surrogates become U+FFFD.
+    StrToU8,
+    /// `UTF8String` → `string` (lossless).
+    U8ToStr,
     /// Integer → `Char` (`Chr`, `Char(N)`). The range is that of `Word`.
     IntToChar { check: bool },
     /// Integer → `Boolean` (`Boolean(N)`; nonzero is `True`).
     IntToBool,
-    /// `Char` / `Boolean` → integer (the ordinal as is; does nothing).
+    /// `Char` / `Boolean` / an enumeration → integer (the ordinal as is; does nothing).
     OrdToInt,
+    /// A set → the set type `to` (`docs/spec/types.md` 8.3): another representation or size;
+    /// `check` (`{$R+}`) checks that every element is in the range of `to`.
+    Set { to: Ty, check: bool },
+    /// An ordinal → the enumeration or subrange type `to` (`docs/spec/types.md` 8.1, 8.2): the
+    /// value is kept; `check` (`{$R+}`) checks it against the range of `to` (`ChkRange`).
+    Range { to: Ty, check: bool },
+    /// An integer, a real or a `Currency` → the real or `Currency` type `to` (`docs/spec/types.md`
+    /// 8.4): rounded to nearest even; to `Currency` out of range is `EOverflow`.
+    Num { to: Ty },
 }

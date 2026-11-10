@@ -1,0 +1,78 @@
+; puyc format 2
+.const
+  0: str "x"
+  1: str " "
+  2: str "\n"
+  3: str "assertion failed: C <> nil"
+  4: str "stop"
+  5: str "!"
+  6: str ": "
+.type
+  64: exception DumpExceptions.EAppError slots=2 refs=0,1 parent=ty0
+  65: exception DumpExceptions.EConfigError slots=2 refs=0,1 parent=ty64
+.global
+  0: ref C
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpExceptions file="dump_exceptions.pas" init=- fini=- entry=0
+.func 0 DumpExceptions.<main> params=0 regs=15
+  .line 24
+  0000  LoadConst    r0, k0
+  0001  NewExc       r0, ty5
+  0002  StoreGlobalRef r0, g0
+  .line 25
+  0003  LoadGlobal   r13, g0
+  0004  ExcGet       r2, r13, 2
+  0005  Release      r3
+  0006  EqStr        r12, r2, r3
+  0007  BoolToStr    r1, r12
+  0008  LoadConst    r4, k1
+  0009  ConcatStr    r1, r1, r4
+  000a  LoadGlobal   r14, g0
+  000b  ExcInfo      r6, r14, 0
+  000c  StrLen       r13, r6
+  000d  IntToStr     r5, r13
+  000e  ConcatStr    r1, r1, r5
+  000f  LoadConst    r7, k2
+  0010  ConcatStr    r1, r1, r7
+  0011  CallHost     r1, h0
+  .line 26
+  0012  LoadGlobalRef r8, g0
+  0013  Release      r9
+  0014  JmpIfNeInt   r8, r9, -> 0018
+  0015  LoadConst    r10, k3
+  0016  NewExc       r10, ty7
+  0017  Raise        r10
+  .line 27
+  0018  LoadConst    r11, k4
+  0019  Move         r12, r11
+  001a  Call         r12, f1
+  .line 28
+  001b  RetVoid
+.finally r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11
+.func 1 DumpExceptions.Fail params=1 regs=9
+  .local r0 Why
+  .local r1 E
+  .line 15
+  0000  AssignRef    r1, r0
+  0001  NewExc       r1, ty65
+  .line 16
+  0002  ExcGet       r2, r1, 0
+  0003  LoadConst    r3, k5
+  0004  ConcatStr    r2, r2, r3
+  0005  ExcSet       r1, 0, r2
+  .line 17
+  0006  ExcInfo      r4, r1, 2
+  0007  LoadConst    r5, k6
+  0008  ConcatStr    r4, r4, r5
+  0009  ExcGet       r6, r1, 0
+  000a  ConcatStr    r4, r4, r6
+  000b  LoadConst    r7, k2
+  000c  ConcatStr    r4, r4, r7
+  000d  CallHost     r4, h0
+  .line 18
+  000e  AssignRef    r8, r1
+  000f  Raise        r8
+  .line 19
+  0010  RetVoid
+.finally r1, r2, r3, r4, r5, r6, r7, r8

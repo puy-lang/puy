@@ -1,0 +1,137 @@
+error[E0734]: ambiguous call to overloaded `P`
+   --> overload_errors.pas:61:3
+    |
+  7 | procedure P(X: Integer); overload;
+    |           - candidate
+...
+ 11 | procedure P(X: Int64); overload;
+    |           - candidate
+...
+ 61 |   P(B);
+    |   ^^^^
+
+error[E0735]: no overload of `P` matches these arguments
+   --> overload_errors.pas:62:3
+    |
+  7 | procedure P(X: Integer); overload;
+    |           - candidate
+...
+ 11 | procedure P(X: Int64); overload;
+    |           - candidate
+...
+ 15 | procedure P(const S: string); overload;
+    |           - candidate
+...
+ 62 |   P(D);
+    |   ^^^^
+    |
+    = note: the arguments have types `Double`
+
+error[E0735]: no overload of `P` matches these arguments
+   --> overload_errors.pas:63:3
+    |
+  7 | procedure P(X: Integer); overload;
+    |           - candidate
+...
+ 11 | procedure P(X: Int64); overload;
+    |           - candidate
+...
+ 15 | procedure P(const S: string); overload;
+    |           - candidate
+...
+ 63 |   P(1, 2);
+    |   ^^^^^^^
+    |
+    = note: the arguments have types `Integer`, `Integer`
+
+error[E0735]: no overload of `P` matches these arguments
+   --> overload_errors.pas:64:3
+    |
+  7 | procedure P(X: Integer); overload;
+    |           - candidate
+...
+ 11 | procedure P(X: Int64); overload;
+    |           - candidate
+...
+ 15 | procedure P(const S: string); overload;
+    |           - candidate
+...
+ 64 |   P();
+    |   ^^^
+    |
+    = note: the call has no arguments
+
+error[E0734]: ambiguous call to overloaded `Q`
+   --> overload_errors.pas:65:3
+    |
+ 19 | procedure Q(A: Integer; B: Int64); overload;
+    |           - candidate
+...
+ 23 | procedure Q(A: Int64; B: Integer); overload;
+    |           - candidate
+...
+ 65 |   Q(1, 2);
+    |   ^^^^^^^
+
+error[E0734]: ambiguous call to overloaded `F`
+   --> overload_errors.pas:66:11
+    |
+ 27 | function F(N: Integer = 1): Integer; overload;
+    |          - candidate
+...
+ 32 | function F(const S: string = ''): Integer; overload;
+    |          - candidate
+...
+ 66 |   WriteLn(F);
+    |           ^
+
+error[E0735]: no overload of `R` matches these arguments
+   --> overload_errors.pas:67:3
+    |
+ 45 | procedure R(var X: Integer); overload;
+    |           - candidate
+...
+ 49 | procedure R(var X: string); overload;
+    |           - candidate
+...
+ 67 |   R(W);
+    |   ^^^^
+    |
+    = note: the arguments have types `Word`
+
+error[E0700]: undeclared identifier `Undefined`
+   --> overload_errors.pas:68:5
+    |
+ 68 |   P(Undefined);
+    |     ^^^^^^^^^
+
+error[E0703]: operator `+` cannot be applied to `Byte` and `Char`
+   --> overload_errors.pas:69:7
+    |
+ 69 |   P(B + 'x');
+    |       ^
+    |
+    = suggestion: convert with `IntToStr(…)`
+
+error[E0700]: undeclared identifier `Undefined`
+   --> overload_errors.pas:70:5
+    |
+ 70 |   T(Undefined, 'x');
+    |     ^^^^^^^^^
+
+error[E0702]: type mismatch: expected `Integer`, found `Char` (argument 2, parameter `B`)
+   --> overload_errors.pas:70:16
+    |
+ 70 |   T(Undefined, 'x');
+    |                ^^^
+
+error[E0704]: procedure `P` requires arguments
+   --> overload_errors.pas:71:3
+    |
+ 15 | procedure P(const S: string); overload;
+    |           - declared here
+...
+ 71 |   P;
+    |   ^
+
+error: aborting due to 12 errors

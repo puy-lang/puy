@@ -1,0 +1,187 @@
+error[E0707]: cannot assign to `A[0]`
+   --> dyn_array_errors.pas:13:3
+    |
+ 11 | procedure Fill(const A: array of Integer);
+    |                      - declared here
+ 12 | begin
+ 13 |   A[0] := 1;                            // E0707: const open array
+    |   ^^^^ a `const` parameter
+
+error[E0707]: cannot assign to `A`
+   --> dyn_array_errors.pas:18:13
+    |
+ 16 | procedure Resize(A: array of Integer; var B: array of Integer);
+    |                  - declared here
+ 17 | begin
+ 18 |   SetLength(A, 2);                      // E0707: open array parameter
+    |             ^ an open array parameter
+
+error[E0707]: cannot assign to `B`
+   --> dyn_array_errors.pas:19:3
+    |
+ 16 | procedure Resize(A: array of Integer; var B: array of Integer);
+    |                                           - declared here
+...
+ 19 |   B := nil;                             // E0707: open array parameter
+    |   ^ an open array parameter
+
+error[E3200]: `out` open array parameters are not supported yet
+   --> dyn_array_errors.pas:27:22
+    |
+ 27 | procedure Bad(out A: array of Integer); // E3200: out open array
+    |                      ^^^^^^^^^^^^^^^^
+    |
+    = note: use a `var` parameter
+
+error[E3200]: `array of const` parameters are not supported yet (planned for M3)
+   --> dyn_array_errors.pas:31:25
+    |
+ 31 | procedure Args(const A: array of const); // E3200: array of const (M3)
+    |                         ^^^^^
+
+warning[W0001]: unused variable `X` (unused-variable)
+   --> dyn_array_errors.pas:42:7
+    |
+ 42 |   var X := [1, 2];                      // E0729
+    |       ^ declared here
+    |
+    = note: disable with `{$WARN unused-variable OFF}`
+    = suggestion: remove `X`
+
+error[E0729]: cannot infer the type of an array constructor
+   --> dyn_array_errors.pas:42:12
+    |
+ 42 |   var X := [1, 2];                      // E0729
+    |            ^^^^^^
+    |
+    = note: give the array a type, as in `var A: TArray<Integer> := [1, 2]`
+
+error[E0729]: cannot infer the type of an array constructor
+   --> dyn_array_errors.pas:43:11
+    |
+ 43 |   WriteLn([1]);                         // E0729
+    |           ^^^
+    |
+    = note: give the array a type, as in `var A: TArray<Integer> := [1, 2]`
+
+error[E0702]: type mismatch: expected `Integer`, found `nil`
+   --> dyn_array_errors.pas:44:8
+    |
+ 44 |   I := nil;                             // E0702: nil to Integer
+    |        ^^^
+
+error[E0702]: type mismatch: expected `TStrs`, found `TInts`
+   --> dyn_array_errors.pas:45:8
+    |
+ 45 |   S := A;                               // E0702: element types differ
+    |        ^
+
+error[E0702]: type mismatch: expected `array of string`, found `TInts` (argument 1, parameter `A`)
+   --> dyn_array_errors.pas:46:8
+    |
+ 46 |   Strs(A);                              // E0702: element types differ
+    |        ^
+
+error[E0702]: expected 2 elements, found 3
+   --> dyn_array_errors.pas:47:8
+    |
+ 47 |   P := [1, 2, 3];                       // E0702: element count
+    |        ^^^^^^^^^
+
+error[E0702]: a range is not allowed in an array constructor
+   --> dyn_array_errors.pas:48:9
+    |
+ 48 |   A := [1..3];                          // E0702: range in an array constructor
+    |         ^^^^
+
+error[E0702]: type mismatch: expected `string`, found an array constructor
+   --> dyn_array_errors.pas:49:10
+    |
+ 49 |   Str := [1];                           // E0702: not an array type
+    |          ^^^
+
+error[E0703]: operator `=` cannot be applied to `TInts` and `TInts`
+   --> dyn_array_errors.pas:50:8
+    |
+ 50 |   if A = B then;                        // E0703: arrays are not compared
+    |        ^
+
+warning[W0018]: empty statement after `then` (empty-statement)
+   --> dyn_array_errors.pas:50:16
+    |
+ 50 |   if A = B then;                        // E0703: arrays are not compared
+    |                ^
+    |
+    = note: write a statement after `then`, or `begin end` if the body is meant to be empty
+    = note: disable with `{$WARN empty-statement OFF}`
+
+error[E0718]: cannot write a value of type `TInts`
+   --> dyn_array_errors.pas:51:11
+    |
+ 51 |   WriteLn(A);                           // E0718
+    |           ^
+
+error[E0719]: index type mismatch: expected `Integer`, found `Char`
+   --> dyn_array_errors.pas:52:10
+    |
+ 52 |   I := A['x'];                          // E0719
+    |          ^^^
+
+error[E0705]: wrong number of arguments: expected 2, found 1
+   --> dyn_array_errors.pas:53:3
+    |
+ 53 |   SetLength(A);                         // E0705
+    |   ^^^^^^^^^^^^
+
+error[E0705]: wrong number of arguments: expected 2, found 3
+   --> dyn_array_errors.pas:54:3
+    |
+ 54 |   SetLength(A, 1, 2);                   // E0705: one dimension
+    |   ^^^^^^^^^^^^^^^^^^
+
+error[E0702]: type mismatch: expected a string or a dynamic array, found `Integer` (argument 1, parameter `S`)
+   --> dyn_array_errors.pas:55:13
+    |
+ 55 |   SetLength(I, 1);                      // E0702: not a string or a dynamic array
+    |             ^
+
+error[E0702]: type mismatch: expected an integer type, found `Char` (argument 2, parameter `NewLength`)
+   --> dyn_array_errors.pas:56:16
+    |
+ 56 |   SetLength(A, 'x');                    // E0702: length is an integer
+    |                ^^^
+
+error[E0702]: type mismatch: expected a dynamic array, found `Integer` (argument 1, parameter `X`)
+   --> dyn_array_errors.pas:57:21
+    |
+ 57 |   I := Ord(Assigned(I));                // E0702: Assigned of an Integer
+    |                     ^
+
+error[E0702]: type mismatch: expected an ordinal type or an array, found the type `TInts` (argument 1, parameter `X`)
+   --> dyn_array_errors.pas:58:13
+    |
+ 58 |   I := High(TInts);                     // E0702: High of a dynamic array type
+    |             ^^^^^
+
+error[E0705]: wrong number of arguments: expected 1 to 3, found 4
+   --> dyn_array_errors.pas:59:8
+    |
+ 59 |   I := Copy(A, 1, 2, 3)[0];             // E0705
+    |        ^^^^^^^^^^^^^^^^
+
+error[E3200]: `nil` without a dynamic array type is not supported yet (planned for M3)
+   --> dyn_array_errors.pas:60:12
+    |
+ 60 |   if nil = nil then;                    // E3200: nil without a dynamic array
+    |            ^^^
+
+warning[W0018]: empty statement after `then` (empty-statement)
+   --> dyn_array_errors.pas:60:20
+    |
+ 60 |   if nil = nil then;                    // E3200: nil without a dynamic array
+    |                    ^
+    |
+    = note: write a statement after `then`, or `begin end` if the body is meant to be empty
+    = note: disable with `{$WARN empty-statement OFF}`
+
+error: aborting due to 24 errors; 3 warnings emitted

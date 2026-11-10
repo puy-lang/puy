@@ -1,0 +1,129 @@
+error[E0731]: `Continue` cannot leave a `finally` block
+   --> try_errors.pas:19:9
+    |
+ 19 |         Continue;
+    |         ^^^^^^^^
+    |
+    = note: leaving a `finally` block would discard an exception that is being raised
+    = note: set a flag variable instead, and leave after the `try` statement
+
+error[E0731]: `Break` cannot leave a `finally` block
+   --> try_errors.pas:21:9
+    |
+ 21 |         Break;
+    |         ^^^^^
+    |
+    = note: leaving a `finally` block would discard an exception that is being raised
+    = note: set a flag variable instead, and leave after the `try` statement
+
+error[E0731]: `Exit` cannot leave a `finally` block
+   --> try_errors.pas:22:7
+    |
+ 22 |       Exit;
+    |       ^^^^
+    |
+    = note: leaving a `finally` block would discard an exception that is being raised
+    = note: set a flag variable instead, and leave after the `try` statement
+
+warning[W0019]: handler for `EParse` is unreachable (unreachable-handler)
+   --> try_errors.pas:58:8
+    |
+ 56 |     on Exception do
+    |        --------- caught here
+ 57 |       WriteLn('all');
+ 58 |     on EParse do
+    |        ^^^^^^
+    |
+    = note: disable with `{$WARN unreachable-handler OFF}`
+
+error[E0733]: `TRec` is not an exception class
+   --> try_errors.pas:60:11
+    |
+ 60 |     on E: TRec do
+    |           ^^^^
+
+error[E0701]: `Local` is already declared
+   --> try_errors.pas:62:8
+    |
+ 50 |   Local: Integer;
+    |   ----- declared here
+...
+ 62 |     on Local: Exception do
+    |        ^^^^^ declared again here
+
+warning[W0019]: handler for `Exception` is unreachable (unreachable-handler)
+   --> try_errors.pas:62:15
+    |
+ 56 |     on Exception do
+    |        --------- caught here
+...
+ 62 |     on Local: Exception do
+    |               ^^^^^^^^^
+    |
+    = note: disable with `{$WARN unreachable-handler OFF}`
+
+warning[W0019]: handler for `Exception` is unreachable (unreachable-handler)
+   --> try_errors.pas:64:11
+    |
+ 56 |     on Exception do
+    |        --------- caught here
+...
+ 64 |     on E: Exception do
+    |           ^^^^^^^^^
+    |
+    = note: disable with `{$WARN unreachable-handler OFF}`
+
+error[E0707]: cannot assign to `E`
+   --> try_errors.pas:66:7
+    |
+ 64 |     on E: Exception do
+    |        - declared here
+ 65 |     begin
+ 66 |       E := nil;
+    |       ^ the exception variable
+
+error[E0701]: `E` is already declared
+   --> try_errors.pas:70:12
+    |
+ 64 |     on E: Exception do
+    |        - declared here
+...
+ 70 |         on E: EParse do
+    |            ^ declared again here
+
+error[E0732]: `raise` without an exception is only allowed in an `except` block
+   --> try_errors.pas:90:3
+    |
+ 90 |   raise;
+    |   ^^^^^
+
+error[E0732]: `RaiseOuterException` is only allowed in an `except` block
+   --> try_errors.pas:91:13
+    |
+ 91 |   Exception.RaiseOuterException(EParse.Create('outer'));
+    |             ^^^^^^^^^^^^^^^^^^^
+
+warning[W0003]: unreachable code (unreachable-code)
+   --> try_errors.pas:92:3
+    |
+ 92 |   try
+    |   ^^^
+...
+ 97 |   end;
+    | ^^^^^
+    |
+    = note: disable with `{$WARN unreachable-code OFF}`
+
+error[E0705]: wrong number of arguments: expected 1, found 2
+   --> try_errors.pas:95:5
+    |
+ 95 |     Exception.RaiseOuterException(EParse.Create('a'), 1);
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0702]: type mismatch: expected `Exception`, found `Integer`
+   --> try_errors.pas:96:35
+    |
+ 96 |     Exception.RaiseOuterException(42);
+    |                                   ^^
+
+error: aborting due to 11 errors; 4 warnings emitted

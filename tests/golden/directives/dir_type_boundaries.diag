@@ -1,0 +1,10 @@
+warning[W0005]: directive `{$R+}` is not at a declaration or statement boundary (directive-placement)
+   --> dir_type_boundaries.pas:14:17
+    |
+ 14 |     Z: array[0..{$R+}1] of Integer;
+    |                 ^^^^^
+    |
+    = note: Puy applies a switch from the next declaration or statement, not from this point
+    = note: disable with `{$WARN directive-placement OFF}`
+
+warning: 1 warning emitted

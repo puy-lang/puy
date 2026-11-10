@@ -1,0 +1,9 @@
+error[E0700]: undeclared identifier `Area`
+   --> main.pas:15:13
+    |
+ 15 |   Result := Area(N, N);
+    |             ^^^^
+    |
+    = fix: add `uses Shapes`
+
+error: aborting due to 1 error

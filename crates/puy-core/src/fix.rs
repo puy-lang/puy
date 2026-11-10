@@ -1,19 +1,28 @@
 //! The `puy fix` procedure (`docs/spec/diagnostics.md` 2.1, 10.7): apply the `safe` fixes and recompile (up to 10 times).
+//!
+//! The fixes are applied to every source file checked: the passed file and the units it uses
+//! (`docs/spec/units.md` 8.3). The included files are not rewritten.
+
+use std::collections::HashMap;
 
 use crate::diagnostics::{Applicability, Diagnostic, TextEdit};
 use crate::driver::{CompileOptions, compile};
-use crate::source::{FileId, SourceMap, SourceProvider, TextRange};
+use crate::source::{FileId, SourceMap, SourceProvider};
 
 /// An applied fix.
 #[derive(Debug, Clone)]
 pub struct AppliedFix {
     pub code: String,
     pub title: String,
+    /// The file the fix rewrites (the path of the passed file, or a unit's path in the form of
+    /// `docs/spec/units.md` 8.2).
+    pub file: String,
     /// 1-based.
     pub round: usize,
     /// The edits, in terms of the source before this round was applied.
     pub edits: Vec<TextEdit>,
-    /// The source before this round was applied (to look up lines and columns for `original`).
+    /// The source of `file` before this round was applied (to look up lines and columns for
+    /// `original`).
     pub source_before: Vec<u8>,
 }
 
@@ -29,9 +38,18 @@ pub struct SkippedFix {
     pub edits: Vec<TextEdit>,
 }
 
-pub struct FixResult {
-    /// The source after applying.
+/// A file rewritten by the fixes.
+#[derive(Debug, Clone)]
+pub struct FixedFile {
+    pub path: String,
+    /// The source after applying (line breaks not yet normalized; `normalize_newlines`).
     pub bytes: Vec<u8>,
+}
+
+pub struct FixResult {
+    /// The files with at least one applied fix, in file order (`docs/spec/units.md` 8.1): the
+    /// order in which `puy fix` writes them.
+    pub files: Vec<FixedFile>,
     pub applied: Vec<AppliedFix>,
     pub skipped: Vec<SkippedFix>,
     /// Number of compilations.
@@ -42,6 +60,16 @@ pub struct FixResult {
     pub sources: SourceMap,
 }
 
+impl FixResult {
+    /// The source of `path` after applying, if a fix was applied to it.
+    pub fn fixed(&self, path: &str) -> Option<&[u8]> {
+        self.files
+            .iter()
+            .find(|f| f.path == path)
+            .map(|f| f.bytes.as_slice())
+    }
+}
+
 pub const MAX_ROUNDS: usize = 10;
 
 /// Whether two edits overlap (touching at an endpoint also counts as overlapping).
@@ -49,14 +77,16 @@ fn overlaps(a: &TextEdit, b: &TextEdit) -> bool {
     a.file == b.file && a.range.start() <= b.range.end() && b.range.start() <= a.range.end()
 }
 
-/// Selects the edits to apply in one round (in diagnostic order, only non-overlapping ones).
-/// Returns (the fixes to apply as (diagnostic index, fix), all of the edits).
-pub fn select_round(diags: &[Diagnostic], file: FileId) -> Vec<(usize, Vec<TextEdit>)> {
+/// Selects the fixes to apply in one round (in diagnostic order, only non-overlapping ones),
+/// among those whose `primary` is in `files` (the files `puy fix` rewrites) and whose edits are
+/// all in the primary's file.
+/// Returns (diagnostic index, the fix's edits) for each.
+pub fn select_round(diags: &[Diagnostic], files: &[FileId]) -> Vec<(usize, Vec<TextEdit>)> {
     let mut chosen: Vec<TextEdit> = Vec::new();
     let mut out: Vec<(usize, Vec<TextEdit>)> = Vec::new();
     for (i, d) in diags.iter().enumerate() {
         let Some(p) = &d.primary else { continue };
-        if p.span.file != file {
+        if !files.contains(&p.span.file) {
             continue;
         }
         let Some(fix) = d
@@ -66,6 +96,11 @@ pub fn select_round(diags: &[Diagnostic], file: FileId) -> Vec<(usize, Vec<TextE
         else {
             continue;
         };
+        // The edits of a fix are in its primary's file (`docs/spec/diagnostics.md` 2.1), which
+        // `AppliedFix` and the output of `puy fix` rely on
+        if fix.edits.iter().any(|e| e.file != p.span.file) {
+            continue;
+        }
         // An identical edit counts as already selected
         let edits: Vec<TextEdit> = fix
             .edits
@@ -89,7 +124,8 @@ pub fn select_round(diags: &[Diagnostic], file: FileId) -> Vec<(usize, Vec<TextE
     out
 }
 
-/// Applies the edits in descending order of position. If `newline` is given, inserted `LF`s are replaced with it.
+/// Applies the edits (all in one file) in descending order of position. If `newline` is given,
+/// inserted `LF`s are replaced with it.
 pub fn apply_edits(bytes: &[u8], edits: &[TextEdit], newline: Option<&str>) -> Vec<u8> {
     let mut sorted: Vec<&TextEdit> = edits.iter().collect();
     sorted.sort_by_key(|e| std::cmp::Reverse(e.range.start()));
@@ -143,7 +179,28 @@ pub fn normalize_newlines(bytes: &[u8]) -> Vec<u8> {
     out
 }
 
-/// Applies fixes until none remain. With `keep_line_endings`, inserted line breaks follow the file's line breaks.
+/// Serves the rewritten units in place of the files on disk, so that the next round compiles
+/// the fixed sources.
+struct Overlay<'a> {
+    inner: &'a mut dyn SourceProvider,
+    files: &'a HashMap<String, Vec<u8>>,
+}
+
+impl SourceProvider for Overlay<'_> {
+    fn read(&mut self, path: &str) -> Result<Vec<u8>, puy_host::HostError> {
+        match self.files.get(path) {
+            Some(b) => Ok(b.clone()),
+            None => self.inner.read(path),
+        }
+    }
+
+    fn list(&mut self, dir: &str) -> Result<Vec<String>, puy_host::HostError> {
+        self.inner.list(dir)
+    }
+}
+
+/// Applies fixes until none remain. With `keep_line_endings`, inserted line breaks follow each
+/// file's line breaks.
 pub fn fix(
     path: &str,
     bytes: Vec<u8>,
@@ -151,23 +208,54 @@ pub fn fix(
     opts: &CompileOptions,
     keep_line_endings: bool,
 ) -> FixResult {
-    let newline = if keep_line_endings {
-        Some(detect_newline(&bytes))
-    } else {
-        None
-    };
-    let mut current = bytes;
+    let mut main = bytes;
+    // The rewritten units by path, and the paths of all rewritten files in the order first
+    // rewritten
+    let mut units: HashMap<String, Vec<u8>> = HashMap::new();
+    let mut touched: Vec<String> = Vec::new();
+    // The first line break of each file, from its source before any fix
+    let mut newlines: HashMap<String, &'static str> = HashMap::new();
     let mut applied: Vec<AppliedFix> = Vec::new();
     let mut rounds = 0;
     loop {
         rounds += 1;
-        let out = compile(path, current.clone(), provider, opts);
-        let selected = select_round(&out.diagnostics, FileId(0));
+        let out = {
+            let mut overlay = Overlay {
+                inner: &mut *provider,
+                files: &units,
+            };
+            compile(path, main.clone(), &mut overlay, opts)
+        };
+        let selected = select_round(&out.diagnostics, &out.files);
         if selected.is_empty() || rounds > MAX_ROUNDS {
             let converged = selected.is_empty();
-            let skipped = collect_skipped(&out.diagnostics, &out.sources);
+            let skipped = collect_skipped(&out.diagnostics, &out.sources, &out.files);
+            // File order: the files of the last compilation, then any rewritten file it no
+            // longer reads
+            let mut order: Vec<String> = out
+                .files
+                .iter()
+                .map(|f| out.sources.get(*f).path.clone())
+                .filter(|p| touched.contains(p))
+                .collect();
+            for p in &touched {
+                if !order.contains(p) {
+                    order.push(p.clone());
+                }
+            }
+            let files = order
+                .into_iter()
+                .map(|p| {
+                    let bytes = if p == path {
+                        main.clone()
+                    } else {
+                        units.remove(&p).expect("a rewritten unit has its source")
+                    };
+                    FixedFile { path: p, bytes }
+                })
+                .collect();
             return FixResult {
-                bytes: current,
+                files,
                 applied,
                 skipped,
                 rounds,
@@ -176,35 +264,80 @@ pub fn fix(
                 sources: out.sources,
             };
         }
-        let mut all_edits: Vec<TextEdit> = Vec::new();
+        // The edits of this round by file, without duplicates
+        let mut by_file: Vec<(FileId, Vec<TextEdit>)> = Vec::new();
         for (i, edits) in &selected {
             let d = &out.diagnostics[*i];
-            let fix = d.safe_fix().unwrap();
+            let fix = d
+                .safe_fix()
+                .expect("select_round picks diagnostics with a safe fix");
+            let file = d
+                .primary
+                .as_ref()
+                .expect("select_round picks diagnostics with a primary")
+                .span
+                .file;
+            let src = out.sources.get(file);
             applied.push(AppliedFix {
                 code: d.code.map(|c| c.to_string()).unwrap_or_default(),
                 title: fix.title.clone(),
+                file: src.path.clone(),
                 round: rounds,
                 edits: edits.clone(),
-                source_before: current.clone(),
+                source_before: src.bytes.clone(),
             });
             for e in edits {
-                if !all_edits
+                let slot = match by_file.iter().position(|(f, _)| *f == e.file) {
+                    Some(k) => k,
+                    None => {
+                        by_file.push((e.file, Vec::new()));
+                        by_file.len() - 1
+                    }
+                };
+                let list = &mut by_file[slot].1;
+                if !list
                     .iter()
                     .any(|c| c.range == e.range && c.replacement == e.replacement)
                 {
-                    all_edits.push(e.clone());
+                    list.push(e.clone());
                 }
             }
         }
-        current = apply_edits(&current, &all_edits, newline);
+        for (file, edits) in by_file {
+            let src = out.sources.get(file);
+            let newline = if keep_line_endings {
+                Some(
+                    *newlines
+                        .entry(src.path.clone())
+                        .or_insert_with(|| detect_newline(&src.bytes)),
+                )
+            } else {
+                None
+            };
+            let fixed = apply_edits(&src.bytes, &edits, newline);
+            if !touched.contains(&src.path) {
+                touched.push(src.path.clone());
+            }
+            if file == FileId(0) {
+                main = fixed;
+            } else {
+                units.insert(src.path.clone(), fixed);
+            }
+        }
     }
 }
 
-fn collect_skipped(diags: &[Diagnostic], sources: &SourceMap) -> Vec<SkippedFix> {
+/// The `safe` fixes in included files. `checked` are the source files of the compilation (the
+/// passed file and the units it uses), whose fixes are applied.
+fn collect_skipped(
+    diags: &[Diagnostic],
+    sources: &SourceMap,
+    checked: &[FileId],
+) -> Vec<SkippedFix> {
     let mut out = Vec::new();
     for d in diags {
         let Some(p) = &d.primary else { continue };
-        if p.span.file == FileId(0) {
+        if checked.contains(&p.span.file) {
             continue;
         }
         let Some(fix) = d.safe_fix() else { continue };
@@ -222,18 +355,20 @@ fn collect_skipped(diags: &[Diagnostic], sources: &SourceMap) -> Vec<SkippedFix>
     out
 }
 
-/// Number of applicable `safe` fixes (for the `puy fix` hint line). Fixes inside included files are not counted.
-pub fn applicable_fix_count(diags: &[Diagnostic]) -> usize {
+/// Number of `safe` fixes `puy fix` would apply (for the `puy fix` hint line;
+/// `docs/spec/diagnostics.md` 10.4): those whose `primary` is in `files`, the source files of the
+/// compilation (`CompileOutput::files`). Fixes inside included files are not counted.
+pub fn applicable_fix_count(diags: &[Diagnostic], files: &[FileId]) -> usize {
     diags
         .iter()
         .filter(|d| {
-            d.primary.as_ref().is_some_and(|p| p.span.file == FileId(0)) && d.safe_fix().is_some()
+            d.primary
+                .as_ref()
+                .is_some_and(|p| files.contains(&p.span.file))
+                && d.safe_fix().is_some()
         })
         .count()
 }
-
-#[allow(dead_code)]
-fn _unused(_: TextRange) {}
 
 #[cfg(test)]
 mod tests {
@@ -256,7 +391,7 @@ mod tests {
         let r = run_fix(
             "program Hello\nvar X: Integer\nbegin\n  X := StrToInt('1')\n  WriteLn(X)\nend.\n",
         );
-        let text = String::from_utf8(r.bytes.clone()).unwrap();
+        let text = String::from_utf8(r.fixed("t.pas").unwrap().to_vec()).unwrap();
         assert_eq!(
             text,
             "program Hello;\nuses System.SysUtils;\nvar X: Integer;\nbegin\n  X := StrToInt('1');\n  WriteLn(X)\nend.\n"
@@ -275,7 +410,7 @@ mod tests {
         let r = run_fix(
             "{$APPTYPE CONSOLE}\nprocedure P;\nvar S: string;\nbegin\n  S := S + 'x';\n  WriteLn(S);\nend;\n",
         );
-        let text = String::from_utf8(r.bytes.clone()).unwrap();
+        let text = String::from_utf8(r.fixed("t.pas").unwrap().to_vec()).unwrap();
         assert_eq!(
             text,
             "procedure P;\nvar S: string = '';\nbegin\n  S := S + 'x';\n  WriteLn(S);\nend;\n"
@@ -293,7 +428,7 @@ mod tests {
             &CompileOptions::default(),
             true,
         );
-        let text = String::from_utf8(r.bytes.clone()).unwrap();
+        let text = String::from_utf8(r.fixed("t.pas").unwrap().to_vec()).unwrap();
         assert_eq!(
             text,
             "program Hello;\r\nuses System.SysUtils;\r\nbegin\r\n  X := StrToInt('1');\r\nend.\r\n"

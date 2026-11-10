@@ -1,0 +1,93 @@
+; puyc format 2
+.const
+  0: utf8 "u"
+  1: str "%d %s %s %g %s"
+  2: float 1.5
+  3: str "\n"
+  4: str "12"
+  5: str "aXa"
+  6: str "x"
+  7: str "-"
+  8: str "%d"
+.global
+  0: int V
+  1: int S
+  2: ref U
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpSysUtils file="dump_sysutils.pas" init=- fini=- entry=0
+.func 0 DumpSysUtils.<main> params=0 regs=29
+  .line 15
+  0000  LoadInt      r18, -1
+  0001  StoreGlobal  r18, g1
+  .line 16
+  0002  LoadConst    r0, k0
+  0003  StoreGlobalRef r0, g2
+  .line 17
+  0004  LoadConst    r2, k1
+  0005  Move         r18, r2
+  0006  LoadInt      r19, 4
+  0007  LoadGlobal   r20, g0
+  0008  LoadInt      r21, 8
+  0009  LoadInt      r22, 97
+  000a  LoadInt      r23, 11
+  000b  LoadGlobalRef r3, g2
+  000c  Move         r24, r3
+  000d  LoadInt      r25, 13
+  000e  LoadConst    r26, k2
+  000f  LoadInt      r27, 8
+  0010  LoadInt      r28, 99
+  0011  Format       r1, r18, 5
+  0012  LoadConst    r4, k3
+  0013  ConcatStr    r1, r1, r4
+  0014  CallHost     r1, h0
+  .line 18
+  0015  LoadConst    r5, k4
+  0016  TryStrToInt  r18, r5, r19
+  0017  StoreGlobal  r19, g0
+  0018  JmpIfFalse   r18, -> 001f
+  .line 19
+  0019  LoadGlobal   r18, g0
+  001a  IntToStr     r6, r18
+  001b  LoadConst    r7, k3
+  001c  ConcatStr    r6, r6, r7
+  001d  CallHost     r6, h0
+  .line 18
+  001e  Jmp          -> 001f
+  .line 20
+  001f  LoadGlobal   r18, g0
+  0020  LoadZero     r19
+  0021  LtInt        r18, r19, r18
+  0022  LoadZero     r19
+  0023  BoolStr      r8, r18, r19
+  0024  LoadGlobal   r18, g1
+  0025  LoadInt      r19, 2
+  0026  Narrow       r20, r18, 1
+  0027  IntToHex     r9, r20, r19
+  0028  ConcatStr    r8, r8, r9
+  0029  LoadConst    r10, k3
+  002a  ConcatStr    r8, r8, r10
+  002b  CallHost     r8, h0
+  .line 21
+  002c  LoadConst    r12, k5
+  002d  Move         r18, r12
+  002e  LoadConst    r13, k6
+  002f  Move         r19, r13
+  0030  LoadConst    r14, k7
+  0031  Move         r20, r14
+  0032  LoadInt      r21, 3
+  0033  StrReplace   r11, r18
+  0034  LoadConst    r15, k3
+  0035  ConcatStr    r11, r11, r15
+  0036  CallHost     r11, h0
+  .line 22
+  0037  LoadConst    r17, k8
+  0038  Move         r18, r17
+  0039  LoadInt      r19, 4
+  003a  LoadGlobal   r20, g0
+  003b  Format       r16, r18, 1
+  003c  NewExc       r16, ty0
+  003d  Raise        r16
+  .line 23
+  003e  RetVoid
+.finally r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16, r17

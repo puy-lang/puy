@@ -1,0 +1,4 @@
+error: uncaught exception EDivByZero: division by zero
+  at NestedTrace.Outer.Inner (nested_trace.pas:9)
+  at NestedTrace.Outer (nested_trace.pas:13)
+  at NestedTrace.<main> (nested_trace.pas:18)

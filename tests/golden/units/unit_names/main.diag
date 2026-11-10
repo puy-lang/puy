@@ -1,0 +1,82 @@
+error[E2506]: two files map to the unit name `Pair.One`
+  --> main.pas:6:30
+   |
+ 6 |   Models.User, System.Extra, Pair.One, Calc_test, Tool, App.Missing.Name,
+   |                              ^^^^^^^^
+   |
+   = note: `src/Pair.One.pas`
+   = note: `src/Pair/One.pas`
+
+error[E2500]: unit `Calc_test` not found
+  --> main.pas:6:40
+   |
+ 6 |   Models.User, System.Extra, Pair.One, Calc_test, Tool, App.Missing.Name,
+   |                                        ^^^^^^^^^
+   |
+   = note: unit `Calc_test` is looked up as `src/Calc_test.pas`
+
+error[E2500]: `Tool` is not a unit
+  --> main.pas:6:51
+   |
+ 6 |   Models.User, System.Extra, Pair.One, Calc_test, Tool, App.Missing.Name,
+   |                                                   ^^^^
+
+error[E2500]: unit `App.Missing.Name` not found
+  --> main.pas:6:57
+   |
+ 6 |   Models.User, System.Extra, Pair.One, Calc_test, Tool, App.Missing.Name,
+   |                                                         ^^^^^^^^^^^^^^^^
+   |
+   = note: unit `App.Missing.Name` is looked up as `src/App.Missing.Name.pas`, `src/App/Missing.Name.pas`, `src/App.Missing/Name.pas` or `src/App/Missing/Name.pas`
+
+warning[W0006]: `in 'lib/Greeting.pas'` is ignored (uses-in-clause)
+  --> main.pas:7:12
+   |
+ 7 |   Greeting in 'lib/Greeting.pas', Greeting in 'src/Greeting.pas';
+   |            ^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: disable with `{$WARN uses-in-clause OFF}`
+   = fix: remove `in 'lib/Greeting.pas'`
+
+error[E2504]: file in `uses … in '…'` is not the unit found by name
+  --> main.pas:7:15
+   |
+ 7 |   Greeting in 'lib/Greeting.pas', Greeting in 'src/Greeting.pas';
+   |               ^^^^^^^^^^^^^^^^^^
+   |
+   = note: units are always found by name; the file found is `src/Greeting.pas`
+
+error[E2500]: unit `Greeting` is already used
+  --> main.pas:7:35
+   |
+ 7 |   Greeting in 'lib/Greeting.pas', Greeting in 'src/Greeting.pas';
+   |                                   ^^^^^^^^
+
+warning[W0006]: `in 'src/Greeting.pas'` is ignored (uses-in-clause)
+  --> main.pas:7:44
+   |
+ 7 |   Greeting in 'lib/Greeting.pas', Greeting in 'src/Greeting.pas';
+   |                                            ^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: disable with `{$WARN uses-in-clause OFF}`
+   = fix: remove `in 'src/Greeting.pas'`
+
+error[E2503]: unit name `Models.Users` does not match its path
+  --> src/Models/User.pas:1:6
+   |
+ 1 | unit Models.Users;
+   |      ^^^^^^^^^^^^
+   |
+   = note: the unit name is the path under `src/` with folders joined by `.`
+   = note: move the file to `src/Models/Users.pas`
+   = suggestion: replace with `Models.User`
+
+error[E2503]: unit names starting with `System.` are reserved for the standard library
+  --> src/System/Extra.pas:1:6
+   |
+ 1 | unit System.Extra;
+   |      ^^^^^^^^^^^^
+   |
+   = note: the unit name is the path under `src/` with folders joined by `.`
+
+error: aborting due to 8 errors; 2 warnings emitted

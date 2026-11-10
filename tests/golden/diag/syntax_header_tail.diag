@@ -21,7 +21,7 @@ error[E2500]: unit `Foo` not found
  4 | uses Foo, System.SysUtils as SU;
    |      ^^^
    |
-   = note: only `System.SysUtils` can be used in this release; more units of the standard library come with later releases
+   = note: a script without `puy.toml` can only use standard library units
 
 error[E2500]: unit `System.SysUtils` is already used
   --> syntax_header_tail.pas:4:11

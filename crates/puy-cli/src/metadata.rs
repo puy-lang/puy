@@ -211,3 +211,65 @@ fn find_manifest_os(start: &std::path::Path) -> Option<(String, Vec<u8>)> {
     }
     None
 }
+
+/// The package root (`docs/spec/units.md` 2.1): the nearest directory holding `puy.toml`, from the
+/// directory of the passed file (the working directory for `-e` / stdin) upward. Returns how many
+/// levels up it is and the file's path relative to it.
+pub fn find_package_root(path: &str) -> Option<puy_core::driver::PackageRoot> {
+    let cwd = std::env::current_dir().ok()?;
+    let is_file = path != "<stdin>" && path != "<eval>";
+    let start = if is_file {
+        let p = std::path::Path::new(path);
+        let abs = if p.is_absolute() {
+            p.to_path_buf()
+        } else {
+            cwd.join(p)
+        };
+        abs.parent()?.to_path_buf()
+    } else {
+        cwd
+    };
+    // Fold `.` and `..` as text, without resolving links: the levels must match the parts of the
+    // passed path that `root_prefix` drops (`docs/spec/units.md` 8.2)
+    let start = {
+        let mut out = std::path::PathBuf::new();
+        for c in start.components() {
+            match c {
+                std::path::Component::CurDir => {}
+                std::path::Component::ParentDir => {
+                    if !out.pop() {
+                        out.push("..");
+                    }
+                }
+                c => out.push(c.as_os_str()),
+            }
+        }
+        out
+    };
+    let mut dir = Some(start.as_path());
+    let mut levels = 0u32;
+    while let Some(d) = dir {
+        if d.join("puy.toml").is_file() {
+            let file = if is_file {
+                std::path::Path::new(path)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .and_then(|name| {
+                        let rel = start.strip_prefix(d).ok()?;
+                        let mut parts: Vec<String> = rel
+                            .components()
+                            .map(|c| c.as_os_str().to_string_lossy().into_owned())
+                            .collect();
+                        parts.push(name.to_string());
+                        Some(parts.join("/"))
+                    })
+            } else {
+                None
+            };
+            return Some(puy_core::driver::PackageRoot { levels, file });
+        }
+        dir = d.parent();
+        levels += 1;
+    }
+    None
+}

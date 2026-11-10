@@ -1,0 +1,155 @@
+error[E0714]: constant value 1E20 is out of range for `Currency` (-922337203685477.5808..922337203685477.5807)
+   --> real_diag.pas:10:19
+    |
+ 10 |   Big: Currency = 1E20;
+    |                   ^^^^
+
+error[E0714]: constant value 922337203685478 is out of range for `Currency` (-922337203685477.5808..922337203685477.5807)
+   --> real_diag.pas:12:20
+    |
+ 12 |   Over: Currency = Max + 1;
+    |                    ^^^^^^^
+
+error[E0714]: constant value 1844674407370954 is out of range for `Currency` (-922337203685477.5808..922337203685477.5807)
+   --> real_diag.pas:13:25
+    |
+ 13 |   Twice = Currency(Max) * 2;
+    |                         ^
+
+error[E0715]: division by zero in constant expression
+   --> real_diag.pas:14:22
+    |
+ 14 |   Zero = Currency(1) / 0;
+    |                      ^
+
+error[E0702]: type mismatch: expected `Integer`, found `Double`
+   --> real_diag.pas:25:8
+    |
+ 25 |   I := D;
+    |        ^
+    |
+    = note: convert a floating-point value to an integer with `Trunc` or `Round`
+
+error[E0702]: type mismatch: expected `Integer`, found `Currency`
+   --> real_diag.pas:26:8
+    |
+ 26 |   I := 1 + C;
+    |        ^^^^^
+    |
+    = note: convert a floating-point value to an integer with `Trunc` or `Round`
+
+error[E0724]: a value of type `Double` cannot be converted to `Integer`
+   --> real_diag.pas:27:8
+    |
+ 27 |   B := Integer(1.5);
+    |        ^^^^^^^^^^^^
+    |
+    = note: convert a floating-point value to an integer with `Trunc` or `Round`
+
+error[E0724]: a value of type `Single` cannot be converted to `Byte`
+   --> real_diag.pas:28:8
+    |
+ 28 |   I := Byte(S);
+    |        ^^^^^^^
+    |
+    = note: convert a floating-point value to an integer with `Trunc` or `Round`
+
+error[E0703]: operator `div` cannot be applied to `Double` and `Integer`
+   --> real_diag.pas:30:10
+    |
+ 30 |   D := D div 2;
+    |          ^^^
+    |
+    = note: `div`, `mod` and bitwise operators need integer operands; convert with `Trunc` or `Round` first
+
+error[E0703]: operator `mod` cannot be applied to `Currency` and `Integer`
+   --> real_diag.pas:31:10
+    |
+ 31 |   C := C mod 2;
+    |          ^^^
+    |
+    = note: `div`, `mod` and bitwise operators need integer operands; convert with `Trunc` or `Round` first
+
+error[E0703]: operator `and` cannot be applied to `Integer` and `Double`
+   --> real_diag.pas:32:10
+    |
+ 32 |   I := I and D;
+    |          ^^^
+    |
+    = note: `div`, `mod` and bitwise operators need integer operands; convert with `Trunc` or `Round` first
+
+error[E0703]: operator `shl` cannot be applied to `Double` and `Integer`
+   --> real_diag.pas:33:10
+    |
+ 33 |   D := D shl 1;
+    |          ^^^
+    |
+    = note: `div`, `mod` and bitwise operators need integer operands; convert with `Trunc` or `Round` first
+
+error[E0703]: operator `not` cannot be applied to `Double`
+   --> real_diag.pas:34:8
+    |
+ 34 |   D := not D;
+    |        ^^^
+
+error[E0717]: precision specifier requires a floating-point value
+   --> real_diag.pas:35:11
+    |
+ 35 |   WriteLn(I:4:2);
+    |           ^^^^^
+
+error[E0717]: precision specifier requires a floating-point value
+   --> real_diag.pas:36:11
+    |
+ 36 |   WriteLn('a':1:1);
+    |           ^^^^^^^
+
+error[E0702]: type mismatch: expected `Integer`, found `Double`
+   --> real_diag.pas:37:15
+    |
+ 37 |   WriteLn(D:4:1.5);
+    |               ^^^
+
+error[E0703]: operator `+` cannot be applied to `Char` and `Double`
+   --> real_diag.pas:38:15
+    |
+ 38 |   WriteLn('x' + D);
+    |               ^
+
+error[E0703]: operator `=` cannot be applied to `Double` and `Boolean`
+   --> real_diag.pas:39:13
+    |
+ 39 |   WriteLn(D = True);
+    |             ^
+
+error[E0702]: type mismatch: expected a number type, found `Char` (argument 1, parameter `X`)
+   --> real_diag.pas:40:15
+    |
+ 40 |   WriteLn(Abs('a'), Trunc(True), Sqr('b'));
+    |               ^^^
+
+error[E0702]: type mismatch: expected a number type, found `Boolean` (argument 1, parameter `X`)
+   --> real_diag.pas:40:27
+    |
+ 40 |   WriteLn(Abs('a'), Trunc(True), Sqr('b'));
+    |                           ^^^^
+
+error[E0702]: type mismatch: expected a number type, found `Char` (argument 1, parameter `X`)
+   --> real_diag.pas:40:38
+    |
+ 40 |   WriteLn(Abs('a'), Trunc(True), Sqr('b'));
+    |                                      ^^^
+
+error[E0714]: constant value 922337203685477.5808 is out of range for `Currency` (-922337203685477.5808..922337203685477.5807)
+   --> real_diag.pas:42:8
+    |
+ 42 |   C := -(-Currency(Max) - Currency(0.5808));
+    |        ^
+
+error[E0722]: loop variable must be a local variable of an ordinal type
+   --> real_diag.pas:44:7
+    |
+ 44 |   for D := 1 to 2 do
+    |       ^
+
+error: aborting due to 23 errors

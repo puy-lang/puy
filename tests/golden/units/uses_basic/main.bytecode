@@ -1,0 +1,133 @@
+; puyc format 2
+.const
+  0: str "Hello, "
+  1: str "!"
+  2: str " ("
+  3: str ")"
+  4: str "unit"
+  5: str "\n"
+  6: str "qualified"
+  7: str "nested"
+  8: str " "
+  9: str "!\n"
+.type
+  64: record Greeting.TPoint slots=2
+.global
+  0: int Greeting.Count
+  1: int Greeting.Calls
+  2: ref P
+.host
+  0: Console.Write params=1 ret=0
+.unit Greeting file="src/Greeting.pas" init=0 fini=- entry=-
+.unit MyApp.Models.User file="src/MyApp/Models.User.pas" init=- fini=- entry=-
+.unit Main file="main.pas" init=- fini=- entry=4
+.func 0 Greeting.<init> params=0 regs=1
+  .line 14
+  0000  LoadInt      r0, 10
+  0001  StoreGlobal  r0, g0
+  0002  RetVoid
+.func 1 Greeting.Greet params=1 regs=4
+  .local r0 Name
+  .local r1 Result
+  .line 26
+  0000  LoadGlobal   r3, g1
+  0001  AddIntI      r3, r3, 1
+  0002  NarrowOvf    r3, r3, 4
+  0003  StoreGlobal  r3, g1
+  .line 27
+  0004  LoadConst    r1, k0
+  0005  ConcatStr    r1, r1, r0
+  0006  LoadConst    r2, k1
+  0007  ConcatStr    r1, r1, r2
+  .line 28
+  0008  Ret          r1
+.finally r1, r2
+.func 2 Greeting.Origin params=0 regs=2
+  .local r0 Result
+  .line 32
+  0000  Release      r0
+  .line 33
+  0001  LoadZero     r1
+  0002  Unique       r0, ty64
+  0003  FieldSet     r0, 0, r1
+  .line 34
+  0004  LoadGlobal   r1, g1
+  0005  Unique       r0, ty64
+  0006  FieldSet     r0, 1, r1
+  .line 35
+  0007  Ret          r0
+.finally r0
+.func 3 MyApp.Models.User.Describe params=1 regs=6
+  .local r0 Name
+  .local r1 Result
+  .line 13
+  0000  Move         r5, r0
+  0001  Call         r5, f1
+  0002  MoveRef      r1, r5
+  0003  LoadConst    r2, k2
+  0004  ConcatStr    r1, r1, r2
+  0005  LoadGlobal   r5, g0
+  0006  IntToStr     r3, r5
+  0007  ConcatStr    r1, r1, r3
+  0008  LoadConst    r4, k3
+  0009  ConcatStr    r1, r1, r4
+  .line 14
+  000a  Ret          r1
+.finally r1, r2, r3, r4
+.func 4 Main.<main> params=0 regs=19
+  .line 9
+  0000  LoadConst    r1, k4
+  0001  Move         r16, r1
+  0002  Call         r16, f1
+  0003  MoveRef      r0, r16
+  0004  LoadConst    r2, k5
+  0005  ConcatStr    r0, r0, r2
+  0006  CallHost     r0, h0
+  .line 10
+  0007  LoadConst    r4, k6
+  0008  Move         r16, r4
+  0009  Call         r16, f1
+  000a  MoveRef      r3, r16
+  000b  LoadConst    r5, k5
+  000c  ConcatStr    r3, r3, r5
+  000d  CallHost     r3, h0
+  .line 11
+  000e  LoadConst    r7, k7
+  000f  Move         r16, r7
+  0010  Call         r16, f3
+  0011  MoveRef      r6, r16
+  0012  LoadConst    r8, k5
+  0013  ConcatStr    r6, r6, r8
+  0014  CallHost     r6, h0
+  .line 12
+  0015  Call         r16, f2
+  0016  MoveRef      r9, r16
+  0017  StoreGlobalRef r9, g2
+  .line 13
+  0018  LoadGlobal   r17, g2
+  0019  FieldGet     r16, r17, 0
+  001a  IntToStr     r10, r16
+  001b  LoadConst    r11, k8
+  001c  ConcatStr    r10, r10, r11
+  001d  LoadGlobal   r18, g2
+  001e  FieldGet     r17, r18, 1
+  001f  IntToStr     r12, r17
+  0020  ConcatStr    r10, r10, r12
+  0021  LoadConst    r13, k5
+  0022  ConcatStr    r10, r10, r13
+  0023  CallHost     r10, h0
+  .line 14
+  0024  LoadGlobal   r16, g0
+  0025  LoadInt      r17, 1
+  0026  AddInt       r16, r16, r17
+  0027  NarrowOvf    r16, r16, 4
+  0028  StoreGlobal  r16, g0
+  .line 15
+  0029  LoadGlobal   r16, g0
+  002a  IntToStr     r14, r16
+  002b  LoadConst    r15, k9
+  002c  ConcatStr    r14, r14, r15
+  002d  CallHost     r14, h0
+  .line 16
+  002e  RetVoid
+.finally r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15

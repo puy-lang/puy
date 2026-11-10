@@ -1,0 +1,1 @@
+error: `--dump ir` and `--dump bytecode` need a program; `dump_unit.pas` is a unit

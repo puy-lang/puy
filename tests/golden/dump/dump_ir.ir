@@ -1,0 +1,241 @@
+; puy ir 1
+.global
+  g0 G: Integer
+  g1 S: string
+  g2 N: Integer
+  g3 C: Byte
+.func f0 DumpIr.<main> params=0
+  .reg v0 -: Int64 hidden
+  .reg t0: string temp
+  .reg t1: Integer temp
+  .reg t2: Char temp
+  .reg t3: string temp
+  .reg t4: Integer temp
+  .reg t5: Integer temp
+  .reg t6: - ref
+  .reg t7: - ref
+  .reg t8: string temp
+  .reg t9: string temp
+  .reg t10: Integer temp
+  .reg t11: Integer temp
+  .reg t12: Byte temp
+  .reg t13: Integer temp
+  .reg t14: string temp
+  .reg t15: string temp
+  .reg t16: Integer temp
+  .reg t17: string temp
+  .reg t18: string temp
+  .reg t19: Integer temp
+  .reg t20: Integer temp
+  .reg t21: Integer temp
+  .reg t22: Integer temp
+  .reg t23: Integer temp
+  .reg t24: Integer temp
+  .reg t25: Integer temp
+  .reg t26: Integer temp
+  .reg t27: Integer temp
+  .reg t28: Integer temp
+  .reg t29: Integer temp
+  .reg t30: string temp
+  .reg t31: Integer temp
+  .reg t32: string temp
+  .reg t33: string temp
+  .reg t34: string temp
+  .reg t35: string temp
+  .reg t36: Integer temp
+  .reg t37: string temp
+  .reg t38: string temp
+  .reg t39: Byte temp
+  .reg t40: string temp
+bb0:
+  .line 25
+  LoadConst    t0, "abc"
+  StoreGlobalRef t0, g1
+  .line 26
+  LoadInt      t1, 2
+  LoadInt      t2, 120
+  LoadGlobalRef t3, g1
+  StrSetIndex  t3, t1, t2
+  StoreGlobalRef t3, g1
+  .line 27
+  LoadInt      t5, 3
+  Call         t4, f1(t5)
+  StoreGlobal  t4, g2
+  .line 28
+  MakeGlobalRef t6, g2
+  MakeGlobalRef t7, g3
+  LoadGlobalRef t9, g1
+  Move         t8, t9
+  Call         -, f2(t6, t7, t8)
+  .line 29
+  LoadGlobal   t10, g2
+  LoadInt      t11, 5
+  JmpIfLeInt   t10, t11, bb3, bb1
+bb1:
+  .line 29
+  LoadGlobal   t12, g3
+  LoadInt      t13, 1
+  JmpIfNeInt   t12, t13, bb3, bb2
+bb2:
+  .line 30
+  LoadConst    t14, "big "
+  LoadGlobal   t16, g2
+  IntToStr     t15, t16
+  ConcatStr    t14, t14, t15
+  LoadConst    t17, "\n"
+  ConcatStr    t14, t14, t17
+  CallHost     -, h0(t14)
+  .line 29
+  Jmp          bb4
+bb3:
+  .line 32
+  LoadConst    t18, "small\n"
+  CallHost     -, h0(t18)
+  .line 29
+  Jmp          bb4
+bb4:
+  .line 33
+  Jmp          bb5
+bb5:
+  .line 33
+  LoadGlobal   t19, g2
+  LoadZero     t20
+  JmpIfLeInt   t19, t20, bb7, bb6
+bb6:
+  .line 34
+  LoadGlobal   t21, g2
+  AddIntI      t21, t21, -4
+  NarrowOvf    t21, t21, 4
+  StoreGlobal  t21, g2
+  .line 33
+  Jmp          bb5
+bb7:
+  .line 35
+  Jmp          bb8
+bb8:
+  .line 36
+  LoadGlobal   t22, g2
+  AddIntI      t22, t22, 1
+  NarrowOvf    t22, t22, 4
+  StoreGlobal  t22, g2
+  .line 37
+  LoadGlobal   t23, g2
+  LoadInt      t24, 2
+  JmpIfNeInt   t23, t24, bb11, bb9
+bb9:
+  .line 38
+  Jmp          bb13
+bb10:
+  .line 37
+  Jmp          bb12
+bb11:
+  .line 37
+  Jmp          bb12
+bb12:
+  .line 35
+  Jmp          bb13
+bb13:
+  .line 39
+  LoadGlobal   t25, g2
+  LoadInt      t26, 3
+  JmpIfLtInt   t25, t26, bb8, bb14
+bb14:
+  .line 35
+  Jmp          bb15
+bb15:
+  .line 40
+  LoadInt      v0, 1
+  LoadInt      t27, 3
+  JmpIfLtInt   t27, v0, bb25, bb16
+bb16:
+  .line 40
+  Jmp          bb17
+bb17:
+  .line 40
+  StoreGlobal  v0, g0
+  .line 42
+  LoadGlobal   t28, g0
+  LoadInt      t29, 2
+  JmpIfNeInt   t28, t29, bb20, bb18
+bb18:
+  .line 43
+  Jmp          bb24
+bb19:
+  .line 42
+  Jmp          bb21
+bb20:
+  .line 42
+  Jmp          bb21
+bb21:
+  .line 44
+  LoadGlobal   t31, g0
+  IntToStr     t30, t31
+  CallHost     -, h0(t30)
+  .line 40
+  Jmp          bb22
+bb22:
+  .line 40
+  JmpIfEqInt   v0, t27, bb24, bb23
+bb23:
+  .line 40
+  AddIntI      v0, v0, 1
+  Jmp          bb17
+bb24:
+  .line 40
+  StoreGlobal  v0, g0
+  Jmp          bb25
+bb25:
+  .line 46
+  LoadConst    t32, "\n"
+  CallHost     -, h0(t32)
+  .line 47
+  LoadGlobalRef t33, g1
+  LoadConst    t34, " "
+  ConcatStr    t33, t33, t34
+  LoadGlobal   t36, g2
+  IntToStr     t35, t36
+  ConcatStr    t33, t33, t35
+  LoadConst    t37, " "
+  ConcatStr    t33, t33, t37
+  LoadGlobal   t39, g3
+  IntToStr     t38, t39
+  ConcatStr    t33, t33, t38
+  LoadConst    t40, "\n"
+  ConcatStr    t33, t33, t40
+  CallHost     -, h0(t33)
+  .line 48
+  RetVoid
+.finally t0, t3, t9, t14, t15, t17, t18, t30, t32, t33, t34, t35, t37, t38, t40
+.func f1 DumpIr.Twice params=1
+  .reg v0 X: Integer param
+  .reg v1 Result: Integer result
+  .reg t0: Integer temp
+bb0:
+  .line 12
+  Move         v1, v0
+  LoadInt      t0, 2
+  MulInt       v1, v1, t0
+  NarrowOvf    v1, v1, 4
+  .line 13
+  Ret          v1
+.finally
+.func f2 DumpIr.Fill params=3
+  .reg v0 Total: Integer var param
+  .reg v1 Count: Byte out param
+  .reg v2 Tag: string const param
+  .reg t0: Integer temp
+  .reg t1: Integer temp
+  .reg t2: Byte temp
+bb0:
+  .line 17
+  LoadRef      t0, v0
+  StrLen       t1, v2
+  AddInt       t0, t0, t1
+  NarrowOvf    t0, t0, 4
+  StoreRef     v0, t0
+  .line 18
+  LoadInt      t2, 1
+  StoreRef     v1, t2
+  .line 19
+  RetVoid
+.finally

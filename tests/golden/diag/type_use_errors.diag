@@ -1,0 +1,143 @@
+error[E0702]: expected 3 elements, found 2
+   --> type_use_errors.pas:17:17
+    |
+ 17 |   Short: TArr = (1, 2);                    // E0702: element count
+    |                 ^^^^^^
+
+error[E0702]: expected field `X`, found `Y`
+   --> type_use_errors.pas:18:22
+    |
+ 18 |   Swapped: TPoint = (Y: 1; X: 2);          // E0702: field order
+    |                      ^
+    |
+    = note: write every field of the record in declaration order
+
+error[E0702]: missing field `Y`
+   --> type_use_errors.pas:19:21
+    |
+ 19 |   Partial: TPoint = (X: 1);                // E0702: missing field
+    |                     ^^^^^^
+    |
+    = note: write every field of the record in declaration order
+
+error[E0700]: `TPoint` has no field `Z`
+   --> type_use_errors.pas:20:32
+    |
+ 20 |   Extra: TPoint = (X: 1; Y: 2; Z: 3);      // E0700: no such field
+    |                                ^
+
+error[E0702]: type mismatch: expected `TArr`, found a record constant
+   --> type_use_errors.pas:21:22
+    |
+ 21 |   WrongShape: TArr = (X: 1);               // E0702: record constant for an array
+    |                      ^^^^^^
+
+error[E0707]: cannot assign to `P.X`
+   --> type_use_errors.pas:25:3
+    |
+ 23 | procedure Show(const P: TPoint);
+    |                      - declared here
+ 24 | begin
+ 25 |   P.X := 1;                                // E0707: const parameter
+    |   ^^^ a `const` parameter
+
+error[E0702]: type mismatch: expected `TPoint`, found `TOther`
+   --> type_use_errors.pas:45:8
+    |
+ 45 |   P := O;                                  // E0702: different record types
+    |        ^
+
+error[E0703]: operator `=` cannot be applied to `TPoint` and `TPoint`
+   --> type_use_errors.pas:46:8
+    |
+ 46 |   if P = P then WriteLn('eq');             // E0703
+    |        ^
+
+error[E0703]: operator `+` cannot be applied to `TArr` and `TArr`
+   --> type_use_errors.pas:47:10
+    |
+ 47 |   A := A + A;                              // E0703
+    |          ^
+
+error[E0718]: cannot write a value of type `TPoint`
+   --> type_use_errors.pas:48:11
+    |
+ 48 |   WriteLn(P);                              // E0718
+    |           ^
+
+error[E0700]: `TPoint` has no field `Z`
+   --> type_use_errors.pas:49:13
+    |
+ 49 |   WriteLn(P.Z);                            // E0700: no field
+    |             ^
+
+error[E0714]: index 4 is out of range for `TArr` (1..3)
+   --> type_use_errors.pas:50:5
+    |
+ 50 |   A[4] := 1;                               // E0714: constant index out of range
+    |     ^
+
+error[E0719]: index type mismatch: expected `Integer`, found `Char`
+   --> type_use_errors.pas:51:5
+    |
+ 51 |   A['x'] := 1;                             // E0719: index type
+    |     ^^^
+
+error[E0719]: index type mismatch: expected `Char`, found `Integer`
+   --> type_use_errors.pas:52:5
+    |
+ 52 |   C[1] := 1;                               // E0719: Char index
+    |     ^
+
+error[E0705]: wrong number of indices: expected 1, found 2
+   --> type_use_errors.pas:53:3
+    |
+ 53 |   A[1, 2] := 3;                            // E0705: too many indices
+    |   ^^^^^^^
+
+error[E0720]: cannot index a value of type `TPoint`
+   --> type_use_errors.pas:54:3
+    |
+ 54 |   P[1] := 2;                               // E0720
+    |   ^^^^
+
+error[E0707]: cannot assign to `Origin.X`
+   --> type_use_errors.pas:55:3
+    |
+ 16 |   Origin: TPoint = (X: 0; Y: 0);
+    |   ------ declared here
+...
+ 55 |   Origin.X := 5;                           // E0707: typed constant
+    |   ^^^^^^^^ a constant
+
+error[E0706]: argument 1 must be a variable (parameter `N` is `var`)
+   --> type_use_errors.pas:56:8
+    |
+ 28 | procedure Bump(var N: Integer);
+    |                    - declared here
+...
+ 56 |   Bump(Origin.X);                          // E0706
+    |        ^^^^^^^^
+
+error[E0706]: argument 1 must be a variable (parameter `N` is `var`)
+   --> type_use_errors.pas:57:8
+    |
+ 28 | procedure Bump(var N: Integer);
+    |                    - declared here
+...
+ 57 |   Bump(S[1]);                              // E0706
+    |        ^^^^
+
+error[E0708]: `P` is not a type
+   --> type_use_errors.pas:58:19
+    |
+ 58 |   WriteLn(Default(P).X);                   // E0708
+    |                   ^
+
+error[E0702]: type mismatch: expected an ordinal type or an array, found `TPoint` (argument 1, parameter `X`)
+   --> type_use_errors.pas:60:15
+    |
+ 60 |   WriteLn(Low(P));                         // E0702
+    |               ^
+
+error: aborting due to 21 errors

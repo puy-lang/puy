@@ -1,0 +1,95 @@
+error[E2000]: variable `A` may be read before it is assigned
+   --> record_flow.pas:17:3
+    |
+ 14 |   A: TPoint;
+    |   - declared here
+...
+ 17 |   A.X := 1;
+    |   ^ read here
+    |
+    = note: Puy requires every local variable to be assigned before it is read
+    = fix: add an initial value: `var A: TPoint = Default(TPoint);`
+
+error[E2000]: variable `B` may be read before it is assigned
+   --> record_flow.pas:18:3
+    |
+ 15 |   B: array[0..2] of Integer;
+    |   - declared here
+...
+ 18 |   B[0] := 1;
+    |   ^ read here
+    |
+    = note: Puy requires every local variable to be assigned before it is read
+    = note: declare a named type such as `TName` for `B` and initialize it with `Default(TName)`
+    = note: or give it an initial value that lists every element, as in `(0, 0, 0)`
+
+error[E2000]: variable `A` may be read before it is assigned
+   --> record_flow.pas:19:11
+    |
+ 14 |   A: TPoint;
+    |   - declared here
+...
+ 19 |   WriteLn(A.X, B[0]);
+    |           ^ read here
+    |
+    = note: Puy requires every local variable to be assigned before it is read
+    = fix: add an initial value: `var A: TPoint = Default(TPoint);`
+
+error[E2000]: variable `B` may be read before it is assigned
+   --> record_flow.pas:19:16
+    |
+ 15 |   B: array[0..2] of Integer;
+    |   - declared here
+...
+ 19 |   WriteLn(A.X, B[0]);
+    |                ^ read here
+    |
+    = note: Puy requires every local variable to be assigned before it is read
+    = note: declare a named type such as `TName` for `B` and initialize it with `Default(TName)`
+    = note: or give it an initial value that lists every element, as in `(0, 0, 0)`
+
+error[E2001]: function `Make` may return without assigning `Result`
+   --> record_flow.pas:22:10
+    |
+ 22 | function Make: TPoint;
+    |          ^^^^
+...
+ 25 | end;
+    | --- returns here
+    |
+    = note: Puy requires `Result` to be assigned on every path that returns
+    = suggestion: add `Result := Default(TPoint);` at the start of the body
+
+error[E2000]: variable `Result` may be read before it is assigned
+   --> record_flow.pas:24:3
+    |
+ 24 |   Result.X := 1;
+    |   ^^^^^^ read here
+    |
+    = note: Puy requires `Result` to be assigned before it is read
+    = fix: add `Result := Default(TPoint);` at the start of the body
+
+error[E2000]: variable `Q` may be read before it is assigned
+   --> record_flow.pas:30:3
+    |
+ 29 |   var Q: TPoint;
+    |       - declared here
+ 30 |   Q.X := Make.X;
+    |   ^ read here
+    |
+    = note: Puy requires every local variable to be assigned before it is read
+    = fix: add an initial value: `var Q: TPoint := Default(TPoint);`
+
+error[E2000]: variable `Q` may be read before it is assigned
+   --> record_flow.pas:31:11
+    |
+ 29 |   var Q: TPoint;
+    |       - declared here
+ 30 |   Q.X := Make.X;
+ 31 |   WriteLn(Q.X);
+    |           ^ read here
+    |
+    = note: Puy requires every local variable to be assigned before it is read
+    = fix: add an initial value: `var Q: TPoint := Default(TPoint);`
+
+error: aborting due to 8 errors

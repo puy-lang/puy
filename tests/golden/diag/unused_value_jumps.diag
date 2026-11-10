@@ -1,0 +1,19 @@
+warning[W0002]: value assigned to `S` is never read (unused-value)
+   --> unused_value_jumps.pas:62:3
+    |
+ 62 |   S := '';
+    |   ^
+    |
+    = note: remove the assignment if the value is not needed
+    = note: disable with `{$WARN unused-value OFF}`
+
+warning[W0002]: value assigned to `N` is never read (unused-value)
+   --> unused_value_jumps.pas:78:3
+    |
+ 78 |   N := 1;
+    |   ^
+    |
+    = note: remove the assignment if the value is not needed
+    = note: disable with `{$WARN unused-value OFF}`
+
+warning: 2 warnings emitted

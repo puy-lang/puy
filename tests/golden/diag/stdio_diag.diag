@@ -1,0 +1,124 @@
+warning[W0001]: unused variable `F` (unused-variable)
+   --> stdio_diag.pas:20:7
+    |
+ 20 |   var F := Output;
+    |       ^ declared here
+    |
+    = note: disable with `{$WARN unused-variable OFF}`
+    = suggestion: remove `F`
+
+error[E0740]: `Output` can only be used as the first argument of `Write`, `WriteLn`, `Read`, `ReadLn`, `Eof`, `Eoln` or `Flush`
+   --> stdio_diag.pas:20:12
+    |
+ 20 |   var F := Output;
+    |            ^^^^^^
+
+error[E0740]: `Input` can only be used as the first argument of `Write`, `WriteLn`, `Read`, `ReadLn`, `Eof`, `Eoln` or `Flush`
+   --> stdio_diag.pas:21:5
+    |
+ 21 |   P(Input);
+    |     ^^^^^
+
+error[E0740]: `Output` can only be used as the first argument of `Write`, `WriteLn`, `Read`, `ReadLn`, `Eof`, `Eoln` or `Flush`
+   --> stdio_diag.pas:22:12
+    |
+ 22 |   Write(I, Output);
+    |            ^^^^^^
+
+error[E0740]: `Output` can only be used as the first argument of `Write`, `WriteLn`, `Read`, `ReadLn`, `Eof`, `Eoln` or `Flush`
+   --> stdio_diag.pas:23:3
+    |
+ 23 |   Output;
+    |   ^^^^^^
+
+error[E0740]: `ErrOutput` can only be used as the first argument of `Write`, `WriteLn`, `Read`, `ReadLn`, `Eof`, `Eoln` or `Flush`
+   --> stdio_diag.pas:24:3
+    |
+ 24 |   ErrOutput(1);
+    |   ^^^^^^^^^
+
+error[E0740]: `Input` can only be used as the first argument of `Write`, `WriteLn`, `Read`, `ReadLn`, `Eof`, `Eoln` or `Flush`
+   --> stdio_diag.pas:25:15
+    |
+ 25 |   I := System.Input;
+    |               ^^^^^
+
+error[E0702]: type mismatch: expected `Output` or `ErrOutput`, found `Input`
+   --> stdio_diag.pas:26:11
+    |
+ 26 |   WriteLn(Input, 'x');
+    |           ^^^^^
+
+error[E0702]: type mismatch: expected `Input`, found `Output`
+   --> stdio_diag.pas:27:10
+    |
+ 27 |   ReadLn(Output, I);
+    |          ^^^^^^
+
+error[E0718]: cannot read a value of type `Boolean`
+   --> stdio_diag.pas:28:10
+    |
+ 28 |   ReadLn(B);
+    |          ^
+
+error[E0718]: cannot read a value of type `TColor`
+   --> stdio_diag.pas:29:8
+    |
+ 29 |   Read(K);
+    |        ^
+
+error[E0705]: wrong number of arguments: expected at least 1, found 0
+   --> stdio_diag.pas:30:3
+    |
+ 30 |   Read;
+    |   ^^^^
+
+error[E0705]: wrong number of arguments: expected at least 1, found 0
+   --> stdio_diag.pas:31:3
+    |
+ 31 |   Read(Input);
+    |   ^^^^^^^^^^^
+
+error[E0705]: wrong number of arguments: expected 1, found 0
+   --> stdio_diag.pas:32:3
+    |
+ 32 |   Flush;
+    |   ^^^^^
+
+error[E0702]: type mismatch: expected `Output` or `ErrOutput`, found `Input`
+   --> stdio_diag.pas:33:9
+    |
+ 33 |   Flush(Input);
+    |         ^^^^^
+
+error[E0702]: type mismatch: expected `Output` or `ErrOutput`, found `Integer`
+   --> stdio_diag.pas:34:9
+    |
+ 34 |   Flush(I);
+    |         ^
+
+error[E0705]: wrong number of arguments: expected 1, found 2
+   --> stdio_diag.pas:35:3
+    |
+ 35 |   Flush(Output, ErrOutput);
+    |   ^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0702]: type mismatch: expected `Input`, found `Output`
+   --> stdio_diag.pas:36:12
+    |
+ 36 |   B := Eof(Output);
+    |            ^^^^^^
+
+error[E0702]: type mismatch: expected `Input`, found `Integer`
+   --> stdio_diag.pas:37:13
+    |
+ 37 |   B := Eoln(I);
+    |             ^
+
+error[E0705]: wrong number of arguments: expected 0 to 1, found 2
+   --> stdio_diag.pas:38:8
+    |
+ 38 |   B := Eof(Input, Input);
+    |        ^^^^^^^^^^^^^^^^^
+
+error: aborting due to 19 errors; 1 warning emitted

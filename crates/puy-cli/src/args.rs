@@ -13,7 +13,7 @@ Usage: puy <command> [options] [args]
 
 Commands:
   run <file|-> [args...]   Compile and run a program (`-` reads the source from stdin)
-  check <file|->           Type-check only (`--dump tokens|cst|hir|bytecode` prints a stage)
+  check <file|->           Type-check only (`--dump tokens|cst|hir|ir|bytecode` prints a stage)
   fix <file>               Apply safe fixes to the file
   explain <code>           Explain an error code
 
@@ -67,6 +67,7 @@ pub enum Dump {
     Tokens,
     Cst,
     Hir,
+    Ir,
     Bytecode,
 }
 
@@ -211,10 +212,11 @@ pub fn parse(argv: &[OsString]) -> Result<Parsed, String> {
                     "tokens" => Dump::Tokens,
                     "cst" => Dump::Cst,
                     "hir" => Dump::Hir,
+                    "ir" => Dump::Ir,
                     "bytecode" => Dump::Bytecode,
                     _ => {
                         return Err(usage_error(&format!(
-                            "invalid value `{v}` for `--dump`: expected `tokens`, `cst`, `hir` or `bytecode`"
+                            "invalid value `{v}` for `--dump`: expected `tokens`, `cst`, `hir`, `ir` or `bytecode`"
                         )));
                     }
                 });

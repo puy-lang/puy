@@ -1,0 +1,16 @@
+unit UnitSections
+.global g0 Count: Integer
+.routine <init>
+  assign @8 R+ init
+    global g0 Count
+    const Integer 1
+  assign @13 R+
+    global g0 Count
+    binary Integer
+      global g0 Count: Integer
+      + Integer int:Integer
+        const Integer 1
+.routine <fini>
+  assign @15 R+
+    global g0 Count
+    const Integer 0

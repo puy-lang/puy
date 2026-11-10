@@ -6,7 +6,7 @@ Usage: puy <command> [options] [args]
 
 Commands:
   run <file|-> [args...]   Compile and run a program (`-` reads the source from stdin)
-  check <file|->           Type-check only (`--dump tokens|cst|hir|bytecode` prints a stage)
+  check <file|->           Type-check only (`--dump tokens|cst|hir|ir|bytecode` prints a stage)
   fix <file>               Apply safe fixes to the file
   explain <code>           Explain an error code
 

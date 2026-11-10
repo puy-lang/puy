@@ -1,0 +1,51 @@
+Classify
+  body 0
+  finally 0 zero
+zero
+  body 2
+  finally 2 many
+  after try 2
+many
+  body 1
+  finally 1 none
+caught one
+Nested
+  level 3
+  finally 3
+  after level 3
+  finally 2
+  finally 1
+  end of Nested
+  level 3
+  finally 3
+  finally 2
+  finally 1
+  level 3
+  finally 3
+  finally 2
+  finally 1
+caught deep
+Loops
+  loop 1
+  loop finally 1
+  loop tail 1
+  loop finally 2
+  loop 3
+  loop finally 3
+  loop tail 3
+  loop finally 4
+  inner 1 1
+  inner finally 1 1
+  inner finally 1 2
+  outer finally 1
+  inner 2 1
+  inner finally 2 1
+  inner finally 2 2
+  outer finally 2
+  loops done 2
+InHandler
+  handler 1
+  handler finally 1
+  handler 2
+  handler finally 2
+done

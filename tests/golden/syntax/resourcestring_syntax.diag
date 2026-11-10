@@ -1,0 +1,18 @@
+error[E0417]: a `resourcestring` cannot have a type
+  --> resourcestring_syntax.pas:6:6
+   |
+ 6 |   B: string = 'b';
+   |      ^^^^^^
+   |
+   = note: a `resourcestring` is always of type `string`
+   = fix: remove the type
+
+error[E0416]: `resourcestring` is not allowed inside a routine
+  --> resourcestring_syntax.pas:9:1
+   |
+ 9 | resourcestring
+   | ^^^^^^^^^^^^^^
+   |
+   = note: move the `resourcestring` section outside the routine
+
+error: aborting due to 2 errors

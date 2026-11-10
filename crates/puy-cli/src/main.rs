@@ -194,6 +194,8 @@ fn compile_options(
         extra_diagnostics: Vec::new(),
         script_name,
         extra_files: Vec::new(),
+        package: metadata::find_package_root(path),
+        run: false,
     };
     // The driver checks inline metadata (E2507)
     let (diags, files) = metadata::check(path, bytes);
@@ -207,7 +209,8 @@ fn run(source: Source, prog_args: Vec<String>, opts: &Options) -> u8 {
         Ok(x) => x,
         Err(code) => return code,
     };
-    let co = compile_options(&path, &bytes, script_name, opts);
+    let mut co = compile_options(&path, &bytes, script_name, opts);
+    co.run = true;
     let mut provider = runtime::FileSourceProvider;
     let out = compile(&path, bytes, &mut provider, &co);
     let has_errors = out.diagnostics.iter().any(|d| d.is_error());
@@ -217,7 +220,7 @@ fn run(source: Source, prog_args: Vec<String>, opts: &Options) -> u8 {
             &out.sources,
             opts,
             false,
-            matches!(source, Source::File(_)),
+            matches!(source, Source::File(_)).then_some(out.files.as_slice()),
         );
     }
     if has_errors {
@@ -275,14 +278,25 @@ fn run(source: Source, prog_args: Vec<String>, opts: &Options) -> u8 {
     }];
     argv.extend(prog_args);
     match runtime::run_module(module, runtime::host_set(), config, argv) {
-        Ok(runtime::RunResult::Exit(status)) => {
-            if let ExitKind::UncaughtException(report) = &status.kind {
+        Ok(runtime::RunResult::Exit { program, last }) => {
+            // Order of `docs/spec/units.md` 5.4: the program's uncaught exception, the exceptions
+            // dropped during `Halt`, those of `<fini>`, then the flush failure.
+            if let ExitKind::UncaughtException(report) = &program.kind {
                 output::emit_exception(report, opts);
             }
-            if let Some(e) = &status.stdout_error {
+            for report in &program.halt_exceptions {
+                output::emit_halt_exception(report, opts);
+            }
+            for report in &last.fini_exceptions {
+                output::emit_exception(report, opts);
+            }
+            for report in &last.halt_exceptions {
+                output::emit_halt_exception(report, opts);
+            }
+            if let Some(e) = program.stdout_error.as_ref().or(last.stdout_error.as_ref()) {
                 output::emit_stdout_error(e, opts);
             }
-            status.exit_code()
+            last.exit_code()
         }
         Ok(runtime::RunResult::Fatal(e)) => {
             output::emit_fatal("F0001", &format!("internal error: {}", e.message), opts);
@@ -308,6 +322,11 @@ fn check(source: Source, dump: Option<args::Dump>, opts: &Options) -> u8 {
     let mut provider = runtime::FileSourceProvider;
     let out = compile(&path, bytes, &mut provider, &co);
     let has_errors = out.diagnostics.iter().any(|d| d.is_error());
+    // A unit has no entry, so no module to dump (`docs/spec/units.md` 8.3)
+    if out.is_unit && matches!(dump, Some(args::Dump::Ir | args::Dump::Bytecode)) {
+        eprintln!("error: `--dump ir` and `--dump bytecode` need a program; `{path}` is a unit");
+        return 2;
+    }
     match dump {
         Some(args::Dump::Tokens) => {
             if let Some(tokens) = &out.stages.tokens {
@@ -326,6 +345,11 @@ fn check(source: Source, dump: Option<args::Dump>, opts: &Options) -> u8 {
                 print!("{}", puy_core::sema::dump::dump_hir(p, src));
             }
         }
+        Some(args::Dump::Ir) => {
+            if !has_errors && let Some(m) = &out.stages.ir {
+                print!("{}", puy_core::ir::dump_ir(m));
+            }
+        }
         Some(args::Dump::Bytecode) => {
             if !has_errors && let Some(m) = &out.stages.module {
                 print!("{}", puy_core::bytecode::disassemble(m));
@@ -339,7 +363,7 @@ fn check(source: Source, dump: Option<args::Dump>, opts: &Options) -> u8 {
         &out.sources,
         opts,
         true,
-        matches!(source, Source::File(_)),
+        matches!(source, Source::File(_)).then_some(out.files.as_slice()),
     );
     if has_errors { 1 } else { 0 }
 }
@@ -359,28 +383,33 @@ fn fix(file: &str, opts: &Options) -> u8 {
         &co,
         opts.keep_line_endings,
     );
-    let mut written = false;
-    if !result.applied.is_empty() {
+    // Write in file order; stop at the first failure and keep the files already written
+    // (`docs/spec/units.md` 8.3)
+    let mut written: Vec<String> = Vec::new();
+    let mut failure = None;
+    for f in &result.files {
         let to_write = if opts.keep_line_endings {
-            result.bytes.clone()
+            f.bytes.clone()
         } else {
-            puy_core::fix::normalize_newlines(&result.bytes)
+            puy_core::fix::normalize_newlines(&f.bytes)
         };
-        if let Err(e) = std::fs::write(&path, &to_write) {
+        if let Err(e) = std::fs::write(&f.path, &to_write) {
             let he = puy_host::HostError::from_io(&e);
-            let d = Diagnostic::new(
+            failure = Some(Diagnostic::new(
                 Code::F(2),
                 Severity::Error,
-                format!("cannot write `{path}`: {}", he.fixed_text()),
+                format!("cannot write `{}`: {}", f.path, he.fixed_text()),
                 Stage::Driver,
-            );
-            output::emit_standalone(&d, opts, true);
-            return 2;
+            ));
+            break;
         }
-        written = true;
+        written.push(f.path.clone());
+    }
+    output::emit_fix_result(&result, &written, failure.as_ref(), opts);
+    if failure.is_some() {
+        return 2;
     }
     let has_errors = result.diagnostics.iter().any(|d| d.is_error());
-    output::emit_fix_result(&result, &path, written, opts);
     if has_errors { 1 } else { 0 }
 }
 

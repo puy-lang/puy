@@ -45,11 +45,13 @@ error[E3200]: `1.Foo` is not supported yet (planned for M3)
  17 |   N := 1.Foo;
     |        ^^^^^
 
-error[E3200]: `raise` is not supported yet (planned for M2)
+error[E3000]: `with` is not supported in Puy
    --> recover_misc.pas:18:3
     |
- 18 |   raise Exception.Create('x');
-    |   ^^^^^
+ 18 |   with System.Abs(N) do WriteLn;
+    |   ^^^^
+    |
+    = note: use an inline variable (`var R := …;`) and qualify the fields with it
 
 error[E0008]: invalid character code after `#`
    --> recover_misc.pas:19:8

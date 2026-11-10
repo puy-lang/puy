@@ -1,0 +1,4 @@
+error: uncaught exception EInvalidOp: from finalization
+  at Outer.<fini> (src/Outer.pas:13)
+warning: exception during Halt: Exception: dropped
+  at Inner.<fini> (src/Inner.pas:12)

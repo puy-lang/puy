@@ -1,0 +1,111 @@
+error[E3200]: `SizeOf(string)` is not supported yet (planned for M8)
+   --> system_builtin_errors.pas:24:8
+    |
+ 24 |   N := SizeOf(string);
+    |        ^^^^^^^^^^^^^^
+
+error[E3200]: `SizeOf(TInts)` is not supported yet (planned for M8)
+   --> system_builtin_errors.pas:25:8
+    |
+ 25 |   N := SizeOf(A);
+    |        ^^^^^^^^^
+
+error[E3200]: `SizeOf(TArr)` is not supported yet (planned for M8)
+   --> system_builtin_errors.pas:26:8
+    |
+ 26 |   N := SizeOf(TArr);
+    |        ^^^^^^^^^^^^
+
+error[E3200]: `SizeOf(TPoint)` is not supported yet (planned for M8)
+   --> system_builtin_errors.pas:27:8
+    |
+ 27 |   N := SizeOf(P);
+    |        ^^^^^^^^^
+
+error[E3200]: `SizeOf(TSet)` is not supported yet (planned for M8)
+   --> system_builtin_errors.pas:28:8
+    |
+ 28 |   N := SizeOf(TSet);
+    |        ^^^^^^^^^^^^
+
+error[E0729]: cannot infer the type of an array constructor
+   --> system_builtin_errors.pas:29:8
+    |
+ 29 |   A := [1] + [2];
+    |        ^^^
+    |
+    = note: give the array a type, as in `var A: TArray<Integer> := [1, 2]`
+
+error[E0705]: wrong number of arguments: expected at least 1, found 0
+   --> system_builtin_errors.pas:30:8
+    |
+ 30 |   S := Concat();
+    |        ^^^^^^^^
+
+error[E0702]: type mismatch: expected `string`, found `Integer` (argument 2, parameter `S`)
+   --> system_builtin_errors.pas:31:20
+    |
+ 31 |   S := Concat('a', 1);
+    |                    ^
+
+error[E0702]: type mismatch: expected `Integer`, found `Char`
+   --> system_builtin_errors.pas:32:19
+    |
+ 32 |   A := Concat(A, ['x']);
+    |                   ^^^
+
+error[E0705]: wrong number of arguments: expected 3, found 2
+   --> system_builtin_errors.pas:33:3
+    |
+ 33 |   Insert('a', S);
+    |   ^^^^^^^^^^^^^^
+
+error[E0706]: argument 2 must be a variable (parameter `S` is `var`)
+   --> system_builtin_errors.pas:34:15
+    |
+ 34 |   Insert('a', 'b', 1);
+    |               ^^^
+
+error[E0702]: type mismatch: expected a string or a dynamic array, found `Integer` (argument 2, parameter `S`)
+   --> system_builtin_errors.pas:35:15
+    |
+ 35 |   Insert('a', N, 1);
+    |               ^
+
+error[E0702]: type mismatch: expected `Integer`, found `Char` (argument 1, parameter `Source`)
+   --> system_builtin_errors.pas:36:10
+    |
+ 36 |   Insert('a', A, 0);
+    |          ^^^
+
+error[E0702]: type mismatch: expected an integer type, found `Char` (argument 2, parameter `Index`)
+   --> system_builtin_errors.pas:37:13
+    |
+ 37 |   Delete(S, 'a', 1);
+    |             ^^^
+
+error[E0702]: type mismatch: expected an integer type, found `Char` (argument 1, parameter `X`)
+   --> system_builtin_errors.pas:38:16
+    |
+ 38 |   N := Ord(Odd('a'));
+    |                ^^^
+
+error[E0702]: type mismatch: expected `Char`, found `Integer` (argument 1, parameter `Ch`)
+   --> system_builtin_errors.pas:39:19
+    |
+ 39 |   N := Ord(UpCase(1));
+    |                   ^
+
+error[E0702]: type mismatch: expected `TInts`, found `Integer`
+   --> system_builtin_errors.pas:40:11
+    |
+ 40 |   Insert([1, 2], M, 0);
+    |           ^
+
+error[E0702]: type mismatch: expected `TInts`, found `Integer`
+   --> system_builtin_errors.pas:40:14
+    |
+ 40 |   Insert([1, 2], M, 0);
+    |              ^
+
+error: aborting due to 18 errors
