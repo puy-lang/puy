@@ -1,0 +1,42 @@
+Add in the first iteration
+  visit 1
+  EInvalidOperation: `TList<Integer>` was modified during enumeration
+Delete in the last iteration
+  visit 1
+  visit 2
+  visit 3
+  EInvalidOperation: `TList<Integer>` was modified during enumeration
+each change of the structure
+  Insert
+  EInvalidOperation: `TList<Integer>` was modified during enumeration
+  Exchange
+  EInvalidOperation: `TList<Integer>` was modified during enumeration
+  Move
+  EInvalidOperation: `TList<Integer>` was modified during enumeration
+  Reverse
+  EInvalidOperation: `TList<Integer>` was modified during enumeration
+  Count
+  EInvalidOperation: `TList<Integer>` was modified during enumeration
+  Capacity
+  EInvalidOperation: `TList<Integer>` was modified during enumeration
+  TrimExcess
+  EInvalidOperation: `TList<Integer>` was modified during enumeration
+  Clear
+  EInvalidOperation: `TList<Integer>` was modified during enumeration
+adding or removing nothing
+  not raised
+writing values in place
+  visit 1
+  visit 2
+  visit 300
+a copy
+  visit 1
+  visit 2
+  visit 3
+  visit 1
+  visit 2
+  visit 3
+  visit 11
+  visit 12
+  visit 13
+  count 0

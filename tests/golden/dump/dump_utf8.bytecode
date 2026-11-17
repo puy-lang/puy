@@ -1,4 +1,4 @@
-; puyc format 2
+; puyc format 0
 .const
   0: utf8 "é"
   1: str "x"
@@ -11,7 +11,7 @@
 .host
   0: Console.Write params=1 ret=0
 .unit DumpUtf8 file="dump_utf8.pas" init=- fini=- entry=0
-.func 0 DumpUtf8.<main> params=0 regs=29
+.func 0 DumpUtf8.<main> params=0 regs=28
   .line 12
   0000  LoadConst    r0, k0
   0001  StoreGlobalRef r0, g0
@@ -34,53 +34,50 @@
   000e  ConcatStr    r6, r6, r8
   000f  StoreGlobalRef r6, g2
   .line 17
-  0010  LoadGlobalRef r9, g1
-  0011  U8Len        r24, r9
-  0012  LoadGlobalRef r10, g1
-  0013  LoadInt      r26, 1
-  0014  U8Index      r25, r10, r26
-  0015  AddInt       r24, r24, r25
-  0016  NarrowOvf    r24, r24, 4
-  0017  LoadGlobalRef r11, g0
-  0018  Move         r27, r11
-  0019  LoadGlobalRef r12, g1
-  001a  Move         r28, r12
-  001b  U8Pos        r26, r27
-  001c  AddInt       r24, r24, r26
-  001d  NarrowOvf    r24, r24, 4
-  001e  StoreGlobal  r24, g3
+  0010  LoadGlobal   r24, g1
+  0011  U8Len        r23, r24
+  0012  LoadGlobalRef r9, g1
+  0013  LoadInt      r25, 1
+  0014  U8Index      r24, r9, r25
+  0015  AddInt       r23, r23, r24
+  0016  NarrowOvf    r23, r23, 4
+  0017  LoadGlobalRef r10, g0
+  0018  Move         r26, r10
+  0019  LoadGlobalRef r11, g1
+  001a  Move         r27, r11
+  001b  U8Pos        r25, r26
+  001c  AddInt       r23, r23, r25
+  001d  NarrowOvf    r23, r23, 4
+  001e  StoreGlobal  r23, g3
   .line 18
-  001f  LoadGlobalRef r13, g0
-  0020  LoadGlobalRef r14, g1
-  0021  CmpU8        r24, r13, r14
-  0022  LoadZero     r25
-  0023  JmpIfLeInt   r25, r24, -> 002b
+  001f  LoadGlobalRef r12, g0
+  0020  LoadGlobalRef r13, g1
+  0021  CmpU8        r23, r12, r13
+  0022  JmpIfGeIntI  r23, 0, -> 0029
   .line 19
-  0024  LoadGlobalRef r16, g1
-  0025  Move         r24, r16
-  0026  LoadInt      r25, 1
-  0027  LoadInt      r26, 2
-  0028  U8Copy       r15, r24
-  0029  StoreGlobalRef r15, g1
-  .line 18
-  002a  Jmp          -> 002b
+  0023  LoadGlobalRef r15, g1
+  0024  Move         r23, r15
+  0025  LoadInt      r24, 1
+  0026  LoadInt      r25, 2
+  0027  U8Copy       r14, r23
+  0028  StoreGlobalRef r14, g1
   .line 20
-  002b  LoadGlobal   r24, g3
-  002c  LoadGlobal   r25, g1
-  002d  U8SetLen     r25, r24
-  002e  StoreGlobal  r25, g1
+  0029  LoadGlobal   r23, g3
+  002a  LoadGlobal   r24, g1
+  002b  U8SetLen     r24, r23
+  002c  StoreGlobal  r24, g1
   .line 21
-  002f  LoadGlobalRef r18, g1
-  0030  U8ToStr      r17, r18
-  0031  LoadGlobalRef r20, g2
-  0032  LoadGlobalRef r22, g0
-  0033  U8ToStr      r21, r22
-  0034  EqStr        r24, r20, r21
-  0035  BoolToStr    r19, r24
-  0036  ConcatStr    r17, r17, r19
-  0037  LoadConst    r23, k2
-  0038  ConcatStr    r17, r17, r23
-  0039  CallHost     r17, h0
+  002d  LoadGlobalRef r17, g1
+  002e  U8ToStr      r16, r17
+  002f  LoadGlobalRef r19, g2
+  0030  LoadGlobalRef r21, g0
+  0031  U8ToStr      r20, r21
+  0032  EqStr        r23, r19, r20
+  0033  BoolToStr    r18, r23
+  0034  ConcatStr    r16, r16, r18
+  0035  LoadConst    r22, k2
+  0036  ConcatStr    r16, r16, r22
+  0037  CallHost     r16, h0
   .line 22
-  003a  RetVoid
-.finally r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16, r17, r18, r19, r20, r21, r22, r23
+  0038  RetVoid
+.finally r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16, r17, r18, r19, r20, r21, r22

@@ -1,0 +1,14 @@
+dropped; parent still alive
+after the call
+destroy child
+destroy parent
+destroy n
+B is nil: TRUE
+Seen is nil: TRUE
+first
+second
+destroy first
+destroy second
+destroy linked
+target is nil: TRUE, last is nil: TRUE
+end

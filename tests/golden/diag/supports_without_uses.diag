@@ -1,0 +1,9 @@
+error[E0700]: undeclared identifier `Supports`
+   --> supports_without_uses.pas:15:11
+    |
+ 15 |   WriteLn(Supports(O, IRun));
+    |           ^^^^^^^^
+    |
+    = fix: add `uses System.SysUtils`
+
+error: aborting due to 1 error

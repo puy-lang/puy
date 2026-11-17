@@ -1,0 +1,62 @@
+error[E0701]: `T` is already declared
+   --> generic_names.pas:10:13
+    |
+ 10 |   TTwice<T, T> = class
+    |             ^ declared again here
+    |          - declared here
+
+error[E0701]: `T` is already declared
+   --> generic_names.pas:13:5
+    |
+ 12 |   TFieldNamed<T> = class
+    |               - declared here
+ 13 |     T: Integer;
+    |     ^ declared again here
+
+error[E0701]: `T` is already declared
+   --> generic_names.pas:16:15
+    |
+ 15 |   TMethodNamed<T> = record
+    |                - declared here
+ 16 |     procedure T;
+    |               ^ declared again here
+
+warning[W0001]: unused variable `S` (unused-variable)
+   --> generic_names.pas:25:3
+    |
+ 25 |   S: NotRefCounted;
+    |   ^ declared here
+    |
+    = note: disable with `{$WARN unused-variable OFF}`
+    = suggestion: remove `S`
+
+error[E0708]: `NotRefCounted` can only be used as a constraint
+   --> generic_names.pas:25:6
+    |
+ 25 |   S: NotRefCounted;
+    |      ^^^^^^^^^^^^^
+
+error[E0762]: cannot convert a value of type parameter `T`
+   --> generic_names.pas:27:12
+    |
+ 18 |   THides<T> = class
+    |          - type parameter declared here
+...
+ 27 |   FItem := 'text';
+    |            ^^^^^^
+    |
+    = note: a type parameter can only be used in ways that its constraints allow
+
+error[E0708]: `T` is a type and cannot be used as a value
+   --> generic_names.pas:28:11
+    |
+ 28 |   WriteLn(T);
+    |           ^
+
+error[E0708]: `NotRefCounted` can only be used as a constraint
+   --> generic_names.pas:29:11
+    |
+ 29 |   WriteLn(NotRefCounted);
+    |           ^^^^^^^^^^^^^
+
+error: aborting due to 7 errors; 1 warning emitted

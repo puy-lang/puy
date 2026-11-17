@@ -4,8 +4,9 @@ pub mod op;
 
 use std::fmt;
 
-/// Format version (3.1).
-pub const FORMAT_VERSION: u32 = 2;
+/// Format version (3.1). Fixed at 0 before 1.0: modules built by a different
+/// toolchain are rejected by the exact toolchain version match instead.
+pub const FORMAT_VERSION: u32 = 0;
 
 /// Builds an instruction word.
 pub fn encode(op: u8, a: u32, b: u32, c: u32) -> u32 {
@@ -19,18 +20,97 @@ pub fn encode_ext(a: u32, b: u32, c: u32) -> u32 {
 
 /// Splits a word: `(op, A, B, C)` (8 bits each).
 pub fn decode(word: u32) -> (u8, u32, u32, u32) {
-    (
-        (word & 0xFF) as u8,
-        (word >> 8) & 0xFF,
-        (word >> 16) & 0xFF,
-        (word >> 24) & 0xFF,
-    )
+    (word_op(word), word_a(word), word_b(word), word_c(word))
+}
+
+/// The opcode of a word (one field of [`decode`]; the fast path of the execution loop reads each
+/// field only where an instruction uses it).
+#[inline(always)]
+pub fn word_op(word: u32) -> u8 {
+    (word & 0xFF) as u8
+}
+
+/// `A` of a word (8 bits; see [`word_op`]).
+#[inline(always)]
+pub fn word_a(word: u32) -> u32 {
+    (word >> 8) & 0xFF
+}
+
+/// `B` of a word (8 bits; see [`word_op`]).
+#[inline(always)]
+pub fn word_b(word: u32) -> u32 {
+    (word >> 16) & 0xFF
+}
+
+/// `C` of a word (8 bits; see [`word_op`]).
+#[inline(always)]
+pub fn word_c(word: u32) -> u32 {
+    (word >> 24) & 0xFF
 }
 
 /// `Bx` joins `B/C` of the main word as the lower 16 bits and `B/C` of the extension word as the upper 16 bits.
 /// Do not overlap `B` and `C` widened to 16 bits by shifting one of them by 8 bits.
 pub(crate) fn decode_bx(word: u32, extension: Option<u32>) -> u32 {
     (word >> 16) | extension.map_or(0, |ext| ext & 0xFFFF_0000)
+}
+
+/// The instruction at the boundary `pos`: its opcode, its `A`, `B`, `C` (widened by the extension
+/// word after a `Wide`; 1.2) and its length in words (1, or 3 with `Wide`). A `Wide` at `pos` must
+/// be followed by two words.
+pub(crate) fn decode_at(code: &[u32], pos: usize) -> (u8, u32, u32, u32, usize) {
+    let (op0, a0, b0, c0) = decode(code[pos]);
+    if op0 != op::WIDE {
+        return (op0, a0, b0, c0, 1);
+    }
+    let (opc, a8, b8, c8) = decode(code[pos + 1]);
+    let (_, ea, eb, ec) = decode(code[pos + 2]);
+    (opc, a8 | (ea << 8), b8 | (eb << 8), c8 | (ec << 8), 3)
+}
+
+/// `Bx` of the instruction at the boundary `pos` (16 bits, or 32 bits after a `Wide`; see
+/// `decode_bx`). A `Wide` at `pos` must be followed by two words.
+pub(crate) fn bx_at(code: &[u32], pos: usize) -> u32 {
+    if decode(code[pos]).0 == op::WIDE {
+        decode_bx(code[pos + 1], Some(code[pos + 2]))
+    } else {
+        decode_bx(code[pos], None)
+    }
+}
+
+/// Writes `Bx` of the instruction at the boundary `pos`, keeping its width (the inverse of
+/// [`bx_at`] and `decode_bx`): without `Wide`, `bx` must fit in 16 bits.
+pub(crate) fn set_bx_at(code: &mut [u32], pos: usize, bx: u32) {
+    if decode(code[pos]).0 == op::WIDE {
+        code[pos + 1] = (code[pos + 1] & 0xFFFF) | (bx << 16);
+        code[pos + 2] = (code[pos + 2] & 0xFFFF) | (bx & 0xFFFF_0000);
+    } else {
+        assert!(bx <= 0xFFFF, "a narrow `Bx` holds 16 bits");
+        code[pos] = (code[pos] & 0xFFFF) | (bx << 16);
+    }
+}
+
+/// `sBx`: `Bx` read as a signed 16-bit value, or 32-bit after a `Wide` (1.2).
+pub(crate) fn signed_bx(bx: u32, wide: bool) -> i64 {
+    if wide {
+        bx as i32 as i64
+    } else {
+        bx as u16 as i16 as i64
+    }
+}
+
+/// `sC`: `C` read as a signed 8-bit value, or 16-bit after a `Wide` (1.2).
+pub(crate) fn signed_c(c: u32, wide: bool) -> i64 {
+    if wide {
+        c as u16 as i16 as i64
+    } else {
+        c as u8 as i8 as i64
+    }
+}
+
+/// `sB`: `B` read as a signed value, the same widths as `sC` (the immediate of the
+/// compare-and-branch instructions with an immediate; 2.3).
+pub(crate) fn signed_b(b: u32, wide: bool) -> i64 {
+    signed_c(b, wide)
 }
 
 /// A constant pool entry.
@@ -66,35 +146,128 @@ pub const FIRST_TYPE_INDEX: u32 = 64;
 pub const TYPE_RECORD: u8 = 1;
 pub const TYPE_ARRAY: u8 = 2;
 pub const TYPE_DYNARRAY: u8 = 3;
-pub const TYPE_EXCEPTION: u8 = 4;
+// Kind 4 (an exception class until M3-35) is unused: exception classes are classes (kind 7;
+// `docs/spec/objects.md` 14.8).
 /// A big set: its number of bits (`docs/spec/types.md` 8.3).
 pub const TYPE_SET: u8 = 5;
 /// An enumeration: the table of its value names (`docs/spec/types.md` 8.1).
 pub const TYPE_ENUM: u8 = 6;
+/// A class (`docs/spec/objects.md` 14.1): its parent, flags and virtual method table.
+pub const TYPE_CLASS: u8 = 7;
+/// An interface (`docs/spec/objects.md` 14.7): its parent, number of methods and GUID.
+pub const TYPE_INTERFACE: u8 = 8;
 
-/// A type section entry (3.2): records, static arrays, dynamic arrays and exception classes in M2a.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// `TypeEntry::flags` of a reference counted class (`TRefObject` and its descendants).
+pub const CLASS_REF_COUNTED: u32 = 1;
+/// `TypeEntry::flags` of a class that cannot be instantiated (`class abstract`, or an abstract
+/// method left).
+pub const CLASS_ABSTRACT: u32 = 2;
+/// `TypeEntry::flags` of a `sealed` class.
+pub const CLASS_SEALED: u32 = 4;
+
+/// The first reserved virtual method table entry: `VMT_BUILTIN + k` is the built-in body `k`
+/// (`docs/spec/objects.md` 14.1).
+pub const VMT_BUILTIN: u32 = 0xFFFF_FF00;
+/// The built-in body that does nothing (`Destroy`, `AfterConstruction`, `BeforeDestruction`).
+pub const VMT_BUILTIN_NOTHING: u32 = VMT_BUILTIN;
+/// The built-in body of `TObject.ToString` (returns `ClassName`).
+pub const VMT_BUILTIN_CLASS_NAME: u32 = VMT_BUILTIN + 1;
+/// The built-in body of `Exception.ToString` (returns `Message`; `docs/spec/objects.md` 14.8).
+pub const VMT_BUILTIN_MESSAGE: u32 = VMT_BUILTIN + 2;
+/// The built-in body of `TObject.Equals` (the same instance; `docs/spec/equality.md` 3.1, 8.2).
+pub const VMT_BUILTIN_EQUALS: u32 = VMT_BUILTIN + 3;
+/// The built-in body of `TObject.GetHashCode` (`HashInt` of the handle; `docs/spec/equality.md`
+/// 3.1, 8.2).
+pub const VMT_BUILTIN_HASH: u32 = VMT_BUILTIN + 4;
+/// The fixed entries of every class's virtual method table (`docs/spec/objects.md` chapter 5).
+pub const VMT_DESTROY: u32 = 0;
+pub const VMT_AFTER_CONSTRUCTION: u32 = 1;
+pub const VMT_BEFORE_DESTRUCTION: u32 = 2;
+pub const VMT_EQUALS: u32 = 4;
+pub const VMT_GET_HASH_CODE: u32 = 5;
+
+/// The virtual method table entry of an abstract method.
+pub const VMT_ABSTRACT: u32 = 0xFFFF_FFFF;
+
+/// The virtual method table of `TObject` and `TRefObject` (`Destroy`, `AfterConstruction`,
+/// `BeforeDestruction`, `ToString`, `Equals`, `GetHashCode`).
+pub const TOBJECT_VMT: [u32; 6] = [
+    VMT_BUILTIN_NOTHING,
+    VMT_BUILTIN_NOTHING,
+    VMT_BUILTIN_NOTHING,
+    VMT_BUILTIN_CLASS_NAME,
+    VMT_BUILTIN_EQUALS,
+    VMT_BUILTIN_HASH,
+];
+
+/// The virtual method table of `Exception` and the built-in exception classes
+/// (`docs/spec/objects.md` 14.8): `ToString` returns `Message`.
+pub const EXCEPTION_VMT: [u32; 6] = [
+    VMT_BUILTIN_NOTHING,
+    VMT_BUILTIN_NOTHING,
+    VMT_BUILTIN_NOTHING,
+    VMT_BUILTIN_MESSAGE,
+    VMT_BUILTIN_EQUALS,
+    VMT_BUILTIN_HASH,
+];
+
+/// A type section entry (3.2): records, static arrays, dynamic arrays, sets, enumerations and
+/// classes.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct TypeEntry {
-    /// [`TYPE_RECORD`], [`TYPE_ARRAY`], [`TYPE_DYNARRAY`] or [`TYPE_EXCEPTION`] (0 for an unused
-    /// built-in type index).
+    /// [`TYPE_RECORD`], [`TYPE_ARRAY`], … [`TYPE_CLASS`] (0 for an unused built-in type index).
     pub kind: u8,
-    /// Fields of a record, elements of a static array (0 for a dynamic array), slots of an
-    /// exception class (`docs/spec/exceptions.md` 6.1).
+    /// Fields of a record, elements of a static array (0 for a dynamic array), slots of a class's
+    /// instances.
     pub slots: u32,
-    /// Whether each slot holds a heap reference: one per field for a record or slot of an
-    /// exception class, one for all the elements of an array.
-    pub refs: Vec<bool>,
+    /// The kind of each slot ([`SLOT_PLAIN`], [`SLOT_REF`], [`SLOT_OBJ`]): one per field for a
+    /// record or a class, one for all the elements of an array.
+    pub refs: Vec<u8>,
     /// The fully qualified name (`Hello.TPoint`), or the written form of an anonymous type.
     pub name: String,
-    /// The parent's type index of an exception class (`None` for the root `Exception` and for
-    /// the other kinds).
+    /// The parent's type index of a class (`None` for the root `TObject` and for the other
+    /// kinds).
     pub parent: Option<u32>,
     /// The values of an enumeration in declaration order: (ordinal, name as declared). Empty for
     /// the other kinds.
     pub values: Vec<(i64, String)>,
+    /// The flags of a class ([`CLASS_REF_COUNTED`], [`CLASS_ABSTRACT`], [`CLASS_SEALED`]; 0 for
+    /// the other kinds).
+    pub flags: u32,
+    /// The virtual method table of a class (`docs/spec/objects.md` 14.1): function indexes or the
+    /// reserved values ([`VMT_BUILTIN`] + k, [`VMT_ABSTRACT`]), the parent's entries first. Empty
+    /// for the other kinds.
+    pub vmt: Vec<u32>,
+    /// The names of the abstract entries of a class's table (`docs/spec/objects.md` 14.1): (entry,
+    /// `TShape.Area`), in entry order, for the message of `EAbstractError`. Empty for the other
+    /// kinds.
+    pub abstract_names: Vec<(u32, String)>,
+    /// The interface table of a class (`docs/spec/objects.md` 14.7): one entry per interface the
+    /// class implements. Empty for the other kinds.
+    pub intfs: Vec<IntfEntry>,
+    /// The number of methods of an interface, its ancestors' included (0 for the other kinds).
+    pub methods: u32,
+    /// The GUID of an interface as written (all zeros when none is written; `docs/spec/objects.md`
+    /// 14.7).
+    pub guid: [u8; 16],
+}
+
+/// An entry of a class's interface table (`docs/spec/objects.md` 14.7): the interface, and the
+/// function of each of its methods (a function index, [`VMT_BUILTIN`] + k or [`VMT_ABSTRACT`]),
+/// in method number order.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+pub struct IntfEntry {
+    pub intf: u32,
+    pub funcs: Vec<u32>,
 }
 
 impl TypeEntry {
+    /// The entry of the interface `intf` in the interface table of this class (`None` if the
+    /// class does not implement it, and for the other kinds; `docs/spec/objects.md` 7.3, 14.7).
+    pub fn intf_entry(&self, intf: u32) -> Option<&IntfEntry> {
+        self.intfs.iter().find(|e| e.intf == intf)
+    }
+
     /// The name of an ordinal of an enumeration: the first value declared with it, or the
     /// ordinal in decimal (`docs/spec/types.md` 8.1).
     pub fn enum_name(&self, ord: i64) -> String {
@@ -104,20 +277,22 @@ impl TypeEntry {
             .map_or_else(|| ord.to_string(), |(_, n)| n.clone())
     }
 
-    /// Whether slot `i` holds a heap reference.
-    pub fn slot_is_ref(&self, i: usize) -> bool {
+    /// The kind of slot `i` ([`SLOT_PLAIN`], [`SLOT_REF`] or [`SLOT_OBJ`]).
+    pub fn slot_kind(&self, i: usize) -> u8 {
         match self.kind {
-            TYPE_RECORD | TYPE_EXCEPTION => self.refs.get(i).copied().unwrap_or(false),
-            _ => self.refs.first().copied().unwrap_or(false),
+            TYPE_RECORD | TYPE_CLASS => self.refs.get(i).copied().unwrap_or(0),
+            _ => self.refs.first().copied().unwrap_or(0),
         }
     }
 }
 
 /// Built-in exception classes (`docs/spec/exceptions.md` chapter 2): the type index, the name,
 /// the parent and whether the class adds a slot (a string or not). Index 12 is
-/// `TArray<Exception>` ([`EXCEPTION_ARRAY_TYPE`]), so the M2b classes start at 13.
+/// `TArray<Exception>` ([`EXCEPTION_ARRAY_TYPE`]), so the M2b classes start at 13. They are
+/// reference counted classes; the parent of `Exception` is `TRefObject` (`docs/spec/objects.md`
+/// 8.1).
 pub const BUILTIN_EXCEPTIONS: &[(u32, &str, Option<u32>, Option<bool>)] = &[
-    (0, "Exception", None, None),
+    (0, "Exception", Some(TREFOBJECT_TYPE), None),
     (1, "EIntError", Some(0), None),
     (2, "EDivByZero", Some(1), None),
     (3, "ERangeError", Some(1), None),
@@ -134,10 +309,31 @@ pub const BUILTIN_EXCEPTIONS: &[(u32, &str, Option<u32>, Option<bool>)] = &[
     (15, "EInvalidOp", Some(13), None),
     (16, "EEncodingError", Some(0), None),
     (17, "EZeroDivide", Some(13), None),
+    (18, "EAliasError", Some(0), None),
+    (21, "EInvalidCast", Some(0), None),
+    (22, "EAbstractError", Some(0), None),
+    (23, "EInvalidOperation", Some(0), None),
 ];
 
+/// The type index of the root class `TObject` (`docs/spec/objects.md` 14.1).
+pub const TOBJECT_TYPE: u32 = 19;
+/// The type index of `TRefObject`, the root of the reference counted classes.
+pub const TREFOBJECT_TYPE: u32 = 20;
+
+/// The type index of `IInterface`, the root of the interfaces (`docs/spec/objects.md` 14.7).
+pub const IINTERFACE_TYPE: u32 = 24;
+
+/// The type index of `TCustomAttribute`, the root of the attribute classes
+/// (`docs/spec/attributes.md` 4.1): a reference counted class with no members of its own.
+pub const TCUSTOMATTRIBUTE_TYPE: u32 = 25;
+
+/// The type index of `TIndexRange`, the built-in record a range written as an index of a
+/// default array property makes (`docs/spec/objects.md` 12.3, 14.10): the slots `First`,
+/// `Last`, `HasFirst` and `HasLast`.
+pub const TINDEXRANGE_TYPE: u32 = 26;
+
 /// One more than the largest type index of a built-in type.
-pub const BUILTIN_TYPE_END: u32 = 18;
+pub const BUILTIN_TYPE_END: u32 = 27;
 
 /// Type indexes of the built-in exception classes the VM raises.
 pub mod exc {
@@ -156,6 +352,10 @@ pub mod exc {
     pub const INVALID_OP: u32 = 15;
     pub const ENCODING_ERROR: u32 = 16;
     pub const ZERO_DIVIDE: u32 = 17;
+    pub const ALIAS_ERROR: u32 = 18;
+    pub const INVALID_CAST: u32 = 21;
+    pub const ABSTRACT_ERROR: u32 = 22;
+    pub const INVALID_OPERATION: u32 = 23;
 }
 
 /// The type index of `TArray<Exception>`, the array `Suppressed` returns (`docs/spec/exceptions.md` 6.1).
@@ -170,7 +370,6 @@ pub const EXC_SLOT_EXTRA: u32 = 2;
 /// Information `ExcInfo` reads (`docs/spec/exceptions.md` 6.2).
 pub const EXC_INFO_STACK_TRACE: u32 = 0;
 pub const EXC_INFO_SUPPRESSED: u32 = 1;
-pub const EXC_INFO_CLASS_NAME: u32 = 2;
 
 /// The kinds of the elements of `Format`'s `array of const` (`docs/spec/bytecode.md` 2.16).
 /// Integers are `0..=7`, their width code of the `Narrow` family (2.2).
@@ -194,46 +393,94 @@ pub const REPLACE_FLAG_IGNORE_CASE: u32 = 1;
 pub const CASE_MAPPING_FULL: i64 = 1;
 pub const CASE_FOLD_UPPER: i64 = 1;
 
-/// The kind of real that `StrToFloatIO` reads (its `C` operand; 2.17).
-pub const FLOAT_IO_DOUBLE: i64 = 0;
-pub const FLOAT_IO_SINGLE: i64 = 1;
-pub const FLOAT_IO_CURRENCY: i64 = 2;
-
 /// The VM's built-in types, type indexes 0 to 63 (`docs/spec/exceptions.md` 6.1). Unused
 /// indexes have kind 0.
 pub fn builtin_types() -> &'static [TypeEntry] {
     static TYPES: std::sync::OnceLock<Vec<TypeEntry>> = std::sync::OnceLock::new();
     TYPES.get_or_init(|| {
         let empty = || TypeEntry {
+            abstract_names: Vec::new(),
+            intfs: Vec::new(),
+            methods: 0,
+            guid: [0; 16],
             kind: 0,
             slots: 0,
             refs: Vec::new(),
             name: String::new(),
             parent: None,
             values: Vec::new(),
+            flags: 0,
+            vmt: Vec::new(),
         };
         let mut v: Vec<TypeEntry> = (0..BUILTIN_TYPE_END).map(|_| empty()).collect();
         for (index, name, parent, extra) in BUILTIN_EXCEPTIONS {
-            let mut refs = vec![true, true];
+            let mut refs = vec![SLOT_REF, SLOT_REF];
             if let Some(r) = extra {
-                refs.push(*r);
+                refs.push(u8::from(*r));
             }
             v[*index as usize] = TypeEntry {
-                kind: TYPE_EXCEPTION,
+                kind: TYPE_CLASS,
                 slots: refs.len() as u32,
                 refs,
                 name: name.to_string(),
                 parent: *parent,
                 values: Vec::new(),
+                flags: CLASS_REF_COUNTED,
+                vmt: EXCEPTION_VMT.to_vec(),
+                abstract_names: Vec::new(),
+                intfs: Vec::new(),
+                methods: 0,
+                guid: [0; 16],
             };
         }
         v[EXCEPTION_ARRAY_TYPE as usize] = TypeEntry {
             kind: TYPE_DYNARRAY,
             slots: 0,
-            refs: vec![true],
+            refs: vec![SLOT_REF],
             name: "TArray<Exception>".into(),
             parent: None,
             values: Vec::new(),
+            flags: 0,
+            vmt: Vec::new(),
+            abstract_names: Vec::new(),
+            intfs: Vec::new(),
+            methods: 0,
+            guid: [0; 16],
+        };
+        // The root classes (`docs/spec/objects.md` 14.1)
+        v[TOBJECT_TYPE as usize] = TypeEntry {
+            kind: TYPE_CLASS,
+            name: "TObject".into(),
+            vmt: TOBJECT_VMT.to_vec(),
+            ..TypeEntry::default()
+        };
+        v[TREFOBJECT_TYPE as usize] = TypeEntry {
+            kind: TYPE_CLASS,
+            name: "TRefObject".into(),
+            parent: Some(TOBJECT_TYPE),
+            flags: CLASS_REF_COUNTED,
+            vmt: TOBJECT_VMT.to_vec(),
+            ..TypeEntry::default()
+        };
+        v[IINTERFACE_TYPE as usize] = TypeEntry {
+            kind: TYPE_INTERFACE,
+            name: "IInterface".into(),
+            ..TypeEntry::default()
+        };
+        v[TCUSTOMATTRIBUTE_TYPE as usize] = TypeEntry {
+            kind: TYPE_CLASS,
+            name: "TCustomAttribute".into(),
+            parent: Some(TREFOBJECT_TYPE),
+            flags: CLASS_REF_COUNTED,
+            vmt: TOBJECT_VMT.to_vec(),
+            ..TypeEntry::default()
+        };
+        v[TINDEXRANGE_TYPE as usize] = TypeEntry {
+            kind: TYPE_RECORD,
+            slots: 4,
+            refs: vec![SLOT_PLAIN; 4],
+            name: "TIndexRange".into(),
+            ..TypeEntry::default()
         };
         while v.len() < FIRST_TYPE_INDEX as usize {
             v.push(TypeEntry {
@@ -243,6 +490,12 @@ pub fn builtin_types() -> &'static [TypeEntry] {
                 name: String::new(),
                 parent: None,
                 values: Vec::new(),
+                flags: 0,
+                vmt: Vec::new(),
+                abstract_names: Vec::new(),
+                intfs: Vec::new(),
+                methods: 0,
+                guid: [0; 16],
             });
         }
         v
@@ -261,8 +514,8 @@ pub struct Function {
     /// Local variable names: (register, name).
     pub locals: Vec<(u16, String)>,
     /// Registers holding managed values, in release order (the implicit `finally`; 3.2,
-    /// `docs/design/lifetime.md` 3.8). Every entry has the kind [`MANAGED_HEAP_REF`].
-    pub managed: Vec<u16>,
+    /// `docs/design/lifetime.md` 3.8).
+    pub managed: Vec<ManagedReg>,
     /// Source file (index into the unit section).
     pub file: u32,
     /// The handler table, inner entries first (`docs/spec/exceptions.md` 6.3).
@@ -270,6 +523,9 @@ pub struct Function {
     /// For a nested routine taking the static link as its first argument, the function it is
     /// nested in, whose frame the link points to (`docs/spec/semantics.md` 4.9).
     pub outer: Option<u32>,
+    /// For a function shared by several instantiations, their full names
+    /// (`docs/spec/generics.md` 7, 8): shown by the disassembly only, not written in the file.
+    pub shared_by: Vec<String>,
 }
 
 /// `outer` of a function that is not nested (in the module file).
@@ -330,9 +586,31 @@ pub const GLOBAL_REF: u32 = 1;
 /// `GlobalEntry::kind` of `System.ExitCode` (an `Integer`; at most one; `docs/spec/bytecode.md` 3.2).
 /// The VM reads it for the exit code and `Halt` writes it.
 pub const GLOBAL_EXIT_CODE: u32 = 2;
+/// `GlobalEntry::kind` of a global variable counted by its contents (a value whose static type is
+/// exactly `TObject`; `docs/spec/objects.md` 14.1).
+pub const GLOBAL_OBJ: u32 = 3;
 
 /// Kind of a managed register entry (3.2): a heap reference.
 pub const MANAGED_HEAP_REF: u16 = 1;
+/// Kind of a managed register entry: a handle counted by its contents (a value whose static type
+/// is exactly `TObject`; `docs/spec/objects.md` 14.1).
+pub const MANAGED_OBJ: u16 = 2;
+
+/// An entry of a function's managed register list (3.2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ManagedReg {
+    pub reg: u16,
+    /// [`MANAGED_HEAP_REF`] or [`MANAGED_OBJ`].
+    pub kind: u16,
+}
+
+/// The kinds of a slot of a type entry (3.2): not managed.
+pub const SLOT_PLAIN: u8 = 0;
+/// A slot holding a heap reference (a string, an array, a record, an instance of a reference
+/// counted class, …).
+pub const SLOT_REF: u8 = 1;
+/// A slot counted by its contents (`docs/spec/objects.md` 14.1).
+pub const SLOT_OBJ: u8 = 2;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GlobalEntry {
@@ -370,7 +648,13 @@ pub struct Module {
     pub entry: u32,
     pub units: Vec<UnitEntry>,
     pub hosts: Vec<HostEntry>,
+    /// The interface call targets (`docs/spec/objects.md` 14.7): (interface type index, method
+    /// number), the `Bx` of `CallIntf`.
+    pub intf_calls: Vec<(u32, u32)>,
 }
+
+/// The kind of the interface call target section (3.1; `docs/spec/objects.md` 14.7).
+const SECTION_INTF_CALLS: u32 = 9;
 
 /// A load failure (F0004).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -438,6 +722,17 @@ impl Module {
         // The type section is written only when it has entries (3.1)
         if !self.types.is_empty() {
             sections.push((6, self.encode_types()));
+        }
+        // So is the interface call target section (kind 9; 7 and 8 are planned for M5;
+        // `docs/spec/objects.md` 14.7)
+        if !self.intf_calls.is_empty() {
+            let mut w = Writer { buf: Vec::new() };
+            w.u32(self.intf_calls.len() as u32);
+            for (intf, k) in &self.intf_calls {
+                w.u32(*intf);
+                w.u32(*k);
+            }
+            sections.push((SECTION_INTF_CALLS, w.buf));
         }
         let mut w = Writer { buf: Vec::new() };
         w.buf.extend_from_slice(b"PUYC");
@@ -547,12 +842,35 @@ impl Module {
             w.u8(0);
             w.u32(t.slots);
             for r in &t.refs {
-                w.u8(*r as u8);
+                w.u8(*r);
             }
             w.pad4();
             w.lp_utf8(&t.name);
-            if t.kind == TYPE_EXCEPTION {
+            if t.kind == TYPE_CLASS {
                 w.u32(t.parent.unwrap_or(0));
+                w.u32(t.flags);
+                w.u32(t.vmt.len() as u32);
+                for e in &t.vmt {
+                    w.u32(*e);
+                }
+                w.u32(t.abstract_names.len() as u32);
+                for (k, name) in &t.abstract_names {
+                    w.u32(*k);
+                    w.lp_utf8(name);
+                }
+                w.u32(t.intfs.len() as u32);
+                for e in &t.intfs {
+                    w.u32(e.intf);
+                    w.u32(e.funcs.len() as u32);
+                    for f in &e.funcs {
+                        w.u32(*f);
+                    }
+                }
+            }
+            if t.kind == TYPE_INTERFACE {
+                w.u32(t.parent.unwrap_or(0));
+                w.u32(t.methods);
+                w.buf.extend_from_slice(&t.guid);
             }
             if t.kind == TYPE_ENUM {
                 w.u32(t.values.len() as u32);
@@ -589,9 +907,9 @@ impl Module {
                 w.u16(0);
             }
             w.u32(f.managed.len() as u32);
-            for r in &f.managed {
-                w.u16(*r);
-                w.u16(MANAGED_HEAP_REF);
+            for m in &f.managed {
+                w.u16(m.reg);
+                w.u16(m.kind);
             }
             w.u32(f.lines.len() as u32);
             for (p, l) in &f.lines {
@@ -717,6 +1035,24 @@ impl<'a> Reader<'a> {
     }
 }
 
+/// A list of managed registers (the managed register list and an entry of the virtual call
+/// arguments; 3.2): a count and { register `u16`, kind `u16` }.
+fn decode_managed(r: &mut Reader) -> Result<Vec<ManagedReg>, LoadError> {
+    let n = r.count("managed register")?;
+    let mut managed = Vec::with_capacity(n);
+    for _ in 0..n {
+        let reg = r.u16()?;
+        let kind = r.u16()?;
+        if kind != MANAGED_HEAP_REF && kind != MANAGED_OBJ {
+            return Err(LoadError::Invalid(format!(
+                "unknown managed register kind {kind}"
+            )));
+        }
+        managed.push(ManagedReg { reg, kind });
+    }
+    Ok(managed)
+}
+
 impl Module {
     /// Reads from bytes and verifies (3.3).
     pub fn decode(bytes: &[u8], puy_version: &str) -> Result<Module, LoadError> {
@@ -745,7 +1081,7 @@ impl Module {
         for _ in 0..k {
             table.push((r.u32()?, r.u32()?, r.u32()?));
         }
-        let mut sections: [Option<&[u8]>; 7] = [None; 7];
+        let mut sections: [Option<&[u8]>; 10] = [None; 10];
         let mut last_end = 0u32;
         for (kind, off, len) in table {
             let end = off
@@ -755,7 +1091,7 @@ impl Module {
                 return Err(LoadError::Invalid("section out of range".into()));
             }
             last_end = end;
-            if !(1..=6).contains(&kind) {
+            if !matches!(kind, 1..=6 | SECTION_INTF_CALLS) {
                 return Err(LoadError::Invalid(format!("unknown section {kind}")));
             }
             if sections[kind as usize].is_some() {
@@ -775,6 +1111,18 @@ impl Module {
             Some(b) => Self::decode_types(b)?,
             None => Vec::new(),
         };
+        let intf_calls = match sections[SECTION_INTF_CALLS as usize] {
+            Some(b) => {
+                let mut r = Reader { buf: b, pos: 0 };
+                let n = r.count("interface call target")?;
+                let mut out = Vec::with_capacity(n);
+                for _ in 0..n {
+                    out.push((r.u32()?, r.u32()?));
+                }
+                out
+            }
+            None => Vec::new(),
+        };
         let m = Module {
             consts,
             types,
@@ -783,6 +1131,7 @@ impl Module {
             entry,
             units,
             hosts,
+            intf_calls,
         };
         m.verify()?;
         Ok(m)
@@ -856,27 +1205,61 @@ impl Module {
             r.u8()?;
             let slots = r.u32()?;
             let nrefs = match kind {
-                TYPE_RECORD | TYPE_EXCEPTION => slots as usize,
+                TYPE_RECORD | TYPE_CLASS => slots as usize,
                 TYPE_ARRAY | TYPE_DYNARRAY => 1,
-                TYPE_ENUM | TYPE_SET => 0,
+                TYPE_ENUM | TYPE_SET | TYPE_INTERFACE => 0,
                 k => return Err(LoadError::Invalid(format!("unknown type kind {k}"))),
             };
             r.need(nrefs)?;
             let mut refs = Vec::with_capacity(nrefs);
             for _ in 0..nrefs {
                 refs.push(match r.u8()? {
-                    0 => false,
-                    1 => true,
+                    k @ (SLOT_PLAIN | SLOT_REF | SLOT_OBJ) => k,
                     k => return Err(LoadError::Invalid(format!("unknown slot kind {k}"))),
                 });
             }
             r.pad4()?;
             let name = r.lp_utf8()?;
-            let parent = if kind == TYPE_EXCEPTION {
+            let parent = if matches!(kind, TYPE_CLASS | TYPE_INTERFACE) {
                 Some(r.u32()?)
             } else {
                 None
             };
+            let mut flags = 0;
+            let mut vmt = Vec::new();
+            let mut abstract_names = Vec::new();
+            let mut intfs = Vec::new();
+            if kind == TYPE_CLASS {
+                flags = r.u32()?;
+                let n = r.count("virtual method")?;
+                for _ in 0..n {
+                    vmt.push(r.u32()?);
+                }
+                let n = r.count("abstract method name")?;
+                for _ in 0..n {
+                    let k = r.u32()?;
+                    abstract_names.push((k, r.lp_utf8()?));
+                }
+                let n = r.count("interface")?;
+                for _ in 0..n {
+                    let intf = r.u32()?;
+                    let m = r.count("interface method")?;
+                    let mut funcs = Vec::with_capacity(m);
+                    for _ in 0..m {
+                        funcs.push(r.u32()?);
+                    }
+                    intfs.push(IntfEntry { intf, funcs });
+                }
+            }
+            let mut methods = 0;
+            let mut guid = [0u8; 16];
+            if kind == TYPE_INTERFACE {
+                if slots != 0 {
+                    return Err(LoadError::Invalid("interface type with slots".into()));
+                }
+                methods = r.u32()?;
+                guid.copy_from_slice(r.bytes(16)?);
+            }
             let mut values = Vec::new();
             if kind == TYPE_ENUM {
                 if slots != 0 {
@@ -907,6 +1290,12 @@ impl Module {
                 name,
                 parent,
                 values,
+                flags,
+                vmt,
+                abstract_names,
+                intfs,
+                methods,
+                guid,
             });
         }
         Ok(out)
@@ -946,18 +1335,7 @@ impl Module {
                     reg,
                 });
             }
-            let nmanaged = r.count("managed register")?;
-            let mut managed = Vec::with_capacity(nmanaged);
-            for _ in 0..nmanaged {
-                let reg = r.u16()?;
-                let kind = r.u16()?;
-                if kind != MANAGED_HEAP_REF {
-                    return Err(LoadError::Invalid(format!(
-                        "unknown managed register kind {kind}"
-                    )));
-                }
-                managed.push(reg);
-            }
+            let managed = decode_managed(&mut r)?;
             let nlines = r.count("line table")?;
             let mut lines = Vec::with_capacity(nlines);
             for _ in 0..nlines {
@@ -983,6 +1361,7 @@ impl Module {
                 managed,
                 file,
                 handlers,
+                shared_by: Vec::new(),
             });
         }
         Ok(out)
@@ -995,7 +1374,10 @@ impl Module {
         for _ in 0..n {
             let name = r.lp_utf8()?;
             let kind = r.u32()?;
-            if kind != GLOBAL_INT && kind != GLOBAL_REF && kind != GLOBAL_EXIT_CODE {
+            if !matches!(
+                kind,
+                GLOBAL_INT | GLOBAL_REF | GLOBAL_EXIT_CODE | GLOBAL_OBJ
+            ) {
                 return Err(LoadError::Invalid(format!("unknown global kind {kind}")));
             }
             if kind == GLOBAL_EXIT_CODE && out.iter().any(|g: &GlobalEntry| g.kind == kind) {
@@ -1136,24 +1518,21 @@ impl Module {
         }
         for (i, t) in self.types.iter().enumerate() {
             let index = FIRST_TYPE_INDEX + i as u32;
-            if t.kind != TYPE_EXCEPTION {
-                continue;
+            if t.kind == TYPE_CLASS {
+                self.verify_class(index, t)?;
             }
-            // The parent comes first, so following parents always reaches the root
-            let parent = t.parent.unwrap_or(index);
-            let ok = parent < index
-                && self
-                    .type_entry(parent)
-                    .is_some_and(|p| p.kind == TYPE_EXCEPTION);
+            if t.kind == TYPE_INTERFACE {
+                self.verify_interface(index, t)?;
+            }
+        }
+        // The interface call targets (`docs/spec/objects.md` 14.7)
+        for (i, (intf, k)) in self.intf_calls.iter().enumerate() {
+            let ok = self
+                .type_entry(*intf)
+                .is_some_and(|t| t.kind == TYPE_INTERFACE && *k < t.methods);
             if !ok {
                 return Err(LoadError::Invalid(format!(
-                    "type {index}: the parent is not an earlier exception class"
-                )));
-            }
-            let base = self.type_entry(parent).map_or(0, |p| p.slots);
-            if t.slots < base {
-                return Err(LoadError::Invalid(format!(
-                    "type {index}: fewer slots than the parent"
+                    "interface call target {i} is not a method of an interface"
                 )));
             }
         }
@@ -1161,6 +1540,141 @@ impl Module {
             self.verify_function(fi, f)?;
         }
         Ok(())
+    }
+
+    /// A class entry (`docs/spec/objects.md` 14.2): its parent is a built-in class or an earlier
+    /// class, of the same kind (managed by hand or reference counted), its slots start with the
+    /// parent's, its virtual method table is at least as long as the parent's and holds function
+    /// indexes or reserved values, and only an abstract class has an abstract entry.
+    fn verify_class(&self, index: u32, t: &TypeEntry) -> Result<(), LoadError> {
+        let err = |m: &str| Err(LoadError::Invalid(format!("type {index}: {m}")));
+        let parent = t.parent.unwrap_or(index);
+        let Some(p) = self
+            .type_entry(parent)
+            .filter(|p| parent < index && p.kind == TYPE_CLASS)
+        else {
+            return err("the parent is not an earlier class");
+        };
+        if t.flags & !(CLASS_REF_COUNTED | CLASS_ABSTRACT | CLASS_SEALED) != 0 {
+            return err("unknown class flags");
+        }
+        if (t.flags ^ p.flags) & CLASS_REF_COUNTED != 0 {
+            return err("the parent is of another kind (managed by hand or reference counted)");
+        }
+        if p.flags & CLASS_SEALED != 0 {
+            return err("the parent is sealed");
+        }
+        if t.slots < p.slots || t.refs[..p.slots as usize] != p.refs[..] {
+            return err("the slots do not start with the parent's");
+        }
+        if t.vmt.len() < p.vmt.len() {
+            return err("the virtual method table is shorter than the parent's");
+        }
+        // `Exception.ToString` reads `Message`, so only an exception class has it
+        let exception = self.class_descends(parent, exc::EXCEPTION);
+        if t.vmt
+            .iter()
+            .any(|e| !self.table_entry_ok(*e, exception, t.flags))
+        {
+            return err("a virtual method table entry is out of range");
+        }
+        // The abstract entries have one name each, in entry order (`EAbstractError`)
+        let abstract_entries: Vec<u32> = (0..t.vmt.len() as u32)
+            .filter(|&k| t.vmt[k as usize] == VMT_ABSTRACT)
+            .collect();
+        if t.abstract_names
+            .iter()
+            .map(|(k, _)| *k)
+            .ne(abstract_entries)
+        {
+            return err("the abstract method names do not match the abstract entries");
+        }
+        // The interface table (`docs/spec/objects.md` 14.7): interfaces, each once, with one
+        // callable entry per method; closed over the interfaces' ancestors, and holding the
+        // parent's interfaces
+        for (i, e) in t.intfs.iter().enumerate() {
+            let Some(it) = self
+                .type_entry(e.intf)
+                .filter(|it| it.kind == TYPE_INTERFACE)
+            else {
+                return err("an interface table entry is not an interface");
+            };
+            if t.intfs[..i].iter().any(|o| o.intf == e.intf) {
+                return err("an interface is in the interface table twice");
+            }
+            if e.funcs.len() != it.methods as usize {
+                return err("an interface table entry has the wrong number of methods");
+            }
+            if e.funcs
+                .iter()
+                .any(|f| !self.table_entry_ok(*f, exception, t.flags))
+            {
+                return err("an interface table entry is out of range");
+            }
+            if let Some(ip) = it.parent
+                && !t.intfs.iter().any(|o| o.intf == ip)
+            {
+                return err("an interface's parent is not in the interface table");
+            }
+        }
+        if p.intfs
+            .iter()
+            .any(|pe| !t.intfs.iter().any(|e| e.intf == pe.intf))
+        {
+            return err("the interface table does not hold the parent's interfaces");
+        }
+        Ok(())
+    }
+
+    /// Whether `e` is a callable entry of a class's virtual method table or interface table
+    /// (`docs/spec/objects.md` 14.1, 14.7): a function, a built-in body (`Message` only for an
+    /// exception class), or abstract in an abstract class (`flags` are the class's).
+    fn table_entry_ok(&self, e: u32, exception: bool, flags: u32) -> bool {
+        (e as usize) < self.funcs.len()
+            || (VMT_BUILTIN_NOTHING..=VMT_BUILTIN_CLASS_NAME).contains(&e)
+            || (e == VMT_BUILTIN_MESSAGE && exception)
+            || (VMT_BUILTIN_EQUALS..=VMT_BUILTIN_HASH).contains(&e)
+            || (e == VMT_ABSTRACT && flags & CLASS_ABSTRACT != 0)
+    }
+
+    /// An interface entry (`docs/spec/objects.md` 14.7): its parent is `IInterface` or an earlier
+    /// interface, and it has at least the parent's methods.
+    fn verify_interface(&self, index: u32, t: &TypeEntry) -> Result<(), LoadError> {
+        let err = |m: &str| Err(LoadError::Invalid(format!("type {index}: {m}")));
+        let parent = t.parent.unwrap_or(index);
+        let Some(p) = self
+            .type_entry(parent)
+            .filter(|p| parent < index && p.kind == TYPE_INTERFACE)
+        else {
+            return err("the parent is not an earlier interface");
+        };
+        if t.methods < p.methods {
+            return err("the interface has fewer methods than its parent");
+        }
+        Ok(())
+    }
+
+    /// Whether the class `class` implements the interface `intf` (its interface table has it;
+    /// `docs/spec/objects.md` 14.7).
+    pub fn implements(&self, class: u32, intf: u32) -> Option<&IntfEntry> {
+        self.type_entry(class)?.intf_entry(intf)
+    }
+
+    /// Whether the class `index` is `ancestor` or a descendant of it (the parents come first, so
+    /// the walk ends; the verifier checks each class's parent before its own entry).
+    pub fn class_descends(&self, index: u32, ancestor: u32) -> bool {
+        let mut cur = Some(index);
+        while let Some(c) = cur {
+            if c == ancestor {
+                return true;
+            }
+            cur = self
+                .type_entry(c)
+                .filter(|t| t.kind == TYPE_CLASS)
+                .and_then(|t| t.parent)
+                .filter(|p| *p < c);
+        }
+        false
     }
 
     /// The type entry of a type index: a built-in type below 64, the type section from 64 (3.2).
@@ -1253,28 +1767,23 @@ impl Module {
         let mut end_finally: Vec<(usize, u32, u32)> = Vec::new();
         while pc < code.len() {
             boundaries.push(pc as u32);
-            let (op0, _, _, _) = decode(code[pc]);
-            let (wide, start) = if op0 == op::WIDE {
-                if pc + 2 >= code.len() {
-                    return Err(err("`Wide` without a following instruction".into()));
-                }
-                (true, pc + 1)
-            } else {
-                (false, pc)
-            };
-            let (opc, a8, b8, c8) = decode(code[start]);
+            if decode(code[pc]).0 == op::WIDE && pc + 2 >= code.len() {
+                return Err(err("`Wide` without a following instruction".into()));
+            }
+            let (opc, a, b, c, len) = decode_at(code, pc);
+            let wide = len == 3;
             if opc == op::WIDE && wide {
                 return Err(err("`Wide` after `Wide`".into()));
             }
-            let info =
-                op::info(opc).ok_or_else(|| err(format!("unknown opcode {opc} at {pc:04x}")))?;
-            let (a, b, c) = if wide {
-                let (_, ea, eb, ec) = decode(code[start + 1]);
-                (a8 | (ea << 8), b8 | (eb << 8), c8 | (ec << 8))
-            } else {
-                (a8, b8, c8)
-            };
-            let bx = decode_bx(code[start], wide.then(|| code[start + 1]));
+            // An intrinsic is checked by its own shape (2.19)
+            let info = op::resolve(opc, c).ok_or_else(|| {
+                if op::info(opc).is_some() {
+                    err(format!("unknown intrinsic {c} at {pc:04x}"))
+                } else {
+                    err(format!("unknown opcode {opc} at {pc:04x}"))
+                }
+            })?;
+            let bx = bx_at(code, pc);
             let regs = f.regs as u32;
             let reg = |r: u32, what: &str| -> Result<(), LoadError> {
                 if r >= regs {
@@ -1285,6 +1794,7 @@ impl Module {
             };
             use op::Shape::*;
             match info.shape {
+                Intrinsic => unreachable!("`resolve` gives an intrinsic's own shape"),
                 None => {}
                 A => reg(a, "A")?,
                 AB => {
@@ -1299,13 +1809,8 @@ impl Module {
                 ABCImm => {
                     reg(a, "A")?;
                     reg(b, "B")?;
-                    // `StrToFloatIO` takes the kind of real (2.17), the others a width (2.2)
-                    let max = if opc == op::STR_TO_FLOAT_IO {
-                        FLOAT_IO_CURRENCY as u32
-                    } else {
-                        8
-                    };
-                    if c > max {
+                    // The width of `Narrow` and friends and `StrToIntIO` (2.2)
+                    if c > 8 {
                         return Err(err(format!("width {c} out of range at {pc:04x}")));
                     }
                 }
@@ -1350,10 +1855,18 @@ impl Module {
                     reg(b, "B")?;
                     reg(b + 2 * c, "B+2C")?;
                 }
+                ABList => {
+                    reg(a, "A")?;
+                    if c < 2 {
+                        return Err(err(format!("fewer than 2 operands at {pc:04x}")));
+                    }
+                    reg(b + c - 1, "B+C-1")?;
+                }
                 ABsC | ABsCImm => {
                     reg(a, "A")?;
                     reg(b, "B")?;
                 }
+                AsBsC => reg(a, "A")?,
                 ASBxImm => reg(a, "A")?,
                 ABx => {
                     reg(a, "A")?;
@@ -1372,12 +1885,19 @@ impl Module {
                                 return Err(err(format!("global {bx} out of range at {pc:04x}")));
                             }
                         }
-                        op::CALL => {
+                        op::CALL | op::CALL_METHOD => {
                             let callee = self.funcs.get(bx as usize).ok_or_else(|| {
                                 err(format!("function {bx} out of range at {pc:04x}"))
                             })?;
                             if a + callee.params as u32 > regs {
                                 return Err(err(format!("call arguments exceed regs at {pc:04x}")));
+                            }
+                        }
+                        op::CALL_INTF => {
+                            if bx as usize >= self.intf_calls.len() {
+                                return Err(err(format!(
+                                    "interface call target {bx} out of range at {pc:04x}"
+                                )));
                             }
                         }
                         op::CALL_HOST => {
@@ -1398,7 +1918,7 @@ impl Module {
                 ABSlot => {
                     reg(a, "A")?;
                     reg(b, "B")?;
-                    if opc == op::EXC_INFO && c > EXC_INFO_CLASS_NAME {
+                    if opc == op::EXC_INFO && c > EXC_INFO_SUPPRESSED {
                         return Err(err(format!("information {c} out of range at {pc:04x}")));
                     }
                 }
@@ -1431,7 +1951,7 @@ impl Module {
                     reg(a, "A")?;
                     reg(b, "B")?;
                     if c == 0 {
-                        return Err(err(format!("empty cell path at {pc:04x}")));
+                        return Err(err(format!("empty lending path at {pc:04x}")));
                     }
                     reg(a + c, "A+C")?;
                 }
@@ -1452,9 +1972,17 @@ impl Module {
                 | op::ARR_INSERT
                 | op::ARR_INSERT_ARR
                 | op::ARR_DELETE => &[TYPE_DYNARRAY],
-                op::NEW_EXC | op::CLASS_IS => &[TYPE_EXCEPTION],
+                op::NEW | op::IS_CLASS | op::AS_CLASS => &[TYPE_CLASS],
                 _ => &[],
             };
+            // `New` cannot make an instance of an abstract class (`docs/spec/objects.md` 14.2)
+            if opc == op::NEW
+                && self
+                    .type_entry(bx)
+                    .is_some_and(|t| t.flags & CLASS_ABSTRACT != 0)
+            {
+                return Err(err(format!("type {bx} is abstract at {pc:04x}")));
+            }
             if !kinds.is_empty() {
                 match self.type_entry(bx) {
                     Some(t) if kinds.contains(&t.kind) => {}
@@ -1474,7 +2002,7 @@ impl Module {
                 _ => {}
             }
             last = Some(opc);
-            pc = if wide { start + 2 } else { start + 1 };
+            pc += len;
         }
         if pc != code.len() {
             return Err(err("instruction stream is truncated".into()));
@@ -1489,12 +2017,8 @@ impl Module {
         }
         // `EndFinally` is followed by exactly `B` `Jmp`s and then another instruction (state 0 goes on
         // after the `Jmp`s)
-        let opcode_at = |i: usize| -> Option<u8> {
-            let start = *boundaries.get(i)? as usize;
-            let (opc0, _, _, _) = decode(code[start]);
-            let body = if opc0 == op::WIDE { start + 1 } else { start };
-            Some(decode(code[body]).0)
-        };
+        let opcode_at =
+            |i: usize| -> Option<u8> { Some(decode_at(code, *boundaries.get(i)? as usize).0) };
         for &(i, _, n) in &end_finally {
             for k in 1..=n as usize {
                 if opcode_at(i + k) != Some(op::JMP) {
@@ -1515,30 +2039,13 @@ impl Module {
             .map_err(err)?;
         // Jump targets
         for &start in &boundaries {
-            let (opc0, _, _, _) = decode(code[start as usize]);
-            let wide = opc0 == op::WIDE;
-            let body = if wide { start + 1 } else { start };
-            let (opc, _, b8, c8) = decode(code[body as usize]);
+            let (opc, _, _, c, len) = decode_at(code, start as usize);
+            let wide = len == 3;
             let Some(info) = op::info(opc) else { continue };
-            let next = if wide { start + 3 } else { start + 1 };
+            let next = start as usize + len;
             let offset: i64 = match info.shape {
-                op::Shape::SBx | op::Shape::ASBx => {
-                    if wide {
-                        let (_, _, eb, ec) = decode(code[body as usize + 1]);
-                        let v = b8 | (c8 << 8) | (eb << 16) | (ec << 24);
-                        v as i32 as i64
-                    } else {
-                        (b8 | (c8 << 8)) as u16 as i16 as i64
-                    }
-                }
-                op::Shape::ABsC => {
-                    if wide {
-                        let (_, _, _, ec) = decode(code[body as usize + 1]);
-                        ((c8 | (ec << 8)) as u16 as i16) as i64
-                    } else {
-                        (c8 as u8 as i8) as i64
-                    }
-                }
+                op::Shape::SBx | op::Shape::ASBx => signed_bx(bx_at(code, start as usize), wide),
+                op::Shape::ABsC | op::Shape::AsBsC => signed_c(c, wide),
                 _ => continue,
             };
             let target = next as i64 + offset;
@@ -1570,11 +2077,12 @@ impl Module {
             }
         }
         let mut seen = std::collections::HashSet::new();
-        for r in &f.managed {
-            if *r as u32 >= f.regs as u32 {
+        for m in &f.managed {
+            let r = m.reg;
+            if r as u32 >= f.regs as u32 {
                 return Err(err("managed register out of range".into()));
             }
-            if !seen.insert(*r) {
+            if !seen.insert(r) {
                 return Err(err(format!("managed register r{r} is listed twice")));
             }
         }
@@ -1639,26 +2147,84 @@ pub fn disassemble(m: &Module) -> String {
             let kind = match t.kind {
                 TYPE_RECORD => "record",
                 TYPE_DYNARRAY => "dynarray",
-                TYPE_EXCEPTION => "exception",
                 TYPE_ENUM => "enum",
                 TYPE_SET => "set",
+                TYPE_CLASS => "class",
+                TYPE_INTERFACE => "interface",
                 _ => "array",
             };
-            let mut line = format!("  {index}: {kind} {} slots={}", t.name, t.slots);
+            let mut flags = String::new();
+            for (bit, name) in [
+                (CLASS_REF_COUNTED, " ref"),
+                (CLASS_ABSTRACT, " abstract"),
+                (CLASS_SEALED, " sealed"),
+            ] {
+                if t.flags & bit != 0 {
+                    flags.push_str(name);
+                }
+            }
+            let mut line = format!("  {index}: {kind} {}{flags} slots={}", t.name, t.slots);
+            if t.kind == TYPE_INTERFACE {
+                // `docs/spec/objects.md` 15.4: no slots
+                line = format!(
+                    "  {index}: {kind} {} parent=ty{} methods={}",
+                    t.name,
+                    t.parent.unwrap_or(0),
+                    t.methods
+                );
+                if t.guid != [0; 16] {
+                    line.push_str(&format!(" guid={}", guid_text(&t.guid)));
+                }
+            }
             match t.kind {
-                TYPE_RECORD | TYPE_EXCEPTION => {
-                    let refs: Vec<String> = t
-                        .refs
-                        .iter()
-                        .enumerate()
-                        .filter(|(_, r)| **r)
-                        .map(|(i, _)| i.to_string())
-                        .collect();
-                    if !refs.is_empty() {
-                        line.push_str(&format!(" refs={}", refs.join(",")));
+                TYPE_INTERFACE => {}
+                TYPE_RECORD | TYPE_CLASS => {
+                    for (kind, label) in [(SLOT_REF, "refs"), (SLOT_OBJ, "objs")] {
+                        let slots: Vec<String> = t
+                            .refs
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, r)| **r == kind)
+                            .map(|(i, _)| i.to_string())
+                            .collect();
+                        if !slots.is_empty() {
+                            line.push_str(&format!(" {label}={}", slots.join(",")));
+                        }
                     }
                     if let Some(p) = t.parent {
                         line.push_str(&format!(" parent=ty{p}"));
+                    }
+                    if t.kind == TYPE_CLASS {
+                        let vmt: Vec<String> = t
+                            .vmt
+                            .iter()
+                            .enumerate()
+                            .map(|(k, e)| match *e {
+                                VMT_ABSTRACT => {
+                                    let name = t
+                                        .abstract_names
+                                        .iter()
+                                        .find(|(i, _)| *i as usize == k)
+                                        .map_or("", |(_, n)| n.as_str());
+                                    format!("abstract:{name}")
+                                }
+                                e if e >= VMT_BUILTIN => format!("builtin{}", e - VMT_BUILTIN),
+                                e => format!("f{e}"),
+                            })
+                            .collect();
+                        line.push_str(&format!(" vmt={}", vmt.join(",")));
+                        if !t.intfs.is_empty() {
+                            let intfs: Vec<String> = t
+                                .intfs
+                                .iter()
+                                .map(|e| {
+                                    let funcs: Vec<String> =
+                                        e.funcs.iter().map(|f| vmt_entry_text(*f)).collect();
+                                    format!("ty{}:{}", e.intf, funcs.join(","))
+                                })
+                                .collect();
+                            line.push_str(&format!(" intf={}", intfs.join(";")));
+                        }
                     }
                 }
                 TYPE_ENUM => {
@@ -1667,14 +2233,20 @@ pub fn disassemble(m: &Module) -> String {
                     line.push_str(&format!(" values={}", values.join(",")));
                 }
                 TYPE_SET => {}
-                _ => line.push_str(if t.slot_is_ref(0) {
-                    " elem=ref"
-                } else {
-                    " elem=val"
+                _ => line.push_str(match t.slot_kind(0) {
+                    SLOT_REF => " elem=ref",
+                    SLOT_OBJ => " elem=obj",
+                    _ => " elem=val",
                 }),
             }
             out.push_str(&line);
             out.push('\n');
+        }
+    }
+    if !m.intf_calls.is_empty() {
+        out.push_str(".intfcall\n");
+        for (i, (intf, k)) in m.intf_calls.iter().enumerate() {
+            out.push_str(&format!("  {i}: ty{intf} #{k}\n"));
         }
     }
     out.push_str(".global\n");
@@ -1682,6 +2254,7 @@ pub fn disassemble(m: &Module) -> String {
         let kind = match g.kind {
             GLOBAL_INT => "int",
             GLOBAL_EXIT_CODE => "exitcode",
+            GLOBAL_OBJ => "obj",
             _ => "ref",
         };
         out.push_str(&format!("  {i}: {kind} {}\n", g.name));
@@ -1719,6 +2292,10 @@ pub fn disassemble(m: &Module) -> String {
             out.push_str(&format!(" outer={o}"));
         }
         out.push('\n');
+        // `docs/spec/generics.md` 8
+        if !f.shared_by.is_empty() {
+            out.push_str(&format!("; shared by {}\n", f.shared_by.join(", ")));
+        }
         let mut locals = f.locals.clone();
         locals.sort_by_key(|l| l.0);
         for (r, n) in &locals {
@@ -1747,11 +2324,22 @@ pub fn disassemble(m: &Module) -> String {
             pc += len;
         }
         if !f.managed.is_empty() {
-            let regs: Vec<String> = f.managed.iter().map(|r| format!("r{r}")).collect();
-            out.push_str(&format!(".finally {}\n", regs.join(", ")));
+            out.push_str(&format!(".finally {}\n", managed_text(&f.managed)));
         }
     }
     out
+}
+
+/// Managed registers as the disassembly shows them (`.finally`; 5): `r3, r4:obj`.
+fn managed_text(regs: &[ManagedReg]) -> String {
+    let regs: Vec<String> = regs
+        .iter()
+        .map(|m| {
+            let obj = if m.kind == MANAGED_OBJ { ":obj" } else { "" };
+            format!("r{}{obj}", m.reg)
+        })
+        .collect();
+    regs.join(", ")
 }
 
 /// A `str` constant as the disassembly shows it (5).
@@ -1793,43 +2381,28 @@ fn fmt_target(t: i64) -> String {
 
 /// Disassembles one instruction: (text, number of words).
 pub fn disassemble_one(code: &[u32], pc: usize) -> (String, usize) {
-    let (op0, _, _, _) = decode(code[pc]);
-    let wide = op0 == op::WIDE;
-    let body = if wide { pc + 1 } else { pc };
-    let (opc, a8, b8, c8) = decode(code[body]);
-    let (a, b, c) = if wide {
-        let (_, ea, eb, ec) = decode(code[body + 1]);
-        (a8 | (ea << 8), b8 | (eb << 8), c8 | (ec << 8))
-    } else {
-        (a8, b8, c8)
-    };
-    let len = if wide { 3 } else { 1 };
+    let (opc, a, b, c, len) = decode_at(code, pc);
+    let wide = len == 3;
     let next = pc + len;
-    let Some(info) = op::info(opc) else {
-        return (format!("<unknown {opc}>"), len);
+    // An intrinsic is shown by its own name and shape (2.19)
+    let Some(info) = op::resolve(opc, c) else {
+        return (format!("<unknown {opc} {c}>"), len);
     };
     let name = if wide {
         format!("w.{}", info.name)
     } else {
         info.name.to_string()
     };
-    let bx = decode_bx(code[body], wide.then(|| code[body + 1]));
-    let sbx = if wide {
-        bx as i32 as i64
-    } else {
-        (b8 | (c8 << 8)) as u16 as i16 as i64
-    };
-    let sc = if wide {
-        ((c8 | ((c >> 8) << 8)) as u16 as i16) as i64
-    } else {
-        (c8 as u8 as i8) as i64
-    };
+    let bx = bx_at(code, pc);
+    let sbx = signed_bx(bx, wide);
+    let sc = signed_c(c, wide);
     use op::Shape::*;
     let operands = match info.shape {
+        Intrinsic => unreachable!("`resolve` gives an intrinsic's own shape"),
         None => String::new(),
         A => format!("r{a}"),
         AB | ABRange2 | ABRange3 | ABRange4 => format!("r{a}, r{b}"),
-        ABPairs => format!("r{a}, r{b}, {c}"),
+        ABPairs | ABList => format!("r{a}, r{b}, {c}"),
         ABC => format!("r{a}, r{b}, r{c}"),
         ABCImm => format!("r{a}, r{b}, {c}"),
         ASBxImm => format!("r{a}, {sbx}"),
@@ -1841,8 +2414,9 @@ pub fn disassemble_one(code: &[u32], pc: usize) -> (String, usize) {
                 | op::MAKE_GLOBAL_REF
                 | op::LOAD_GLOBAL_REF
                 | op::STORE_GLOBAL_REF => "g",
-                op::CALL => "f",
+                op::CALL | op::CALL_METHOD => "f",
                 op::CALL_HOST => "h",
+                op::CALL_INTF => "ic",
                 op::UNIQUE
                 | op::SET_LEN
                 | op::NEW_ARR
@@ -1852,8 +2426,9 @@ pub fn disassemble_one(code: &[u32], pc: usize) -> (String, usize) {
                 | op::ARR_INSERT_ARR
                 | op::ARR_DELETE
                 | op::MATERIALIZE
-                | op::NEW_EXC
-                | op::CLASS_IS => "ty",
+                | op::NEW
+                | op::IS_CLASS
+                | op::AS_CLASS => "ty",
                 _ => "",
             };
             format!("r{a}, {prefix}{bx}")
@@ -1866,6 +2441,11 @@ pub fn disassemble_one(code: &[u32], pc: usize) -> (String, usize) {
         SBx => format!("-> {}", fmt_target(next as i64 + sbx)),
         ABsC => format!("r{a}, r{b}, -> {}", fmt_target(next as i64 + sc)),
         ABsCImm => format!("r{a}, r{b}, {sc}"),
+        AsBsC => format!(
+            "r{a}, {}, -> {}",
+            signed_b(b, wide),
+            fmt_target(next as i64 + sc)
+        ),
         AJumps => format!("r{a}, {b}"),
         AOuter => format!("r{a}, {b}, {c}"),
     };
@@ -1876,6 +2456,30 @@ pub fn disassemble_one(code: &[u32], pc: usize) -> (String, usize) {
     }
 }
 
+/// An entry of an interface table in the disassembly (`docs/spec/objects.md` 15.4): `f3`,
+/// `builtin1` or `abstract`.
+fn vmt_entry_text(e: u32) -> String {
+    match e {
+        VMT_ABSTRACT => "abstract".into(),
+        e if e >= VMT_BUILTIN => format!("builtin{}", e - VMT_BUILTIN),
+        e => format!("f{e}"),
+    }
+}
+
+/// A GUID as written (`{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}`, uppercase; `docs/spec/objects.md`
+/// 14.7): the bytes are the hexadecimal digits in pairs, in written order.
+pub fn guid_text(g: &[u8; 16]) -> String {
+    let hex: String = g.iter().map(|b| format!("{b:02X}")).collect();
+    format!(
+        "{{{}-{}-{}-{}-{}}}",
+        &hex[0..8],
+        &hex[8..12],
+        &hex[12..16],
+        &hex[16..20],
+        &hex[20..32]
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1883,6 +2487,7 @@ mod tests {
     fn sample() -> Module {
         Module {
             types: Vec::new(),
+            intf_calls: Vec::new(),
             consts: vec![
                 ConstEntry::Str("Hello, world\n".into()),
                 ConstEntry::Int(42),
@@ -1900,9 +2505,13 @@ mod tests {
                 ],
                 lines: vec![(0, 5), (2, 6)],
                 locals: vec![(1, "I".into())],
-                managed: vec![0],
+                managed: vec![ManagedReg {
+                    reg: 0,
+                    kind: MANAGED_HEAP_REF,
+                }],
                 file: 0,
                 handlers: Vec::new(),
+                shared_by: Vec::new(),
                 outer: None,
             }],
             globals: vec![GlobalEntry {
@@ -1926,6 +2535,32 @@ mod tests {
         }
     }
 
+    // `set_bx_at` writes what `bx_at` reads, in the narrow and the `Wide` form, and leaves the
+    // opcode and `A` alone (sharing renumbers calls in place; generics.md 7).
+    #[test]
+    fn set_bx_at_inverts_bx_at() {
+        for (idx, (code, bx)) in [
+            (vec![encode(op::CALL, 7, 0x34, 0x12)], 0xBEEF),
+            (
+                vec![
+                    encode(op::WIDE, 0, 0, 0),
+                    encode(op::CALL, 7, 0x34, 0x12),
+                    encode_ext(1, 0x5600, 0x7800),
+                ],
+                0x0102_0304,
+            ),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let mut code = code;
+            set_bx_at(&mut code, 0, bx);
+            assert_eq!(bx_at(&code, 0), bx, "{idx}");
+            let (opc, a, _, _, _) = decode_at(&code, 0);
+            assert_eq!((opc, a & 0xFF), (op::CALL, 7), "{idx}");
+        }
+    }
+
     #[test]
     fn roundtrip() {
         let m = sample();
@@ -1943,11 +2578,24 @@ mod tests {
         ));
     }
 
+    // Before 1.0 the header's format version field is fixed at 0 and any other
+    // value is rejected (3.1, 3.3).
+    #[test]
+    fn format_version_fixed_at_zero() {
+        let mut bytes = sample().encode("0.0.0");
+        assert_eq!(&bytes[4..8], &[0, 0, 0, 0]);
+        bytes[4] = 7;
+        assert!(matches!(
+            Module::decode(&bytes, "0.0.0"),
+            Err(LoadError::Invalid(_))
+        ));
+    }
+
     #[test]
     fn disassembly_format() {
         let d = disassemble(&sample());
         let expected = "\
-; puyc format 2
+; puyc format 0
 .const
   0: str \"Hello, world\\n\"
   1: int 42
@@ -1976,12 +2624,146 @@ mod tests {
         m.types.push(TypeEntry {
             kind: TYPE_RECORD,
             slots: 2,
-            refs: vec![false, true],
+            refs: vec![SLOT_PLAIN, SLOT_REF],
             name: "Hello.TPoint".into(),
             parent: None,
             values: Vec::new(),
+            flags: 0,
+            vmt: Vec::new(),
+            abstract_names: Vec::new(),
+            intfs: Vec::new(),
+            methods: 0,
+            guid: [0; 16],
         });
         m
+    }
+
+    /// A module with an interface (type 64, one method) implemented by a reference counted class
+    /// (type 65, function 0), and a `CallIntf` of the method (`docs/spec/objects.md` 14.7).
+    fn with_interface() -> Module {
+        let mut m = sample();
+        m.types.push(TypeEntry {
+            kind: TYPE_INTERFACE,
+            name: "Hello.IRun".into(),
+            parent: Some(IINTERFACE_TYPE),
+            methods: 1,
+            guid: [0xAB; 16],
+            ..TypeEntry::default()
+        });
+        m.types.push(TypeEntry {
+            kind: TYPE_CLASS,
+            name: "Hello.TRun".into(),
+            parent: Some(TREFOBJECT_TYPE),
+            flags: CLASS_REF_COUNTED,
+            vmt: TOBJECT_VMT.to_vec(),
+            intfs: vec![
+                IntfEntry {
+                    intf: IINTERFACE_TYPE,
+                    funcs: Vec::new(),
+                },
+                IntfEntry {
+                    intf: 64,
+                    funcs: vec![0],
+                },
+            ],
+            ..TypeEntry::default()
+        });
+        m.intf_calls.push((64, 0));
+        m.funcs[0].code[0] = encode(op::CALL_INTF, 1, 0, 0);
+        m
+    }
+
+    #[test]
+    // An interface entry, a class's interface table and the interface call target section are
+    // written, read back and shown (`docs/spec/objects.md` 14.7, 15.4).
+    fn interface_entries_roundtrip() {
+        let m = with_interface();
+        m.verify().expect("valid module");
+        let bytes = m.encode("0.0.0");
+        assert_eq!(Module::decode(&bytes, "0.0.0").as_ref(), Ok(&m));
+        let d = disassemble(&m);
+        let guid = "{ABABABAB-ABAB-ABAB-ABAB-ABABABABABAB}";
+        let types = format!(
+            ".type\n  64: interface Hello.IRun parent=ty24 methods=1 guid={guid}\n  65: class Hello.TRun ref slots=0 parent=ty20 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4 intf=ty24:;ty64:f0\n.intfcall\n  0: ty64 #0\n.global\n"
+        );
+        assert!(d.contains(&types), "{d}");
+        assert!(d.contains("  0000  CallIntf     r1, ic0\n"), "{d}");
+    }
+
+    #[test]
+    // What the verifier refuses in interfaces, interface tables and interface call targets
+    // (`docs/spec/objects.md` 14.7): each change breaks one rule of the valid module.
+    fn verify_checks_interfaces() {
+        type Change = fn(&mut Module);
+        let cases: [(&str, Change); 12] = [
+            ("parent not an interface", |m| {
+                m.types[0].parent = Some(TOBJECT_TYPE)
+            }),
+            ("parent not earlier", |m| m.types[0].parent = Some(64)),
+            ("fewer methods than the parent", |m| {
+                m.types.push(TypeEntry {
+                    kind: TYPE_INTERFACE,
+                    name: "Hello.IEmpty".into(),
+                    parent: Some(64),
+                    methods: 0,
+                    ..TypeEntry::default()
+                })
+            }),
+            ("table entry not an interface", |m| {
+                m.types[1].intfs[1].intf = TOBJECT_TYPE
+            }),
+            ("interface twice", |m| {
+                let e = m.types[1].intfs[1].clone();
+                m.types[1].intfs.push(e)
+            }),
+            ("wrong number of methods", |m| {
+                m.types[1].intfs[1].funcs.push(0)
+            }),
+            ("function out of range", |m| {
+                m.types[1].intfs[1].funcs[0] = 7
+            }),
+            ("abstract entry in a class that is not abstract", |m| {
+                m.types[1].intfs[1].funcs[0] = VMT_ABSTRACT
+            }),
+            ("interface's parent missing", |m| {
+                m.types[1].intfs.remove(0);
+            }),
+            ("parent's interface missing", |m| {
+                let mut child = m.types[1].clone();
+                child.parent = Some(65);
+                child.intfs.truncate(1);
+                m.types.push(child)
+            }),
+            ("call target method out of range", |m| m.intf_calls[0].1 = 1),
+            ("CallIntf target out of range", |m| {
+                m.funcs[0].code[0] = encode(op::CALL_INTF, 1, 1, 0)
+            }),
+        ];
+        for (what, change) in cases {
+            let mut m = with_interface();
+            change(&mut m);
+            assert!(m.verify().is_err(), "{what}");
+        }
+    }
+
+    #[test]
+    // The reserved values a virtual method table may hold (`docs/spec/objects.md` 14.2,
+    // `docs/spec/equality.md` 8.2): the built-in bodies 0 to 4 (2 only in an exception class),
+    // and nothing above 4.
+    fn vmt_builtin_bodies_range() {
+        let cases: [(u32, bool); 6] = [
+            (VMT_BUILTIN, true),
+            (VMT_BUILTIN + 1, true),
+            (VMT_BUILTIN + 2, false),
+            (VMT_BUILTIN + 3, true),
+            (VMT_BUILTIN + 4, true),
+            (VMT_BUILTIN + 5, false),
+        ];
+        for (entry, ok) in cases {
+            let mut m = with_interface();
+            m.types[1].vmt[5] = entry;
+            assert_eq!(m.verify().is_ok(), ok, "{entry:#x}");
+        }
     }
 
     #[test]
@@ -2036,6 +2818,26 @@ mod tests {
     }
 
     #[test]
+    // `IsClass` / `AsClass` take a class as `Bx` (`docs/spec/objects.md` 14.2): `TObject` and
+    // `Exception` (a class since M3-35) pass, while a record, `TArray<Exception>` and an unused
+    // index are refused.
+    fn class_check_operand_is_a_class() {
+        for opc in [op::IS_CLASS, op::AS_CLASS] {
+            for (ty, ok) in [
+                (TOBJECT_TYPE, true),
+                (0, true),
+                (64, false),
+                (12, false),
+                (63, false),
+            ] {
+                let mut m = sample_with_type();
+                m.funcs[0].code[0] = encode(opc, 1, ty, 0);
+                assert_eq!(m.verify().is_ok(), ok, "{opc} ty{ty}");
+            }
+        }
+    }
+
+    #[test]
     // Aggregate constants that would make `LoadConst` loop or read a slot that is not there, and
     // type operands outside the type section, are refused at load (3.3).
     fn verify_rejects_bad_aggregates_and_types() {
@@ -2086,10 +2888,16 @@ mod tests {
             m.types.push(TypeEntry {
                 kind: TYPE_DYNARRAY,
                 slots: 0,
-                refs: vec![true],
+                refs: vec![SLOT_REF],
                 name: "array of string".into(),
                 parent: None,
                 values: Vec::new(),
+                flags: 0,
+                vmt: Vec::new(),
+                abstract_names: Vec::new(),
+                intfs: Vec::new(),
+                methods: 0,
+                guid: [0; 16],
             });
             m
         };
@@ -2146,23 +2954,31 @@ mod tests {
         );
     }
 
-    /// `sample_with_type` plus an exception class (64 is the record) whose parent is `parent`.
+    /// `sample_with_type` plus an exception class (64 is the record) whose parent is `parent`: a
+    /// reference counted class whose `ToString` is the built-in body 2 (`docs/spec/objects.md`
+    /// 14.8).
     fn with_exception(parent: u32) -> Module {
         let mut m = sample_with_type();
         m.types.push(TypeEntry {
-            kind: TYPE_EXCEPTION,
+            kind: TYPE_CLASS,
             slots: 2,
-            refs: vec![true, true],
+            refs: vec![SLOT_REF, SLOT_REF],
             name: "Hello.EParseError".into(),
             parent: Some(parent),
             values: Vec::new(),
+            flags: CLASS_REF_COUNTED,
+            vmt: EXCEPTION_VMT.to_vec(),
+            abstract_names: Vec::new(),
+            intfs: Vec::new(),
+            methods: 0,
+            guid: [0; 16],
         });
         m
     }
 
     #[test]
-    // An exception class entry carries its parent after the name, round trips, and is shown with
-    // `parent=tyN` (3.2, 5.2).
+    // A declared exception class is a class entry (kind 7) whose parent is a built-in exception
+    // class; it round trips and is shown like any class (`docs/spec/objects.md` 14.8, 15.4).
     fn exception_class_entry_roundtrip() {
         let m = with_exception(0);
         m.verify().expect("valid module");
@@ -2170,8 +2986,24 @@ mod tests {
         assert_eq!(Module::decode(&bytes, "0.0.0").as_ref(), Ok(&m));
         let d = disassemble(&m);
         assert!(
-            d.contains("  65: exception Hello.EParseError slots=2 refs=0,1 parent=ty0\n"),
+            d.contains(
+                "  65: class Hello.EParseError ref slots=2 refs=0,1 parent=ty0 vmt=builtin0,builtin0,builtin0,builtin2,builtin3,builtin4\n"
+            ),
             "{d}"
+        );
+    }
+
+    #[test]
+    // Type kind 4 (the exception classes of M2) is gone: a module with it does not load
+    // (`docs/spec/objects.md` 14.8).
+    fn type_kind_4_is_refused() {
+        let mut m = sample_with_type();
+        m.types[0].kind = 4;
+        let bytes = m.encode("0.0.0");
+        assert!(
+            matches!(Module::decode(&bytes, "0.0.0"), Err(LoadError::Invalid(ref e)) if e.contains("unknown type kind 4")),
+            "{:?}",
+            Module::decode(&bytes, "0.0.0")
         );
     }
 
@@ -2185,6 +3017,12 @@ mod tests {
             name: "Hello.TCode".into(),
             parent: None,
             values: vec![(0, "Zero".into()), (5, "Five".into()), (5, "Again".into())],
+            flags: 0,
+            vmt: Vec::new(),
+            abstract_names: Vec::new(),
+            intfs: Vec::new(),
+            methods: 0,
+            guid: [0; 16],
         });
         m.funcs[0].code[0] = encode(op::ENUM_TO_STR, 0, 1, 65);
         m
@@ -2248,6 +3086,12 @@ mod tests {
             name: "Hello.TSmallChars".into(),
             parent: None,
             values: Vec::new(),
+            flags: 0,
+            vmt: Vec::new(),
+            abstract_names: Vec::new(),
+            intfs: Vec::new(),
+            methods: 0,
+            guid: [0; 16],
         });
         m.consts.push(ConstEntry::Set { ty: 65, words });
         m
@@ -2332,10 +3176,20 @@ mod tests {
     }
 
     #[test]
-    // The parent of an exception class is a built-in exception class or an earlier exception
-    // class of the section (`docs/spec/exceptions.md` 6.1).
+    // An exception class's parent is a built-in exception class or an earlier class; `TObject`
+    // is of the other kind (managed by hand), and the built-in body 2 (`Exception.ToString`) is
+    // refused in a class that is not an exception (`docs/spec/objects.md` 14.2, 14.8).
     fn verify_checks_exception_parents() {
-        for (parent, ok) in [(0, true), (11, true), (12, false), (64, false), (65, false)] {
+        for (parent, ok) in [
+            (0, true),
+            (11, true),
+            (23, true),
+            (12, false),
+            (19, false),
+            (20, false),
+            (64, false),
+            (65, false),
+        ] {
             assert_eq!(
                 with_exception(parent).verify().is_ok(),
                 ok,
@@ -2345,43 +3199,25 @@ mod tests {
     }
 
     #[test]
-    // `NewExc` takes an exception class (built-in or declared), and `ExcInfo` reads one of the
-    // three kinds of information (`docs/spec/exceptions.md` 6.2, 6.3).
+    // `ExcInfo` reads the stack trace or `Suppressed` (`C` 0 or 1; the class name moved to the
+    // `ClassName` intrinsic), and `New` makes an instance of a built-in exception class
+    // (`docs/spec/objects.md` 14.8).
     fn verify_checks_exception_instructions() {
-        let cases: [(&str, u32, bool); 9] = [
+        let cases: [(&str, u32, bool); 6] = [
+            ("ExcInfo StackTrace", encode(op::EXC_INFO, 0, 1, 0), true),
+            ("ExcInfo Suppressed", encode(op::EXC_INFO, 0, 1, 1), true),
+            ("ExcInfo ClassName", encode(op::EXC_INFO, 0, 1, 2), false),
             (
-                "NewExc of a built-in class",
-                encode(op::NEW_EXC, 0, 7, 0),
+                "New of a built-in exception",
+                encode(op::NEW, 0, 7, 0),
                 true,
             ),
             (
-                "NewExc of a declared class",
-                encode(op::NEW_EXC, 0, 65, 0),
+                "New of a declared exception",
+                encode(op::NEW, 0, 65, 0),
                 true,
             ),
-            ("NewExc of a record", encode(op::NEW_EXC, 0, 64, 0), false),
-            (
-                "NewExc of TArray<Exception>",
-                encode(op::NEW_EXC, 0, 12, 0),
-                false,
-            ),
-            (
-                "NewExc of an unused built-in index",
-                encode(op::NEW_EXC, 0, 20, 0),
-                false,
-            ),
-            (
-                "NewExc of EEncodingError",
-                encode(op::NEW_EXC, 0, 16, 0),
-                true,
-            ),
-            (
-                "NewExc of an M2b class",
-                encode(op::NEW_EXC, 0, 13, 0),
-                true,
-            ),
-            ("ExcInfo ClassName", encode(op::EXC_INFO, 0, 1, 2), true),
-            ("ExcInfo out of range", encode(op::EXC_INFO, 0, 1, 3), false),
+            ("New of TArray<Exception>", encode(op::NEW, 0, 12, 0), false),
         ];
         for (what, word, ok) in cases {
             let mut m = with_exception(0);
@@ -2506,12 +3342,12 @@ mod tests {
     }
 
     #[test]
-    // `MakeCell A B C` reads its path from `A+1 ..= A+C`, which must be registers, and the path
+    // `Lend A B C` reads its path from `A+1 ..= A+C`, which must be registers, and the path
     // is never empty (6.1).
-    fn verify_checks_cell_path() {
+    fn verify_checks_lending_path() {
         for (c, ok) in [(0, false), (1, true), (2, false)] {
             let mut m = sample();
-            m.funcs[0].code[0] = encode(op::MAKE_CELL, 1, 0, c);
+            m.funcs[0].code[0] = encode(op::LEND, 1, 0, c);
             assert_eq!(m.verify().is_ok(), ok, "path length {c}");
         }
     }
@@ -2591,16 +3427,197 @@ mod tests {
         assert!(m.verify().is_ok());
     }
 
+    // `ConcatStrN` reads `C` registers from `B`: at least 2, all within the frame (2.4, 3.3).
+    #[test]
+    fn concat_str_n_checks_its_register_list() {
+        let mut m = sample();
+        m.funcs[0].code[0] = encode(op::CONCAT_STR_N, 0, 0, 3);
+        assert!(m.verify().is_ok());
+        assert_eq!(
+            disassemble_one(&m.funcs[0].code, 0).0,
+            "ConcatStrN   r0, r0, 3"
+        );
+        for (b, c) in [(1, 3), (0, 4), (0, 1), (0, 0)] {
+            m.funcs[0].code[0] = encode(op::CONCAT_STR_N, 0, b, c);
+            assert!(m.verify().is_err(), "B={b} C={c}");
+        }
+    }
+
+    // The instructions with an immediate (2.2, 2.3) check their registers but not the immediate
+    // in the place of a register (`sC` of `MulIntI`, `sB` of `JmpIfLtIntI`), and the
+    // compare-and-branch forms and `ForLoopUp` check their jump target like the other jumps (3.3)
+    #[test]
+    fn immediate_forms_check_registers_and_targets() {
+        let mut m = sample();
+        let ok = [
+            encode(op::MUL_INT_I, 1, 2, 0x80),
+            encode(op::DIV_INT_I, 0, 1, 0xFF),
+            encode(op::JMP_IF_LT_INT_I, 2, 0xFB, 1),
+            encode(op::FOR_LOOP_UP, 1, 2, 1),
+            encode(op::FOR_LOOP_DOWN, 1, 2, 0xFF),
+        ];
+        for (i, word) in ok.into_iter().enumerate() {
+            m.funcs[0].code[1] = word;
+            assert!(m.verify().is_ok(), "{i}: {:?}", m.verify());
+        }
+        let bad = [
+            encode(op::MUL_INT_I, 3, 0, 1),
+            encode(op::SHR_INT32_I, 0, 3, 1),
+            encode(op::JMP_IF_EQ_INT_I, 3, 0, 0),
+            encode(op::JMP_IF_GE_INT_I, 0, 5, 2),
+            encode(op::FOR_LOOP_UP, 0, 3, 0),
+            encode(op::FOR_LOOP_DOWN, 0, 1, 0xFD),
+        ];
+        for (i, word) in bad.into_iter().enumerate() {
+            m.funcs[0].code[1] = word;
+            assert!(m.verify().is_err(), "{i}");
+        }
+    }
+
+    // The hash instructions (224-228; `docs/spec/equality.md` 8.1) take registers of the function
+    // in each operand, and show by their names (3.3, 5).
+    #[test]
+    fn hash_instructions_check_their_registers() {
+        let mut m = sample();
+        let ok = [
+            (encode(op::HASH_INT, 0, 2, 0), "HashInt      r0, r2"),
+            (encode(op::HASH_F64, 2, 1, 0), "HashF64      r2, r1"),
+            (encode(op::HASH_STR, 1, 0, 0), "HashStr      r1, r0"),
+            (encode(op::HASH_MIX, 0, 1, 2), "HashMix      r0, r1, r2"),
+            (encode(op::KEY_EQ_F64, 2, 0, 1), "KeyEqF64     r2, r0, r1"),
+        ];
+        for (word, text) in ok {
+            m.funcs[0].code[1] = word;
+            assert!(m.verify().is_ok(), "{text}: {:?}", m.verify());
+            assert_eq!(disassemble_one(&m.funcs[0].code, 1).0, text);
+        }
+        let bad = [
+            encode(op::HASH_INT, 3, 0, 0),
+            encode(op::HASH_INT, 0, 3, 0),
+            encode(op::HASH_F64, 0, 3, 0),
+            encode(op::HASH_STR, 3, 0, 0),
+            encode(op::HASH_MIX, 0, 0, 3),
+            encode(op::HASH_MIX, 0, 3, 0),
+            encode(op::KEY_EQ_F64, 3, 0, 0),
+            encode(op::KEY_EQ_F64, 0, 0, 3),
+        ];
+        for (i, word) in bad.into_iter().enumerate() {
+            m.funcs[0].code[1] = word;
+            assert!(m.verify().is_err(), "{i}");
+        }
+    }
+
+    // `Intrinsic` is checked by the intrinsic's own shape and number, and shows by the
+    // intrinsic's name (2.19, 3.3, 5).
+    #[test]
+    fn intrinsic_checked_and_shown_by_its_own_shape() {
+        let mut m = sample();
+        m.funcs[0].code[0] = encode(op::INTRINSIC, 1, 0, u32::from(op::intr::ARG_GET));
+        assert!(m.verify().is_ok());
+        assert_eq!(
+            disassemble_one(&m.funcs[0].code, 0).0,
+            "ArgGet       r1, r0"
+        );
+        m.funcs[0].code[0] = encode(op::INTRINSIC, 0, 0, u32::from(op::intr::READ_LN_END));
+        assert!(m.verify().is_ok());
+        assert_eq!(disassemble_one(&m.funcs[0].code, 0).0, "ReadLnEnd");
+        // `StrInsert` reads `B` and `B+1`; with B = 2, B+1 is past the 3 registers
+        m.funcs[0].code[0] = encode(op::INTRINSIC, 0, 2, u32::from(op::intr::STR_INSERT));
+        assert!(m.verify().is_err());
+        // 76 is not given to an intrinsic yet (`docs/spec/bytecode.md` 2.19)
+        m.funcs[0].code[0] = encode(op::INTRINSIC, 0, 0, 76);
+        assert!(m.verify().is_err());
+    }
+
+    // The intrinsics only the standard library uses (`I73`-`I75`; 2.22) take registers of the
+    // function, `ArrayMoveRange` and `IsOverridden` also `B+1` and `B+2`, and show by their names
+    // (3.3, 5).
+    #[test]
+    fn stdlib_intrinsics_check_their_registers() {
+        let mut m = sample();
+        let word = |a, b, id: u8| encode(op::INTRINSIC, a, b, u32::from(id));
+        let ok = [
+            (
+                word(2, 0, op::intr::ARRAY_MOVE_RANGE),
+                "ArrayMoveRange r2, r0",
+            ),
+            (word(0, 2, op::intr::IS_REF_OBJ), "IsRefObj     r0, r2"),
+            (word(1, 0, op::intr::IS_OVERRIDDEN), "IsOverridden r1, r0"),
+        ];
+        for (w, text) in ok {
+            m.funcs[0].code[0] = w;
+            assert!(m.verify().is_ok(), "{text}: {:?}", m.verify());
+            assert_eq!(disassemble_one(&m.funcs[0].code, 0).0, text);
+        }
+        let bad = [
+            // `B+2` is past the 3 registers
+            word(0, 1, op::intr::ARRAY_MOVE_RANGE),
+            word(3, 0, op::intr::ARRAY_MOVE_RANGE),
+            word(3, 0, op::intr::IS_REF_OBJ),
+            word(0, 3, op::intr::IS_REF_OBJ),
+            word(0, 1, op::intr::IS_OVERRIDDEN),
+            word(3, 0, op::intr::IS_OVERRIDDEN),
+        ];
+        for (i, w) in bad.into_iter().enumerate() {
+            m.funcs[0].code[0] = w;
+            assert!(m.verify().is_err(), "{i}");
+        }
+    }
+
+    // The intrinsics of the key equality and hash (`I68`-`I72`; 2.21) take registers of the
+    // function, `CallableKeyEq` also `B+1`, and show by their names (3.3, 5).
+    #[test]
+    fn hash_intrinsics_check_their_registers() {
+        let mut m = sample();
+        let word = |a, b, id: u8| encode(op::INTRINSIC, a, b, u32::from(id));
+        let ok = [
+            (word(0, 2, op::intr::OBJ_ALIVE), "ObjAlive     r0, r2"),
+            (word(2, 1, op::intr::HASH_UTF8), "HashUtf8     r2, r1"),
+            (word(1, 0, op::intr::HASH_SET_BIG), "HashSetBig   r1, r0"),
+            (
+                word(2, 1, op::intr::CALLABLE_KEY_EQ),
+                "CallableKeyEq r2, r1",
+            ),
+            (word(0, 2, op::intr::CALLABLE_HASH), "CallableHash r0, r2"),
+        ];
+        for (w, text) in ok {
+            m.funcs[0].code[0] = w;
+            assert!(m.verify().is_ok(), "{text}: {:?}", m.verify());
+            assert_eq!(disassemble_one(&m.funcs[0].code, 0).0, text);
+        }
+        let bad = [
+            word(3, 0, op::intr::OBJ_ALIVE),
+            word(0, 3, op::intr::OBJ_ALIVE),
+            word(0, 3, op::intr::HASH_UTF8),
+            word(3, 0, op::intr::HASH_SET_BIG),
+            // `B+1` is past the 3 registers
+            word(0, 2, op::intr::CALLABLE_KEY_EQ),
+            word(0, 3, op::intr::CALLABLE_HASH),
+        ];
+        for (i, w) in bad.into_iter().enumerate() {
+            m.funcs[0].code[0] = w;
+            assert!(m.verify().is_err(), "{i}");
+        }
+    }
+
     // The managed register list must name registers of the function, each once (3.3).
     #[test]
     fn verify_rejects_bad_managed_registers() {
+        let regs = |rs: &[u16]| -> Vec<ManagedReg> {
+            rs.iter()
+                .map(|&reg| ManagedReg {
+                    reg,
+                    kind: MANAGED_HEAP_REF,
+                })
+                .collect()
+        };
         for (idx, managed) in [vec![3], vec![0, 0], vec![1, 2, 1]].into_iter().enumerate() {
             let mut m = sample();
-            m.funcs[0].managed = managed;
+            m.funcs[0].managed = regs(&managed);
             assert!(m.verify().is_err(), "{idx}");
         }
         let mut m = sample();
-        m.funcs[0].managed = vec![2, 0, 1];
+        m.funcs[0].managed = regs(&[2, 0, 1]);
         assert!(m.verify().is_ok());
     }
 
@@ -2616,10 +3633,10 @@ mod tests {
             .expect("the managed register list is encoded")
             + 4;
         let mut bad = bytes.clone();
-        bad[pos + 6] = 2;
+        bad[pos + 6] = 3;
         assert_eq!(
             Module::decode(&bad, "0.0.0"),
-            Err(LoadError::Invalid("unknown managed register kind 2".into()))
+            Err(LoadError::Invalid("unknown managed register kind 3".into()))
         );
     }
 
@@ -2642,6 +3659,35 @@ mod tests {
         assert_eq!(Module::decode(&m.encode("test"), "test").unwrap(), m);
         m.consts.truncate(65536);
         assert!(m.verify().is_err(), "verifies the whole 32-bit index");
+    }
+
+    // A `Wide` must be followed by an instruction and its extension word, and not by another
+    // `Wide`; the verifier reports these as load errors instead of reading past the code.
+    #[test]
+    fn wide_without_its_words_or_before_wide() {
+        let truncated = "function 0 (Hello.<main>): `Wide` without a following instruction";
+        let cases = [
+            (vec![encode(op::WIDE, 0, 0, 0)], truncated),
+            (
+                vec![encode(op::WIDE, 0, 0, 0), encode(op::RET_VOID, 0, 0, 0)],
+                truncated,
+            ),
+            (
+                vec![
+                    encode(op::WIDE, 0, 0, 0),
+                    encode(op::WIDE, 0, 0, 0),
+                    encode_ext(0, 0, 0),
+                    encode(op::RET_VOID, 0, 0, 0),
+                ],
+                "function 0 (Hello.<main>): `Wide` after `Wide`",
+            ),
+        ];
+        for (idx, (code, message)) in cases.into_iter().enumerate() {
+            let mut m = sample();
+            m.funcs[0].code = code;
+            m.funcs[0].lines = vec![(0, 1)];
+            assert_eq!(m.verify(), Err(LoadError::Invalid(message.into())), "{idx}");
+        }
     }
 
     #[test]

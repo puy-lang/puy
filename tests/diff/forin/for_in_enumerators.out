@@ -1,0 +1,17 @@
+enumerator created
+I = 3
+I = 4
+I = 5
+I = 6
+enumerator destroyed at 7
+sum 18, calls 1
+enumerator created
+J = 3
+J = 4
+enumerator destroyed at 5
+enumerator created
+enumerator destroyed at 3
+calls 3
+<one>
+<two>
+<three>

@@ -1,0 +1,8 @@
+B 1
+A item
+B 2
+A item
+drop
+destroy item
+dropped
+end

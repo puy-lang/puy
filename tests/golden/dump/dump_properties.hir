@@ -1,0 +1,74 @@
+program DumpProperties
+.type TBox = class(TObject)
+  .field 0 FSize: Integer
+  .classvar g0 FCount: Integer
+  .method f0 SetSize
+  .method f1 GetItem
+  .method f2 SetItem
+  .method f3 GetScaled
+  .property Size: Integer read=#0 write=f0
+  .property Raw: Integer read=#0 write=#0
+  .property Items[Integer]: string read=f1 write=f2
+  .property Twice: Integer index=2 read=f3 write=-
+  .property Sink: Integer read=- write=f0
+  .property class Count: Integer read=g0 write=g0
+.global g0 TBox.FCount: Integer
+.global g1 B: TBox
+.routine f0 TBox.SetSize(Value: Integer)
+  .var v0 Self: TBox self
+  .var v1 Value: Integer param
+  assign @28 R+
+    objfield Integer FSize #0
+      self TBox
+    var v1 Value: Integer
+.routine f1 TBox.GetItem(I: Integer): string
+  .var v0 Self: TBox self
+  .var v1 I: Integer param
+  .var v2 Result: string result
+  assign @33 R+
+    var v2 Result
+    const string "item"
+.routine f2 TBox.SetItem(I: Integer; const Value: string)
+  .var v0 Self: TBox self
+  .var v1 I: Integer param
+  .var v2 Value: string const param
+.routine f3 TBox.GetScaled(Index: Integer): Integer
+  .var v0 Self: TBox self
+  .var v1 Index: Integer param
+  .var v2 Result: Integer result
+  assign @42 R+
+    var v2 Result
+    binary Integer
+      objfield Integer FSize #0
+        self TBox
+      * Integer int:Integer
+        var v1 Index: Integer
+.routine <main>
+  assign @48 R+
+    global g1 B
+    create TBox builtin
+  assign @49
+    property Size f0
+      global g1 B: TBox
+    const Integer 3
+  assign @50 R+
+    objfield Integer FSize #0
+      global g1 B: TBox
+    const Integer 4
+  assign @51
+    property Items f2
+      global g1 B: TBox
+      const Integer 1
+    const string "x"
+  assign @52 R+
+    global g0 TBox.FCount
+    method f3 TBox.GetScaled: Integer
+      global g1 B: TBox
+      const Integer 2
+  writeln @53
+    arg
+      method f1 TBox.GetItem: string
+        global g1 B: TBox
+        const Integer 2
+  free @54
+    global g1 B: TBox

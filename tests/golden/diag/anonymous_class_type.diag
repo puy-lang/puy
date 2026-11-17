@@ -1,0 +1,146 @@
+error[E0404]: expected a type
+   --> anonymous_class_type.pas:10:8
+    |
+ 10 |     F: class end;                       // E0404
+    |        ^^^^^
+    |
+    = note: declare the type in a `type` section and use its name
+
+error[E0404]: expected a type
+   --> anonymous_class_type.pas:15:6
+    |
+ 15 |   X: class end;                         // E0404
+    |      ^^^^^
+    |
+    = note: declare the type in a `type` section and use its name
+
+error[E0404]: expected a type
+   --> anonymous_class_type.pas:16:6
+    |
+ 16 |   Y: interface end;                     // E0404
+    |      ^^^^^^^^^
+    |
+    = note: declare the type in a `type` section and use its name
+
+error[E0404]: expected a type
+   --> anonymous_class_type.pas:17:6
+    |
+ 17 |   C: class of TFoo;                     // E0404
+    |      ^^^^^
+    |
+    = note: declare the type in a `type` section and use its name
+
+error[E0404]: expected a type
+   --> anonymous_class_type.pas:18:6
+    |
+ 18 |   Z: class(TFoo) end;                   // E0404
+    |      ^^^^^
+    |
+    = note: declare the type in a `type` section and use its name
+
+error[E0404]: expected a type
+   --> anonymous_class_type.pas:19:21
+    |
+ 19 |   W: array[0..1] of interface end;      // E0404
+    |                     ^^^^^^^^^
+    |
+    = note: declare the type in a `type` section and use its name
+
+error[E0404]: a parameter type must be a type name
+   --> anonymous_class_type.pas:21:16
+    |
+ 21 | procedure P(A: class; B: Integer);      // E0404: parameter
+    |                ^^^^^
+    |
+    = note: declare the type in a `type` section and use its name
+
+error[E0404]: a parameter type must be a type name
+   --> anonymous_class_type.pas:25:16
+    |
+ 25 | procedure Q(A: class of TFoo);          // E0404: parameter
+    |                ^^^^^
+    |
+    = note: declare the type in a `type` section and use its name
+
+error[E0404]: a return type must be a type name
+   --> anonymous_class_type.pas:29:13
+    |
+ 29 | function F: interface;                  // E0404: return type
+    |             ^^^^^^^^^
+    |
+    = note: declare the type in a `type` section and use its name
+
+error[E0404]: a return type must be a type name
+   --> anonymous_class_type.pas:33:13
+    |
+ 33 | function G: class(TFoo) end;            // E0404: return type
+    |             ^^^^^
+    |
+    = note: declare the type in a `type` section and use its name
+
+error[E0404]: expected a type
+   --> anonymous_class_type.pas:38:17
+    |
+ 38 |   var L: TArray<class of TFoo>;         // E0404
+    |                 ^^^^^
+    |
+    = note: declare the type in a `type` section and use its name
+
+error[E0404]: expected a type
+   --> anonymous_class_type.pas:39:10
+    |
+ 39 |   var M: class end;                     // E0404
+    |          ^^^^^
+    |
+    = note: declare the type in a `type` section and use its name
+
+error[E0404]: expected a type
+   --> anonymous_class_type.pas:40:14
+    |
+ 40 |   for var K: class of TFoo in [] do;    // E0404 (no E0729 for `[]` on top)
+    |              ^^^^^
+    |
+    = note: declare the type in a `type` section and use its name
+
+warning[W0018]: empty statement after `do` (empty-statement)
+   --> anonymous_class_type.pas:40:36
+    |
+ 40 |   for var K: class of TFoo in [] do;    // E0404 (no E0729 for `[]` on top)
+    |                                    ^
+    |
+    = note: write a statement after `do`, or `begin end` if the body is meant to be empty
+    = note: disable with `{$WARN empty-statement OFF}`
+
+error[E0700]: undeclared identifier `TMissing`
+   --> anonymous_class_type.pas:41:14
+    |
+ 41 |   for var U: TMissing in [1, 2] do;     // E0700 (no E0729 for `[1, 2]` on top)
+    |              ^^^^^^^^
+
+warning[W0018]: empty statement after `do` (empty-statement)
+   --> anonymous_class_type.pas:41:35
+    |
+ 41 |   for var U: TMissing in [1, 2] do;     // E0700 (no E0729 for `[1, 2]` on top)
+    |                                   ^
+    |
+    = note: write a statement after `do`, or `begin end` if the body is meant to be empty
+    = note: disable with `{$WARN empty-statement OFF}`
+
+error[E0404]: expected a type
+   --> anonymous_class_type.pas:42:14
+    |
+ 42 |   for var J: class end := 0 to 1 do;    // E0404
+    |              ^^^^^
+    |
+    = note: declare the type in a `type` section and use its name
+
+warning[W0018]: empty statement after `do` (empty-statement)
+   --> anonymous_class_type.pas:42:36
+    |
+ 42 |   for var J: class end := 0 to 1 do;    // E0404
+    |                                    ^
+    |
+    = note: write a statement after `do`, or `begin end` if the body is meant to be empty
+    = note: disable with `{$WARN empty-statement OFF}`
+
+error: aborting due to 15 errors; 3 warnings emitted

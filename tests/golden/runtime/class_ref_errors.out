@@ -1,0 +1,7 @@
+create: EAccessViolation: access to a nil reference
+class method: EAccessViolation: access to a nil reference
+class name: EAccessViolation: access to a nil reference
+class parent: EAccessViolation: access to a nil reference
+TBlob created
+EAbstractError: abstract method `TShape.Area` called
+TShape created

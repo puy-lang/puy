@@ -1,0 +1,10 @@
+after construction: a #1
+caught ESub a #1 TRUE
+destroy a
+handled
+Exception: made by Exception
+after construction: made by ESub
+ESub: made by ESub
+destroy 
+after construction: last #2
+destroy last

@@ -1,0 +1,39 @@
+error[E0723]: method `TCell.Clear` has no body
+   --> generic_nested_heading_errors.pas:16:17
+    |
+ 16 |       procedure Clear; overload;
+    |                 ^^^^^
+
+error[E0757]: type parameters of `TG` must be written as in its declaration: `<T>`
+   --> generic_nested_heading_errors.pas:28:13
+    |
+ 28 | procedure TG<X>.TCell.Reset;
+    |             ^^^
+    |
+    = fix: write `<T>`
+
+error[E0757]: type parameters of `TCell.Pick` must be written as in its declaration: `<U>`
+   --> generic_nested_heading_errors.pas:33:22
+    |
+ 33 | function TG<T>.TCell.Pick(const A: U): U;
+    |                      ^^^^
+    |
+    = fix: write `<U>`
+
+error[E0757]: type parameters of `TG` must be written as in its declaration: `<T>`
+   --> generic_nested_heading_errors.pas:38:13
+    |
+ 38 | procedure TG<X>.TCell.Clear;
+    |             ^^^
+    |
+    = fix: write `<T>`
+
+error[E0757]: type parameters of `TBox` must be written as in its declaration: `<T>`
+   --> generic_nested_heading_errors.pas:48:23
+    |
+ 48 | procedure THolder.TBox<X>.Show;
+    |                       ^^^
+    |
+    = fix: write `<T>`
+
+error: aborting due to 5 errors

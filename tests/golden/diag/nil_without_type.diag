@@ -1,0 +1,242 @@
+error[E0718]: cannot write a value of type `nil`
+   --> nil_without_type.pas:17:11
+    |
+ 17 |   WriteLn(nil);                         // E0718
+    |           ^^^
+
+error[E0718]: cannot write a value of type `nil`
+   --> nil_without_type.pas:18:14
+    |
+ 18 |   Write('a', (nil));                    // E0718
+    |              ^^^^^
+
+error[E0700]: undeclared identifier `Undeclared`
+   --> nil_without_type.pas:19:6
+    |
+ 19 |   if Undeclared = nil then;             // E0700 only
+    |      ^^^^^^^^^^
+
+warning[W0018]: empty statement after `then` (empty-statement)
+   --> nil_without_type.pas:19:27
+    |
+ 19 |   if Undeclared = nil then;             // E0700 only
+    |                           ^
+    |
+    = note: write a statement after `then`, or `begin end` if the body is meant to be empty
+    = note: disable with `{$WARN empty-statement OFF}`
+
+error[E0700]: undeclared identifier `Undeclared`
+   --> nil_without_type.pas:20:12
+    |
+ 20 |   if nil = Undeclared then;             // E0700 only
+    |            ^^^^^^^^^^
+
+warning[W0018]: empty statement after `then` (empty-statement)
+   --> nil_without_type.pas:20:27
+    |
+ 20 |   if nil = Undeclared then;             // E0700 only
+    |                           ^
+    |
+    = note: write a statement after `then`, or `begin end` if the body is meant to be empty
+    = note: disable with `{$WARN empty-statement OFF}`
+
+error[E0702]: type mismatch: expected `Integer`, found `nil`
+   --> nil_without_type.pas:21:10
+    |
+ 21 |   if I = nil then;                      // E0702: expected `Integer`
+    |          ^^^
+
+warning[W0018]: empty statement after `then` (empty-statement)
+   --> nil_without_type.pas:21:18
+    |
+ 21 |   if I = nil then;                      // E0702: expected `Integer`
+    |                  ^
+    |
+    = note: write a statement after `then`, or `begin end` if the body is meant to be empty
+    = note: disable with `{$WARN empty-statement OFF}`
+
+error[E0702]: type mismatch: expected `string`, found `nil`
+   --> nil_without_type.pas:22:6
+    |
+ 22 |   if nil <> S then;                     // E0702: expected `string`
+    |      ^^^
+
+warning[W0018]: empty statement after `then` (empty-statement)
+   --> nil_without_type.pas:22:19
+    |
+ 22 |   if nil <> S then;                     // E0702: expected `string`
+    |                   ^
+    |
+    = note: write a statement after `then`, or `begin end` if the body is meant to be empty
+    = note: disable with `{$WARN empty-statement OFF}`
+
+error[E0702]: type mismatch: expected a dynamic array, a class, a class reference or an interface, found `nil`
+   --> nil_without_type.pas:23:6
+    |
+ 23 |   if nil = nil then;                    // E0702 once, at the first `nil`
+    |      ^^^
+    |
+    = note: `nil` takes its type from the variable or the operand it is used with
+
+warning[W0018]: empty statement after `then` (empty-statement)
+   --> nil_without_type.pas:23:20
+    |
+ 23 |   if nil = nil then;                    // E0702 once, at the first `nil`
+    |                    ^
+    |
+    = note: write a statement after `then`, or `begin end` if the body is meant to be empty
+    = note: disable with `{$WARN empty-statement OFF}`
+
+error[E0702]: type mismatch: expected `Integer`, found `nil`
+   --> nil_without_type.pas:24:8
+    |
+ 24 |   I := nil + 1;                         // E0702: expected `Integer`
+    |        ^^^
+
+error[E0702]: type mismatch: expected a dynamic array, a class, a class reference or an interface, found `nil`
+   --> nil_without_type.pas:25:6
+    |
+ 25 |   if nil then;                          // E0702
+    |      ^^^
+    |
+    = note: `nil` takes its type from the variable or the operand it is used with
+
+warning[W0018]: empty statement after `then` (empty-statement)
+   --> nil_without_type.pas:25:14
+    |
+ 25 |   if nil then;                          // E0702
+    |              ^
+    |
+    = note: write a statement after `then`, or `begin end` if the body is meant to be empty
+    = note: disable with `{$WARN empty-statement OFF}`
+
+warning[W0001]: unused variable `X` (unused-variable)
+   --> nil_without_type.pas:26:7
+    |
+ 26 |   var X := nil;                         // E0702
+    |       ^ declared here
+    |
+    = note: disable with `{$WARN unused-variable OFF}`
+    = suggestion: remove `X`
+
+error[E0702]: type mismatch: expected a dynamic array, a class, a class reference or an interface, found `nil`
+   --> nil_without_type.pas:26:12
+    |
+ 26 |   var X := nil;                         // E0702
+    |            ^^^
+    |
+    = note: `nil` takes its type from the variable or the operand it is used with
+
+error[E0702]: type mismatch: expected an instance of a class or an interface, found `nil`
+   --> nil_without_type.pas:27:6
+    |
+ 27 |   if nil is TFoo then;                  // E0702: `is` needs an instance
+    |      ^^^
+
+warning[W0018]: empty statement after `then` (empty-statement)
+   --> nil_without_type.pas:27:22
+    |
+ 27 |   if nil is TFoo then;                  // E0702: `is` needs an instance
+    |                      ^
+    |
+    = note: write a statement after `then`, or `begin end` if the body is meant to be empty
+    = note: disable with `{$WARN empty-statement OFF}`
+
+error[E0700]: undeclared identifier `Undeclared`
+   --> nil_without_type.pas:28:6
+    |
+ 28 |   if Undeclared = (nil) then;           // E0700 only
+    |      ^^^^^^^^^^
+
+warning[W0018]: empty statement after `then` (empty-statement)
+   --> nil_without_type.pas:28:29
+    |
+ 28 |   if Undeclared = (nil) then;           // E0700 only
+    |                             ^
+    |
+    = note: write a statement after `then`, or `begin end` if the body is meant to be empty
+    = note: disable with `{$WARN empty-statement OFF}`
+
+error[E0702]: type mismatch: expected `Integer`, found `nil`
+   --> nil_without_type.pas:29:10
+    |
+ 29 |   if I = (nil) then;                    // E0702: expected `Integer`
+    |          ^^^^^
+
+warning[W0018]: empty statement after `then` (empty-statement)
+   --> nil_without_type.pas:29:20
+    |
+ 29 |   if I = (nil) then;                    // E0702: expected `Integer`
+    |                    ^
+    |
+    = note: write a statement after `then`, or `begin end` if the body is meant to be empty
+    = note: disable with `{$WARN empty-statement OFF}`
+
+error[E0702]: type mismatch: expected `Integer`, found `nil`
+   --> nil_without_type.pas:30:6
+    |
+ 30 |   if (nil) = I then;                    // E0702: expected `Integer`
+    |      ^^^^^
+
+warning[W0018]: empty statement after `then` (empty-statement)
+   --> nil_without_type.pas:30:20
+    |
+ 30 |   if (nil) = I then;                    // E0702: expected `Integer`
+    |                    ^
+    |
+    = note: write a statement after `then`, or `begin end` if the body is meant to be empty
+    = note: disable with `{$WARN empty-statement OFF}`
+
+error[E0702]: type mismatch: expected a dynamic array, a class, a class reference or an interface, found `nil`
+   --> nil_without_type.pas:31:12
+    |
+ 31 |   I := F + nil;                         // E0702 at `nil`: no `+` for a class
+    |            ^^^
+    |
+    = note: `nil` takes its type from the variable or the operand it is used with
+
+error[E0702]: type mismatch: expected a dynamic array, a class, a class reference or an interface, found `nil`
+   --> nil_without_type.pas:32:8
+    |
+ 32 |   I := nil + F;                         // E0702 at `nil`: no `+` for a class
+    |        ^^^
+    |
+    = note: `nil` takes its type from the variable or the operand it is used with
+
+warning[W0018]: empty statement after `then` (empty-statement)
+   --> nil_without_type.pas:33:18
+    |
+ 33 |   if F = nil then;
+    |                  ^
+    |
+    = note: write a statement after `then`, or `begin end` if the body is meant to be empty
+    = note: disable with `{$WARN empty-statement OFF}`
+
+warning[W0018]: empty statement after `then` (empty-statement)
+   --> nil_without_type.pas:34:18
+    |
+ 34 |   if nil = F then;
+    |                  ^
+    |
+    = note: write a statement after `then`, or `begin end` if the body is meant to be empty
+    = note: disable with `{$WARN empty-statement OFF}`
+
+warning[W0018]: empty statement after `then` (empty-statement)
+   --> nil_without_type.pas:35:20
+    |
+ 35 |   if F = (nil) then;
+    |                    ^
+    |
+    = note: write a statement after `then`, or `begin end` if the body is meant to be empty
+    = note: disable with `{$WARN empty-statement OFF}`
+
+warning[W0018]: empty statement after `then` (empty-statement)
+   --> nil_without_type.pas:36:21
+    |
+ 36 |   if (nil) <> F then;
+    |                     ^
+    |
+    = note: write a statement after `then`, or `begin end` if the body is meant to be empty
+    = note: disable with `{$WARN empty-statement OFF}`
+
+error: aborting due to 16 errors; 15 warnings emitted

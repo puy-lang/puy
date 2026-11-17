@@ -1,0 +1,81 @@
+error[E0404]: expected a type name
+   --> type_name_only.pas:11:13
+    |
+ 11 |   A: TArray<array of Integer>;          // E0404
+    |             ^^^^^
+    |
+    = note: declare the type in a `type` section and use its name
+
+error[E0404]: expected a type name
+   --> type_name_only.pas:12:13
+    |
+ 12 |   B: TArray<record X: Integer; end>;    // E0404
+    |             ^^^^^^
+    |
+    = note: declare the type in a `type` section and use its name
+
+error[E0404]: expected a type name
+   --> type_name_only.pas:13:13
+    |
+ 13 |   C: TArray<packed record X: Integer; end>; // E0404
+    |             ^^^^^^
+    |
+    = note: declare the type in a `type` section and use its name
+
+error[E0404]: expected a type name
+   --> type_name_only.pas:14:13
+    |
+ 14 |   D: TArray<set of Byte>;               // E0404
+    |             ^^^
+    |
+    = note: declare the type in a `type` section and use its name
+
+error[E0404]: expected a type name
+   --> type_name_only.pas:15:13
+    |
+ 15 |   E: TArray<(Red, Green)>;              // E0404
+    |             ^
+    |
+    = note: declare the type in a `type` section and use its name
+
+error[E0404]: expected a type name
+   --> type_name_only.pas:16:13
+    |
+ 16 |   F: TArray<0..9>;                      // E0404
+    |             ^
+    |
+    = note: declare the type in a `type` section and use its name
+
+error[E0404]: expected a type name
+   --> type_name_only.pas:19:14
+    |
+ 19 |   for var R: array[0..1] of Integer in Rows do       // E0404
+    |              ^^^^^
+    |
+    = note: declare the type in a `type` section and use its name
+
+error[E0404]: expected a type name
+   --> type_name_only.pas:21:14
+    |
+ 21 |   for var R: packed array[0..1] of Integer in Rows do // E0404
+    |              ^^^^^^
+    |
+    = note: declare the type in a `type` section and use its name
+
+error[E0404]: expected a type name
+   --> type_name_only.pas:23:14
+    |
+ 23 |   for var R: record X: Integer; end in Rows do        // E0404
+    |              ^^^^^^
+    |
+    = note: declare the type in a `type` section and use its name
+
+error[E0404]: expected a type name
+   --> type_name_only.pas:25:14
+    |
+ 25 |   for var I: 0..9 := 1 to 3 do                         // E0404
+    |              ^
+    |
+    = note: declare the type in a `type` section and use its name
+
+error: aborting due to 10 errors

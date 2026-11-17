@@ -1,0 +1,63 @@
+program DumpAttr
+.type NameAttribute = class(TCustomAttribute) ref
+  .method f0 Create constructor
+.type KindAttribute = class(TCustomAttribute) ref
+  .method f1 ForClass constructor
+.type MarkAttribute = class(TCustomAttribute) ref
+.type TPoint = class(TRefObject) ref
+  .attr DumpAttr.NameAttribute f0
+    const string "point"
+    const Integer 2
+  .attr DumpAttr.MarkAttribute builtin
+  .field 0 X: Integer
+    .attr DumpAttr.KindAttribute f1
+      classref TPoint
+  .field 1 Y: Integer
+    .attr DumpAttr.KindAttribute f1
+      classref TPoint
+  .classvar g0 Count: Integer
+    .attr DumpAttr.MarkAttribute builtin
+  .method f2 Move
+    .attr DumpAttr.MarkAttribute builtin
+  .property Len: Integer read=#0 write=-
+    .attr DumpAttr.NameAttribute f0
+      const string "len"
+.global g0 TPoint.Count: Integer
+.global g1 G: TPoint
+  .attr DumpAttr.MarkAttribute builtin
+.routine f0 NameAttribute.Create(const S: string; N: Integer)
+  .var v0 Self: NameAttribute self
+  .var v1 S: string const param
+  .var v2 N: Integer param
+.routine f1 KindAttribute.ForClass(C: TClass)
+  .var v0 Self: KindAttribute self
+  .var v1 C: TClass param
+.routine f2 TPoint.Move()
+  .var v0 Self: TPoint self
+  inc @41 calc=Integer Q+R+
+    objfield Integer X #0
+      self TPoint
+.routine f3 Show(const P: TPoint)
+  .attr DumpAttr.MarkAttribute builtin
+  .var v0 P: TPoint const param
+    .attr DumpAttr.NameAttribute f0
+      const string "p"
+  .var v1 I: Integer local
+    .attr DumpAttr.MarkAttribute builtin
+  assign @49 R+
+    var v1 I
+    objfield Integer X #0
+      var v0 P: TPoint
+  writeln @50
+    arg
+      var v1 I: Integer
+.routine <main>
+  assign @56 R+
+    global g1 G
+    create TPoint builtin
+  expr @57
+    method f2 TPoint.Move: -
+      global g1 G: TPoint
+  expr @58
+    call f3 Show: -
+      global g1 G: TPoint

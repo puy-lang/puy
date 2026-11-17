@@ -1,0 +1,20 @@
+ok: control=TRUE button=TRUE checkbox=FALSE label=FALSE
+agree: control=TRUE button=TRUE checkbox=TRUE label=FALSE
+title: control=TRUE button=FALSE checkbox=FALSE label=TRUE
+clicked OK
+clicked I agree
+not a button: title
+I agree
+TRUE
+button agree [I agree]
+button agree [I agree]
+FALSE
+agree
+button ok [OK]
+TRUE
+TRUE
+TRUE
+2
+TCheckBox
+TCheckBox TRUE
+TCheckBox

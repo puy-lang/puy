@@ -1,0 +1,32 @@
+TNum:
+  TNum.Equal(1, 1)
+  TNum.Equal(1, 2)
+  TNum.Equal(1, 1)
+TRUE FALSE TRUE
+TObject:
+  TNum.Equal(1, 1)
+TRUE
+FALSE FALSE FALSE
+interface:
+  TNum.Equal(1, 1)
+TRUE
+inherited by a descendant:
+  TNum.Equal(1, 1)
+  TNum.Equal(1, 1)
+TRUE TRUE
+declared again by a descendant:
+FALSE FALSE FALSE FALSE
+  TExactNum.Equal(1, 1)
+TRUE
+  TExactNum.Equal(1, 2)
+FALSE
+inherited Equals:
+  TLogged.Equals
+  TNum.Equal(1, 1)
+TRUE
+instantiations:
+  TBox.Equal
+TRUE FALSE FALSE
+a class inheriting from an instantiation:
+  TIntBox.Equal
+FALSE FALSE FALSE TRUE

@@ -1,0 +1,9 @@
+script changed
+count 6
+count 7
+after 7
+TRUE
+destroy n
+FALSE
+caught boom
+11 3

@@ -1,0 +1,12 @@
+few few-a 1 few-b
+destroy few-a
+destroy few-b
+few cleared
+many 2 text many-a many-b many-c
+destroy many-a
+destroy many-c
+many cleared
+keep many-b
+destroy many-b
+keep cleared
+end

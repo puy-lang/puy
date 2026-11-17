@@ -1,0 +1,23 @@
+error[E0746]: invalid property accessor `A`
+   --> class_syntax.pas:17:41
+    |
+ 17 |     property Size: Integer index 1 read A write B; default;
+    |                                         ^
+    |
+    = note: expected a field of type `Integer` or `function A(Index: Integer): Integer`
+
+error[E0746]: invalid property accessor `B`
+   --> class_syntax.pas:17:49
+    |
+ 17 |     property Size: Integer index 1 read A write B; default;
+    |                                                 ^
+    |
+    = note: expected a field of type `Integer` or `procedure B(Index: Integer; Value: Integer)`
+
+error[E0756]: a default property must have index parameters
+   --> class_syntax.pas:17:52
+    |
+ 17 |     property Size: Integer index 1 read A write B; default;
+    |                                                    ^^^^^^^
+
+error: aborting due to 3 errors

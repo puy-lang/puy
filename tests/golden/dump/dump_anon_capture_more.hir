@@ -1,0 +1,95 @@
+program DumpAnonCaptureMore
+.type TBox = class(TRefObject) ref
+  .field 0 Name: string
+  .method f0 Show
+.global g0 B: TBox
+.global g1 P: TProc
+.routine f0 TBox.Show(): TProc
+  .var v0 Self: TBox self cell
+  .var v1 Result: TProc result
+  assign @16 R+
+    var v1 Result
+    anon f1
+.routine f1 TBox.Show.<anon1>() closure
+  .var v0 Self: TBox outer v0 up=1
+  .capture #0 Self: TBox self
+  writeln @16
+    arg
+      objfield string Name #0
+        var v0 Self: TBox
+.routine f2 Make(const S: string): TProc
+  .var v0 S: string const param cell
+  .var v1 Result: TProc result
+  .var v2 O: TObject local cell
+  .var v3 Total: Integer local cell
+  .var v4 -: TProc hidden
+  .group v4 [v3]
+  assign @32 R+
+    var v2 O
+    create TBox builtin
+  assign @33 R+
+    var v3 Total
+    const Integer 0
+  expr @34
+    call f3 block v4 Make.Down: -
+  assign @35 R+
+    var v1 Result
+    anon f4
+  expr @36
+    call-closure: -
+      var v1 Result: TProc
+  assign @37 R+
+    var v1 Result
+    nested-ref f3 Make.Down block v4
+.routine f3 Make.Down() closure
+  .var v0 Total: Integer outer v3 up=1
+  .capture #0 Total: Integer from v3
+  inc @26 calc=Integer Q+R+
+    var v0 Total
+  if @27
+    cond
+      binary Boolean
+        var v0 Total: Integer
+        < Boolean int:Integer
+          const Integer 2
+    then
+      expr @28
+        call f3 block link Make.Down: -
+.routine f4 Make.<anon1>() closure
+  .var v0 S: string outer v0 up=1
+  .var v1 O: TObject outer v2 up=1
+  .var v2 Total: Integer outer v3 up=1
+  .capture #0 S: string from v0
+  .capture #1 O: TObject from v2
+  .capture #2 Total: Integer from v3
+  writeln @35
+    arg
+      var v0 S: string
+    arg
+      const Char #32
+    arg
+      builtin ClassName string
+        var v1 O: TObject
+    arg
+      const Char #32
+    arg
+      var v2 Total: Integer
+.routine <main>
+  assign @44 R+
+    global g0 B
+    create TBox builtin
+  assign @45 R+
+    objfield string Name #0
+      global g0 B: TBox
+    const string "box"
+  assign @46 R+
+    global g1 P
+    method f0 TBox.Show: TProc
+      global g0 B: TBox
+  expr @47
+    call-closure: -
+      global g1 P: TProc
+  assign @48 R+
+    global g1 P
+    call f2 Make: TProc
+      const string "s"

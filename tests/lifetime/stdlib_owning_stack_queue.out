@@ -1,0 +1,36 @@
+-- stack
+free d
+extracted c
+free c
+free a
+free b
+free e
+free f
+free g
+-- queue
+free a
+extracted b
+free b
+free c
+free d
+free e
+free f
+free g
+free h
+-- through the parent types
+popped c
+free c
+free a
+free b
+free d
+dequeued a
+free a
+free b
+free b
+free a
+free a2
+free c
+free d
+-- not owning
+still x
+free x

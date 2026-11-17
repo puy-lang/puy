@@ -1,0 +1,17 @@
+error[E2502]: `TBox` is declared in several units; qualify it
+   --> main.pas:11:6
+    |
+ 11 |   B: TBox<Integer>;
+    |      ^^^^
+   ::: src/Pairs.pas:11:3
+ 11 |   TBox<T> = record
+    |   ---- declared here
+   ::: src/Boxes.pas:12:3
+ 12 |   TBox<T> = record
+    |   ---- declared here
+    |
+    = note: Puy does not let a later unit in `uses` hide an earlier one
+    = suggestion: replace with `Pairs.TBox`
+    = suggestion: replace with `Boxes.TBox`
+
+error: aborting due to 1 error

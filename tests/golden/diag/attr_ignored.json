@@ -1,0 +1,212 @@
+[
+  {
+    "schema": "puy.diagnostics/1",
+    "diagnostics": [
+      {
+        "code": "W0010",
+        "severity": "warning",
+        "name": "ignored-hint-directive",
+        "message": "attribute `[Ref]` is ignored",
+        "primary": {
+          "file": "attr_ignored.pas",
+          "start": 370,
+          "end": 373,
+          "line": 11,
+          "column": 23,
+          "end_line": 11,
+          "end_column": 26,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "disable with `{$WARN ignored-hint-directive OFF}`"
+        ],
+        "fixes": [
+          {
+            "title": "remove `[Ref]`",
+            "applicability": "safe",
+            "edits": [
+              {
+                "file": "attr_ignored.pas",
+                "start": 369,
+                "end": 375,
+                "line": 11,
+                "column": 22,
+                "end_line": 11,
+                "end_column": 28,
+                "original": "[Ref] ",
+                "replacement": ""
+              }
+            ]
+          }
+        ],
+        "rendered": "warning[W0010]: attribute `[Ref]` is ignored (ignored-hint-directive)\n   --> attr_ignored.pas:11:23\n    |\n 11 | procedure Show(const [Ref] S: string; [Volatile] N: Integer);\n    |                       ^^^\n    |\n    = note: disable with `{$WARN ignored-hint-directive OFF}`\n    = fix: remove `[Ref]`"
+      },
+      {
+        "code": "W0010",
+        "severity": "warning",
+        "name": "ignored-hint-directive",
+        "message": "attribute `[Volatile]` is ignored",
+        "primary": {
+          "file": "attr_ignored.pas",
+          "start": 387,
+          "end": 395,
+          "line": 11,
+          "column": 40,
+          "end_line": 11,
+          "end_column": 48,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "disable with `{$WARN ignored-hint-directive OFF}`"
+        ],
+        "fixes": [
+          {
+            "title": "remove `[Volatile]`",
+            "applicability": "safe",
+            "edits": [
+              {
+                "file": "attr_ignored.pas",
+                "start": 386,
+                "end": 397,
+                "line": 11,
+                "column": 39,
+                "end_line": 11,
+                "end_column": 50,
+                "original": "[Volatile] ",
+                "replacement": ""
+              }
+            ]
+          }
+        ],
+        "rendered": "warning[W0010]: attribute `[Volatile]` is ignored (ignored-hint-directive)\n   --> attr_ignored.pas:11:40\n    |\n 11 | procedure Show(const [Ref] S: string; [Volatile] N: Integer);\n    |                                        ^^^^^^^^\n    |\n    = note: disable with `{$WARN ignored-hint-directive OFF}`\n    = fix: remove `[Volatile]`"
+      },
+      {
+        "code": "W0010",
+        "severity": "warning",
+        "name": "ignored-hint-directive",
+        "message": "attribute `[Ref]` is ignored",
+        "primary": {
+          "file": "attr_ignored.pas",
+          "start": 446,
+          "end": 449,
+          "line": 17,
+          "column": 4,
+          "end_line": 17,
+          "end_column": 7,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "disable with `{$WARN ignored-hint-directive OFF}`"
+        ],
+        "fixes": [
+          {
+            "title": "remove `[Ref]`",
+            "applicability": "safe",
+            "edits": [
+              {
+                "file": "attr_ignored.pas",
+                "start": 446,
+                "end": 451,
+                "line": 17,
+                "column": 4,
+                "end_line": 17,
+                "end_column": 9,
+                "original": "Ref, ",
+                "replacement": ""
+              }
+            ]
+          }
+        ],
+        "rendered": "warning[W0010]: attribute `[Ref]` is ignored (ignored-hint-directive)\n   --> attr_ignored.pas:17:4\n    |\n 17 |   [Ref, Mark] A: Integer;\n    |    ^^^\n    |\n    = note: disable with `{$WARN ignored-hint-directive OFF}`\n    = fix: remove `[Ref]`"
+      },
+      {
+        "code": "W0010",
+        "severity": "warning",
+        "name": "ignored-hint-directive",
+        "message": "attribute `[Volatile]` is ignored",
+        "primary": {
+          "file": "attr_ignored.pas",
+          "start": 478,
+          "end": 486,
+          "line": 18,
+          "column": 10,
+          "end_line": 18,
+          "end_column": 18,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "disable with `{$WARN ignored-hint-directive OFF}`"
+        ],
+        "fixes": [
+          {
+            "title": "remove `[Volatile]`",
+            "applicability": "safe",
+            "edits": [
+              {
+                "file": "attr_ignored.pas",
+                "start": 478,
+                "end": 488,
+                "line": 18,
+                "column": 10,
+                "end_line": 18,
+                "end_column": 20,
+                "original": "Volatile, ",
+                "replacement": ""
+              }
+            ]
+          }
+        ],
+        "rendered": "warning[W0010]: attribute `[Volatile]` is ignored (ignored-hint-directive)\n   --> attr_ignored.pas:18:10\n    |\n 18 |   [Mark, Volatile, Mark] B: Integer;\n    |          ^^^^^^^^\n    |\n    = note: disable with `{$WARN ignored-hint-directive OFF}`\n    = fix: remove `[Volatile]`"
+      },
+      {
+        "code": "W0010",
+        "severity": "warning",
+        "name": "ignored-hint-directive",
+        "message": "attribute `[Ref]` is ignored",
+        "primary": {
+          "file": "attr_ignored.pas",
+          "start": 515,
+          "end": 518,
+          "line": 19,
+          "column": 10,
+          "end_line": 19,
+          "end_column": 13,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "disable with `{$WARN ignored-hint-directive OFF}`"
+        ],
+        "fixes": [
+          {
+            "title": "remove `[Ref]`",
+            "applicability": "safe",
+            "edits": [
+              {
+                "file": "attr_ignored.pas",
+                "start": 513,
+                "end": 518,
+                "line": 19,
+                "column": 8,
+                "end_line": 19,
+                "end_column": 13,
+                "original": ", Ref",
+                "replacement": ""
+              }
+            ]
+          }
+        ],
+        "rendered": "warning[W0010]: attribute `[Ref]` is ignored (ignored-hint-directive)\n   --> attr_ignored.pas:19:10\n    |\n 19 |   [Mark, Ref] C: Integer;\n    |          ^^^\n    |\n    = note: disable with `{$WARN ignored-hint-directive OFF}`\n    = fix: remove `[Ref]`"
+      }
+    ],
+    "summary": {
+      "errors": 0,
+      "warnings": 5,
+      "notes": 0
+    }
+  }
+]

@@ -1,0 +1,60 @@
+error[E0400]: expected `private`, found `public`
+   --> class_body_syntax_errors.pas:11:9
+    |
+ 11 |   strict public
+    |         ^
+    |          ------ found here
+    |
+    = fix: insert `private`
+
+error[E0400]: expected `procedure`, `function` or `var` after `class`, found `X`
+   --> class_body_syntax_errors.pas:16:5
+    |
+ 16 |     class X: Integer;
+    |     ^^^^^
+
+error[E0401]: unexpected `forward`
+   --> class_body_syntax_errors.pas:20:20
+    |
+ 20 |     procedure Run; forward;
+    |                    ^^^^^^^
+
+error[E0401]: unexpected `external`
+   --> class_body_syntax_errors.pas:21:19
+    |
+ 21 |     procedure Go; external 'lib';
+    |                   ^^^^^^^^
+
+error[E3010]: `automated` is not supported in Puy
+   --> class_body_syntax_errors.pas:22:3
+    |
+ 22 |   automated
+    |   ^^^^^^^^^
+    |
+    = note: Puy does not support COM
+
+error[E0405]: expected an identifier
+   --> class_body_syntax_errors.pas:28:6
+    |
+ 28 |     ['{0F9A1B2C-3D4E-5F60-7182-93A4B5C6D7E9}']
+    |      ^
+    |      ---------------------------------------- found here
+
+error[E0401]: unexpected `forward`
+   --> class_body_syntax_errors.pas:29:20
+    |
+ 29 |     procedure Run; forward;
+    |                    ^^^^^^^
+
+error[E0400]: expected `end`, found `begin`
+   --> class_body_syntax_errors.pas:33:16
+    |
+ 33 |     Y: Integer;
+    |                ^
+ 34 |
+ 35 | begin
+    | ----- found here
+    |
+    = fix: insert `end`
+
+error: aborting due to 8 errors

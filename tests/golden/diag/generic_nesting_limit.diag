@@ -1,0 +1,9 @@
+error[E0764]: generic instantiation `TDeep<TArray<TArray<TArray<…>>>>` is nested too deeply (limit 32)
+   --> generic_nesting_limit.pas:26:11
+    |
+ 26 |   D: TDeep<Integer>;
+    |           ^^^^^^^^^
+    |
+    = note: instantiated through `TDeep<Integer>`, `TDeep<TArray<Integer>>`, `TDeep<TArray<TArray<Integer>>>`, `TDeep<TArray<TArray<TArray<…>>>>`, …
+
+error: aborting due to 1 error

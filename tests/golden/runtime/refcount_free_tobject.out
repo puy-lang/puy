@@ -1,0 +1,3 @@
+EInvalidOperation: cannot free a reference counted object of class `TCounted`; assign `nil` instead
+still assigned: TRUE
+destroy

@@ -1,0 +1,9 @@
+error[E2500]: unit `System.Classes` not found
+  --> stdlib_unit_not_found.pas:5:6
+   |
+ 5 | uses System.Classes;
+   |      ^^^^^^^^^^^^^^
+   |
+   = note: the standard library of this release has only `System.Generics.Collections`, `System.Generics.Defaults`, `System.SysUtils`; more units come with later releases
+
+error: aborting due to 1 error

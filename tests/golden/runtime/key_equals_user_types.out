@@ -1,0 +1,17 @@
+record Equal: TRUE TRUE
+record Equal, different: FALSE
+reference counted Equal: TRUE TRUE
+as TObject: TRUE
+as interface: TRUE TRUE
+reference counted Equal, different: FALSE
+overridden Equals:
+  TKey.Equals
+TRUE
+the same instance, without calling Equals:
+TRUE
+overridden GetHashCode:
+  TKey.GetHashCode
+  TKey.GetHashCode
+TRUE
+destroyed: TRUE FALSE FALSE TRUE
+destroyed and nil: FALSE

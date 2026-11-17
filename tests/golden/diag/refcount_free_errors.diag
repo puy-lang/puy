@@ -1,0 +1,78 @@
+error[E3019]: `Free` is not supported in Puy
+   --> refcount_free_errors.pas:21:3
+    |
+ 21 |   Free;
+    |   ^^^^
+    |
+    = note: assign `nil` instead; reference counted objects are freed automatically
+
+error[E3019]: `Destroy` is not supported in Puy
+   --> refcount_free_errors.pas:22:3
+    |
+ 22 |   Destroy;
+    |   ^^^^^^^
+    |
+    = note: assign `nil` instead; reference counted objects are freed automatically
+
+error[E3019]: `Free` is not supported in Puy
+   --> refcount_free_errors.pas:27:8
+    |
+ 27 |   Item.Free;
+    |        ^^^^
+    |
+    = note: assign `nil` instead; reference counted objects are freed automatically
+
+error[E3019]: `Free` is not supported in Puy
+   --> refcount_free_errors.pas:34:5
+    |
+ 34 |   X.Free;
+    |     ^^^^
+    |
+    = note: assign `nil` instead; reference counted objects are freed automatically
+    = suggestion: replace with `X := nil`
+
+error[E3019]: `Destroy` is not supported in Puy
+   --> refcount_free_errors.pas:35:5
+    |
+ 35 |   X.Destroy;
+    |     ^^^^^^^
+    |
+    = note: assign `nil` instead; reference counted objects are freed automatically
+    = suggestion: replace with `X := nil`
+
+error[E3019]: `Free` is not supported in Puy
+   --> refcount_free_errors.pas:36:10
+    |
+ 36 |   X.Next.Free;
+    |          ^^^^
+    |
+    = note: assign `nil` instead; reference counted objects are freed automatically
+    = suggestion: replace with `X.Next := nil`
+
+error[E3019]: `Free` is not supported in Puy
+   --> refcount_free_errors.pas:37:5
+    |
+ 37 |   G.Free;
+    |     ^^^^
+    |
+    = note: assign `nil` instead; reference counted objects are freed automatically
+    = suggestion: replace with `G := nil`
+
+error[E3019]: `FreeAndNil` is not supported in Puy
+   --> refcount_free_errors.pas:38:3
+    |
+ 38 |   FreeAndNil(X);
+    |   ^^^^^^^^^^
+    |
+    = note: assign `nil` instead; reference counted objects are freed automatically
+    = suggestion: replace with `X := nil`
+
+error[E3019]: `Free` is not supported in Puy
+   --> refcount_free_errors.pas:39:16
+    |
+ 39 |   TItem.Create.Free;
+    |                ^^^^
+    |
+    = note: assign `nil` instead; reference counted objects are freed automatically
+
+error: aborting due to 9 errors

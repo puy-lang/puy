@@ -5,6 +5,8 @@
 /// `Currency` values are the value times this.
 pub const CURR_SCALE: i64 = 10000;
 
+use std::fmt;
+
 /// The default text of a `Double` (`docs/spec/semantics.md` 6.1): the shortest digits that read
 /// back to the same value, in fixed notation when the decimal exponent is in −5..14, otherwise as
 /// `digitsEexp`.
@@ -76,20 +78,44 @@ pub(crate) fn layout_sci(sci: &str) -> String {
 }
 
 /// `X:W:D` of a real (`docs/spec/semantics.md` 6.1): the exact decimal value of the binary value
-/// rounded to `d` decimals, ties to even (`d <= 0`: no decimal point). INF and NaN use the default
-/// text. `None` if the text would exceed the string length limit.
-pub fn f64_fixed(v: f64, d: i64) -> Option<String> {
+/// rounded to `d` decimals, ties to even (`d <= 0`: no decimal point), written to `w`. INF and
+/// NaN use the default text. `Err` if the text would exceed the string length limit, or if `w`
+/// refuses it (`core::fmt` writes the zeros of a long fraction in pieces without allocating, so
+/// a sink that allocates fallibly sees every byte).
+pub fn f64_fixed(w: &mut impl fmt::Write, v: f64, d: i64) -> fmt::Result {
     if !v.is_finite() {
-        return Some(f64_to_str(v));
+        return w.write_str(&f64_to_str(v));
     }
     let d = d.max(0);
     // The integer part has at most 309 digits
     if d > crate::sema::types::MAX_STRING_LEN as i64 - 400 {
-        return None;
+        return Err(fmt::Error);
     }
     // Rust's fixed-precision formatting rounds the exact binary value to nearest, ties to even
-    // (`fixed_text_rounds_the_exact_value` checks the ties)
-    Some(format!("{v:.*}", d as usize))
+    // (`fixed_text_rounds_the_exact_value` checks the ties). It takes at most 65535 digits, and
+    // the exact value has at most 1074 after the point, so the rest are zeros
+    let exact = d.min(EXACT_DIGITS) as usize;
+    write!(w, "{v:.*}", exact)?;
+    write_zeros(w, d as usize - exact)
+}
+
+/// More decimals (and significant digits) than the exact decimal value of any `Double` has (at
+/// most 1074 after the point, 767 significant): digits past these are zeros.
+pub const EXACT_DIGITS: i64 = 1100;
+
+/// Units a fixed or exponential text can have besides the digits its precision asks for: the
+/// integer part of a `Double` (at most 309 digits), the sign, the point and `E+ddd`.
+pub const DIGITS_EXTRA: usize = 400;
+
+/// Writes `n` zeros to `w` in pieces (without building them first).
+pub fn write_zeros(w: &mut impl fmt::Write, mut n: usize) -> fmt::Result {
+    const ZEROS: &str = "0000000000000000000000000000000000000000000000000000000000000000";
+    while n > 0 {
+        let k = n.min(ZEROS.len());
+        w.write_str(&ZEROS[..k])?;
+        n -= k;
+    }
+    Ok(())
 }
 
 /// The default text of a `Currency`: fixed notation without trailing zeros of the fraction, and
@@ -118,40 +144,33 @@ pub fn curr_text_wide(v: i128) -> String {
     out
 }
 
-/// `X:W:D` of a `Currency`: the value rounded to `d` decimals, ties to even.
-pub fn curr_fixed(c: i64, d: i64) -> Option<String> {
+/// `X:W:D` of a `Currency`: the value rounded to `d` decimals, ties to even, written to `w`
+/// (`Err` as for [`f64_fixed`]).
+pub fn curr_fixed(w: &mut impl fmt::Write, c: i64, d: i64) -> fmt::Result {
     let d = d.max(0);
     if d > crate::sema::types::MAX_STRING_LEN as i64 - 40 {
-        return None;
+        return Err(fmt::Error);
     }
     let neg = c < 0;
     let a = c.unsigned_abs() as u128;
-    let (int, frac) = if d >= 4 {
+    if neg {
+        w.write_char('-')?;
+    }
+    if d >= 4 {
         // Exact: pad the four decimals with zeros
         let s = CURR_SCALE as u128;
-        (a / s, format!("{:04}{}", a % s, "0".repeat(d as usize - 4)))
+        write!(w, "{}.{:04}", a / s, a % s)?;
+        return write_zeros(w, d as usize - 4);
+    }
+    // Round to `d` decimals: the value in units of 10^-d
+    let unit = 10u128.pow(4 - d as u32);
+    let q = div_round_even(a, unit);
+    let p = 10u128.pow(d as u32);
+    if d == 0 {
+        write!(w, "{}", q / p)
     } else {
-        // Round to `d` decimals: the value in units of 10^-d
-        let unit = 10u128.pow(4 - d as u32);
-        let q = div_round_even(a, unit);
-        let p = 10u128.pow(d as u32);
-        let f = if d == 0 {
-            String::new()
-        } else {
-            format!("{:0width$}", q % p, width = d as usize)
-        };
-        (q / p, f)
-    };
-    let mut out = String::new();
-    if neg {
-        out.push('-');
+        write!(w, "{}.{:0width$}", q / p, q % p, width = d as usize)
     }
-    out.push_str(&int.to_string());
-    if d > 0 {
-        out.push('.');
-        out.push_str(&frac);
-    }
-    Some(out)
 }
 
 /// `a / b` rounded to the nearest integer, ties to even (`b > 0`).
@@ -406,8 +425,21 @@ mod tests {
             (1.0, -1, "1"),
             (f64::NAN, 2, "NAN"),
         ] {
-            assert_eq!(f64_fixed(v, d).unwrap(), s, "{v}:{d}");
+            let mut t = String::new();
+            f64_fixed(&mut t, v, d).unwrap();
+            assert_eq!(t, s, "{v}:{d}");
         }
+    }
+
+    // More decimals than Rust's formatting takes (65535) are zeros after the exact digits of
+    // the value, not a panic.
+    #[test]
+    fn fixed_text_past_the_format_precision_limit() {
+        let mut t = String::new();
+        f64_fixed(&mut t, 0.1, 70000).unwrap();
+        assert_eq!(t.len(), 70002);
+        assert!(t.starts_with("0.1000000000000000055511151231257827021181583404541015625000"));
+        assert!(t[60..].bytes().all(|b| b == b'0'));
     }
 
     // Currency text: trailing zeros dropped, and the fixed form rounded ties to even.
@@ -417,11 +449,21 @@ mod tests {
         assert_eq!(curr_to_str(1_000_000), "100");
         assert_eq!(curr_to_str(2), "0.0002");
         assert_eq!(curr_to_str(-15000), "-1.5");
-        assert_eq!(curr_fixed(12500, 1).unwrap(), "1.2");
-        assert_eq!(curr_fixed(13500, 0).unwrap(), "1");
-        assert_eq!(curr_fixed(15000, 0).unwrap(), "2");
-        assert_eq!(curr_fixed(-15, 2).unwrap(), "-0.00");
-        assert_eq!(curr_fixed(12345, 6).unwrap(), "1.234500");
+        for (c, d, s) in [
+            (12500, 1, "1.2"),
+            (13500, 0, "1"),
+            (15000, 0, "2"),
+            (-15, 2, "-0.00"),
+            (12345, 6, "1.234500"),
+        ] {
+            let mut t = String::new();
+            curr_fixed(&mut t, c, d).unwrap();
+            assert_eq!(t, s, "{c}:{d}");
+        }
+        // More decimals than the four kept are zeros written in pieces of 64
+        let mut t = String::new();
+        curr_fixed(&mut t, -12345, 70).unwrap();
+        assert_eq!(t, format!("-1.2345{}", "0".repeat(66)));
     }
 
     // Currency arithmetic rounds ties to even and reports overflow and a zero divisor.

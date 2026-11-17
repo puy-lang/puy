@@ -1,0 +1,4 @@
+handle
+inside: TRUE
+destroy handler
+outside: FALSE

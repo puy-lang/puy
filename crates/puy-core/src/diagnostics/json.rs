@@ -6,22 +6,34 @@ use crate::source::{SourceMap, TextRange};
 /// Escapes a JSON string (including the surrounding `"`).
 pub fn json_string(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 2);
-    out.push('"');
+    write_json_string(&mut out, s).expect("writing to a String does not fail");
+    out
+}
+
+/// [`json_string`] written to `w` without allocating (the fatal diagnostic of a refused
+/// allocation is written this way; `docs/design/host-interface.md` 3.8).
+pub fn write_json_string(w: &mut impl std::fmt::Write, s: &str) -> std::fmt::Result {
+    w.write_char('"')?;
+    write_json_escaped(w, s)?;
+    w.write_char('"')
+}
+
+/// The inside of [`json_string`]: `s` escaped, without the surrounding `"`.
+pub fn write_json_escaped(w: &mut impl std::fmt::Write, s: &str) -> std::fmt::Result {
     for c in s.chars() {
         match c {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            '\u{8}' => out.push_str("\\b"),
-            '\u{c}' => out.push_str("\\f"),
-            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
-            c => out.push(c),
+            '"' => w.write_str("\\\"")?,
+            '\\' => w.write_str("\\\\")?,
+            '\n' => w.write_str("\\n")?,
+            '\r' => w.write_str("\\r")?,
+            '\t' => w.write_str("\\t")?,
+            '\u{8}' => w.write_str("\\b")?,
+            '\u{c}' => w.write_str("\\f")?,
+            c if (c as u32) < 0x20 => write!(w, "\\u{:04x}", c as u32)?,
+            c => w.write_char(c)?,
         }
     }
-    out.push('"');
-    out
+    Ok(())
 }
 
 /// A small JSON builder.

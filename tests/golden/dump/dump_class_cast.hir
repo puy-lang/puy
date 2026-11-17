@@ -1,0 +1,76 @@
+program DumpClassCast
+.type TShape = class(TObject)
+.type TCircle = class(TShape)
+  .field 0 Radius: Integer
+.type TShapeClass = class of TShape
+.type TCircleClass = class of TCircle
+.global g0 X: TShape
+.routine f0 Check(S: TShape; K: TShapeClass)
+  .var v0 S: TShape param
+  .var v1 K: TShapeClass param
+  .var v2 C: TCircle local
+  .var v3 CK: TCircleClass local
+  .var v4 B: Boolean local
+  assign @24 R+
+    var v4 B
+    is TCircle
+      var v0 S: TShape
+  assign @25 R+
+    var v2 C
+    as TCircle
+      var v0 S: TShape
+  assign @26 R+
+    var v2 C
+    as TCircle cast
+      var v0 S: TShape
+  assign @27 R+
+    var v3 CK
+    as TCircleClass cast
+      var v1 K: TShapeClass
+  writeln @28
+    arg
+      objfield Integer Radius #0
+        as TCircle
+          var v0 S: TShape
+    arg
+      objfield Integer Radius #0
+        as TCircle cast
+          var v0 S: TShape
+    arg
+      is TCircle
+        var v0 S: TShape
+  assign @29 R+
+    var v4 B
+    binary Boolean
+      var v4 B: Boolean
+      and Boolean bool
+        binary Boolean
+          var v2 C: TCircle
+          <> Boolean ref
+            const TCircle nil
+  assign @30 R+
+    var v0 S
+    var v2 C: TShape
+  writeln @31
+    arg
+      var v4 B: Boolean
+    arg
+      binary Boolean
+        var v0 S: TShape
+        = Boolean ref
+          const TShape nil
+    arg
+      binary Boolean
+        var v3 CK: TCircleClass
+        = Boolean ref
+          const TCircleClass nil
+.routine <main>
+  assign @37 R+
+    global g0 X
+    create TCircle builtin
+  expr @38
+    call f0 Check: -
+      global g0 X: TShape
+      classref TCircle
+  free @39
+    global g0 X: TShape

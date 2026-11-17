@@ -1,0 +1,14 @@
+EListError: duplicate key in `TDictionary<string,Integer>`
+a = 1, count 2
+EKeyNotFound: key not found in `TDictionary<string,Integer>`
+EKeyNotFound: key not found in `TDictionary<string,Integer>`
+EInvalidOperation: `TDictionary<string,Integer>` was modified during enumeration
+count 3
+EInvalidOperation: `TDictionary<string,Integer>` was modified during enumeration
+EInvalidOperation: `TDictionary<string,Integer>` was modified during enumeration
+a=11
+b=21
+ERangeError: dictionary capacity 1 is less than the count 2
+ERangeError: dictionary capacity -1 is out of range
+EListError: duplicate key in `TDictionary<string,Integer>`
+capacity 8, count 0

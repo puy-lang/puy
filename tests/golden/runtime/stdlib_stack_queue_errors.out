@@ -1,0 +1,14 @@
+EListError: stack is empty
+EListError: stack is empty
+EListError: stack is empty
+ERangeError: stack capacity 2 is less than the count 3
+3 4
+1 2 3 
+EListError: stack is empty
+0
+EListError: queue is empty
+EListError: queue is empty
+EListError: queue is empty
+ERangeError: queue capacity -1 is less than the count 2
+2 a
+EListError: queue is empty

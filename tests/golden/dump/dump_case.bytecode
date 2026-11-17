@@ -1,4 +1,4 @@
-; puyc format 2
+; puyc format 0
 .const
   0: str "b\n"
   1: str "a\n"
@@ -15,43 +15,35 @@
   0000  LoadInt      r6, 4
   0001  StoreGlobal  r6, g0
   .line 12
-  0002  LoadGlobal   r6, g0
-  0003  LoadInt      r7, 1
-  0004  AddInt       r6, r6, r7
-  0005  NarrowOvf    r6, r6, 4
+  0002  AddIntI      r6, r6, 1
+  0003  NarrowOvf    r6, r6, 4
   .line 13
-  0006  LoadInt      r7, 1
-  0007  JmpIfEqInt   r6, r7, -> 0011
-  0008  LoadInt      r7, 3
-  0009  JmpIfLtInt   r6, r7, -> 000c
-  000a  LoadInt      r8, 5
-  000b  JmpIfLeInt   r6, r8, -> 0011
+  0004  JmpIfEqIntI  r6, 1, -> 000b
+  0005  JmpIfLtIntI  r6, 3, -> 0007
+  0006  JmpIfLeIntI  r6, 5, -> 000b
   .line 14
-  000c  LoadInt      r7, 2
-  000d  JmpIfEqInt   r6, r7, -> 0014
+  0007  JmpIfEqIntI  r6, 2, -> 000d
   .line 16
-  000e  LoadConst    r0, k0
-  000f  CallHost     r0, h0
+  0008  LoadConst    r0, k0
+  0009  CallHost     r0, h0
   .line 12
-  0010  Jmp          -> 0014
+  000a  Jmp          -> 000d
   .line 13
-  0011  LoadConst    r1, k1
-  0012  CallHost     r1, h0
-  .line 12
-  0013  Jmp          -> 0014
+  000b  LoadConst    r1, k1
+  000c  CallHost     r1, h0
   .line 18
-  0014  LoadConst    r2, k2
-  0015  StoreGlobalRef r2, g1
+  000d  LoadConst    r2, k2
+  000e  StoreGlobalRef r2, g1
   .line 19
-  0016  LoadGlobalRef r3, g1
+  000f  LoadGlobalRef r3, g1
   .line 20
-  0017  LoadConst    r4, k2
-  0018  JmpIfEqStr   r3, r4, -> 001a
+  0010  LoadConst    r4, k2
+  0011  JmpIfEqStr   r3, r4, -> 0013
   .line 19
-  0019  Jmp          -> 001c
+  0012  Jmp          -> 0015
   .line 20
-  001a  LoadConst    r5, k3
-  001b  CallHost     r5, h0
+  0013  LoadConst    r5, k3
+  0014  CallHost     r5, h0
   .line 22
-  001c  RetVoid
+  0015  RetVoid
 .finally r0, r1, r2, r3, r4, r5

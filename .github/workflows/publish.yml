@@ -48,8 +48,14 @@ jobs:
     with: {crate: puy-host}
     secrets: inherit
 
+  puy-stdlib:
+    needs: [version]
+    uses: ./.github/workflows/publish-crate.yml
+    with: {crate: puy-stdlib}
+    secrets: inherit
+
   puy-core:
-    needs: [puy-host]
+    needs: [puy-host, puy-stdlib]
     uses: ./.github/workflows/publish-crate.yml
     with: {crate: puy-core}
     secrets: inherit

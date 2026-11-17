@@ -1,0 +1,169 @@
+error[E0749]: `TPartial` does not implement `IShape.Perimeter`
+   --> interface_impl_errors.pas:22:3
+    |
+ 15 |     function Perimeter: Integer;
+    |              --------- declared here
+...
+ 22 |   TPartial = class(TRefObject, IShape)
+    |   ^^^^^^^^
+
+error[E0749]: `TWrongSig` does not implement `IShape.Area`
+   --> interface_impl_errors.pas:27:3
+    |
+ 14 |     function Area: Integer;
+    |              ---- declared here
+...
+ 27 |   TWrongSig = class(TRefObject, IShape, IRun)
+    |   ^^^^^^^^^
+
+error[E0749]: `TWrongSig` does not implement `IShape.Perimeter`
+   --> interface_impl_errors.pas:27:3
+    |
+ 15 |     function Perimeter: Integer;
+    |              --------- declared here
+...
+ 27 |   TWrongSig = class(TRefObject, IShape, IRun)
+    |   ^^^^^^^^^
+
+error[E0749]: `TWrongSig` does not implement `IRun.Run`
+   --> interface_impl_errors.pas:27:3
+    |
+ 19 |     procedure Run;
+    |               --- declared here
+...
+ 27 |   TWrongSig = class(TRefObject, IShape, IRun)
+    |   ^^^^^^^^^
+
+error[E0750]: interface `IRun` is listed more than once
+   --> interface_impl_errors.pas:34:37
+    |
+ 34 |   TListed = class(TRefObject, IRun, IRun, TObject)
+    |                                     ^^^^
+
+error[E0750]: `TObject` is not an interface
+   --> interface_impl_errors.pas:34:43
+    |
+ 34 |   TListed = class(TRefObject, IRun, IRun, TObject)
+    |                                           ^^^^^^^
+
+error[E0700]: `TClauses` has no member `Missing`
+   --> interface_impl_errors.pas:41:26
+    |
+ 41 |     procedure IRun.Run = Missing;
+    |                          ^^^^^^^
+
+error[E0750]: `IShape` is not an interface implemented by `TClauses`
+   --> interface_impl_errors.pas:42:15
+    |
+ 42 |     procedure IShape.Area = Run;
+    |               ^^^^^^^^^^^
+
+error[E0700]: `IRun` has no member `Stop`
+   --> interface_impl_errors.pas:43:15
+    |
+ 43 |     procedure IRun.Stop = Run;
+    |               ^^^^^^^^^
+
+error[E0700]: undeclared identifier `INone`
+   --> interface_impl_errors.pas:44:15
+    |
+ 44 |     procedure INone.Run = Run;
+    |               ^^^^^^^^^
+
+error[E0700]: `TAncestorClause` has no member `Missing`
+   --> interface_impl_errors.pas:54:26
+    |
+ 54 |     procedure IRun.Run = Missing;
+    |                          ^^^^^^^
+
+error[E3020]: `TAggregatedObject` is not supported in Puy
+   --> interface_impl_errors.pas:61:16
+    |
+ 61 |   TAgg = class(TAggregatedObject)
+    |                ^^^^^^^^^^^^^^^^^
+    |
+    = note: use `TRefObject` instead
+
+error[E3010]: `IDispatch` is not supported in Puy
+   --> interface_impl_errors.pas:78:6
+    |
+ 78 |   D: IDispatch;
+    |      ^^^^^^^^^
+    |
+    = note: Puy does not support COM
+
+error[E3200]: `TGUID` is not supported yet (planned for M5)
+   --> interface_impl_errors.pas:79:6
+    |
+ 79 |   G: TGUID;
+    |      ^^^^^
+
+error[E0702]: type mismatch: expected `TObject`, found `IRun`
+   --> interface_impl_errors.pas:81:8
+    |
+ 81 |   O := R;
+    |        ^
+    |
+    = note: use `as` to convert an interface to a class
+
+error[E0702]: type mismatch: expected `TListed`, found `IRun`
+   --> interface_impl_errors.pas:82:8
+    |
+ 82 |   L := R;
+    |        ^
+    |
+    = note: use `as` to convert an interface to a class
+
+error[E0702]: type mismatch: expected `IRun`, found `TObject`
+   --> interface_impl_errors.pas:83:8
+    |
+ 83 |   R := O;
+    |        ^
+    |
+    = note: use `as` to check at run time
+
+error[E0702]: type mismatch: expected `IRun`, found `TSealed`
+   --> interface_impl_errors.pas:84:8
+    |
+ 84 |   R := T;
+    |        ^
+
+error[E0718]: cannot write a value of type `IRun`
+   --> interface_impl_errors.pas:85:11
+    |
+ 85 |   WriteLn(R);
+    |           ^
+    |
+    = note: call a method of the interface that returns a string
+
+error[E0700]: `IRun` has no member `ClassName`
+   --> interface_impl_errors.pas:86:5
+    |
+ 86 |   R.ClassName;
+    |     ^^^^^^^^^
+    |
+    = note: convert the interface to a class with `as TObject` to use it
+
+error[E0700]: `IRun` has no member `Free`
+   --> interface_impl_errors.pas:87:5
+    |
+ 87 |   R.Free;
+    |     ^^^^
+    |
+    = note: convert the interface to a class with `as TObject` to use it
+
+error[E0703]: operator `<` cannot be applied to `IShape` and `IShape`
+   --> interface_impl_errors.pas:88:13
+    |
+ 88 |   WriteLn(S < S);
+    |             ^
+
+error[E3021]: raising `IRun` is not supported in Puy
+   --> interface_impl_errors.pas:89:9
+    |
+ 89 |   raise R;
+    |         ^
+    |
+    = note: raise an object whose class derives from `Exception`
+
+error: aborting due to 23 errors

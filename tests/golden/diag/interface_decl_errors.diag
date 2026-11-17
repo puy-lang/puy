@@ -1,0 +1,106 @@
+error[E0750]: interfaces cannot have fields
+   --> interface_decl_errors.pas:16:5
+    |
+ 16 |     FCount: Integer;
+    |     ^^^^^^^^^^^^^^^^
+
+error[E0750]: `private` is not allowed in an interface
+   --> interface_decl_errors.pas:17:3
+    |
+ 17 |   private
+    |   ^^^^^^^
+
+error[E0701]: `Run` is already declared
+   --> interface_decl_errors.pas:18:15
+    |
+ 11 |     procedure Run;
+    |               --- declared here
+...
+ 18 |     procedure Run;
+    |               ^^^ declared again here
+
+error[E0750]: `virtual` is not allowed in an interface
+   --> interface_decl_errors.pas:19:21
+    |
+ 19 |     procedure Virt; virtual;
+    |                     ^^^^^^^
+
+error[E0750]: `override` is not allowed in an interface
+   --> interface_decl_errors.pas:20:21
+    |
+ 20 |     procedure Over; override;
+    |                     ^^^^^^^^
+
+error[E0750]: `constructor` is not allowed in an interface
+   --> interface_decl_errors.pas:21:5
+    |
+ 21 |     constructor Create;
+    |     ^^^^^^^^^^^
+
+error[E0750]: `class procedure` is not allowed in an interface
+   --> interface_decl_errors.pas:22:5
+    |
+ 22 |     class procedure Make;
+    |     ^^^^^^^^^^^^^^^
+
+error[E0746]: invalid property accessor `FCount`
+   --> interface_decl_errors.pas:24:34
+    |
+ 24 |     property Count: Integer read FCount;
+    |                                  ^^^^^^
+    |
+    = note: expected `function FCount: Integer` of the interface
+
+error[E0746]: invalid property accessor `SetSize`
+   --> interface_decl_errors.pas:25:48
+    |
+ 25 |     property Size: Integer read GetCount write SetSize;
+    |                                                ^^^^^^^
+    |
+    = note: expected `procedure SetSize(Value: Integer)` of the interface
+
+error[E0750]: `class property` is not allowed in an interface
+   --> interface_decl_errors.pas:26:5
+    |
+ 26 |     class property Total: Integer read GetCount;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0746]: invalid property accessor `GetBase`
+   --> interface_decl_errors.pas:27:31
+    |
+ 27 |     property Impl: IBase read GetBase implements IBase;
+    |                               ^^^^^^^
+    |
+    = note: expected `function GetBase: IBase` of the interface
+
+error[E3200]: `implements` is not supported yet (planned for a later release)
+   --> interface_decl_errors.pas:27:39
+    |
+ 27 |     property Impl: IBase read GetBase implements IBase;
+    |                                       ^^^^^^^^^^^^^^^^
+
+error[E0400]: expected `)`, found `,`
+   --> interface_decl_errors.pas:30:25
+    |
+ 30 |   ITwo = interface(IBase, IMembers)
+    |                         ^
+
+error[E0750]: `TObject` is not an interface
+   --> interface_decl_errors.pas:33:24
+    |
+ 33 |   INotIntf = interface(TObject)
+    |                        ^^^^^^^
+
+error[E0750]: invalid GUID `{1234}`
+   --> interface_decl_errors.pas:37:6
+    |
+ 37 |     ['{1234}']
+    |      ^^^^^^^^
+
+error[E0723]: forward declaration of interface `IForward` has no body
+   --> interface_decl_errors.pas:40:3
+    |
+ 40 |   IForward = interface;
+    |   ^^^^^^^^
+
+error: aborting due to 16 errors

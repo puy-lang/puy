@@ -1,0 +1,9 @@
+hello from a
+set to nil
+destroy a
+assigned: FALSE
+dropping b
+dropped, b still runs
+destroy b
+after the call: FALSE
+end

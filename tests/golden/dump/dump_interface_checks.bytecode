@@ -1,0 +1,111 @@
+; puyc format 0
+.const
+  0: str "\n"
+  1: str " "
+.type
+  64: interface DumpInterfaceChecks.IShape parent=ty24 methods=1
+  65: class DumpInterfaceChecks.TSquare ref slots=0 parent=ty20 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4 intf=ty24:;ty64:f1
+.global
+  0: obj O
+  1: obj S
+  2: ref Q
+.host
+  0: Console.Write params=1 ret=0
+.unit System.SysUtils file="<stdlib>/System.SysUtils.pas" init=- fini=- entry=-
+.unit DumpInterfaceChecks file="dump_interface_checks.pas" init=- fini=- entry=0
+.func 0 DumpInterfaceChecks.<main> params=0 regs=22
+  .line 31
+  0000  New          r0, ty65
+  0001  LoadGlobal   r15, g0
+  0002  AddRefObj    r0
+  0003  StoreGlobal  r0, g0
+  0004  ReleaseObj   r15
+  .line 32
+  0005  LoadGlobal   r16, g0
+  0006  Move         r15, r16
+  0007  LoadInt      r17, 64
+  0008  IsIntf       r15, r17
+  0009  BoolToStr    r1, r15
+  000a  LoadConst    r2, k0
+  000b  ConcatStr    r1, r1, r2
+  000c  CallHost     r1, h0
+  .line 33
+  000d  LoadGlobal   r15, g0
+  000e  AssignObj    r3, r15
+  000f  LoadInt      r15, 64
+  0010  AsIntf       r3, r15
+  0011  LoadGlobal   r15, g1
+  0012  AddRefObj    r3
+  0013  StoreGlobal  r3, g1
+  0014  ReleaseObj   r15
+  .line 34
+  0015  LoadGlobal   r15, g0
+  0016  AssignObj    r4, r15
+  0017  LoadInt      r15, 64
+  0018  AsIntf       r4, r15
+  0019  LoadGlobal   r15, g1
+  001a  AddRefObj    r4
+  001b  StoreGlobal  r4, g1
+  001c  ReleaseObj   r15
+  .line 35
+  001d  LoadGlobal   r15, g1
+  001e  AssignObj    r5, r15
+  001f  AsClass      r5, ty65
+  0020  StoreGlobalRef r5, g2
+  .line 36
+  0021  LoadGlobal   r15, g1
+  0022  AssignObj    r6, r15
+  0023  LoadGlobal   r15, g0
+  0024  AddRefObj    r6
+  0025  StoreGlobal  r6, g0
+  0026  ReleaseObj   r15
+  .line 37
+  0027  LoadGlobal   r16, g0
+  0028  AssignObj    r8, r16
+  0029  Move         r16, r8
+  002a  LoadInt      r17, 64
+  002b  IsIntf       r16, r17
+  002c  JmpIfFalse   r16, -> 0032
+  002d  LoadGlobal   r17, g1
+  002e  AddRefObj    r8
+  002f  StoreGlobal  r8, g1
+  0030  ReleaseObj   r17
+  0031  Jmp          -> 0037
+  0032  LoadZero     r9
+  0033  LoadGlobal   r18, g1
+  0034  AddRefObj    r9
+  0035  StoreGlobal  r9, g1
+  0036  ReleaseObj   r18
+  0037  Move         r15, r16
+  0038  BoolToStr    r7, r15
+  0039  LoadConst    r10, k1
+  003a  ConcatStr    r7, r7, r10
+  003b  LoadGlobal   r17, g1
+  003c  Move         r18, r17
+  003d  LoadInt      r19, 64
+  003e  IsIntf       r18, r19
+  003f  Move         r16, r18
+  0040  BoolToStr    r11, r16
+  0041  ConcatStr    r7, r7, r11
+  0042  LoadConst    r12, k1
+  0043  ConcatStr    r7, r7, r12
+  0044  LoadInt      r18, 66
+  0045  LoadInt      r19, 64
+  0046  Move         r20, r18
+  0047  Move         r21, r19
+  0048  ClassSupports r17, r20
+  0049  BoolToStr    r13, r17
+  004a  ConcatStr    r7, r7, r13
+  004b  LoadConst    r14, k0
+  004c  ConcatStr    r7, r7, r14
+  004d  CallHost     r7, h0
+  .line 38
+  004e  RetVoid
+.finally r0:obj, r1, r2, r3:obj, r4:obj, r5, r6:obj, r7, r8:obj, r9:obj, r10, r11, r12, r13, r14
+.func 1 DumpInterfaceChecks.TSquare.Area params=1 regs=2
+  .local r0 Self
+  .local r1 Result
+  .line 23
+  0000  LoadInt      r1, 4
+  .line 24
+  0001  Ret          r1

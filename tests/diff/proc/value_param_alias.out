@@ -1,0 +1,16 @@
+global changed
+global 6
+changed!
+param: 1 2 3
+param: 1 2 3
+global: 9
+field field?
+param: 4 5
+field?
+element other
+local / local and more
+local and more
+local and more (written)
+param: 1 2 100
+local and more
+local: 1 2

@@ -1,0 +1,3 @@
+error: uncaught exception EIntOverflow: integer overflow in Int64 arithmetic
+  at DivInt64Overflow.Divide (div_int64_overflow.pas:10)
+  at DivInt64Overflow.<main> (div_int64_overflow.pas:24)

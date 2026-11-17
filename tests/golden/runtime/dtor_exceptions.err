@@ -1,0 +1,8 @@
+error: uncaught exception EStep: TMiddle.Destroy failed
+  at DtorExceptions.TMiddle.Destroy (dtor_exceptions.pas:55)
+  at DtorExceptions.FreeUnhandled (dtor_exceptions.pas:111)
+  at DtorExceptions.<main> (dtor_exceptions.pas:123)
+  suppressed: EStep: TLeaf.Destroy failed
+    at DtorExceptions.TLeaf.Destroy (dtor_exceptions.pas:63)
+    at DtorExceptions.FreeUnhandled (dtor_exceptions.pas:111)
+    at DtorExceptions.<main> (dtor_exceptions.pas:123)

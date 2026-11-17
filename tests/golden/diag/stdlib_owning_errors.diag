@@ -1,0 +1,82 @@
+error[E0760]: `TRefFoo` is a reference counted class and cannot be used for `T` of `TObjectStack<T>`
+    --> stdlib_owning_errors.pas:22:25
+     |
+  22 |     Items: TObjectStack<TRefFoo>;
+     |                         ^^^^^^^
+    ::: <stdlib>/System.Generics.Collections.pas:527:16
+ 527 |   TObjectStack<T: class, NotRefCounted> = class(TStack<T>)
+     |                - type parameter declared here
+     |
+     = note: reference counted objects are freed when the last reference goes away, so they do not need an owning container
+     = suggestion: use `TStack`
+
+error[E0760]: `TRefFoo` is a reference counted class and cannot be used for `T` of `TObjectList<T>`
+    --> stdlib_owning_errors.pas:26:18
+     |
+  26 |   L: TObjectList<TRefFoo>;
+     |                  ^^^^^^^
+    ::: <stdlib>/System.Generics.Collections.pas:505:15
+ 505 |   TObjectList<T: class, NotRefCounted> = class(TList<T>)
+     |               - type parameter declared here
+     |
+     = note: reference counted objects are freed when the last reference goes away, so they do not need an owning container
+     = suggestion: use `TList`
+
+error[E0760]: `IFoo` is an interface and cannot be used for `T` of `TObjectQueue<T>`
+    --> stdlib_owning_errors.pas:27:19
+     |
+  27 |   Q: TObjectQueue<IFoo>;
+     |                   ^^^^
+    ::: <stdlib>/System.Generics.Collections.pas:550:16
+ 550 |   TObjectQueue<T: class, NotRefCounted> = class(TQueue<T>)
+     |                - type parameter declared here
+     |
+     = note: reference counted objects are freed when the last reference goes away, so they do not need an owning container
+     = suggestion: use `TQueue`
+
+error[E0760]: `TRefFoo` is a reference counted class and cannot be used for `T` of `TObjectList<T>`
+    --> stdlib_owning_errors.pas:36:23
+     |
+  36 |   WriteLn(TObjectList<TRefFoo>.Create.Count);
+     |                       ^^^^^^^
+    ::: <stdlib>/System.Generics.Collections.pas:505:15
+ 505 |   TObjectList<T: class, NotRefCounted> = class(TList<T>)
+     |               - type parameter declared here
+     |
+     = note: reference counted objects are freed when the last reference goes away, so they do not need an owning container
+     = suggestion: use `TList`
+
+error[E0725]: procedure `TObjectStack<TFoo>.Pop` has no value
+    --> stdlib_owning_errors.pas:39:10
+     |
+  39 |   F := S.Pop;
+     |          ^^^
+    ::: <stdlib>/System.Generics.Collections.pas:542:15
+ 542 |     procedure Pop; reintroduce;
+     |               --- declared here
+     |
+     = note: use `Extract` to take the object out without freeing it
+
+error[E0725]: procedure `TObjectStack<TFoo>.Pop` has no value
+    --> stdlib_owning_errors.pas:40:10
+     |
+  40 |   F := S.Pop();
+     |          ^^^
+    ::: <stdlib>/System.Generics.Collections.pas:542:15
+ 542 |     procedure Pop; reintroduce;
+     |               --- declared here
+     |
+     = note: use `Extract` to take the object out without freeing it
+
+error[E0725]: procedure `TObjectQueue<TFoo>.Dequeue` has no value
+    --> stdlib_owning_errors.pas:41:14
+     |
+  41 |   WriteLn(OQ.Dequeue.ClassName);
+     |              ^^^^^^^
+    ::: <stdlib>/System.Generics.Collections.pas:565:15
+ 565 |     procedure Dequeue; reintroduce;
+     |               ------- declared here
+     |
+     = note: use `Extract` to take the object out without freeing it
+
+error: aborting due to 7 errors

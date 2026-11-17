@@ -1,4 +1,4 @@
-error[E3200]: `array of const` parameters are not supported yet (planned for M3)
+error[E3200]: `array of const` parameters are not supported yet (planned for M5)
    --> sysutils_diag.pas:16:27
     |
  16 | procedure Log(const Args: array of const);

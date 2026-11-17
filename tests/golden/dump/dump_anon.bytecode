@@ -1,0 +1,114 @@
+; puyc format 0
+.const
+  0: str "\n"
+.global
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpAnon file="dump_anon.pas" init=- fini=- entry=0
+.func 0 DumpAnon.<main> params=0 regs=1
+  .line 32
+  0000  LoadInt      r0, 10
+  0001  Call         r0, f1
+  .line 33
+  0002  RetVoid
+.func 1 DumpAnon.Run params=1 regs=17
+  .local r0 N
+  .local r1 Total
+  .local r2 P
+  .local r3 I
+  .local r4 K
+  .local r5 N
+  .local r6 Total
+  .local r7 I
+  .local r8 K
+  .line 9
+  0000  NewCell      r5
+  0001  CellSet      r5, r0
+  0002  CellRef      r0, r5
+  0003  NewCell      r6
+  0004  CellRef      r1, r6
+  .line 14
+  0005  LoadZero     r9
+  0006  StoreRef     r1, r9
+  .line 15
+  0007  LoadInt      r9, 1
+  0008  LoadInt      r10, 2
+  0009  JmpIfLtInt   r10, r9, -> 001a
+  000a  NewCell      r7
+  000b  CellRef      r3, r7
+  000c  StoreRef     r3, r9
+  .line 17
+  000d  NewCell      r8
+  000e  CellRef      r4, r8
+  .line 18
+  000f  LoadRef      r11, r3
+  0010  StoreRef     r4, r11
+  .line 19
+  0011  LoadInt      r11, 2
+  0012  LoadInt      r12, 4
+  0013  Move         r13, r6
+  0014  Move         r14, r7
+  0015  Move         r15, r8
+  0016  Move         r16, r5
+  0017  MakeClosure  r2, r11
+  .line 27
+  0018  CallClosure  r11, r2
+  .line 15
+  0019  ForLoopUp    r9, r10, -> 000a
+  .line 29
+  001a  RetVoid
+.finally r2, r5, r6, r7, r8
+.func 2 DumpAnon.Run.<anon1> params=1 regs=13
+  .local r1 Q
+  .local r2 Total
+  .local r3 I
+  .local r4 K
+  .local r5 N
+  .local r6 Total
+  .local r7 I
+  .local r8 K
+  .local r9 N
+  .line 19
+  0000  CapGet       r6, r0, 0
+  0001  CellRef      r2, r6
+  0002  CapGet       r7, r0, 1
+  0003  CellRef      r3, r7
+  0004  CapGet       r8, r0, 2
+  0005  CellRef      r4, r8
+  0006  CapGet       r9, r0, 3
+  0007  CellRef      r5, r9
+  .line 23
+  0008  LoadRef      r10, r2
+  0009  LoadRef      r11, r3
+  000a  LoadRef      r12, r4
+  000b  MulInt       r11, r11, r12
+  000c  NarrowOvf    r11, r11, 4
+  000d  AddInt       r10, r10, r11
+  000e  NarrowOvf    r10, r10, 4
+  000f  LoadRef      r12, r5
+  0010  AddInt       r10, r10, r12
+  0011  NarrowOvf    r10, r10, 4
+  0012  StoreRef     r2, r10
+  .line 24
+  0013  LoadInt      r10, 3
+  0014  LoadInt      r11, 1
+  0015  Move         r12, r6
+  0016  MakeClosure  r1, r10
+  .line 25
+  0017  CallClosure  r10, r1
+  .line 26
+  0018  RetVoid
+.finally r1
+.func 3 DumpAnon.Run.<anon1>.<anon1> params=1 regs=6
+  .local r1 Total
+  .local r2 Total
+  .line 24
+  0000  CapGet       r2, r0, 0
+  0001  CellRef      r1, r2
+  0002  LoadRef      r5, r1
+  0003  IntToStr     r3, r5
+  0004  LoadConst    r4, k0
+  0005  ConcatStr    r3, r3, r4
+  0006  CallHost     r3, h0
+  0007  RetVoid
+.finally r3, r4

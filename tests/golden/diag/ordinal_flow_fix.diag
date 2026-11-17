@@ -1,0 +1,61 @@
+error[E2000]: variable `C` may be read before it is assigned
+   --> ordinal_flow_fix.pas:22:15
+    |
+ 16 |   C: TColor;
+    |   - declared here
+...
+ 22 |   WriteLn(Ord(C), Ord(L), D, T, Ord(W));
+    |               ^ read here
+    |
+    = note: Puy requires every local variable to be assigned before it is read
+    = fix: add an initial value: `var C: TColor = TColor.Red;`
+
+error[E2000]: variable `L` may be read before it is assigned
+   --> ordinal_flow_fix.pas:22:23
+    |
+ 17 |   L: TLevel;
+    |   - declared here
+...
+ 22 |   WriteLn(Ord(C), Ord(L), D, T, Ord(W));
+    |                       ^ read here
+    |
+    = note: Puy requires every local variable to be assigned before it is read
+    = fix: add an initial value: `var L: TLevel = TLevel.Low;`
+
+error[E2000]: variable `D` may be read before it is assigned
+   --> ordinal_flow_fix.pas:22:27
+    |
+ 18 |   D: TDigit;
+    |   - declared here
+...
+ 22 |   WriteLn(Ord(C), Ord(L), D, T, Ord(W));
+    |                           ^ read here
+    |
+    = note: Puy requires every local variable to be assigned before it is read
+    = fix: add an initial value: `var D: TDigit = 5;`
+
+error[E2000]: variable `T` may be read before it is assigned
+   --> ordinal_flow_fix.pas:22:30
+    |
+ 19 |   T: TLetter;
+    |   - declared here
+...
+ 22 |   WriteLn(Ord(C), Ord(L), D, T, Ord(W));
+    |                              ^ read here
+    |
+    = note: Puy requires every local variable to be assigned before it is read
+    = fix: add an initial value: `var T: TLetter = #97;`
+
+error[E2000]: variable `W` may be read before it is assigned
+   --> ordinal_flow_fix.pas:22:37
+    |
+ 20 |   W: TWarm;
+    |   - declared here
+ 21 | begin
+ 22 |   WriteLn(Ord(C), Ord(L), D, T, Ord(W));
+    |                                     ^ read here
+    |
+    = note: Puy requires every local variable to be assigned before it is read
+    = fix: add an initial value: `var W: TWarm = TColor.Green;`
+
+error: aborting due to 5 errors

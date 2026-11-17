@@ -1,0 +1,31 @@
+error[E0700]: undeclared identifier `ArrayMoveRange`
+   --> stdlib_only_builtins.pas:14:3
+    |
+ 14 |   ArrayMoveRange(A, 0, 1, 1);
+    |   ^^^^^^^^^^^^^^
+
+error[E0700]: undeclared identifier `FreeIfClass`
+   --> stdlib_only_builtins.pas:15:3
+    |
+ 15 |   FreeIfClass(O);
+    |   ^^^^^^^^^^^
+
+error[E0700]: undeclared identifier `IsRefCountedObject`
+   --> stdlib_only_builtins.pas:16:8
+    |
+ 16 |   B := IsRefCountedObject(O);
+    |        ^^^^^^^^^^^^^^^^^^
+
+error[E0700]: undeclared identifier `IsOverridden`
+   --> stdlib_only_builtins.pas:17:8
+    |
+ 17 |   B := IsOverridden(B);
+    |        ^^^^^^^^^^^^
+
+error[E0700]: undeclared identifier `ArrayMoveRange`
+   --> stdlib_only_builtins.pas:18:10
+    |
+ 18 |   System.ArrayMoveRange(A, 0, 1, 1);
+    |          ^^^^^^^^^^^^^^
+
+error: aborting due to 5 errors

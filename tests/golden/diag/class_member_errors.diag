@@ -1,0 +1,118 @@
+error[E0744]: a static method cannot be virtual
+   --> class_member_errors.pas:18:37
+    |
+ 18 |     class procedure Twice; virtual; static;
+    |                                     ^^^^^^
+
+error[E3200]: `class constructor` is not supported yet (planned for a later release)
+   --> class_member_errors.pas:19:5
+    |
+ 19 |     class constructor Init;
+    |     ^^^^^^^^^^^^^^^^^
+
+error[E3200]: `class destructor` is not supported yet (planned for a later release)
+   --> class_member_errors.pas:20:5
+    |
+ 20 |     class destructor Done;
+    |     ^^^^^^^^^^^^^^^^
+
+error[E0733]: `Integer` is not a class
+   --> class_member_errors.pas:29:24
+    |
+ 29 |   TIntClass = class of Integer;
+    |                        ^^^^^^^
+
+error[E0700]: `Value` is an instance member and cannot be used in a class method
+   --> class_member_errors.pas:37:3
+    |
+ 13 |     Value: Integer;
+    |     ----- declared here
+...
+ 37 |   Value := 1;
+    |   ^^^^^
+
+error[E0700]: `Run` is an instance member and cannot be used in a class method
+   --> class_member_errors.pas:38:3
+    |
+ 15 |     procedure Run;
+    |               --- declared here
+...
+ 38 |   Run;
+    |   ^^^
+
+error[E0700]: `Run` is an instance member and cannot be used in a class method
+   --> class_member_errors.pas:39:8
+    |
+ 15 |     procedure Run;
+    |               --- declared here
+...
+ 39 |   Self.Run;
+    |        ^^^
+
+error[E0700]: `Self` is not available in a static method
+   --> class_member_errors.pas:45:11
+    |
+ 45 |   WriteLn(Self.ClassName);
+    |           ^^^^
+
+error[E0700]: `Value` is an instance member and cannot be used in a static method
+   --> class_member_errors.pas:46:3
+    |
+ 13 |     Value: Integer;
+    |     ----- declared here
+...
+ 46 |   Value := 2;
+    |   ^^^^^
+
+error[E0700]: `Run` is an instance member and cannot be used through a class
+   --> class_member_errors.pas:62:5
+    |
+ 15 |     procedure Run;
+    |               --- declared here
+...
+ 62 |   B.Run;
+    |     ^^^
+
+error[E0700]: `Value` is an instance member and cannot be used through a class
+   --> class_member_errors.pas:63:10
+    |
+ 13 |     Value: Integer;
+    |     ----- declared here
+...
+ 63 |   I := B.Value;
+    |          ^^^^^
+
+error[E0700]: `Run` is an instance member and cannot be used through a class
+   --> class_member_errors.pas:64:9
+    |
+ 15 |     procedure Run;
+    |               --- declared here
+...
+ 64 |   TBase.Run;
+    |         ^^^
+
+error[E0708]: `TBase` is a type and cannot be used as a value
+   --> class_member_errors.pas:65:8
+    |
+ 65 |   I := TBase;
+    |        ^^^^^
+
+error[E0702]: type mismatch: expected `TChildClass`, found `TBaseClass`
+   --> class_member_errors.pas:66:8
+    |
+ 66 |   C := B;
+    |        ^
+
+error[E0703]: operator `=` cannot be applied to `TBaseClass` and `TOtherClass`
+   --> class_member_errors.pas:67:13
+    |
+ 67 |   WriteLn(B = O);
+    |             ^
+
+error[E0700]: `ClassType` is an instance member and cannot be used through a class
+   --> class_member_errors.pas:68:17
+    |
+ 68 |   WriteLn(TBase.ClassType.ClassName);
+    |                 ^^^^^^^^^
+
+error: aborting due to 16 errors

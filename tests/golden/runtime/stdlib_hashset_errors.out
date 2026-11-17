@@ -1,0 +1,11 @@
+EInvalidOperation: `THashSet<string>` was modified during enumeration
+3
+EInvalidOperation: `THashSet<string>` was modified during enumeration
+ERangeError: set capacity 1 is less than the count 2
+2 4
+EInvalidOperation: `TNames` was modified during enumeration
+TRUE FALSE TRUE FALSE
+Hello
+World
+World
+TRUE 0

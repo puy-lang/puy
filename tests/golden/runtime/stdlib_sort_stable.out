@@ -1,0 +1,10 @@
+Create(AComparer), 25 items:
+0a 0e 0i 0m 0q 0u 0y 1b 1f 1j 1n 1r 1v 2c 2g 2k 2o 2s 2w 3d 3h 3l 3p 3t 3x 
+Sort(AComparer), descending:
+3d 3h 3l 3p 3t 3x 2c 2g 2k 2o 2s 2w 1b 1f 1j 1n 1r 1v 0a 0e 0i 0m 0q 0u 0y 
+already in order, 20 items (the merges copy the runs):
+0a 0b 0c 1d 1e 1f 2g 2h 2i 3j 3k 3l 4m 4n 4o 5p 5q 5r 6s 6t 
+TArray.Sort, 12 items:
+0a 0d 0g 0j 1b 1e 1h 1k 2c 2f 2i 2l 
+TArray.Sort of the range 2..9:
+0a 1b 0d 0g 0j 1e 1h 2c 2f 2i 1k 2l 

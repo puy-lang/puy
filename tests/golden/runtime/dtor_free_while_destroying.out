@@ -1,0 +1,6 @@
+TSelfFree.Destroy
+TBase.Destroy
+EInvalidOperation: object of class `TSelfFree` is being destroyed
+TSelfFree.Destroy
+TBase.Destroy
+EInvalidOperation: object of class `TSelfFree` is being destroyed

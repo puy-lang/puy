@@ -1,0 +1,48 @@
+program DumpEqualsHash
+.type TKey = class(TObject)
+  .method f0 Equals override 4
+  .method f1 GetHashCode override 5
+.type TPlain = class(TObject)
+.global g0 K: TKey
+.global g1 P: TPlain
+.routine f0 TKey.Equals(Obj: TObject): Boolean
+  .var v0 Self: TKey self
+  .var v1 Obj: TObject param
+  .var v2 Result: Boolean result
+  assign @20 R+
+    var v2 Result
+    builtin TObject.Equals Boolean
+      self TKey
+      var v1 Obj: TObject
+.routine f1 TKey.GetHashCode(): Int64
+  .var v0 Self: TKey self
+  .var v1 Result: Int64 result
+  assign @25 R+
+    var v1 Result
+    builtin TObject.GetHashCode Int64
+      self TKey
+.routine <main>
+  assign @32 R+
+    global g0 K
+    create TKey builtin
+  assign @33 R+
+    global g1 P
+    create TPlain builtin
+  writeln @34
+    arg
+      virtual 4 TKey.Equals: Boolean
+        global g0 K: TKey
+        global g1 P: TObject
+    arg
+      const Char #32
+    arg
+      binary Boolean
+        virtual 5 TKey.GetHashCode: Int64
+          global g0 K: TKey
+        = Boolean int:Int64
+          virtual 5 TKey.GetHashCode: Int64
+            global g0 K: TKey
+  free @35
+    global g0 K: TKey
+  free @36
+    global g1 P: TPlain

@@ -1,0 +1,221 @@
+error[E0762]: cannot free a value of type parameter `T`
+   --> generic_constraint_ops.pas:75:3
+    |
+ 55 |   TCheck<T: class; R: record; I: IA, IB; N; C: IC; O: TObject; B: TBase> = class
+    |          - type parameter declared here
+...
+ 75 |   FItem.Free;
+    |   ^^^^^^^^^^
+    |
+    = note: add the constraints `class, NotRefCounted` to free values of `T`
+
+error[E0762]: cannot free a value of type parameter `O`
+   --> generic_constraint_ops.pas:76:3
+    |
+ 55 |   TCheck<T: class; R: record; I: IA, IB; N; C: IC; O: TObject; B: TBase> = class
+    |                                                    - type parameter declared here
+...
+ 76 |   FObj.Destroy;
+    |   ^^^^^^^^^^^^
+    |
+    = note: add the constraints `class, NotRefCounted` to free values of `O`
+
+error[E0762]: cannot free a value of type parameter `T`
+   --> generic_constraint_ops.pas:77:14
+    |
+ 55 |   TCheck<T: class; R: record; I: IA, IB; N; C: IC; O: TObject; B: TBase> = class
+    |          - type parameter declared here
+...
+ 77 |   FreeAndNil(FItem);
+    |              ^^^^^
+    |
+    = note: add the constraints `class, NotRefCounted` to free values of `T`
+
+error[E0762]: cannot compare a value of type parameter `R`
+   --> generic_constraint_ops.pas:78:6
+    |
+ 55 |   TCheck<T: class; R: record; I: IA, IB; N; C: IC; O: TObject; B: TBase> = class
+    |                    - type parameter declared here
+...
+ 78 |   if FRec = FRec then
+    |      ^^^^^^^^^^^
+    |
+    = note: add a `class` or interface constraint to compare references; to compare values, use `KeyEquals`
+
+error[E0762]: cannot compare a value of type parameter `N`
+   --> generic_constraint_ops.pas:80:14
+    |
+ 55 |   TCheck<T: class; R: record; I: IA, IB; N; C: IC; O: TObject; B: TBase> = class
+    |                                          - type parameter declared here
+...
+ 80 |   if FAny <> nil then
+    |              ^^^
+    |
+    = note: add a `class` or interface constraint to compare references; to compare values, use `KeyEquals`
+
+error[E0762]: cannot compare a value of type parameter `N`
+   --> generic_constraint_ops.pas:82:6
+    |
+ 55 |   TCheck<T: class; R: record; I: IA, IB; N; C: IC; O: TObject; B: TBase> = class
+    |                                          - type parameter declared here
+...
+ 82 |   if Assigned(FAny) then
+    |      ^^^^^^^^^^^^^^
+    |
+    = note: add a `class` or interface constraint to compare references; to compare values, use `KeyEquals`
+
+error[E0762]: type parameter `T` has no member `Show`
+   --> generic_constraint_ops.pas:84:3
+    |
+ 55 |   TCheck<T: class; R: record; I: IA, IB; N; C: IC; O: TObject; B: TBase> = class
+    |          - type parameter declared here
+...
+ 84 |   FItem.Show;
+    |   ^^^^^^^^^^
+    |
+    = note: add a class or interface constraint that declares `Show`
+
+error[E0762]: `Run` is ambiguous: it is declared in constraints `IA` and `IB`
+   --> generic_constraint_ops.pas:86:3
+    |
+ 55 |   TCheck<T: class; R: record; I: IA, IB; N; C: IC; O: TObject; B: TBase> = class
+    |                               - type parameter declared here
+...
+ 86 |   FIntf.Run;
+    |   ^^^^^^^^^
+    |
+    = note: add a class or interface constraint that declares `Run`
+
+error[E0762]: cannot create a value of type parameter `T`
+   --> generic_constraint_ops.pas:89:12
+    |
+ 55 |   TCheck<T: class; R: record; I: IA, IB; N; C: IC; O: TObject; B: TBase> = class
+    |          - type parameter declared here
+...
+ 89 |   FItem := T.Create;
+    |            ^^^^^^^^
+    |
+    = note: a type parameter can only be used in ways that its constraints allow
+
+error[E0762]: cannot test the type of a value of type parameter `I`
+   --> generic_constraint_ops.pas:90:6
+    |
+ 55 |   TCheck<T: class; R: record; I: IA, IB; N; C: IC; O: TObject; B: TBase> = class
+    |                               - type parameter declared here
+...
+ 90 |   if FIntf is TBase then
+    |      ^^^^^^^^^^^^^^
+    |
+    = note: a type parameter can only be used in ways that its constraints allow
+
+error[E0762]: cannot convert a value of type parameter `B`
+   --> generic_constraint_ops.pas:92:8
+    |
+ 55 |   TCheck<T: class; R: record; I: IA, IB; N; C: IC; O: TObject; B: TBase> = class
+    |                                                                - type parameter declared here
+...
+ 92 |   X := FBase;
+    |        ^^^^^
+    |
+    = note: a type parameter can only be used in ways that its constraints allow
+
+error[E0759]: `R` does not satisfy the constraint `class` of `U` in `TList<U>`
+   --> generic_constraint_ops.pas:98:13
+    |
+ 55 |   TCheck<T: class; R: record; I: IA, IB; N; C: IC; O: TObject; B: TBase> = class
+    |                    - type parameter declared here
+...
+ 98 |   LR: TList<R>;
+    |             ^
+    |
+    = note: add the constraint `class` to `R`
+
+error[E0759]: `T` does not satisfy the constraint `NotRefCounted` of `U` in `TOwned<U>`
+    --> generic_constraint_ops.pas:100:14
+     |
+  55 |   TCheck<T: class; R: record; I: IA, IB; N; C: IC; O: TObject; B: TBase> = class
+     |          - type parameter declared here
+...
+ 100 |   OT: TOwned<T>;
+     |              ^
+     |
+     = note: add the constraint `NotRefCounted` to `T`
+
+error[E0759]: `O` does not satisfy the constraint `NotRefCounted` of `U` in `TOwned<U>`
+    --> generic_constraint_ops.pas:102:14
+     |
+  55 |   TCheck<T: class; R: record; I: IA, IB; N; C: IC; O: TObject; B: TBase> = class
+     |                                                    - type parameter declared here
+...
+ 102 |   OO: TOwned<O>;
+     |              ^
+     |
+     = note: add the constraint `NotRefCounted` to `O`
+
+error[E0759]: `T` does not satisfy the constraint `constructor` of `U` in `TMake<U>`
+    --> generic_constraint_ops.pas:103:13
+     |
+  55 |   TCheck<T: class; R: record; I: IA, IB; N; C: IC; O: TObject; B: TBase> = class
+     |          - type parameter declared here
+...
+ 103 |   MT: TMake<T>;
+     |             ^
+     |
+     = note: add the constraint `constructor` to `T`
+
+error[E0759]: `T` does not satisfy the constraint `TBase` of `U` in `TPick<U>`
+    --> generic_constraint_ops.pas:104:13
+     |
+  55 |   TCheck<T: class; R: record; I: IA, IB; N; C: IC; O: TObject; B: TBase> = class
+     |          - type parameter declared here
+...
+ 104 |   PT: TPick<T>;
+     |             ^
+     |
+     = note: add the constraint `TBase` to `T`
+
+error[E0759]: `N` does not satisfy the constraint `IA` of `U` in `TUseA<U>`
+    --> generic_constraint_ops.pas:108:13
+     |
+  55 |   TCheck<T: class; R: record; I: IA, IB; N; C: IC; O: TObject; B: TBase> = class
+     |                                          - type parameter declared here
+...
+ 108 |   UN: TUseA<N>;
+     |             ^
+     |
+     = note: add the constraint `IA` to `N`
+
+error[E0759]: `B` does not satisfy the constraint `record` of `U` in `TValues<U>`
+    --> generic_constraint_ops.pas:110:15
+     |
+  55 |   TCheck<T: class; R: record; I: IA, IB; N; C: IC; O: TObject; B: TBase> = class
+     |                                                                - type parameter declared here
+...
+ 110 |   VB: TValues<B>;
+     |               ^
+     |
+     = note: add the constraint `record` to `B`
+
+error[E0762]: cannot free a value of type parameter `T`
+    --> generic_constraint_ops.pas:116:3
+     |
+ 114 | procedure Free<T: class>(var X: T);
+     |                - type parameter declared here
+ 115 | begin
+ 116 |   X.Free;
+     |   ^^^^^^
+     |
+     = note: add the constraints `class, NotRefCounted` to free values of `T`
+
+error[E0762]: cannot free a value of type parameter `T`
+    --> generic_constraint_ops.pas:121:3
+     |
+ 119 | procedure Churn<T: class, constructor>;
+     |                 - type parameter declared here
+ 120 | begin
+ 121 |   T.Create.Free; // a member right after `T.Create`
+     |   ^^^^^^^^^^^^^
+     |
+     = note: add the constraints `class, NotRefCounted` to free values of `T`
+
+error: aborting due to 20 errors

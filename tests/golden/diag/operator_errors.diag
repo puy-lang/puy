@@ -1,0 +1,129 @@
+error[E0755]: operators can only be declared in records and reference counted classes
+   --> operator_errors.pas:13:5
+    |
+ 13 |     class operator Add(const A, B: TManual): TManual;
+    |     ^^^^^^^^^^^^^^
+    |
+    = note: the instances that operators return could not be freed; derive the class from `TRefObject` to use operators
+
+error[E0755]: operators can only be declared in records and reference counted classes
+   --> operator_errors.pas:17:5
+    |
+ 17 |     class operator Add(const A, B: IShape): IShape;
+    |     ^^^^^^^^^^^^^^
+
+error[E0755]: `Multipy` is not an operator name
+   --> operator_errors.pas:22:20
+    |
+ 22 |     class operator Multipy(const A, B: TVec): TVec;
+    |                    ^^^^^^^
+    |
+    = note: the operator names are `Add`, `Subtract`, `Multiply`, `Divide`, `IntDivide`, `Modulus`, `LeftShift`, `RightShift`, `LogicalAnd`, `BitwiseAnd`, `LogicalOr`, `BitwiseOr`, `LogicalXor`, `BitwiseXor`, `Equal`, `NotEqual`, `LessThan`, `LessThanOrEqual`, `GreaterThan`, `GreaterThanOrEqual`, `In`, `Negative`, `Positive`, `LogicalNot`, `Inc`, `Dec`, `Trunc`, `Round`, `Implicit`, `Explicit`
+    = suggestion: replace with `Multiply`
+
+error[E0755]: `Plus` is not an operator name
+   --> operator_errors.pas:23:20
+    |
+ 23 |     class operator Plus(const A, B: TVec): TVec;
+    |                    ^^^^
+    |
+    = note: the operator names are `Add`, `Subtract`, `Multiply`, `Divide`, `IntDivide`, `Modulus`, `LeftShift`, `RightShift`, `LogicalAnd`, `BitwiseAnd`, `LogicalOr`, `BitwiseOr`, `LogicalXor`, `BitwiseXor`, `Equal`, `NotEqual`, `LessThan`, `LessThanOrEqual`, `GreaterThan`, `GreaterThanOrEqual`, `In`, `Negative`, `Positive`, `LogicalNot`, `Inc`, `Dec`, `Trunc`, `Round`, `Implicit`, `Explicit`
+
+error[E0755]: operator `Add` must have 2 parameters
+   --> operator_errors.pas:24:20
+    |
+ 24 |     class operator Add(const A: TVec): TVec;
+    |                    ^^^
+
+error[E0755]: operator `Negative` must have 1 parameter
+   --> operator_errors.pas:25:20
+    |
+ 25 |     class operator Negative(const A, B: TVec): TVec;
+    |                    ^^^^^^^^
+
+error[E0755]: operator `Equal` must return `Boolean`
+   --> operator_errors.pas:26:20
+    |
+ 26 |     class operator Equal(const A, B: TVec): Integer;
+    |                    ^^^^^
+
+error[E0755]: operator `Inc` must take and return `TVec`
+   --> operator_errors.pas:27:20
+    |
+ 27 |     class operator Inc(const A: TVec): Integer;
+    |                    ^^^
+
+error[E0755]: operator `Multiply` must have a parameter or result of type `TVec`
+   --> operator_errors.pas:28:20
+    |
+ 28 |     class operator Multiply(A, B: Integer): Integer;
+    |                    ^^^^^^^^
+
+error[E0755]: operator `Implicit` must have a parameter or result of type `TVec`
+   --> operator_errors.pas:29:20
+    |
+ 29 |     class operator Implicit(N: Integer): Double;
+    |                    ^^^^^^^^
+
+error[E0755]: operator parameters must be value or `const` parameters
+   --> operator_errors.pas:30:33
+    |
+ 30 |     class operator Subtract(var A: TVec; const B: TVec): TVec;
+    |                                 ^
+
+error[E0755]: operator parameters cannot have default values
+   --> operator_errors.pas:31:42
+    |
+ 31 |     class operator Divide(const A: TVec; B: Integer = 1): TVec;
+    |                                          ^
+
+error[E0755]: `Implicit` from `TVec` to `TVec` is already a built-in conversion
+   --> operator_errors.pas:32:20
+    |
+ 32 |     class operator Implicit(const A: TVec): TVec;
+    |                    ^^^^^^^^
+
+error[E3014]: `class operator Initialize` is not supported in Puy
+   --> operator_errors.pas:33:20
+    |
+ 33 |     class operator Initialize(out A: TVec);
+    |                    ^^^^^^^^^^
+    |
+    = note: use a class derived from `TRefObject` instead
+
+error[E0744]: an operator cannot be `virtual`
+   --> operator_errors.pas:34:51
+    |
+ 34 |     class operator Positive(const A: TVec): TVec; virtual;
+    |                                                   ^^^^^^^
+
+error[E0701]: overloads of operator `BitwiseOr` have the same parameters
+   --> operator_errors.pas:36:20
+    |
+ 35 |     class operator LogicalOr(const A, B: TVec): TVec;
+    |                    --------- declared here
+ 36 |     class operator BitwiseOr(const A, B: TVec): TVec;
+    |                    ^^^^^^^^^ declared again here
+
+error[E0701]: overloads of operator `Implicit` have the same parameters
+   --> operator_errors.pas:39:20
+    |
+ 37 |     class operator Implicit(const A: TVec): Integer;
+    |                    -------- declared here
+ 38 |     class operator Implicit(const A: TVec): string;
+ 39 |     class operator Implicit(const A: TVec): Integer;
+    |                    ^^^^^^^^ declared again here
+
+error[E0755]: `Implicit` from `TRef` to `TRefObject` is already a built-in conversion
+   --> operator_errors.pas:43:20
+    |
+ 43 |     class operator Implicit(const A: TRef): TRefObject;
+    |                    ^^^^^^^^
+
+error[E0755]: operators can only be declared in records and reference counted classes
+   --> operator_errors.pas:47:5
+    |
+ 47 |     class operator Add(A, B: Integer): Integer;
+    |     ^^^^^^^^^^^^^^
+
+error: aborting due to 19 errors

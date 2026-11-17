@@ -1,0 +1,11 @@
+EInvalidOperation: `TFoo` has no default order; pass a comparer
+EInvalidOperation: `TFoo` has no default order; pass a comparer
+EInvalidOperation: `TFoo` has no default order; pass a comparer
+EInvalidOperation: `TFoo` has no default order; pass a comparer
+EInvalidOperation: `TFoo` has no default order; pass a comparer
+1 2 
+EInvalidOperation: `TPoint` has no default order; pass a comparer
+EInvalidOperation: `TPoint` has no default order; pass a comparer
+EInvalidOperation: `TFoo` has no default order; pass a comparer
+EInvalidOperation: `TFoo` has no default order; pass a comparer
+with a comparer: 0

@@ -1,0 +1,61 @@
+; puyc format 0
+.const
+  0: str "x"
+  1: str "\n"
+.type
+  64: class DumpExceptionClass.ECoded ref slots=3 refs=0,1 parent=ty0 vmt=builtin0,builtin0,builtin0,builtin2,builtin3,builtin4
+.global
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpExceptionClass file="dump_exception_class.pas" init=- fini=- entry=0
+.func 0 DumpExceptionClass.<main> params=0 regs=15
+  .local r0 E
+  .try 0005..0008 finally 0008..000a r4
+  .try 0000..000e except 000e..001d r1
+  .line 23
+  0000  LoadConst    r3, k0
+  0001  Move         r12, r3
+  0002  LoadInt      r13, 1
+  0003  LoadZero     r10
+  0004  New          r10, ty64
+  0005  Move         r11, r10
+  0006  CallMethod   r11, f1
+  0007  LoadZero     r4
+  0008  JmpIfNeIntI  r4, 1, -> 000a
+  0009  DestroyFailed r10
+  000a  EndFinally   r4, 0
+  000b  MoveRef      r2, r10
+  000c  Raise        r2
+  .line 22
+  000d  Jmp          -> 001d
+  .line 25
+  000e  Move         r10, r1
+  000f  IsClass      r10, ty64
+  0010  JmpIfFalse   r10, -> 001c
+  0011  Move         r0, r1
+  .line 26
+  0012  ExceptObject r7
+  0013  ObjGetRef    r6, r7, 0
+  0014  ObjGet       r10, r0, 2
+  0015  IntToStr     r8, r10
+  0016  ConcatStr    r6, r6, r8
+  0017  LoadConst    r9, k1
+  0018  ConcatStr    r6, r6, r9
+  0019  CallHost     r6, h0
+  .line 22
+  001a  Release      r1
+  001b  Jmp          -> 001d
+  001c  Raise        r1
+  .line 28
+  001d  RetVoid
+.finally r1, r2, r3, r5, r6, r7, r8, r9
+.func 1 DumpExceptionClass.ECoded.Create params=3 regs=4
+  .local r0 Self
+  .local r1 Msg
+  .local r2 ACode
+  .line 17
+  0000  ObjSetRef    r0, 0, r1
+  .line 18
+  0001  ObjSet       r0, 2, r2
+  .line 19
+  0002  RetVoid

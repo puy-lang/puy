@@ -1,0 +1,82 @@
+error[E0700]: `TX` has no member `Add`
+    --> operator_use_errors.pas:108:11
+     |
+ 108 |   N := TX.Add(X, Y);
+     |           ^^^
+     |
+     = note: operators are used only through their expressions, as in `A + B`, and cannot be called by name
+
+error[E0735]: no operator `+` matches operands of type `TX` and `string`
+    --> operator_use_errors.pas:109:10
+     |
+  15 |     class operator Add(const A: TX; const B: TY): Integer;
+     |                    --- candidate
+...
+ 109 |   N := X + 'text';
+     |          ^
+
+error[E0734]: ambiguous call to overloaded operator `+`
+    --> operator_use_errors.pas:110:10
+     |
+  15 |     class operator Add(const A: TX; const B: TY): Integer;
+     |                    --- candidate
+...
+  21 |     class operator Add(const A: TX; const B: TY): Integer;
+     |                    --- candidate
+...
+ 110 |   N := X + Y;
+     |          ^
+
+error[E0734]: ambiguous call to overloaded operator `Implicit`
+    --> operator_use_errors.pas:111:8
+     |
+  16 |     class operator Implicit(const A: TX): TY;
+     |                    -------- candidate
+...
+  22 |     class operator Implicit(const A: TX): TY;
+     |                    -------- candidate
+...
+ 111 |   Y := X;
+     |        ^
+
+error[E0703]: operator `<>` cannot be applied to `TA` and `TA`
+    --> operator_use_errors.pas:112:13
+     |
+ 112 |   Flag := A <> A2;
+     |             ^^
+     |
+     = note: `TA` declares `Equal` but not `NotEqual`; declare `class operator NotEqual` too
+
+error[E0703]: operator `<>` cannot be applied to `TR` and `TR`
+    --> operator_use_errors.pas:113:14
+     |
+ 113 |   Flag := R1 <> R2;
+     |              ^^
+     |
+     = note: `TR` declares `Equal` but not `NotEqual`; declare `class operator NotEqual` too
+
+error[E0705]: wrong number of arguments: expected 1, found 2
+    --> operator_use_errors.pas:114:3
+     |
+ 114 |   Inc(A, 2);
+     |   ^^^^^^^^^
+
+error[E0702]: type mismatch: expected `Boolean`, found `TA`
+    --> operator_use_errors.pas:115:6
+     |
+ 115 |   if A then
+     |      ^
+
+error[E0703]: operator `-` cannot be applied to `TA`
+    --> operator_use_errors.pas:117:9
+     |
+ 117 |   A2 := -A;
+     |         ^
+
+error[E0703]: operator `=` cannot be applied to `TB` and `TB`
+    --> operator_use_errors.pas:118:13
+     |
+ 118 |   Flag := B = B;
+     |             ^
+
+error: aborting due to 10 errors

@@ -1,0 +1,7 @@
+error[E0700]: undeclared identifier `ArrayMoveRange`
+   --> src/Moves.pas:13:3
+    |
+ 13 |   ArrayMoveRange(A, 0, 1, 1);
+    |   ^^^^^^^^^^^^^^
+
+error: aborting due to 1 error

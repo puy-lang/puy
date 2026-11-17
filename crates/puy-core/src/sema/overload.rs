@@ -3,6 +3,7 @@
 
 use super::expr::{PlaceResult, PlaceUse, err_expr};
 use super::hir::{Expr, RoutineId};
+use super::infer::Excluded;
 use super::types::Ty;
 use super::{GSym, LSym, ParamInfo, Sema, const_init_value};
 use crate::diagnostics::{Code, Diagnostic, Fix, Stage, TextEdit};
@@ -40,8 +41,17 @@ fn same_params(a: &[ParamInfo], b: &[ParamInfo]) -> bool {
             .all(|(x, y)| x.ty == y.ty && by_ref(x.mode) == by_ref(y.mode))
 }
 
+/// Whether the parameters of a declaration and of its body have the same attributes where both
+/// write them (`docs/spec/attributes.md` 1.2).
+pub(super) fn same_param_attrs(a: &[ParamInfo], b: &[ParamInfo]) -> bool {
+    a.iter().zip(b).all(|(x, y)| match (&x.attrs, &y.attrs) {
+        (Some(p), Some(q)) => p == q,
+        _ => true,
+    })
+}
+
 /// The argument expression without parentheses around it.
-fn strip_parens(e: &ast::Expr) -> ast::Expr {
+pub(super) fn strip_parens(e: &ast::Expr) -> ast::Expr {
     let mut cur = e.clone();
     while let ast::Expr::Paren(p) = &cur {
         match p.inner() {
@@ -202,7 +212,8 @@ impl<'a, 's> Sema<'a, 's> {
             && info.params.iter().zip(params).all(|(a, b)| {
                 a.ty == b.ty && a.mode == b.mode && a.name.eq_ignore_ascii_case(&b.name)
             })
-            && info.ret == ret;
+            && info.ret == ret
+            && same_param_attrs(&info.params, params);
         let msg = if !same {
             Some(if info.interface {
                 format!(
@@ -345,6 +356,34 @@ impl<'a, 's> Sema<'a, 's> {
         span: TextRange,
         bare: bool,
     ) -> Pick {
+        let (set, excluded) = match self.explicit_set(id, span) {
+            Some(set) => (set, Excluded::default()),
+            None => {
+                let mut set = self.routine_overloads(id);
+                let Some(excluded) = self.infer_candidates(&mut set, args, span) else {
+                    return Pick::Failed;
+                };
+                (set, excluded)
+            }
+        };
+        // The routine resolved may have been replaced (a generic one) or left out
+        let id = match set.first() {
+            Some(&first) if !set.contains(&id) => first,
+            None => {
+                self.no_candidate_left(&excluded, args, span);
+                return Pick::Failed;
+            }
+            _ => id,
+        };
+        self.pick_from(set, id, args, span, bare, &excluded)
+    }
+
+    /// The overloads of the name the routine `id` is declared with, visible here
+    /// (`docs/spec/semantics.md` 4.7).
+    pub(super) fn routine_overloads(&self, id: RoutineId) -> Vec<RoutineId> {
+        if self.instances.rinst.contains_key(&id) {
+            return vec![id];
+        }
         let lower = self.routines[id.0 as usize].name.to_ascii_lowercase();
         let unit = self.routines[id.0 as usize].unit;
         let set = if unit == self.unit_index {
@@ -361,7 +400,94 @@ impl<'a, 's> Sema<'a, 's> {
                 })
                 .collect()
         };
-        if set.len() <= 1 {
+        if set.is_empty() { vec![id] } else { set }
+    }
+
+    /// The method a call of the overloaded methods `set` (nearest declaration first;
+    /// `docs/spec/objects.md` 2.3) resolves to.
+    pub(super) fn pick_method(
+        &mut self,
+        set: Vec<RoutineId>,
+        args: &[ast::Arg],
+        span: TextRange,
+        bare: bool,
+    ) -> Pick {
+        self.pick_method_with(set, args, span, bare, &Excluded::default())
+    }
+
+    /// [`Self::pick_method`] with the generic candidates a call without type arguments left
+    /// out (`docs/spec/generics.md` 5.4).
+    pub(super) fn pick_method_with(
+        &mut self,
+        set: Vec<RoutineId>,
+        args: &[ast::Arg],
+        span: TextRange,
+        bare: bool,
+        excluded: &Excluded,
+    ) -> Pick {
+        match self.overload_picks.get(&span) {
+            Some(Some(c)) => return Pick::Routine(*c),
+            Some(None) if self.dry_run > 0 => return Pick::Failed,
+            _ => {}
+        }
+        let Some(&id) = set.first() else {
+            self.no_candidate_left(excluded, args, span);
+            if self.dry_run > 0 {
+                self.overload_picks.insert(span, None);
+            }
+            return Pick::Failed;
+        };
+        let pick = self.pick_from(set, id, args, span, bare, excluded);
+        match pick {
+            Pick::Routine(c) => {
+                self.overload_picks.insert(span, Some(c));
+            }
+            Pick::Failed if self.dry_run > 0 => {
+                self.overload_picks.insert(span, None);
+            }
+            Pick::Failed => {}
+        }
+        pick
+    }
+
+    /// The candidates of `set` that `args` fit (by count and by type; `docs/spec/semantics.md`
+    /// 4.7), without reporting anything. `None` when an argument has an error.
+    pub(super) fn viable_candidates(
+        &mut self,
+        set: &[RoutineId],
+        args: &[ast::Arg],
+    ) -> Option<Vec<RoutineId>> {
+        self.dry_run(|s| {
+            let n = args.len();
+            let kinds: Vec<ArgKind> = args.iter().map(|a| s.arg_kind(a)).collect();
+            if kinds.iter().any(|k| matches!(k, ArgKind::Error)) {
+                return None;
+            }
+            let mut out = Vec::new();
+            for &c in set {
+                let r = &s.routines[c.0 as usize];
+                if r.min_args() <= n && n <= r.params.len() && s.stages(c, args, &kinds).is_some() {
+                    out.push(c);
+                }
+            }
+            Some(out)
+        })
+    }
+
+    /// The routine among `set` a call resolves to (`docs/spec/semantics.md` 4.7); `id` is the one
+    /// the name resolved to.
+    /// `excluded` holds the generic candidates left out by type argument inference
+    /// (`docs/spec/generics.md` 5.4).
+    fn pick_from(
+        &mut self,
+        set: Vec<RoutineId>,
+        id: RoutineId,
+        args: &[ast::Arg],
+        span: TextRange,
+        bare: bool,
+        excluded: &Excluded,
+    ) -> Pick {
+        if set.len() <= 1 && excluded.notes.is_empty() {
             return Pick::Routine(id);
         }
         let n = args.len();
@@ -393,22 +519,43 @@ impl<'a, 's> Sema<'a, 's> {
         if viable.is_empty() {
             // The arguments are typed once for real, so their variables count as read (W0001, E2000)
             self.lower_args_quietly(args);
-            self.no_overload_matches(&set, &kinds, span);
+            let shown = if excluded.shown.is_empty() {
+                &set
+            } else {
+                &excluded.shown
+            };
+            self.no_overload_matches(shown, &kinds, span, &excluded.notes);
             return Pick::Failed;
         }
         let dominates = |a: &[u8], b: &[u8]| {
             a.iter().zip(b).all(|(x, y)| x <= y) && a.iter().zip(b).any(|(x, y)| x < y)
         };
-        let best: Vec<RoutineId> = viable
+        let best: Vec<&(RoutineId, Vec<u8>)> = viable
             .iter()
             .filter(|(_, s)| !viable.iter().any(|(_, o)| dominates(o, s)))
-            .map(|(c, _)| *c)
             .collect();
-        if let [only] = best.as_slice() {
+        if let [(only, _)] = best.as_slice() {
             return Pick::Routine(*only);
         }
+        // With the same stages everywhere, the one candidate that is not an instantiation of a
+        // generic declaration (`docs/spec/generics.md` 5.4)
+        let same = best.iter().all(|(_, s)| *s == best[0].1);
+        let plain: Vec<RoutineId> = best
+            .iter()
+            .map(|(c, _)| *c)
+            .filter(|c| !self.instances.rinst.contains_key(c))
+            .collect();
+        if same && let [only] = plain.as_slice() {
+            return Pick::Routine(*only);
+        }
+        let best: Vec<RoutineId> = best.iter().map(|(c, _)| *c).collect();
         self.lower_args_quietly(args);
-        let name = self.routines[id.0 as usize].name.clone();
+        // A call without type arguments names the generic declaration, not an instantiation
+        let named = match self.instances.rinst.get(&id) {
+            Some((base, _)) if !excluded.shown.is_empty() => *base,
+            _ => id,
+        };
+        let name = self.routines[named.0 as usize].name.clone();
         let mut d = Diagnostic::error(
             Code::E(734),
             format!("ambiguous call to overloaded `{name}`"),
@@ -416,14 +563,37 @@ impl<'a, 's> Sema<'a, 's> {
         )
         .with_primary(self.span(span), "");
         for c in best {
-            d = d.with_secondary(self.routine_decl_span(c), "candidate");
+            d = self.with_routine_decl(d, c, "candidate");
         }
         self.push(d);
         Pick::Failed
     }
 
-    /// E0735: no overload takes the arguments.
-    fn no_overload_matches(&mut self, set: &[RoutineId], kinds: &[ArgKind], span: TextRange) {
+    /// E0735 when type argument inference left out every candidate (`docs/spec/generics.md`
+    /// 5.4).
+    pub(super) fn no_candidate_left(
+        &mut self,
+        excluded: &Excluded,
+        args: &[ast::Arg],
+        span: TextRange,
+    ) {
+        if excluded.shown.is_empty() {
+            return;
+        }
+        let kinds: Vec<ArgKind> = args.iter().map(|a| self.arg_kind(a)).collect();
+        self.lower_args_quietly(args);
+        self.no_overload_matches(&excluded.shown, &kinds, span, &excluded.notes);
+    }
+
+    /// E0735: no overload takes the arguments. `why` is a note for each generic candidate left
+    /// out by type argument inference (`docs/spec/generics.md` 5.4).
+    fn no_overload_matches(
+        &mut self,
+        set: &[RoutineId],
+        kinds: &[ArgKind],
+        span: TextRange,
+        why: &[String],
+    ) {
         let name = self.routines[set[0].0 as usize].name.clone();
         let mut d = Diagnostic::error(
             Code::E(735),
@@ -432,7 +602,7 @@ impl<'a, 's> Sema<'a, 's> {
         )
         .with_primary(self.span(span), "");
         for c in set {
-            d = d.with_secondary(self.routine_decl_span(*c), "candidate");
+            d = self.with_routine_decl(d, *c, "candidate");
         }
         let note = if kinds.is_empty() {
             "the call has no arguments".to_string()
@@ -447,7 +617,11 @@ impl<'a, 's> Sema<'a, 's> {
                 .collect();
             format!("the arguments have types {}", types.join(", "))
         };
-        self.push(d.with_note(note));
+        let mut d = d.with_note(note);
+        for w in why {
+            d = d.with_note(w.clone());
+        }
+        self.push(d);
     }
 
     /// The kind of an argument, from typing it on its own without reporting anything.
@@ -457,6 +631,31 @@ impl<'a, 's> Sema<'a, 's> {
         };
         match strip_parens(&v) {
             ast::Expr::Nil(_) => ArgKind::Contextual("nil"),
+            // A class's name is a value of its class reference type (`docs/spec/objects.md` 2.8)
+            e @ (ast::Expr::NameRef(_) | ast::Expr::Field(_))
+                if self.class_name_of(&e).is_some() =>
+            {
+                let class = self.class_name_of(&e).expect("checked above");
+                let ty = self
+                    .class_ref_value(class, ast::trimmed_range(e.syntax()))
+                    .ty;
+                ArgKind::Typed(ty, false)
+            }
+            // A routine or method name that is not a call takes its type from the parameter
+            // (a procedural value; `docs/spec/objects.md` 9.2)
+            e if self.is_code_name(&e) => {
+                let n = self.sink.len();
+                let (ty, is_const, failed) = self.dry_run(|s| {
+                    let x = s.lower_expr(&e);
+                    let failed = s.sink.iter().skip(n).any(|d| d.is_error());
+                    (x.ty, x.value.is_some(), failed)
+                });
+                if failed || ty.is_error() {
+                    ArgKind::Contextual("a routine")
+                } else {
+                    ArgKind::Typed(ty, is_const)
+                }
+            }
             ast::Expr::ArrayCtor(ac) => {
                 let n = self.sink.len();
                 let failed = self.dry_run(|s| {
@@ -520,25 +719,48 @@ impl<'a, 's> Sema<'a, 's> {
                 ParamMode::Value | ParamMode::Const => {
                     let fits = self.dry_run(|s| {
                         let e = s.lower_expected(&v, p.ty);
-                        !e.ty.is_error() && !s.coerce(e, p.ty, true, None).ty.is_error()
+                        !e.ty.is_error() && !s.coerce_with(e, p.ty, true, None, false).ty.is_error()
                     });
-                    if !fits {
+                    if fits {
+                        out.push(match *k {
+                            ArgKind::Typed(t, is_const) => self.conversion_stage(t, is_const, p.ty),
+                            _ => 0,
+                        });
+                        continue;
+                    }
+                    // Stage 3 (6 on the scale of `conversion_stage`): through a user's `Implicit`
+                    // (`docs/spec/objects.md` 11.4)
+                    let implicit = self.dry_run(|s| {
+                        let e = s.lower_expr(&v);
+                        matches!(
+                            s.conversion_for(&e, p.ty, &["Implicit"]),
+                            super::operators::ConvPick::One(_)
+                        )
+                    });
+                    if !implicit {
                         return None;
                     }
-                    out.push(match *k {
-                        ArgKind::Typed(t, is_const) => self.conversion_stage(t, is_const, p.ty),
-                        _ => 0,
-                    });
+                    out.push(6);
                 }
             }
         }
         Some(out)
     }
 
-    /// The stage of passing a value of type `arg` to a parameter of type `param` that accepts it:
-    /// 0 the same type, 1 a widening that keeps the value, 2 any other assignment compatibility
-    /// (`docs/spec/semantics.md` 4.7).
-    fn conversion_stage(&self, arg: Ty, is_const: bool, param: Ty) -> u8 {
+    /// The stage of passing a value of type `arg` to a parameter of type `param` that accepts it
+    /// (`docs/spec/semantics.md` 4.7), twice the stage so that stage 0.5 has a place: 0 the same
+    /// type, 1 (stage 0.5) two types of the same root of which one is a distinct type
+    /// (`docs/spec/types.md` 1.3), 2 a widening that keeps the value, 4 any other assignment
+    /// compatibility. Two types of which one is a distinct type are compared by their roots.
+    pub(super) fn conversion_stage(&self, arg: Ty, is_const: bool, param: Ty) -> u8 {
+        if arg != param && (matches!(arg, Ty::Distinct(_)) || matches!(param, Ty::Distinct(_))) {
+            let (a, p) = (self.types.root(arg), self.types.root(param));
+            return if a == p {
+                1
+            } else {
+                self.conversion_stage(a, is_const, p)
+            };
+        }
         let a = self.types.base(arg);
         let p = self.types.base(param);
         if a == p
@@ -550,11 +772,11 @@ impl<'a, 's> Sema<'a, 's> {
         if a.is_integer() && p.is_integer() {
             let (alo, ahi) = a.range().expect("an integer type");
             let (plo, phi) = p.range().expect("an integer type");
-            return if plo <= alo && ahi <= phi { 1 } else { 2 };
+            return if plo <= alo && ahi <= phi { 2 } else { 4 };
         }
         match (a, p) {
-            (Ty::Single, Ty::Double) | (Ty::Char, Ty::String) | (Ty::Utf8String, Ty::String) => 1,
-            _ => 2,
+            (Ty::Single, Ty::Double) | (Ty::Char, Ty::String) | (Ty::Utf8String, Ty::String) => 2,
+            _ => 4,
         }
     }
 }

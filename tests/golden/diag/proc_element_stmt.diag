@@ -1,0 +1,13 @@
+error[E0402]: expected a statement
+   --> proc_element_stmt.pas:19:3
+    |
+ 19 |   A[0];
+    |   ^^^^
+
+error[E0402]: expected a statement
+   --> proc_element_stmt.pas:20:3
+    |
+ 20 |   (A[0]);
+    |   ^^^^^^
+
+error: aborting due to 2 errors

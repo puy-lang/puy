@@ -1,0 +1,8 @@
+work w
+TRUE FALSE
+FALSE TRUE FALSE
+call: access to a freed object
+nil: access to a nil reference
+freed: access to a freed object
+nil event: access to a nil reference
+nil function: access to a nil reference

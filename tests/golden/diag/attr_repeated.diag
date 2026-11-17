@@ -1,0 +1,35 @@
+error[E0748]: `[weak]` can only be applied to a reference counted class or an interface
+   --> attr_repeated.pas:12:4
+    |
+ 12 |   [weak, weak] A: Integer;
+    |    ^^^^
+    |
+    = note: `[weak]` in Puy can only be applied to reference counted classes and interfaces
+
+warning[W0010]: attribute `[Ref]` is ignored (ignored-hint-directive)
+   --> attr_repeated.pas:13:4
+    |
+ 13 |   [Ref, Ref] B: Integer;
+    |    ^^^
+    |
+    = note: disable with `{$WARN ignored-hint-directive OFF}`
+    = fix: remove `[Ref]`
+
+error[E3018]: `[unsafe]` is not supported in Puy
+   --> attr_repeated.pas:14:4
+    |
+ 14 |   [unsafe][unsafe] C: Integer;
+    |    ^^^^^^
+    |
+    = note: `[weak]` in Puy can only be applied to reference counted classes and interfaces
+    = suggestion: remove `[unsafe]`
+
+error[E0748]: `[weak]` can only be applied to a reference counted class or an interface
+   --> attr_repeated.pas:15:4
+    |
+ 15 |   [weak, Weak] D: Integer;
+    |    ^^^^
+    |
+    = note: `[weak]` in Puy can only be applied to reference counted classes and interfaces
+
+error: aborting due to 3 errors; 1 warning emitted

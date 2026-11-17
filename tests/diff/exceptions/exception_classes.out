@@ -1,0 +1,6 @@
+app: bad input (42) code=42
+log: EAppError: bad input
+net: cannot reach example.org (7) host=example.org
+log: ENetError: cannot reach example.org
+plain: plain count=3
+done

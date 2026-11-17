@@ -1,0 +1,207 @@
+error[E0762]: cannot write a value of type parameter `T`
+   --> generic_body_ops.pas:31:11
+    |
+ 15 |   TBag<T> = class
+    |        - type parameter declared here
+...
+ 31 |   WriteLn(FItem); // error: E0762
+    |           ^^^^^
+    |
+    = note: a type parameter can only be used in ways that its constraints allow
+
+error[E0762]: cannot compare a value of type parameter `T`
+   --> generic_body_ops.pas:40:6
+    |
+ 19 |   TCheck<T> = class
+    |          - type parameter declared here
+...
+ 40 |   if FItem = Y then
+    |      ^^^^^^^^^
+    |
+    = note: add a `class` or interface constraint to compare references; to compare values, use `KeyEquals`
+
+error[E0762]: cannot assign `nil` to a value of type parameter `T`
+   --> generic_body_ops.pas:42:12
+    |
+ 19 |   TCheck<T> = class
+    |          - type parameter declared here
+...
+ 42 |   FItem := nil;
+    |            ^^^
+    |
+    = note: add a `class` or interface constraint to compare references; to compare values, use `KeyEquals`
+
+error[E0762]: cannot compare a value of type parameter `T`
+   --> generic_body_ops.pas:43:6
+    |
+ 19 |   TCheck<T> = class
+    |          - type parameter declared here
+...
+ 43 |   if Assigned(FItem) then
+    |      ^^^^^^^^^^^^^^^
+    |
+    = note: add a `class` or interface constraint to compare references; to compare values, use `KeyEquals`
+
+error[E0762]: type parameter `T` has no member `Run`
+   --> generic_body_ops.pas:45:3
+    |
+ 19 |   TCheck<T> = class
+    |          - type parameter declared here
+...
+ 45 |   FItem.Run;
+    |   ^^^^^^^^^
+    |
+    = note: add a class or interface constraint that declares `Run`
+
+error[E0762]: cannot free a value of type parameter `T`
+   --> generic_body_ops.pas:46:3
+    |
+ 19 |   TCheck<T> = class
+    |          - type parameter declared here
+...
+ 46 |   FItem.Free;
+    |   ^^^^^^^^^^
+    |
+    = note: add the constraints `class, NotRefCounted` to free values of `T`
+
+error[E0762]: cannot apply operator `+` to a value of type parameter `T`
+   --> generic_body_ops.pas:47:8
+    |
+ 19 |   TCheck<T> = class
+    |          - type parameter declared here
+...
+ 47 |   Y := FItem + Y;
+    |        ^^^^^^^^^
+    |
+    = note: a type parameter can only be used in ways that its constraints allow
+
+error[E0762]: cannot apply operator `-` to a value of type parameter `T`
+   --> generic_body_ops.pas:48:8
+    |
+ 19 |   TCheck<T> = class
+    |          - type parameter declared here
+...
+ 48 |   Y := -FItem;
+    |        ^^^^^^
+    |
+    = note: a type parameter can only be used in ways that its constraints allow
+
+error[E0762]: cannot convert a value of type parameter `T`
+   --> generic_body_ops.pas:49:8
+    |
+ 19 |   TCheck<T> = class
+    |          - type parameter declared here
+...
+ 49 |   I := FItem;
+    |        ^^^^^
+    |
+    = note: a type parameter can only be used in ways that its constraints allow
+
+error[E0762]: cannot convert a value of type parameter `T`
+   --> generic_body_ops.pas:50:8
+    |
+ 19 |   TCheck<T> = class
+    |          - type parameter declared here
+...
+ 50 |   Y := T(I);
+    |        ^^^^
+    |
+    = note: a type parameter can only be used in ways that its constraints allow
+
+warning[W0002]: value assigned to `I` is never read (unused-value)
+   --> generic_body_ops.pas:51:3
+    |
+ 51 |   I := Ord(FItem);
+    |   ^
+    |
+    = note: remove the assignment if the value is not needed
+    = note: disable with `{$WARN unused-value OFF}`
+
+error[E0762]: cannot take the ordinal of a value of type parameter `T`
+   --> generic_body_ops.pas:51:8
+    |
+ 19 |   TCheck<T> = class
+    |          - type parameter declared here
+...
+ 51 |   I := Ord(FItem);
+    |        ^^^^^^^^^^
+    |
+    = note: a type parameter can only be used in ways that its constraints allow
+
+warning[W0002]: value assigned to `I` is never read (unused-value)
+   --> generic_body_ops.pas:52:3
+    |
+ 52 |   I := SizeOf(T);
+    |   ^
+    |
+    = note: remove the assignment if the value is not needed
+    = note: disable with `{$WARN unused-value OFF}`
+
+error[E0762]: cannot take the size of a value of type parameter `T`
+   --> generic_body_ops.pas:52:8
+    |
+ 19 |   TCheck<T> = class
+    |          - type parameter declared here
+...
+ 52 |   I := SizeOf(T);
+    |        ^^^^^^^^^
+    |
+    = note: a type parameter can only be used in ways that its constraints allow
+
+error[E0762]: cannot take the ordinal of a value of type parameter `T`
+   --> generic_body_ops.pas:53:7
+    |
+ 19 |   TCheck<T> = class
+    |          - type parameter declared here
+...
+ 53 |   for Y := Y to Y do
+    |       ^
+    |
+    = note: a type parameter can only be used in ways that its constraints allow
+
+error[E0762]: cannot free a value of type parameter `T`
+   --> generic_body_ops.pas:55:14
+    |
+ 19 |   TCheck<T> = class
+    |          - type parameter declared here
+...
+ 55 |   FreeAndNil(FItem);
+    |              ^^^^^
+    |
+    = note: add the constraints `class, NotRefCounted` to free values of `T`
+
+error[E2000]: variable `Last` may be read before it is assigned
+   --> generic_body_ops.pas:62:8
+    |
+ 60 |   Last: T;
+    |   ---- declared here
+ 61 | begin
+ 62 |   Exit(Last);
+    |        ^^^^ read here
+    |
+    = note: Puy requires every local variable to be assigned before it is read
+    = fix: add an initial value: `var Last: T = Default(T);`
+
+error[E0762]: cannot free a value of type parameter `T`
+   --> generic_body_ops.pas:67:3
+    |
+ 24 |   TRefs<T: class> = class
+    |         - type parameter declared here
+...
+ 67 |   FItem.Free;
+    |   ^^^^^^^^^^
+    |
+    = note: add the constraints `class, NotRefCounted` to free values of `T`
+
+error[E0762]: cannot write a value of type parameter `T`
+   --> generic_body_ops.pas:69:11
+    |
+ 24 |   TRefs<T: class> = class
+    |         - type parameter declared here
+...
+ 69 |   WriteLn(FItem);
+    |           ^^^^^
+    |
+    = note: a type parameter can only be used in ways that its constraints allow
+
+error: aborting due to 17 errors; 2 warnings emitted

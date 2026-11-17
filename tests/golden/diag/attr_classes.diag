@@ -1,0 +1,89 @@
+error[E0742]: cannot create an instance of abstract class `ShapeAttribute`
+   --> attr_classes.pas:51:4
+    |
+ 51 |   [Shape] TA = class
+    |    ^^^^^
+
+error[E0702]: type mismatch: expected `string`, found `Integer` (argument 1, parameter `S`)
+   --> attr_classes.pas:53:9
+    |
+ 53 |   [Name(1)] TB = class
+    |         ^
+
+error[E0705]: wrong number of arguments: expected 1, found 0
+   --> attr_classes.pas:55:4
+    |
+ 17 |     constructor Create(const S: string);
+    |                 ------ declared here
+...
+ 55 |   [Name] TC = class
+    |    ^^^^
+
+error[E0735]: no overload of `RangeAttribute.Make` matches these arguments
+   --> attr_classes.pas:57:4
+    |
+ 21 |     constructor Make(Low, High: Integer);
+    |                 ---- candidate
+ 22 |     constructor FromText(const S: string; N: Integer);
+    |                 -------- candidate
+...
+ 57 |   [Range(True)] TD = class
+    |    ^^^^^^^^^^^
+    |
+    = note: the arguments have types `Boolean`
+
+error[E0713]: constant expression required
+   --> attr_classes.pas:59:9
+    |
+ 59 |   [Name(Title)] TE = class
+    |         ^^^^^
+
+error[E0705]: wrong number of arguments: expected 0, found 1
+   --> attr_classes.pas:61:4
+    |
+ 61 |   [Mark(1)] TF = class
+    |    ^^^^^^^
+
+warning[W0010]: attribute `[Volatile]` is ignored (ignored-hint-directive)
+   --> attr_classes.pas:63:4
+    |
+ 63 |   [Volatile(1)] TG = class
+    |    ^^^^^^^^
+    |
+    = note: disable with `{$WARN ignored-hint-directive OFF}`
+    = fix: remove `[Volatile]`
+
+error[E0705]: wrong number of arguments: expected 0, found 1
+   --> attr_classes.pas:63:12
+    |
+ 63 |   [Volatile(1)] TG = class
+    |            ^^^
+
+error[E0743]: `Create` is private to `HiddenAttribute`
+   --> attr_classes.pas:67:4
+    |
+ 26 |     constructor Create;
+    |                 ------ declared here
+...
+ 67 |   [Hidden] TI = class
+    |    ^^^^^^
+
+error[E0723]: body of `Show` does not match its forward declaration
+   --> attr_classes.pas:72:11
+    |
+ 70 | procedure Show(const [Name('a')] S: string); forward;
+    |           ---- declared here
+ 71 |
+ 72 | procedure Show(const [Name('b')] S: string);
+    |           ^^^^
+
+error[E0723]: body of `Spelled` does not match its forward declaration
+   --> attr_classes.pas:86:11
+    |
+ 84 | procedure Spelled(const [Name('A')] S: string); forward;
+    |           ------- declared here
+ 85 |
+ 86 | procedure Spelled(const [Name('a')] S: string);
+    |           ^^^^^^^
+
+error: aborting due to 10 errors; 1 warning emitted

@@ -1,0 +1,67 @@
+error[E0700]: undeclared identifier `reference`
+   --> proc_value_more_errors.pas:44:6
+    |
+ 44 |   X: reference;
+    |      ^^^^^^^^^
+
+error[E0752]: `ClassType` cannot be used as a procedural value
+   --> proc_value_more_errors.pas:47:10
+    |
+ 47 |   E := O.ClassType;
+    |          ^^^^^^^^^
+
+error[E0752]: `InheritsFrom` cannot be used as a procedural value
+   --> proc_value_more_errors.pas:48:10
+    |
+ 48 |   E := O.InheritsFrom;
+    |          ^^^^^^^^^^^^
+
+error[E0702]: type mismatch: expected `TConstFn`, found `function(Integer): Integer`
+   --> proc_value_more_errors.pas:49:8
+    |
+ 49 |   C := Id;
+    |        ^^
+
+error[E0702]: type mismatch: expected `TSumInts`, found `function(const array of Double): Integer`
+   --> proc_value_more_errors.pas:50:8
+    |
+ 50 |   S := SumReals;
+    |        ^^^^^^^^
+
+error[E0702]: type mismatch: expected `TStrFn`, found `function(Double): Integer`
+   --> proc_value_more_errors.pas:51:8
+    |
+ 51 |   F := Ov;
+    |        ^^
+
+error[E3004]: `@` is not supported in Puy
+   --> proc_value_more_errors.pas:52:9
+    |
+ 52 |   Fn := @Id;
+    |         ^
+    |
+    = note: use a class, a dynamic array or a `var` parameter instead
+
+error[E3004]: `@` is not supported in Puy
+   --> proc_value_more_errors.pas:53:9
+    |
+ 53 |   Fn := @@Fn;
+    |         ^
+    |
+    = note: use a class, a dynamic array or a `var` parameter instead
+
+error[E3004]: `@` is not supported in Puy
+   --> proc_value_more_errors.pas:53:10
+    |
+ 53 |   Fn := @@Fn;
+    |          ^
+    |
+    = note: use a class, a dynamic array or a `var` parameter instead
+
+error[E0718]: cannot write a value of type `TProc`
+   --> proc_value_more_errors.pas:55:11
+    |
+ 55 |   WriteLn(R);
+    |           ^
+
+error: aborting due to 10 errors

@@ -1,0 +1,129 @@
+error[E0744]: records cannot inherit from another type
+   --> record_method_errors.pas:15:14
+    |
+ 15 |   TA = record(TBase)
+    |              ^^^^^^^
+
+error[E0744]: a record cannot be `abstract` or `sealed`
+   --> record_method_errors.pas:18:15
+    |
+ 18 |   TB = record sealed
+    |               ^^^^^^
+
+error[E0744]: records cannot have virtual methods
+   --> record_method_errors.pas:23:18
+    |
+ 23 |     procedure V; virtual;
+    |                  ^^^^^^^
+
+error[E0744]: records cannot have virtual methods
+   --> record_method_errors.pas:24:18
+    |
+ 24 |     procedure O; override;
+    |                  ^^^^^^^^
+
+error[E0744]: records cannot have destructors
+   --> record_method_errors.pas:25:5
+    |
+ 25 |     destructor Destroy;
+    |     ^^^^^^^^^^
+
+error[E0747]: a record constructor must have parameters
+   --> record_method_errors.pas:26:17
+    |
+ 26 |     constructor Create;
+    |                 ^^^^^^
+
+error[E0744]: a class method of a record must be `static`
+   --> record_method_errors.pas:28:21
+    |
+ 28 |     class procedure K;
+    |                     ^
+
+error[E0744]: `protected` is not allowed in a record
+   --> record_method_errors.pas:31:3
+    |
+ 31 |   protected
+    |   ^^^^^^^^^
+
+error[E0744]: `strict protected` is not allowed in a record
+   --> record_method_errors.pas:33:3
+    |
+ 33 |   strict protected
+    |   ^^^^^^^^^^^^^^^^
+
+error[E0744]: `published` is not allowed in a record
+   --> record_method_errors.pas:35:3
+    |
+ 35 |   published
+    |   ^^^^^^^^^
+
+error[E0700]: `X` is an instance member and cannot be used in a static method
+   --> record_method_errors.pas:70:13
+    |
+ 70 |   Result := X;
+    |             ^
+
+error[E0700]: `inherited` is only allowed in a method of a class
+   --> record_method_errors.pas:75:3
+    |
+ 75 |   inherited Up;
+    |   ^^^^^^^^^^^^
+
+error[E0707]: cannot assign to `D.Val`
+   --> record_method_errors.pas:90:3
+    |
+ 90 |   D.Val := 1;
+    |   ^^^^^ not a variable
+
+error[E0707]: cannot assign to `D.Raw`
+   --> record_method_errors.pas:91:3
+    |
+ 91 |   D.Raw := 2;
+    |   ^^^^^ not a variable
+
+error[E0744]: a record type with methods must be declared in a `type` section
+   --> record_method_errors.pas:98:15
+    |
+ 98 |     procedure M;
+    |               ^
+
+error[E0747]: a constructor must be called on a class
+    --> record_method_errors.pas:102:5
+     |
+ 102 |   C.Make(2);
+     |     ^^^^
+     |
+     = note: call the constructor on the class, as in `TC.Create`
+
+error[E0700]: `V` is an instance member and cannot be used through a class
+    --> record_method_errors.pas:103:6
+     |
+  23 |     procedure V; virtual;
+     |               - declared here
+...
+ 103 |   TC.V;
+     |      ^
+
+error[E0700]: `X` is an instance member and cannot be used through a class
+    --> record_method_errors.pas:104:14
+     |
+ 104 |   WriteLn(TC.X);
+     |              ^
+
+error[E0743]: `FHidden` is private to `TD`
+    --> record_method_errors.pas:106:13
+     |
+  40 |     FHidden: Integer;
+     |     ------- declared here
+...
+ 106 |   WriteLn(D.FHidden);
+     |             ^^^^^^^
+
+error[E0707]: cannot assign to `MakeD.Val`
+    --> record_method_errors.pas:107:3
+     |
+ 107 |   MakeD.Val := 3;
+     |   ^^^^^^^^^ not a variable
+
+error: aborting due to 20 errors

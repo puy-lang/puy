@@ -36,9 +36,9 @@ type
   end;
   TDyn = array of TDyn;                    // E0727: an array of itself
   TMethods = record
-    procedure Run;                         // E3200 (M3)
+    procedure Run;                         // E0723: no body
   end;
-  TDistinct = type Integer;                // E3200 (M4)
+  TDistinct = type Integer;                // no error: a distinct type (types.md 1.3)
   TUnknown = record
     F: TNowhere;                           // E0700
   end;

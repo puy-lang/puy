@@ -1,0 +1,152 @@
+error[E3200]: a class implementing the anonymous method type `TProc` is not supported yet (planned for a later release)
+   --> anon_errors.pas:21:31
+    |
+ 21 |   TRunner = class(TRefObject, TProc)
+    |                               ^^^^^
+    |
+    = note: make a method reference to a method of the class, or an anonymous method that calls it
+
+error[E0713]: constant expression required
+   --> anon_errors.pas:25:19
+    |
+ 25 |   Global: TProc = procedure begin end;
+    |                   ^^^^^^^^^^^^^^^^^^^
+
+error[E0751]: cannot capture `Self`
+   --> anon_errors.pas:31:15
+    |
+ 27 | function TRec.Getter: TProc;
+    |          ----------- declared here
+...
+ 31 |       WriteLn(X);
+    |               ^
+    |
+    = note: `Self` of a record method is passed like a `var` parameter; copy the fields needed to local variables
+
+error[E0751]: cannot capture `V`
+   --> anon_errors.pas:42:15
+    |
+ 35 | procedure Params(var V: Integer; out O: Integer; const A: array of Integer; const C: Integer);
+    |                      - declared here
+...
+ 42 |       WriteLn(V);
+    |               ^
+    |
+    = note: copy the parameter to a local variable and capture that
+
+error[E0751]: cannot capture `O`
+   --> anon_errors.pas:43:7
+    |
+ 35 | procedure Params(var V: Integer; out O: Integer; const A: array of Integer; const C: Integer);
+    |                                      - declared here
+...
+ 43 |       O := 1;
+    |       ^
+    |
+    = note: copy the parameter to a local variable and capture that
+
+error[E0751]: cannot capture `A`
+   --> anon_errors.pas:44:22
+    |
+ 35 | procedure Params(var V: Integer; out O: Integer; const A: array of Integer; const C: Integer);
+    |                                                        - declared here
+...
+ 44 |       WriteLn(Length(A));
+    |                      ^
+    |
+    = note: copy the open array to a dynamic array and capture that
+
+error[E0707]: cannot assign to `C`
+   --> anon_errors.pas:45:7
+    |
+ 35 | procedure Params(var V: Integer; out O: Integer; const A: array of Integer; const C: Integer);
+    |                                                                                   - declared here
+...
+ 45 |       C := 2;
+    |       ^ a `const` parameter
+
+error[E0751]: cannot capture `Result`
+   --> anon_errors.pas:57:7
+    |
+ 50 | function Res: Integer;
+    |          --- declared here
+...
+ 57 |       Result := 1;
+    |       ^^^^^^
+    |
+    = note: assign the value to a local variable, and that to `Result` at the end
+
+warning[W0001]: unused variable `Plain` (unused-variable)
+   --> anon_errors.pas:64:3
+    |
+ 64 |   Plain: TPlain;
+    |   ^^^^^ declared here
+    |
+    = note: remove `Plain` and its assignments if the value is not needed
+    = note: disable with `{$WARN unused-variable OFF}`
+
+warning[W0001]: unused variable `Event` (unused-variable)
+   --> anon_errors.pas:65:3
+    |
+ 65 |   Event: TEvent;
+    |   ^^^^^ declared here
+    |
+    = note: remove `Event` and its assignments if the value is not needed
+    = note: disable with `{$WARN unused-variable OFF}`
+
+error[E0752]: an anonymous method can only be assigned to a `reference to` type
+   --> anon_errors.pas:69:12
+    |
+ 69 |   Plain := procedure begin end;
+    |            ^^^^^^^^^
+
+error[E0752]: an anonymous method can only be assigned to a `reference to` type
+   --> anon_errors.pas:70:12
+    |
+ 70 |   Event := procedure begin end;
+    |            ^^^^^^^^^
+
+error[E0702]: type mismatch: expected `TIntFunc`, found `reference to function(string): Integer`
+   --> anon_errors.pas:71:8
+    |
+ 71 |   F := function(S: string): Integer begin Result := 0 end;
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0702]: type mismatch: expected `TIntFunc`, found `reference to procedure(Integer)`
+   --> anon_errors.pas:72:8
+    |
+ 72 |   F := procedure(N: Integer) begin end;
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning[W0001]: unused variable `Q` (unused-variable)
+   --> anon_errors.pas:73:7
+    |
+ 73 |   var Q := procedure begin end;
+    |       ^ declared here
+    |
+    = note: disable with `{$WARN unused-variable OFF}`
+    = suggestion: remove `Q`
+
+error[E0729]: cannot infer the type of an anonymous method
+   --> anon_errors.pas:73:12
+    |
+ 73 |   var Q := procedure begin end;
+    |            ^^^^^^^^^^^^^^^^^^^
+    |
+    = note: give the anonymous method a type, as in `var P: TProc := procedure begin … end`
+
+error[E0707]: cannot assign to `I`
+   --> anon_errors.pas:78:9
+    |
+ 78 |         I := N;
+    |         ^ the loop variable of the enclosing routine
+    |
+    = note: an anonymous method cannot write a variable its enclosing routine uses as a `for` loop variable
+
+error[E0712]: `Break` outside a loop
+   --> anon_errors.pas:80:9
+    |
+ 80 |         Break;
+    |         ^^^^^
+
+error: aborting due to 15 errors; 3 warnings emitted

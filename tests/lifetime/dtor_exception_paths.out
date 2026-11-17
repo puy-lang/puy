@@ -1,0 +1,12 @@
+destroy assigned
+dtor assigned
+destroy local
+dtor local [propagating]
+dtor of failed [ctor]
+destroy holder
+destroy fa
+destroy fb
+dtor fb [dtor fa]
+body
+destroy in finally
+dtor in finally

@@ -16,14 +16,13 @@ use args::{Command, Format, Options};
 use puy_core::bytecode::Module;
 use puy_core::diagnostics::{self, Code, Diagnostic, Severity, Stage};
 use puy_core::driver::{CompileOptions, compile};
-use puy_core::vm::{ExitKind, IsolateConfig, StdoutBuffering};
+use puy_core::vm::{ExitKind, HashSeed, IsolateConfig, StdoutBuffering};
 
 #[cfg(not(target_os = "wasi"))]
 use puy_runtime_native as runtime;
 #[cfg(target_os = "wasi")]
 use puy_runtime_wasi as runtime;
 
-#[cfg(not(target_os = "wasi"))]
 #[global_allocator]
 static ALLOC: runtime::CountingAlloc = runtime::CountingAlloc;
 
@@ -36,7 +35,8 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    install_panic_hook(parsed.options.format == Format::Json);
+    runtime::set_fatal_json(parsed.options.format == Format::Json);
+    install_panic_hook();
     // Run compilation and execution on a thread with a large stack (nesting limit 256 vs. the
     // Rust stack; `docs/design/compiler-pipeline.md` 3.11)
     let code = run_on_big_stack(move || dispatch(parsed));
@@ -66,8 +66,8 @@ fn run_on_big_stack(f: impl FnOnce() -> u8 + Send + 'static) -> u8 {
 
 /// Panic hook: prints `fatal[F0001]: internal error: ...` and exits with 101
 /// (§9.3, `diagnostics.md` 4.9).
-fn install_panic_hook(json: bool) {
-    std::panic::set_hook(Box::new(move |info| {
+fn install_panic_hook() {
+    std::panic::set_hook(Box::new(|info| {
         let msg = match info.payload().downcast_ref::<&str>() {
             Some(s) => (*s).to_string(),
             None => match info.payload().downcast_ref::<String>() {
@@ -79,18 +79,14 @@ fn install_panic_hook(json: bool) {
             .location()
             .map(|l| format!(" ({}:{})", l.file(), l.line()))
             .unwrap_or_default();
-        let text = format!("internal error: {msg}{location}");
+        let mut text = String::new();
+        let _ = runtime::write_fatal(
+            &mut text,
+            "F0001",
+            &format!("internal error: {msg}{location}"),
+        );
         let mut err = std::io::stderr().lock();
-        if json {
-            let _ = writeln!(
-                err,
-                "{{\"schema\":\"puy.diagnostics/1\",\"diagnostics\":[{{\"code\":\"F0001\",\"severity\":\"fatal\",\"name\":null,\"message\":{},\"primary\":null,\"secondary\":[],\"notes\":[],\"fixes\":[],\"rendered\":{}}}],\"summary\":{{\"errors\":1,\"warnings\":0,\"notes\":0}}}}",
-                diagnostics::json::json_string(&text),
-                diagnostics::json::json_string(&format!("fatal[F0001]: {text}"))
-            );
-        } else {
-            let _ = writeln!(err, "fatal[F0001]: {text}");
-        }
+        let _ = err.write_all(text.as_bytes());
         let _ = err.flush();
         std::process::exit(101);
     }));
@@ -268,8 +264,16 @@ fn run(source: Source, prog_args: Vec<String>, opts: &Options) -> u8 {
         args::Buffering::Full => StdoutBuffering::Full,
         args::Buffering::None => StdoutBuffering::None,
     };
+    let hash_seed = match hash_seed_from(std::env::var_os("PUY_RANDOM_SEED").as_deref()) {
+        Ok(seed) => seed,
+        Err(message) => {
+            output::emit_fatal("F0006", &message, opts);
+            return 101;
+        }
+    };
     let config = IsolateConfig {
         stdout_buffering: buffering,
+        hash_seed,
         ..Default::default()
     };
     let mut argv = vec![match &source {
@@ -305,11 +309,32 @@ fn run(source: Source, prog_args: Vec<String>, opts: &Options) -> u8 {
         Err(e) => {
             let code = match e {
                 puy_core::vm::IsolateError::HostFunction(_) => "F0005",
+                puy_core::vm::IsolateError::InvalidModule(_) => "F0004",
                 _ => "F0001",
             };
             output::emit_fatal(code, &e.to_string(), opts);
             101
         }
+    }
+}
+
+/// The hash seed from the value of the env var `PUY_RANDOM_SEED` (`docs/spec/equality.md` 7.1): a
+/// decimal `Int64` `r` fixes it to `mix64(r xor $5BD1E9955BD1E995)`; without the variable it is
+/// taken from the random source. A value that cannot be read is F0006.
+fn hash_seed_from(value: Option<&std::ffi::OsStr>) -> Result<HashSeed, String> {
+    let Some(v) = value else {
+        return Ok(HashSeed::FromHost);
+    };
+    match v.to_str().and_then(|t| t.parse::<i64>().ok()) {
+        Some(r) => Ok(HashSeed::Fixed(
+            puy_core::vm::hash::seed_from_fixed_random_seed(r as u64),
+        )),
+        None => Err(format!(
+            "invalid runtime setting `PUY_RANDOM_SEED`: expected an integer from {} to {}, found `{}`",
+            i64::MIN,
+            i64::MAX,
+            v.to_string_lossy()
+        )),
     }
 }
 
@@ -427,4 +452,44 @@ fn explain(code: &str) -> u8 {
         None => println!("no explanation is available for {c} yet"),
     }
     0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::ffi::OsStr;
+
+    // `PUY_RANDOM_SEED` fixes the hash seed to `mix64(r xor $5BD1E9955BD1E995)` (values worked out
+    // from the definition in `docs/spec/equality.md` 7.1 and 7.2), and its absence leaves the seed
+    // to the random source.
+    #[test]
+    fn random_seed_env_fixes_the_hash_seed() {
+        assert_eq!(hash_seed_from(None), Ok(HashSeed::FromHost));
+        for (value, seed) in [
+            ("42", 0x4337_81C3_62D3_0A38),
+            ("0", 0x0982_60B4_E4EF_00EC),
+            ("-1", 0x75F8_F85D_5A26_6ABE),
+        ] {
+            assert_eq!(
+                hash_seed_from(Some(OsStr::new(value))),
+                Ok(HashSeed::Fixed(seed)),
+                "{value}"
+            );
+        }
+    }
+
+    // A value that is not a decimal `Int64` is a runtime setting error (F0006).
+    #[test]
+    fn unreadable_random_seed_is_an_error() {
+        for value in ["", "abc", "1.5", "9223372036854775808", " 1"] {
+            let err = hash_seed_from(Some(OsStr::new(value))).unwrap_err();
+            assert_eq!(
+                err,
+                format!(
+                    "invalid runtime setting `PUY_RANDOM_SEED`: expected an integer from -9223372036854775808 to 9223372036854775807, found `{value}`"
+                ),
+                "{value}"
+            );
+        }
+    }
 }

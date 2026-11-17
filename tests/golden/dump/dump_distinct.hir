@@ -1,0 +1,76 @@
+program Hello
+.type TUserId = type Int64
+.type TSmall = type Byte
+.type TBox<T> = class(TObject)
+  .field 0 Value: T
+  .method - Get
+.global g0 A: TBox<TUserId>
+.global g1 B: TBox<Int64>
+.global g2 S: TSmall
+.global g3 N: Integer
+.routine - TBox<T>.Get(): T
+  .var v0 Self: TBox<T> self
+  .var v1 Result: T result
+  assign @19 R+
+    var v1 Result
+    objfield T Value #0
+      self TBox<T>
+.instance TBox<TUserId>
+.routine f1 TBox<TUserId>.Get(): TUserId
+  .var v0 Self: TBox<TUserId> self
+  .var v1 Result: TUserId result
+  assign @19 R+
+    var v1 Result
+    objfield TUserId Value #0
+      self TBox<TUserId>
+.instance TBox<Int64>
+.routine f2 TBox<Int64>.Get(): Int64
+  .var v0 Self: TBox<Int64> self
+  .var v1 Result: Int64 result
+  assign @19 R+
+    var v1 Result
+    objfield Int64 Value #0
+      self TBox<Int64>
+.routine <main>
+  assign @28 R+
+    global g0 A
+    create TBox<TUserId> builtin
+  assign @29 R+
+    global g1 B
+    create TBox<Int64> builtin
+  assign @30 R+
+    objfield TUserId Value #0
+      global g0 A: TBox<TUserId>
+    const TUserId 1
+  assign @31 R+
+    objfield Int64 Value #0
+      global g1 B: TBox<Int64>
+    binary Int64
+      method f1 TBox<TUserId>.Get: TUserId
+        global g0 A: TBox<TUserId>
+      + Int64 int:Int64
+        const Int64 1
+  assign @32 R+
+    global g3 N
+    const Integer 200
+  assign @33 R+
+    global g2 S
+    convert range TSmall R+
+      global g3 N: Integer
+  writeln @34
+    arg
+      method f1 TBox<TUserId>.Get: TUserId
+        global g0 A: TBox<TUserId>
+    arg
+      const Char #32
+    arg
+      method f2 TBox<Int64>.Get: Int64
+        global g1 B: TBox<Int64>
+    arg
+      const Char #32
+    arg
+      global g2 S: Byte
+  free @35
+    global g0 A: TBox<TUserId>
+  free @36
+    global g1 B: TBox<Int64>

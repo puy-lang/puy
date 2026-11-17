@@ -1,0 +1,215 @@
+; puyc format 0
+.const
+  0: str " "
+  1: str "\n"
+.type
+  64: class Keys.TKey ref slots=1 parent=ty20 vmt=builtin0,builtin0,builtin0,builtin1,f6,f2
+  65: class Main.TSubKey ref slots=1 parent=ty64 vmt=builtin0,builtin0,builtin0,builtin1,f7,f5
+  66: class Main.TBox<Integer> ref slots=0 parent=ty20 vmt=builtin0,builtin0,builtin0,builtin1,f8,f9
+.global
+  0: ref K
+  1: ref S
+  2: ref B
+.host
+  0: Console.Write params=1 ret=0
+.unit Keys file="src/Keys.pas" init=- fini=- entry=-
+.unit Main file="main.pas" init=- fini=- entry=3
+.func 0 Keys.TKey.Create params=2 regs=2
+  .local r0 Self
+  .local r1 AV
+  .line 20
+  0000  ObjSet       r0, 0, r1
+  .line 21
+  0001  RetVoid
+.func 1 Keys.TKey.Equal params=2 regs=4
+  .local r0 A
+  .local r1 B
+  .local r2 Result
+  .line 25
+  0000  ObjGet       r2, r0, 0
+  0001  ObjGet       r3, r1, 0
+  0002  EqInt        r2, r2, r3
+  .line 26
+  0003  Ret          r2
+.func 2 Keys.TKey.GetHashCode params=1 regs=2
+  .local r0 Self
+  .local r1 Result
+  .line 30
+  0000  ObjGet       r1, r0, 0
+  .line 31
+  0001  Ret          r1
+.func 3 Main.<main> params=0 regs=32
+  .try 0003..0006 finally 0006..0008 r1
+  .try 000e..0011 finally 0011..0013 r4
+  .try 001d..0020 finally 0020..0022 r10
+  .line 46
+  0000  LoadInt      r27, 1
+  0001  LoadZero     r25
+  0002  New          r25, ty64
+  0003  Move         r26, r25
+  0004  CallMethod   r26, f0
+  0005  LoadZero     r1
+  0006  JmpIfNeIntI  r1, 1, -> 0008
+  0007  DestroyFailed r25
+  0008  EndFinally   r1, 0
+  0009  MoveRef      r0, r25
+  000a  StoreGlobalRef r0, g0
+  .line 47
+  000b  LoadInt      r27, 1
+  000c  LoadZero     r25
+  000d  New          r25, ty65
+  000e  Move         r26, r25
+  000f  CallMethod   r26, f0
+  0010  LoadZero     r4
+  0011  JmpIfNeIntI  r4, 1, -> 0013
+  0012  DestroyFailed r25
+  0013  EndFinally   r4, 0
+  0014  MoveRef      r3, r25
+  0015  StoreGlobalRef r3, g1
+  .line 48
+  0016  New          r6, ty66
+  0017  StoreGlobalRef r6, g2
+  .line 49
+  0018  LoadGlobalRef r8, g0
+  0019  Move         r26, r8
+  001a  LoadInt      r30, 1
+  001b  LoadZero     r28
+  001c  New          r28, ty64
+  001d  Move         r29, r28
+  001e  CallMethod   r29, f0
+  001f  LoadZero     r10
+  0020  JmpIfNeIntI  r10, 1, -> 0022
+  0021  DestroyFailed r28
+  0022  EndFinally   r10, 0
+  0023  AssignObj    r9, r28
+  0024  ReleaseObj   r28
+  0025  Move         r27, r9
+  0026  CallVirtual  r26, 4
+  0027  Move         r25, r26
+  0028  BoolToStr    r7, r25
+  0029  LoadConst    r12, k0
+  002a  ConcatStr    r7, r7, r12
+  002b  LoadGlobalRef r14, g0
+  002c  Move         r27, r14
+  002d  LoadGlobal   r29, g1
+  002e  AssignObj    r15, r29
+  002f  Move         r28, r15
+  0030  CallVirtual  r27, 4
+  0031  Move         r26, r27
+  0032  BoolToStr    r13, r26
+  0033  ConcatStr    r7, r7, r13
+  0034  LoadConst    r16, k0
+  0035  ConcatStr    r7, r7, r16
+  0036  LoadGlobalRef r18, g1
+  0037  Move         r28, r18
+  0038  LoadGlobal   r30, g0
+  0039  AssignObj    r19, r30
+  003a  Move         r29, r19
+  003b  CallVirtual  r28, 4
+  003c  Move         r27, r28
+  003d  BoolToStr    r17, r27
+  003e  ConcatStr    r7, r7, r17
+  003f  LoadConst    r20, k0
+  0040  ConcatStr    r7, r7, r20
+  0041  LoadGlobalRef r22, g2
+  0042  Move         r29, r22
+  0043  LoadGlobal   r31, g2
+  0044  AssignObj    r23, r31
+  0045  Move         r30, r23
+  0046  CallVirtual  r29, 4
+  0047  Move         r28, r29
+  0048  BoolToStr    r21, r28
+  0049  ConcatStr    r7, r7, r21
+  004a  LoadConst    r24, k1
+  004b  ConcatStr    r7, r7, r24
+  004c  CallHost     r7, h0
+  .line 50
+  004d  RetVoid
+.finally r0, r2, r3, r5, r6, r7, r8, r9:obj, r11, r12, r13, r14, r15:obj, r16, r17, r18, r19:obj, r20, r21, r22, r23:obj, r24
+.func 4 Main.TSubKey.Equal params=2 regs=4
+  .local r0 A
+  .local r1 B
+  .local r2 Result
+  .line 23
+  0000  ObjGet       r2, r0, 0
+  0001  ObjGet       r3, r1, 0
+  0002  EqInt        r2, r2, r3
+  .line 24
+  0003  Ret          r2
+.func 5 Main.TSubKey.GetHashCode params=1 regs=2
+  .local r0 Self
+  .local r1 Result
+  .line 28
+  0000  ObjGet       r1, r0, 0
+  .line 29
+  0001  Ret          r1
+.func 6 Keys.TKey.Equals params=2 regs=6
+  .local r0 Self
+  .local r1 Obj
+  .local r2 Result
+  .line 12
+  0000  Move         r4, r1
+  0001  IsClass      r4, ty64
+  0002  Move         r2, r4
+  0003  JmpIfFalse   r2, -> 0007
+  0004  Move         r4, r1
+  0005  IsClass      r4, ty65
+  0006  NotBool      r2, r4
+  0007  JmpIfFalse   r2, -> 000e
+  0008  Move         r4, r0
+  0009  AssignObj    r3, r1
+  000a  AsClass      r3, ty64
+  000b  Move         r5, r3
+  000c  Call         r4, f1
+  000d  Move         r2, r4
+  000e  Ret          r2
+.finally r3
+.func 7 Main.TSubKey.Equals params=2 regs=6
+  .local r0 Self
+  .local r1 Obj
+  .local r2 Result
+  .line 12
+  0000  Move         r4, r1
+  0001  IsClass      r4, ty65
+  0002  Move         r2, r4
+  0003  JmpIfFalse   r2, -> 000a
+  0004  Move         r4, r0
+  0005  AssignObj    r3, r1
+  0006  AsClass      r3, ty65
+  0007  Move         r5, r3
+  0008  Call         r4, f4
+  0009  Move         r2, r4
+  000a  Ret          r2
+.finally r3
+.func 8 Main.TBox<Integer>.Equals params=2 regs=6
+  .local r0 Self
+  .local r1 Obj
+  .local r2 Result
+  .line 17
+  0000  Move         r4, r1
+  0001  IsClass      r4, ty66
+  0002  Move         r2, r4
+  0003  JmpIfFalse   r2, -> 000a
+  0004  Move         r4, r0
+  0005  AssignObj    r3, r1
+  0006  AsClass      r3, ty66
+  0007  Move         r5, r3
+  0008  Call         r4, f10
+  0009  Move         r2, r4
+  000a  Ret          r2
+.finally r3
+.func 9 Main.TBox<Integer>.GetHashCode params=1 regs=2
+  .local r0 Self
+  .local r1 Result
+  .line 38
+  0000  LoadZero     r1
+  .line 39
+  0001  Ret          r1
+.func 10 Main.TBox<Integer>.Equal params=2 regs=3
+  .local r0 A
+  .local r1 B
+  .local r2 Result
+  .line 33
+  0000  LoadInt      r2, 1
+  .line 34
+  0001  Ret          r2

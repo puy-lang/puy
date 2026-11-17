@@ -1,0 +1,22 @@
+Integer: -1 1 0
+Int64: -1
+UInt64: 1 -1
+Char: -1
+Boolean: 1
+enum: -1 0
+subrange: 1
+Currency: -1
+string: -1 1 -1 0
+string code points: -1
+UTF8String: 1 -1
+Double:
+  0 -1 -1 -1 -1 -1 -1
+  1  0 -1 -1 -1 -1 -1
+  1  1  0  0 -1 -1 -1
+  1  1  0  0 -1 -1 -1
+  1  1  1  1  0 -1 -1
+  1  1  1  1  1  0 -1
+  1  1  1  1  1  1  0
+Single: 1 0 0
+record: -1 1 0
+class: 1 -1 0

@@ -1,0 +1,133 @@
+error[E0763]: conflicting types `Integer` and `Double` for the type argument `T` of `Max`
+   --> generic_inference_errors.pas:96:11
+    |
+ 96 |   WriteLn(Max(I, D));
+    |           ^^^^^^^^^
+    |
+    = note: write the type arguments, as in `Max<T>(…)`
+
+error[E0763]: conflicting types `Integer` and `Double` for the type argument `T` of `Sum`
+   --> generic_inference_errors.pas:97:11
+    |
+ 97 |   WriteLn(Sum([1, 2.5]));
+    |           ^^^^^^^^^^^^^
+    |
+    = note: write the type arguments, as in `Sum<T>(…)`
+
+error[E0763]: conflicting types `Int64` and `Integer` for the type argument `T` of `Max`
+   --> generic_inference_errors.pas:98:11
+    |
+ 98 |   WriteLn(Max(Limit, I));
+    |           ^^^^^^^^^^^^^
+    |
+    = note: write the type arguments, as in `Max<T>(…)`
+
+error[E0763]: cannot infer the type argument `T` of `Make`
+   --> generic_inference_errors.pas:99:11
+    |
+ 99 |   WriteLn(Make);
+    |           ^^^^
+    |
+    = note: write the type arguments, as in `Make<T>(…)`
+
+error[E0763]: cannot infer the type argument `V` of `Pair`
+    --> generic_inference_errors.pas:100:11
+     |
+ 100 |   WriteLn(Pair(1, nil));
+     |           ^^^^^^^^^^^^
+     |
+     = note: write the type arguments, as in `Pair<Integer, V>(…)`
+
+error[E0759]: `Integer` does not satisfy the constraint `class` of `T` in `Release`
+    --> generic_inference_errors.pas:101:3
+     |
+  34 | procedure Release<T: class>(const X: T);
+     |                   - type parameter declared here
+...
+ 101 |   Release(I);
+     |   ^^^^^^^^^^
+     |
+     = note: the type arguments were inferred from the arguments as `Release<Integer>`
+
+error[E0702]: type mismatch: expected `TFunc<Integer, Boolean>`, found `function(var Integer): Boolean`
+    --> generic_inference_errors.pas:102:16
+     |
+ 102 |   WriteLn(Test(ByRef, 1));
+     |                ^^^^^
+
+error[E0702]: type mismatch: expected `TArray<Integer>`, found `Integer` (argument 1, parameter `L`)
+    --> generic_inference_errors.pas:103:7
+     |
+ 103 |   Put(5, 3);
+     |       ^
+
+error[E0704]: function `ByRef` requires arguments
+    --> generic_inference_errors.pas:104:15
+     |
+  43 | function ByRef(var X: Integer): Boolean;
+     |          ----- declared here
+...
+ 104 |   WriteLn(Max(ByRef, 1));
+     |               ^^^^^
+
+error[E0735]: no overload of `Pick` matches these arguments
+    --> generic_inference_errors.pas:105:11
+     |
+  52 | function Pick<T>(const A: TArray<T>): Integer; overload;
+     |          ------- candidate
+...
+  57 | function Pick<T: class>(const A: T; const B: string): Integer; overload;
+     |          -------------- candidate
+...
+  62 | function Pick(const A: string): Integer; overload;
+     |          ---- candidate
+...
+ 105 |   WriteLn(Pick(nil));
+     |           ^^^^^^^^^
+     |
+     = note: the arguments have types `nil`
+     = note: cannot infer the type argument `T` of `Pick`
+
+error[E0735]: no overload of `Pick` matches these arguments
+    --> generic_inference_errors.pas:106:11
+     |
+  52 | function Pick<T>(const A: TArray<T>): Integer; overload;
+     |          ------- candidate
+...
+  57 | function Pick<T: class>(const A: T; const B: string): Integer; overload;
+     |          -------------- candidate
+...
+  62 | function Pick(const A: string): Integer; overload;
+     |          ---- candidate
+...
+ 106 |   WriteLn(Pick(I, 'a'));
+     |           ^^^^^^^^^^^^
+     |
+     = note: the arguments have types `Integer`, `Char`
+     = note: `Integer` does not satisfy the constraint `class` of `T` in `Pick`
+
+error[E0734]: ambiguous call to overloaded `Mix`
+    --> generic_inference_errors.pas:107:11
+     |
+  67 | function Mix(const A: Integer; const B: Int64): Integer; overload;
+     |          --- candidate
+...
+  72 | function Mix<T>(const A: Int64; const B: T): Integer; overload;
+     |          ------ candidate
+...
+ 107 |   WriteLn(Mix(I, I));
+     |           ^^^^^^^^^
+
+error[E0734]: ambiguous call to overloaded `Both`
+    --> generic_inference_errors.pas:108:11
+     |
+  77 | function Both<T>(const A: T; const B: Integer): Integer; overload;
+     |          ------- candidate
+...
+  82 | function Both<T>(const A: Integer; const B: T): Integer; overload;
+     |          ------- candidate
+...
+ 108 |   WriteLn(Both(1, 2));
+     |           ^^^^^^^^^^
+
+error: aborting due to 13 errors

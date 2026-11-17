@@ -1,0 +1,101 @@
+error[E0702]: `TShape` can never be `TStream`
+   --> class_cast_diag.pas:31:8
+    |
+ 31 |   B := S is TStream;
+    |        ^^^^^^^^^^^^
+
+error[E0702]: `TCircle` can never be `TStream`
+   --> class_cast_diag.pas:32:8
+    |
+ 32 |   T := C as TStream;
+    |        ^^^^^^^^^^^^
+
+error[E0702]: `TShape` can never be `TStream`
+   --> class_cast_diag.pas:33:8
+    |
+ 33 |   T := TStream(S);
+    |        ^^^^^^^^^^
+
+error[E0702]: `TShapeClass` can never be `TStreamClass`
+   --> class_cast_diag.pas:34:9
+    |
+ 34 |   KS := TStreamClass(K);
+    |         ^^^^^^^^^^^^^^^
+
+error[E0702]: `TStreamClass` can never be `TShapeClass`
+   --> class_cast_diag.pas:35:8
+    |
+ 35 |   K := TShapeClass(KS);
+    |        ^^^^^^^^^^^^^^^
+
+error[E0702]: type mismatch: expected an instance of a class or an interface, found `TShapeClass`
+   --> class_cast_diag.pas:36:8
+    |
+ 36 |   B := K is TShape;
+    |        ^
+    |
+    = note: check a class reference with `InheritsFrom`, and convert it with the name of a class reference type, as in `TShapeClass(C)`
+
+error[E0702]: type mismatch: expected an instance of a class or an interface, found `TShapeClass`
+   --> class_cast_diag.pas:37:8
+    |
+ 37 |   K := K as TCircle;
+    |        ^
+    |
+    = note: check a class reference with `InheritsFrom`, and convert it with the name of a class reference type, as in `TShapeClass(C)`
+
+error[E0702]: type mismatch: expected an instance of a class or an interface, found `Integer`
+   --> class_cast_diag.pas:38:8
+    |
+ 38 |   B := I is TShape;
+    |        ^
+
+error[E0702]: type mismatch: expected a class or an interface, found `Integer`
+   --> class_cast_diag.pas:39:13
+    |
+ 39 |   B := S is Integer;
+    |             ^^^^^^^
+
+error[E0702]: type mismatch: expected a class or an interface, found a value of type `TShapeClass`
+   --> class_cast_diag.pas:40:13
+    |
+ 40 |   B := S is K;
+    |             ^
+
+error[E0702]: type mismatch: expected a class or an interface, found `TCircleClass`
+   --> class_cast_diag.pas:41:13
+    |
+ 41 |   B := S is TCircleClass;
+    |             ^^^^^^^^^^^^
+
+error[E0702]: `TShape` can never be `Exception`
+   --> class_cast_diag.pas:43:8
+    |
+ 43 |   B := S is Exception;
+    |        ^^^^^^^^^^^^^^
+
+error[E0702]: type mismatch: expected `Integer`, found `TShapeClass`
+   --> class_cast_diag.pas:44:8
+    |
+ 44 |   I := Integer(K);
+    |        ^^^^^^^^^^
+
+error[E0702]: type mismatch: expected `TShapeClass`, found `Integer`
+   --> class_cast_diag.pas:45:8
+    |
+ 45 |   K := TShapeClass(I);
+    |        ^^^^^^^^^^^^^^
+
+error[E0702]: type mismatch: expected `TShapeClass`, found `TShape`
+   --> class_cast_diag.pas:46:8
+    |
+ 46 |   K := TShapeClass(S);
+    |        ^^^^^^^^^^^^^^
+
+error[E0702]: type mismatch: expected `TShape`, found `TShapeClass`
+   --> class_cast_diag.pas:47:8
+    |
+ 47 |   S := TShape(K);
+    |        ^^^^^^^^^
+
+error: aborting due to 16 errors

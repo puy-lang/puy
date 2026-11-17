@@ -1,0 +1,28 @@
+error[E0400]: expected `)`, found `deprecated`
+  --> hint_not_here.pas:7:11
+   |
+ 7 |   TE = (A deprecated, B);
+   |           ^^^^^^^^^^
+
+error[E0400]: expected `)`, found `deprecated`
+  --> hint_not_here.pas:9:24
+   |
+ 9 | procedure Q(X: Integer deprecated);
+   |                        ^^^^^^^^^^
+
+error[E0400]: expected `;`, found `deprecated`
+   --> hint_not_here.pas:14:22
+    |
+ 14 |   var V: Integer := 1 deprecated;
+    |                      ^
+    |                       ---------- found here
+    |
+    = fix: insert `;`
+
+error[E0700]: undeclared identifier `deprecated`
+   --> hint_not_here.pas:14:23
+    |
+ 14 |   var V: Integer := 1 deprecated;
+    |                       ^^^^^^^^^^
+
+error: aborting due to 4 errors

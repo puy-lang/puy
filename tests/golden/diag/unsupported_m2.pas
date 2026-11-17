@@ -11,7 +11,7 @@ var
 begin
   Z := Low(Integer) + SizeOf(1);
   for var E in S do WriteLn(E);
-  Z := I.ToString;
+  Z := I.ToHexString;
   WriteLn(Z);
   raise;
 end.

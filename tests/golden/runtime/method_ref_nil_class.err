@@ -1,0 +1,2 @@
+error: uncaught exception EAccessViolation: access to a nil reference
+  at MethodRefNilClass.<main> (method_ref_nil_class.pas:28)

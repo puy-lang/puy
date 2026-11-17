@@ -1,0 +1,83 @@
+error[E0767]: `[ValueEquality]` can only be applied to a class
+   --> value_equality_errors.pas:11:4
+    |
+ 11 |   [ValueEquality]
+    |    ^^^^^^^^^^^^^
+    |
+    = note: records are already compared field by field
+    = fix: remove `[ValueEquality]`
+
+error[E0767]: `[ValueEquality]` can only be applied to a class
+   --> value_equality_errors.pas:16:4
+    |
+ 16 |   [ValueEquality]
+    |    ^^^^^^^^^^^^^
+    |
+    = fix: remove `[ValueEquality]`
+
+error[E0767]: `[EqualityMember]` can only be applied to a field of a class with `[ValueEquality]`
+   --> value_equality_errors.pas:20:6
+    |
+ 20 |     [EqualityMember] A: Integer;
+    |      ^^^^^^^^^^^^^^
+    |
+    = fix: remove `[EqualityMember]`
+
+error[E0767]: `[EqualityMember]` can only be applied to a field of a class with `[ValueEquality]`
+   --> value_equality_errors.pas:26:6
+    |
+ 26 |     [EqualityMember] V: Integer;
+    |      ^^^^^^^^^^^^^^
+    |
+    = fix: remove `[EqualityMember]`
+
+error[E0767]: `[weak]` field `Parent` cannot be an equality member
+   --> value_equality_errors.pas:32:28
+    |
+ 32 |     [EqualityMember, weak] Parent: TItem;
+    |                            ^^^^^^
+
+error[E0767]: `[EqualityMember]` can only be applied to a field of a class with `[ValueEquality]`
+   --> value_equality_errors.pas:35:16
+    |
+ 35 |     class var [EqualityMember] Count: Integer;
+    |                ^^^^^^^^^^^^^^
+    |
+    = fix: remove `[EqualityMember]`
+
+error[E0767]: `[EqualityMember]` can only be applied to a field of a class with `[ValueEquality]`
+   --> value_equality_errors.pas:47:6
+    |
+ 47 |     [EqualityMember] W: Integer;
+    |      ^^^^^^^^^^^^^^
+    |
+    = fix: remove `[EqualityMember]`
+
+error[E0765]: `TOverriding` has `[ValueEquality]`, so `Equals` and `GetHashCode` are generated and cannot be overridden
+   --> value_equality_errors.pas:56:14
+    |
+ 52 |   [ValueEquality]
+    |    ------------- `[ValueEquality]` written here
+...
+ 56 |     function Equals(Obj: TObject): Boolean; override;
+    |              ^^^^^^
+
+error[E0765]: `[ValueEquality]` cannot be used with operator `Equal`
+   --> value_equality_errors.pas:64:20
+    |
+ 60 |   [ValueEquality]
+    |    ------------- `[ValueEquality]` written here
+...
+ 64 |     class operator Equal(const A, B: TWithEqual): Boolean;
+    |                    ^^^^^
+
+error[E0767]: `[ValueEquality]` can only be applied to a class
+   --> value_equality_errors.pas:69:4
+    |
+ 69 |   [ValueEquality]
+    |    ^^^^^^^^^^^^^
+    |
+    = note: records are already compared field by field
+    = fix: remove `[ValueEquality]`
+
+error: aborting due to 10 errors

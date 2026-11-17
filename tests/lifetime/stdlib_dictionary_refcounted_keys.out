@@ -1,0 +1,20 @@
+added, count 4
+removing k1
+  destroyed v1
+removed, key still held: k1
+  destroyed k1
+writing over the value of k2
+  destroyed v2
+extracting
+  extracted v2b
+  destroyed v2b
+  destroyed k2
+clearing
+  destroyed k3
+  destroyed v3
+  destroyed k4
+  destroyed v4
+freeing
+  destroyed k5
+  destroyed v5
+done

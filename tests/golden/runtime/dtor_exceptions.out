@@ -1,0 +1,25 @@
+BeforeDestruction before
+TMiddle.Destroy before
+TBase.Destroy before
+EStep: TMiddle.Destroy failed
+  EStep: BeforeDestruction failed
+after: access to a freed object
+BeforeDestruction leaf
+TLeaf.Destroy leaf
+TMiddle.Destroy leaf
+TBase.Destroy leaf
+EStep: TMiddle.Destroy failed
+  EStep: TLeaf.Destroy failed
+after: access to a freed object
+BeforeDestruction middle
+TLeaf.Destroy middle
+TMiddle.Destroy middle
+TBase.Destroy middle
+EStep: TMiddle.Destroy failed
+after: access to a freed object
+BeforeDestruction quiet
+TQuiet.Destroy quiet
+BeforeDestruction leaf
+TLeaf.Destroy leaf
+TMiddle.Destroy leaf
+TBase.Destroy leaf

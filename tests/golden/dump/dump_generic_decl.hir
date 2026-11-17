@@ -1,0 +1,103 @@
+program DumpGenericDecl
+.type TStack<T> = class(TObject)
+  .field 0 FItems: TArray<T>
+  .field 1 FCount: Integer
+  .method - Push
+  .method - Pop
+  .method - Peek virtual 6
+.type TPair<K, V> = record
+  .field 0 Key: K
+  .field 1 Value: V
+  .method - Clear
+.type TOwnedList<T: class, NotRefCounted> = class(TObject)
+  .method - Clear
+.routine - TStack<T>.Push(const Item: T)
+  .var v0 Self: TStack<T> self
+  .var v1 Item: T const param
+  if @29
+    cond
+      binary Boolean
+        objfield Integer FCount #1
+          self TStack<T>
+        = Boolean int:Integer
+          builtin Length Integer
+            objfield TArray<T> FItems #0
+              self TStack<T>
+    then
+      setlength @30
+        objfield TArray<T> FItems #0
+          self TStack<T>
+        binary Int64
+          objfield Integer FCount #1
+            self TStack<T>
+          * Integer int:Integer
+            const Integer 2
+          + Integer int:Integer
+            const Integer 4
+  assign @31 R+
+    index T
+      objfield TArray<T> FItems #0
+        self TStack<T>
+      objfield Int64 FCount #1
+        self TStack<T>
+    var v1 Item: T
+  inc @32 calc=Integer Q+R+
+    objfield Integer FCount #1
+      self TStack<T>
+.routine - TStack<T>.Pop(): T
+  .var v0 Self: TStack<T> self
+  .var v1 Result: T result
+  dec @37 calc=Integer Q+R+
+    objfield Integer FCount #1
+      self TStack<T>
+  assign @38 R+
+    var v1 Result
+    index T
+      objfield TArray<T> FItems #0
+        self TStack<T>
+      objfield Int64 FCount #1
+        self TStack<T>
+  assign @39 R+
+    index T
+      objfield TArray<T> FItems #0
+        self TStack<T>
+      objfield Int64 FCount #1
+        self TStack<T>
+    builtin Default T
+.routine - TStack<T>.Peek(): T
+  .var v0 Self: TStack<T> self
+  .var v1 Result: T result
+  .var v2 Last: T local
+  .var v3 Item: T for var
+  .var v4 -: TArray<T> hidden
+  .var v5 -: Integer hidden
+  assign @46 R+
+    var v2 Last
+    builtin Default T
+  for-in @47 coll=v4 idx=v5
+    var v3 Item
+    in
+      objfield TArray<T> FItems #0
+        self TStack<T>
+    body
+      assign @48 R+
+        var v2 Last
+        var v3 Item: T
+  exit @49
+    var v2 Last: T
+.routine - TPair<K, V>.Clear()
+  .var v0 Self: TPair<K, V> var self
+  assign @54 R+
+    field K Key #0
+      var v0 Self
+    builtin Default K
+  assign @55 R+
+    field V Value #1
+      var v0 Self
+    builtin Default V
+.routine - TOwnedList<T>.Clear()
+  .var v0 Self: TOwnedList<T> self
+.routine <main>
+  writeln @63
+    arg
+      const string "declared"

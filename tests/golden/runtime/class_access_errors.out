@@ -1,0 +1,10 @@
+read nil: EAccessViolation: access to a nil reference
+write nil: EAccessViolation: access to a nil reference
+Free nil: no exception
+Destroy nil: EAccessViolation: access to a nil reference
+TRUE TRUE
+read freed: EAccessViolation: access to a freed object
+Free twice: EAccessViolation: access to a freed object
+FALSE
+5
+write freed: EAccessViolation: access to a freed object

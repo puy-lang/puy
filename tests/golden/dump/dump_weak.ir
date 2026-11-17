@@ -1,0 +1,82 @@
+; puy ir 1
+.global
+  g0 TNode.Last: TNode
+  g1 Current: TNode
+  g2 N: TNode
+.func f0 DumpWeak.<main> params=0
+  .reg t0: TNode temp
+  .reg t1: TNode temp
+  .reg t2: TNode temp
+bb0:
+  .line 41
+  New          t0, DumpWeak.TNode
+  StoreGlobalRef t0, g2
+  .line 42
+  LoadGlobalRef t2, g2
+  Move         t1, t2
+  Call         -, f1(t1)
+  .line 43
+  RetVoid
+.finally t0, t2
+.func f1 DumpWeak.Link params=1
+  .reg v0 N: TNode param
+  .reg v1 L: TLink local
+  .reg v2 W: TNode local
+  .reg t0: TNode temp
+  .reg t1: TNode temp
+  .reg t2: TNode temp
+  .reg t3: TNode temp
+  .reg t4: TNode temp
+  .reg t5: TNode temp
+  .reg t6: TNode temp
+  .reg t7: TNode temp
+  .reg t8: string temp
+  .reg t9: Boolean temp
+  .reg t10: TNode temp
+  .reg t11: TNode temp
+  .reg t12: TNode temp
+  .reg t13: string temp
+bb0:
+  .line 28
+  Release      v1
+  .line 29
+  ObjGet       t0, v0, 1
+  ObjSet       v0, 0, t0
+  .line 30
+  Unique       v1, DumpWeak.TLink
+  FieldSet     v1, 0, v0
+  .line 31
+  StoreGlobal  v0, g0
+  .line 32
+  StoreGlobal  v0, g1
+  .line 33
+  LoadGlobal   t2, g1
+  LoadWeak     t1, t2
+  Move         v2, t1
+  .line 34
+  LoadWeak     t4, v2
+  ObjGet       t5, t4, 0
+  LoadWeak     t3, t5
+  FieldGet     t7, v1, 0
+  LoadWeak     t6, t7
+  JmpIfEqInt   t3, t6, bb2, bb1
+bb1:
+  .line 35
+  LoadGlobal   t11, g0
+  LoadWeak     t10, t11
+  Release      t12
+  EqInt        t9, t10, t12
+  NotBool      t9, t9
+  BoolToStr    t8, t9
+  LoadConst    t13, "\n"
+  ConcatStr    t8, t8, t13
+  CallHost     -, h0(t8)
+  .line 34
+  Jmp          bb3
+bb2:
+  .line 34
+  Jmp          bb3
+bb3:
+  .line 36
+  RetVoid
+.finally v1, t1, t3, t4, t6, t8, t10, t12, t13

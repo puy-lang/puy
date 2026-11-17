@@ -7,6 +7,8 @@
 
 mod recovery;
 
+use std::borrow::Cow;
+
 use rowan::{Checkpoint, GreenNodeBuilder};
 
 use crate::diagnostics::{Code, Diagnostic, DiagnosticSink, Fix, Severity, Stage, TextEdit};
@@ -15,6 +17,9 @@ use crate::lexer::{self, Token};
 use crate::source::{FileId, Span, TextRange, TextSize};
 use crate::syntax::{SyntaxKind, SyntaxNode};
 use SyntaxKind::*;
+
+/// The notes of E3401 `attributes are not allowed here` (`docs/spec/attributes.md` 8).
+pub(crate) const ATTRIBUTE_PLACES_NOTE: &str = "attributes can be written on types, fields, methods, properties, parameters, variables and top-level routines";
 
 /// Parser input.
 pub struct ParseInput<'a> {
@@ -38,7 +43,7 @@ pub fn parse(input: &ParseInput<'_>, sink: &mut DiagnosticSink) -> ParseOutput {
     let mut p = Parser {
         file: input.file,
         bytes: input.bytes,
-        tokens: input.tokens,
+        tokens: Cow::Borrowed(input.tokens),
         pos: 0,
         last_end: 0,
         builder: GreenNodeBuilder::new(),
@@ -50,10 +55,12 @@ pub fn parse(input: &ParseInput<'_>, sink: &mut DiagnosticSink) -> ParseOutput {
         closing_all: false,
         in_program_decls: false,
         routine_depth: 0,
+        class_depth: 0,
         routines_too_deep: false,
         bodyless: Vec::new(),
         last_was_hole: false,
         diag_found_at: Vec::new(),
+        attr_start: None,
     };
     if input.invalid_utf8 {
         p.parse_invalid_utf8_file();
@@ -131,7 +138,9 @@ fn dump_node(node: &SyntaxNode, indent: usize, out: &mut String) {
 struct Parser<'a> {
     file: FileId,
     bytes: &'a [u8],
-    tokens: &'a [Token],
+    /// The tokens; copied only when a `>=` closing type arguments is split
+    /// ([`Parser::split_ge`]).
+    tokens: Cow<'a, [Token]>,
     /// Index of the next token to read (may point at trivia).
     pos: usize,
     /// End of the last consumed (non-trivia) token.
@@ -150,6 +159,8 @@ struct Parser<'a> {
     in_program_decls: bool,
     /// Number of routine bodies currently being read (for the limit on nested routines).
     routine_depth: usize,
+    /// The depth of class bodies being read (nested types; E0413 past [`MAX_NESTING`]).
+    class_depth: usize,
     /// Skipped to the end of the file at the nested-routine limit (E0413).
     routines_too_deep: bool,
     /// `ROUTINE_DECL`s with neither a body nor `forward` (to decide the E0411 fix).
@@ -158,6 +169,9 @@ struct Parser<'a> {
     last_was_hole: bool,
     /// Start position of the current token when each diagnostic in `diags` was issued (used to suppress after E0203).
     diag_found_at: Vec<Option<TextSize>>,
+    /// Where the attributes read before a declaration start (`parse_leading_attributes`): the
+    /// declaration's node starts there, so the `ATTRIBUTE_LIST`s are its first children.
+    attr_start: Option<Checkpoint>,
 }
 
 struct BodylessDecl {
@@ -293,6 +307,50 @@ fn routine_directive_kind(lower: &str) -> Option<SyntaxKind> {
     })
 }
 
+/// Tokens that may follow the `>` closing type arguments in an expression
+/// (`docs/spec/grammar.md` 1.5): those that end an expression, and the binary operators that
+/// cannot start an expression (so they cannot start the right operand of a second comparison).
+fn follows_type_args(kind: SyntaxKind) -> bool {
+    matches!(
+        kind,
+        L_PAREN
+            | DOT
+            | R_PAREN
+            | R_BRACK
+            | SEMICOLON
+            | COMMA
+            | COLON
+            | ASSIGN
+            | EQ
+            | NE
+            | THEN_KW
+            | DO_KW
+            | OF_KW
+            | TO_KW
+            | DOWNTO_KW
+            | ELSE_KW
+            | END_KW
+            | UNTIL_KW
+            | EOF
+            | AND_KW
+            | OR_KW
+            | XOR_KW
+            | STAR
+            | SLASH
+            | DIV_KW
+            | MOD_KW
+            | SHL_KW
+            | SHR_KW
+            | IN_KW
+            | IS_KW
+            | AS_KW
+            | LT
+            | GT
+            | LE
+            | GE
+    )
+}
+
 fn binary_prec(kind: SyntaxKind) -> Option<u8> {
     Some(match kind {
         EQ | NE | LT | GT | LE | GE | IN_KW | IS_KW => 1,
@@ -394,6 +452,19 @@ impl<'a> Parser<'a> {
         if tok.kind != EOF {
             self.pos += 1;
         }
+    }
+
+    /// Splits the current `>=` into `>` and `=`, each keeping its own character's range: a `>`
+    /// closing type parameters or arguments directly followed by `=` (`docs/spec/generics.md`
+    /// 1.3).
+    fn split_ge(&mut self) {
+        let i = self.index_of_nth(0);
+        let ge = self.tokens[i];
+        debug_assert_eq!(ge.kind, GE);
+        let mid = ge.start() + 1;
+        let tokens = self.tokens.to_mut();
+        tokens[i] = Token::new(GT, ge.start(), mid);
+        tokens.insert(i + 1, Token::new(EQ, mid, ge.end()));
     }
 
     fn bump_eof(&mut self) {
@@ -878,30 +949,9 @@ impl<'a> Parser<'a> {
             self.supply_diag(Code::E(405), "expected an identifier".into(), None);
         }
         // Hint directives of the unit (`platform`, `deprecated`, `experimental`, `library`)
-        loop {
-            let kind = if self.at(LIBRARY_KW) {
-                Some(LIBRARY_KW)
-            } else if self.at(IDENT) {
-                match self.current_lower().as_str() {
-                    "platform" => Some(PLATFORM_KW),
-                    "deprecated" => Some(DEPRECATED_KW),
-                    "experimental" => Some(EXPERIMENTAL_KW),
-                    _ => None,
-                }
-            } else {
-                None
-            };
-            let Some(kind) = kind else { break };
-            self.start_node(ROUTINE_DIRECTIVE);
-            if kind == LIBRARY_KW {
-                self.bump();
-            } else {
-                self.bump_as(kind);
-            }
-            if kind == DEPRECATED_KW && self.at(STRING_LIT) {
-                self.bump();
-            }
-            self.finish_node();
+        let mut seen = Vec::new();
+        while let Some(kind) = self.hint_kind_at(0) {
+            self.hint_directive(ROUTINE_DIRECTIVE, kind, &mut seen);
         }
         self.expect(SEMICOLON, &[INTERFACE_KW, IMPLEMENTATION_KW], &[]);
         self.finish_node(); // UNIT_HEADER
@@ -1029,6 +1079,11 @@ impl<'a> Parser<'a> {
                 RESOURCESTRING_KW => self.parse_resourcestring_section(),
                 USES_KW => self.parse_uses_clause(),
                 PROCEDURE_KW | FUNCTION_KW => self.parse_routine_heading_decl(),
+                L_BRACK if self.at_attributed_routine() => {
+                    self.parse_leading_attributes();
+                    self.parse_routine_heading_decl();
+                }
+                L_BRACK => self.attributes_not_allowed_here(),
                 LABEL_KW | THREADVAR_KW | EXPORTS_KW => self.skip_unsupported_section(),
                 IMPLEMENTATION_KW | INITIALIZATION_KW | FINALIZATION_KW | END_KW | DOT | EOF => {
                     break;
@@ -1105,8 +1160,17 @@ impl<'a> Parser<'a> {
                 }
                 CONST_KW => self.parse_const_section(),
                 VAR_KW if self.script_var_is_section() => self.parse_var_section(),
-                PROCEDURE_KW | FUNCTION_KW => self.parse_routine_decl(true),
-                TYPE_KW => self.parse_type_section(),
+                // The body of a constructor or destructor (`docs/spec/objects.md` chapter 1)
+                PROCEDURE_KW | FUNCTION_KW | CONSTRUCTOR_KW | DESTRUCTOR_KW => {
+                    self.parse_routine_decl(true)
+                }
+                // The body of a class method (`class function TFoo.Make: TFoo;`)
+                CLASS_KW if self.at_class_routine() => self.parse_routine_decl(true),
+                L_BRACK if self.at_attributed_routine() => {
+                    self.parse_leading_attributes();
+                    self.parse_routine_decl(true);
+                }
+                TYPE_KW => self.parse_type_section_in(true),
                 RESOURCESTRING_KW => self.parse_resourcestring_section(),
                 LABEL_KW | THREADVAR_KW | EXPORTS_KW => self.skip_unsupported_section(),
                 _ => {
@@ -1141,16 +1205,18 @@ impl<'a> Parser<'a> {
 
     /// Whether a `var` at the top level of a script is a `VarSection` (1.1).
     fn script_var_is_section(&self) -> bool {
-        // var IDENT := ... / var IDENT : TypeRef := ... / var IDENT ; is an InlineVarDecl
-        if self.nth(1) != IDENT {
+        // var IDENT := ... / var IDENT : TypeRef := ... / var IDENT ; is an InlineVarDecl (after
+        // the attributes, if any)
+        let k = self.attributes_end(1);
+        if self.nth(k) != IDENT {
             return true;
         }
-        match self.nth(2) {
+        match self.nth(k + 1) {
             ASSIGN => false,
             SEMICOLON => false,
             COLON => {
                 // Whether `:=` appears before `;`
-                let mut i = 3;
+                let mut i = k + 2;
                 loop {
                     match self.nth(i) {
                         ASSIGN => return false,
@@ -1266,9 +1332,29 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_qualified_name(&mut self) {
+        self.parse_qualified_name_in(None);
+    }
+
+    /// `GenericName = IDENT [TypeParams] {"." IDENT [TypeParams]}`: the name in a routine or
+    /// method heading (`docs/spec/generics.md` 1.2). `ends` are the tokens ending the heading.
+    fn parse_generic_name(&mut self, ends: &[SyntaxKind]) {
+        self.parse_qualified_name_in(Some(ends));
+    }
+
+    /// A `QualifiedName`; with `generic`, type parameters may follow each part (the tokens
+    /// ending the declaration, for a missing `>`).
+    fn parse_qualified_name_in(&mut self, generic: Option<&[SyntaxKind]>) {
         self.start_node(QUALIFIED_NAME);
         self.bump(); // IDENT
-        while self.at(DOT) && self.nth(1) == IDENT {
+        loop {
+            if let Some(ends) = generic
+                && self.at(LT)
+            {
+                self.parse_type_params(ends);
+            }
+            if !(self.at(DOT) && self.nth(1) == IDENT) {
+                break;
+            }
             self.bump();
             self.bump();
         }
@@ -1283,6 +1369,173 @@ impl<'a> Parser<'a> {
         self.finish_node();
     }
 
+    /// The name of a `class operator`: `In` (a reserved word) is read as an identifier there,
+    /// also after the type's name in an implementation heading (`docs/spec/objects.md` 11.2).
+    fn parse_operator_name(&mut self) {
+        self.start_node(QUALIFIED_NAME);
+        self.bump_name_or_in();
+        loop {
+            // `class operator TVec<T>.Add(…)` (`docs/spec/generics.md` 1.2)
+            if self.at(LT) {
+                self.parse_type_params(&[L_PAREN, COLON, SEMICOLON]);
+            }
+            if !(self.at(DOT) && matches!(self.nth(1), IDENT | IN_KW)) {
+                break;
+            }
+            self.bump();
+            self.bump_name_or_in();
+        }
+        self.finish_node();
+    }
+
+    /// `TypeParams = "<" TypeParamGroup {";" TypeParamGroup} ">"` (`docs/spec/generics.md` 1.1,
+    /// 1.6), at `<`. `ends` are the tokens ending the declaration, where a missing `>` is
+    /// supplied.
+    fn parse_type_params(&mut self, ends: &[SyntaxKind]) {
+        self.start_node(TYPE_PARAMS);
+        self.bump(); // <
+        loop {
+            self.parse_type_param_group(ends);
+            // `;` separates the groups when a type parameter's name follows it
+            if self.at(SEMICOLON)
+                && self.nth(1) == IDENT
+                && matches!(self.nth(2), COMMA | COLON | SEMICOLON | GT | GE)
+            {
+                self.bump();
+                continue;
+            }
+            break;
+        }
+        self.expect_closing_gt(ends);
+        self.finish_node();
+    }
+
+    /// `TypeParamGroup = IdentList [":" Constraint {"," Constraint}]`.
+    fn parse_type_param_group(&mut self, ends: &[SyntaxKind]) {
+        self.start_node(TYPE_PARAM_GROUP);
+        if self.at(IDENT) {
+            self.parse_ident_list_plain();
+        } else {
+            self.supply_diag(Code::E(400), "expected a type parameter name".into(), None);
+            self.skip_in_type_params(ends);
+        }
+        if self.at(COLON) {
+            self.bump();
+            self.parse_constraint(ends);
+            while self.at(COMMA) {
+                self.bump();
+                self.parse_constraint(ends);
+            }
+        }
+        self.finish_node();
+    }
+
+    /// `Constraint = "class" | "record" | "constructor" | TypeRef`. Anything else is E0400,
+    /// skipped to the next `,` / `;` / `>` (`docs/spec/generics.md` 1.6).
+    fn parse_constraint(&mut self, ends: &[SyntaxKind]) {
+        match self.current() {
+            CLASS_KW | RECORD_KW | CONSTRUCTOR_KW => {
+                self.start_node(CONSTRAINT);
+                self.bump();
+                self.finish_node();
+            }
+            IDENT => {
+                self.start_node(CONSTRAINT);
+                self.parse_type_ref(&[COMMA, SEMICOLON, GT]);
+                self.finish_node();
+            }
+            _ => {
+                self.supply_diag(Code::E(400), "expected a constraint".into(), None);
+                self.skip_in_type_params(ends);
+            }
+        }
+    }
+
+    /// Skips to the next `,` / `;` / `:` / `>` of the type parameters, the end of the
+    /// declaration or a synchronizing token (an `ERROR` node).
+    fn skip_in_type_params(&mut self, ends: &[SyntaxKind]) {
+        let stops = |c: SyntaxKind| {
+            matches!(c, COMMA | SEMICOLON | COLON | GT | GE) || ends.contains(&c) || is_sync(c)
+        };
+        if !stops(self.current()) {
+            self.start_node(ERROR_NODE);
+            while !stops(self.current()) {
+                self.bump();
+            }
+            self.finish_node();
+        }
+    }
+
+    /// The `>` closing type parameters or type arguments. A `>=` there is read as `>` and `=`
+    /// (`const C: TArray<Integer>= nil;`; `docs/spec/generics.md` 1.3). A missing `>` is
+    /// supplied before the end of the declaration (`ends`) or a synchronizing token (1.6).
+    fn expect_closing_gt(&mut self, ends: &[SyntaxKind]) -> bool {
+        if self.at(GE) {
+            self.split_ge();
+        }
+        self.expect(GT, ends, &[])
+    }
+
+    /// Whether the `n`-th token is a `<` whose matching `>` is followed by `=` (or is a `>=`): the
+    /// type parameters of a generic type's declaration (`TPair<K, V> =`; `docs/spec/generics.md`
+    /// 1.1), which continue a `type` section.
+    fn type_params_then_eq(&self, n: usize) -> bool {
+        if self.nth(n) != LT {
+            return false;
+        }
+        let mut depth = 0i32;
+        let mut k = n;
+        loop {
+            match self.nth(k) {
+                LT => depth += 1,
+                GT => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return self.nth(k + 1) == EQ;
+                    }
+                }
+                GE => return depth == 1,
+                IDENT | COMMA | SEMICOLON | COLON | DOT | CLASS_KW | RECORD_KW | CONSTRUCTOR_KW
+                | STRING_KW => {}
+                _ => return false,
+            }
+            k += 1;
+        }
+    }
+
+    /// Whether the name at the current `IDENT` of a heading is qualified (`TFoo.Bar`,
+    /// `TFoo<T>.Bar`): a `.` follows the name, after the type parameters if any.
+    fn heading_name_is_qualified(&self) -> bool {
+        if self.nth(1) != LT {
+            return self.nth(1) == DOT;
+        }
+        let mut depth = 0i32;
+        let mut k = 1;
+        loop {
+            match self.nth(k) {
+                LT => depth += 1,
+                GT | GE => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return self.nth(k + 1) == DOT;
+                    }
+                }
+                IDENT | COMMA | SEMICOLON | COLON | DOT | CLASS_KW | RECORD_KW | CONSTRUCTOR_KW
+                | STRING_KW => {}
+                _ => return false,
+            }
+            k += 1;
+        }
+    }
+
+    fn bump_name_or_in(&mut self) {
+        if self.at(IN_KW) {
+            self.bump_as(IDENT);
+        } else {
+            self.bump();
+        }
+    }
+
     // ---- Declarations ----
 
     fn parse_decl_sections(&mut self) {
@@ -1290,7 +1543,18 @@ impl<'a> Parser<'a> {
             match self.current() {
                 CONST_KW => self.parse_const_section(),
                 VAR_KW => self.parse_var_section(),
-                PROCEDURE_KW | FUNCTION_KW => self.parse_routine_decl(false),
+                PROCEDURE_KW | FUNCTION_KW | CONSTRUCTOR_KW | DESTRUCTOR_KW => {
+                    self.parse_routine_decl(false)
+                }
+                // The body of a class method (`docs/spec/objects.md` chapter 1)
+                CLASS_KW if self.at_class_routine() => self.parse_routine_decl(false),
+                L_BRACK if self.at_attributed_routine() => {
+                    self.parse_leading_attributes();
+                    self.parse_routine_decl(false);
+                }
+                // Attributes before anything else at the start of an item (E3401;
+                // `docs/spec/attributes.md` 1.3)
+                L_BRACK => self.attributes_not_allowed_here(),
                 USES_KW => self.parse_uses_clause(),
                 TYPE_KW => self.parse_type_section(),
                 RESOURCESTRING_KW => self.parse_resourcestring_section(),
@@ -1327,8 +1591,11 @@ impl<'a> Parser<'a> {
         let resource = kind == RESOURCESTRING_SECTION;
         let mut first = true;
         loop {
-            if (self.at(IDENT) && (first || matches!(self.nth(1), COLON | EQ)))
-                || matches!(self.current(), COLON | EQ)
+            // Attributes before a declaration are skipped to decide whether one follows; they are
+            // read into the declaration and refused by the analysis (`docs/spec/attributes.md` 1.3)
+            let k = self.attributes_end(0);
+            if (self.nth(k) == IDENT && (first || matches!(self.nth(k + 1), COLON | EQ)))
+                || matches!(self.nth(k), COLON | EQ)
             {
                 // A declaration with no identifier starting with `:` / `=` (`const = 1;`) reports E0405 and reads on
                 self.parse_const_decl(resource);
@@ -1344,8 +1611,9 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_const_decl(&mut self, resource: bool) {
+        self.parse_leading_attributes();
         let after_lex_error = self.pending_has_lex_error();
-        self.start_node(CONST_DECL);
+        self.start_decl(CONST_DECL);
         if self.at(IDENT) {
             self.bump();
         } else if !after_lex_error {
@@ -1367,6 +1635,7 @@ impl<'a> Parser<'a> {
         {
             self.parse_init_value(typed);
         }
+        self.hint_directives();
         self.expect(SEMICOLON, &[IDENT, BEGIN_KW], &[]);
         self.finish_node();
     }
@@ -1485,8 +1754,11 @@ impl<'a> Parser<'a> {
         self.bump(); // var
         let mut first = true;
         loop {
-            if (self.at(IDENT) && (first || matches!(self.nth(1), COMMA | COLON)))
-                || matches!(self.current(), COLON | COMMA)
+            // Attributes before a declaration are skipped to decide whether one follows
+            // (`docs/spec/attributes.md` 1.3)
+            let k = self.attributes_end(0);
+            if (self.nth(k) == IDENT && (first || matches!(self.nth(k + 1), COMMA | COLON)))
+                || matches!(self.nth(k), COLON | COMMA)
             {
                 // A declaration with no identifier starting with `:` / `,` (`var : Integer;`) reports E0405 and reads on
                 self.parse_var_decl();
@@ -1504,7 +1776,8 @@ impl<'a> Parser<'a> {
     fn parse_var_decl(&mut self) {
         // When supplying an identifier right after a lexical `ERROR` token (`éa: Integer;`), no diagnostic is issued (chapter 3)
         let after_lex_error = self.pending_has_lex_error();
-        self.start_node(VAR_DECL);
+        self.parse_leading_attributes();
+        self.start_decl(VAR_DECL);
         let mut count = 0;
         self.start_node(IDENT_LIST);
         if self.at(IDENT) {
@@ -1558,6 +1831,7 @@ impl<'a> Parser<'a> {
             .with_note("use an explicit conversion function instead");
             self.push_diag(d);
         }
+        self.hint_directives();
         self.expect(SEMICOLON, &[IDENT, BEGIN_KW], &[]);
         self.finish_node();
     }
@@ -1573,6 +1847,26 @@ impl<'a> Parser<'a> {
         };
         let anonymous =
             matches!(cur, RECORD_KW | ARRAY_KW | PACKED_KW | SET_KW) || ordinal.is_some();
+        // A procedural, method reference or anonymous method type (`docs/spec/objects.md` 9.1)
+        let reference = self.at_ident("reference") && self.nth(1) == TO_KW;
+        if matches!(cur, PROCEDURE_KW | FUNCTION_KW) || reference {
+            if ctx == TypeCtx::Decl {
+                return self.parse_proc_or_ref_type(stop);
+            }
+            let tok = self.current_tok();
+            let what = match ctx {
+                TypeCtx::Param => "a parameter type must be a type name",
+                TypeCtx::Return => "a return type must be a type name",
+                _ => "expected a type name",
+            };
+            self.error_at(Code::E(404), what, tok.range)
+                .notes
+                .push("declare the type in a `type` section and use its name".into());
+            self.start_node(ERROR_NODE);
+            self.parse_proc_or_ref_type(stop);
+            self.finish_node();
+            return;
+        }
         match ctx {
             TypeCtx::Decl if cur == SET_KW => return self.parse_set_type(stop),
             TypeCtx::Decl if ordinal == Some(ENUM_TYPE) => return self.parse_enum_type(),
@@ -1583,11 +1877,11 @@ impl<'a> Parser<'a> {
             TypeCtx::Param
                 if cur == ARRAY_KW && self.nth(1) == OF_KW && self.nth(2) == CONST_KW =>
             {
-                // `array of const` declared by the user (M3; `docs/spec/semantics.md` 5.3)
+                // `array of const` declared by the user (M5, with `TValue`; `docs/spec/semantics.md` 5.3)
                 let tok = self.current_tok();
                 self.error_at(
                     Code::E(3200),
-                    "`array of const` parameters are not supported yet (planned for M3)",
+                    "`array of const` parameters are not supported yet (planned for M5)",
                     tok.range,
                 );
                 self.start_node(ERROR_NODE);
@@ -1601,7 +1895,9 @@ impl<'a> Parser<'a> {
                 // An open array parameter (`docs/spec/types.md` 2.4)
                 return self.parse_structured_type(stop);
             }
-            TypeCtx::Param | TypeCtx::Return if anonymous => {
+            TypeCtx::Param | TypeCtx::Return
+                if anonymous || matches!(cur, CLASS_KW | INTERFACE_KW) =>
+            {
                 let tok = self.current_tok();
                 let what = if ctx == TypeCtx::Param {
                     "a parameter type must be a type name"
@@ -1611,7 +1907,10 @@ impl<'a> Parser<'a> {
                 self.error_at(Code::E(404), what, tok.range)
                     .notes
                     .push("declare the type in a `type` section and use its name".into());
-                return self.skip_type(stop);
+                if anonymous {
+                    return self.skip_type(stop);
+                }
+                return self.skip_anonymous_class(stop);
             }
             _ => {}
         }
@@ -1683,6 +1982,10 @@ impl<'a> Parser<'a> {
         self.start_node(ENUM_TYPE);
         self.bump(); // (
         loop {
+            if self.at(L_BRACK) {
+                // `docs/spec/attributes.md` 1.2
+                self.attributes_not_allowed_here();
+            }
             if self.at(IDENT) {
                 self.start_node(ENUM_VALUE);
                 self.bump();
@@ -1834,26 +2137,49 @@ impl<'a> Parser<'a> {
         self.push_diag(d);
     }
 
-    /// `"record" {FieldDecl} "end"`.
+    /// `"record" {ClassModifier} ["(" TypeRef {"," TypeRef} ")"] {FieldDecl | ClassMember} "end"`
+    /// (`docs/spec/objects.md` chapter 6). The members are children of `RECORD_TYPE`; the
+    /// modifiers and the parents are read so that the semantic analysis can reject them (E0744).
     fn parse_record_body(&mut self, stop: &[SyntaxKind]) {
         let record = self.current_tok();
         self.bump(); // record
         self.open_blocks.push((RECORD_KW, record.range));
+        // `record abstract` / `record sealed` (E0744), unless the word is a field name
+        loop {
+            let kind = match self.current_lower().as_str() {
+                "abstract" if self.at(IDENT) => ABSTRACT_KW,
+                "sealed" if self.at(IDENT) => SEALED_KW,
+                _ => break,
+            };
+            if matches!(self.nth(1), COLON | COMMA) {
+                break;
+            }
+            self.bump_as(kind);
+        }
+        if self.at(L_PAREN) {
+            // `record(TBase)` (E0744)
+            self.start_node(CLASS_PARENTS);
+            self.bump(); // (
+            loop {
+                self.parse_type_ref(&[R_PAREN, COMMA, SEMICOLON]);
+                if self.at(COMMA) {
+                    self.bump();
+                    continue;
+                }
+                break;
+            }
+            self.expect(R_PAREN, &[SEMICOLON, END_KW, IDENT], &[]);
+            self.finish_node();
+        }
         loop {
             match self.current() {
                 END_KW => {
                     self.bump();
                     break;
                 }
-                IDENT
-                    if matches!(
-                        self.current_lower().as_str(),
-                        "private" | "protected" | "public" | "published" | "strict"
-                    ) && !matches!(self.nth(1), COLON | COMMA) =>
-                {
-                    self.skip_record_members()
-                }
+                IDENT if self.at_visibility() => self.parse_visibility(),
                 IDENT => self.parse_field_decl(),
+                L_BRACK => self.parse_attributed_member(),
                 CASE_KW => {
                     // A variant part (E3005): up to the `end` of the record
                     let tok = self.current_tok();
@@ -1878,13 +2204,43 @@ impl<'a> Parser<'a> {
                     }
                     self.finish_node();
                 }
-                PROCEDURE_KW | FUNCTION_KW | PROPERTY_KW | CONSTRUCTOR_KW | DESTRUCTOR_KW
-                | CLASS_KW | CONST_KW | VAR_KW | TYPE_KW => self.skip_record_members(),
+                VAR_KW => self.parse_class_var_section(false),
+                CONST_KW => self.parse_const_section(),
+                TYPE_KW => self.parse_type_section(),
+                // Read as in a class, so that the analysis can say a record implements no
+                // interface (`docs/spec/objects.md` 7.8)
+                PROCEDURE_KW | FUNCTION_KW if self.at_method_resolution() => {
+                    self.parse_method_resolution()
+                }
+                PROCEDURE_KW | FUNCTION_KW | CONSTRUCTOR_KW | DESTRUCTOR_KW => {
+                    self.parse_method_decl()
+                }
+                PROPERTY_KW => self.parse_property_decl(),
+                CLASS_KW => match self.nth(1) {
+                    VAR_KW => self.parse_class_var_section(true),
+                    PROPERTY_KW => self.parse_property_decl(),
+                    PROCEDURE_KW | FUNCTION_KW | CONSTRUCTOR_KW | DESTRUCTOR_KW => {
+                        self.parse_method_decl()
+                    }
+                    IDENT if self.nth_lower(1) == "operator" => self.parse_method_decl(),
+                    _ => {
+                        let tok = self.current_tok();
+                        self.bump_error_node();
+                        let next = self.current_tok();
+                        if !self.pending_has_lex_error() {
+                            let msg = format!(
+                                "expected `procedure`, `function` or `var` after `class`, found {}",
+                                self.found_text(next)
+                            );
+                            self.error_at(Code::E(400), msg, tok.range);
+                        }
+                    }
+                },
                 SEMICOLON => {
                     // An empty field declaration (`;;`)
                     self.bump();
                 }
-                c if c == EOF || stop.contains(&c) || is_sync(c) => {
+                c if c == EOF || stop.contains(&c) || is_sync(c) || c == BEGIN_KW => {
                     // Unclosed record: supply `end`
                     self.supply_diag(
                         Code::E(400),
@@ -1911,32 +2267,10 @@ impl<'a> Parser<'a> {
         self.open_blocks.pop();
     }
 
-    /// Methods, properties and visibility sections in a record (M3; E3200): skips up to the `end`
-    /// of the record, keeping nested `begin` / `case` / `record` / `try` balanced.
-    fn skip_record_members(&mut self) {
-        let tok = self.current_tok();
-        self.error_at(
-            Code::E(3200),
-            "methods and visibility sections in records are not supported yet (planned for M3)",
-            tok.range,
-        );
-        self.start_node(ERROR_NODE);
-        let mut depth = 0i32;
-        while !self.at_eof() {
-            match self.current() {
-                BEGIN_KW | CASE_KW | RECORD_KW | TRY_KW => depth += 1,
-                END_KW if depth > 0 => depth -= 1,
-                END_KW => break,
-                _ => {}
-            }
-            self.bump();
-        }
-        self.finish_node();
-    }
-
     /// `FieldDecl = IdentList ":" TypeSpec [";"]` (the last `;` before `end` may be omitted).
     fn parse_field_decl(&mut self) {
-        self.start_node(FIELD_DECL);
+        self.parse_leading_attributes();
+        self.start_decl(FIELD_DECL);
         self.start_node(IDENT_LIST);
         self.bump();
         while self.at(COMMA) {
@@ -1959,6 +2293,7 @@ impl<'a> Parser<'a> {
         ) {
             self.parse_type_spec(&[SEMICOLON, END_KW], TypeCtx::Decl);
         }
+        self.hint_directives();
         if !self.at(END_KW) {
             self.expect(SEMICOLON, &[IDENT, END_KW, CASE_KW], &[]);
         }
@@ -1998,11 +2333,22 @@ impl<'a> Parser<'a> {
 
     /// `TypeSection = "type" TypeDecl {TypeDecl}`.
     fn parse_type_section(&mut self) {
+        self.parse_type_section_in(false);
+    }
+
+    /// A `type` section. At the top level of a script a name followed by `<` continues the
+    /// section only when its `>` is followed by `=`, as a statement may start with a name with
+    /// type arguments (`docs/spec/generics.md` 1.1, 1.4).
+    fn parse_type_section_in(&mut self, in_script: bool) {
         self.start_node(TYPE_SECTION);
         self.bump(); // type
         let mut first = true;
         loop {
-            if (self.at(IDENT) && (first || self.nth(1) == EQ)) || self.at(EQ) {
+            let k = self.attributes_end(0);
+            let generic = self.nth(k + 1) == LT && (!in_script || self.type_params_then_eq(k + 1));
+            if (self.nth(k) == IDENT && (first || self.nth(k + 1) == EQ || generic))
+                || self.nth(k) == EQ
+            {
                 self.parse_type_decl();
             } else if first {
                 self.supply_diag(Code::E(405), "expected an identifier".into(), None);
@@ -2017,65 +2363,966 @@ impl<'a> Parser<'a> {
 
     /// `TypeDecl = IDENT "=" TypeDef ";"`.
     fn parse_type_decl(&mut self) {
-        self.start_node(TYPE_DECL);
+        self.parse_leading_attributes();
+        self.start_decl(TYPE_DECL);
         if self.at(IDENT) {
             self.bump();
+            if self.at(LT) {
+                // A generic type (`docs/spec/generics.md` 1.1)
+                self.parse_type_params(&[EQ]);
+            }
         } else {
             self.supply_diag(Code::E(405), "expected an identifier".into(), None);
         }
         self.expect(EQ, &[IDENT, STRING_KW, RECORD_KW, ARRAY_KW, PACKED_KW], &[]);
         if self.at(TYPE_KW) {
-            // `type X = type Y` (a distinct type; decided in M4)
-            let tok = self.current_tok();
-            self.error_at(
-                Code::E(3200),
-                "distinct types (`type X = type Y`) are not supported yet (planned for M4)",
-                tok.range,
-            );
-            self.start_node(ERROR_NODE);
+            // `type X = type Y`: a distinct type (`docs/spec/types.md` 1.3)
+            self.start_node(DISTINCT_TYPE);
             self.bump();
-            self.finish_node();
             self.parse_type_ref(&[SEMICOLON]);
-        } else if self.at_exception_class() {
+            self.finish_node();
+        } else if self.at_helper() {
+            self.parse_helper_type();
+        } else if self.at(CLASS_KW) && self.nth(1) == OF_KW {
+            self.parse_class_ref_type();
+        } else if self.at_class_type() {
             self.parse_class_type();
+        } else if self.at(INTERFACE_KW) {
+            self.parse_interface_type();
         } else {
             self.parse_type_spec(&[SEMICOLON], TypeCtx::Decl);
         }
+        self.hint_directives();
         self.expect(SEMICOLON, &[IDENT, BEGIN_KW], &[]);
         self.finish_node();
     }
 
-    /// Whether the type definition is an exception class: `class "(" TypeRef ")" ["end"] ";"`
-    /// with a (qualified) name as the parent (`docs/spec/exceptions.md` chapter 3). Other `class`
-    /// forms are E3200 (M3).
-    fn at_exception_class(&self) -> bool {
-        if !self.at(CLASS_KW) || self.nth(1) != L_PAREN || !matches!(self.nth(2), IDENT | STRING_KW)
-        {
-            return false;
+    /// Whether the type definition is a class type this parser reads (`docs/spec/objects.md`
+    /// chapter 1): `class` not followed by `helper` (10.1) or `of` (a class reference type).
+    fn at_class_type(&self) -> bool {
+        self.at(CLASS_KW) && self.nth(1) != OF_KW && !self.at_class_helper()
+    }
+
+    /// Whether the current token starts `class helper` (`docs/spec/objects.md` 10.1).
+    fn at_class_helper(&self) -> bool {
+        self.at(CLASS_KW) && self.nth(1) == IDENT && self.nth_lower(1) == "helper"
+    }
+
+    /// Whether the type definition is a helper (`docs/spec/objects.md` 10.1): `class` or `record`,
+    /// then `helper`, then `for` or `(` (after `record`, `helper` followed by `:` or `,` is a field).
+    fn at_helper(&self) -> bool {
+        matches!(self.current(), CLASS_KW | RECORD_KW)
+            && self.nth(1) == IDENT
+            && self.nth_lower(1) == "helper"
+            && matches!(self.nth(2), FOR_KW | L_PAREN)
+    }
+
+    /// `HelperType = ("class" | "record") "helper" ["(" TypeRef ")"] "for" TypeRef [HelperBody]
+    /// "end"` (`docs/spec/objects.md` 10.1). There is no forward declaration: a `;` after the
+    /// type is E0400 (expected `end`).
+    fn parse_helper_type(&mut self) {
+        self.start_node(HELPER_TYPE);
+        let tok = self.current_tok();
+        self.bump(); // class / record
+        self.bump_as(HELPER_KW);
+        if self.at(L_PAREN) {
+            self.start_node(CLASS_PARENTS);
+            self.bump(); // (
+            self.parse_type_ref(&[R_PAREN, FOR_KW, SEMICOLON]);
+            self.expect(R_PAREN, &[FOR_KW, SEMICOLON, END_KW], &[]);
+            self.finish_node();
         }
-        let mut k = 3;
-        while self.nth(k) == DOT && self.nth(k + 1) == IDENT {
-            k += 2;
+        if self.expect(FOR_KW, &[IDENT, STRING_KW, SEMICOLON, END_KW], &[]) {
+            self.parse_type_ref(&[SEMICOLON, END_KW]);
         }
-        if self.nth(k) != R_PAREN {
-            return false;
+        if self.at(SEMICOLON) {
+            // `class helper for TFoo;`: no forward declaration
+            self.expect(END_KW, &[], &[]);
+            self.finish_node();
+            return;
         }
-        match self.nth(k + 1) {
-            SEMICOLON => true,
-            END_KW => self.nth(k + 2) == SEMICOLON,
-            _ => false,
+        if !self.enter_type_body(tok) {
+            self.finish_node();
+            return;
+        }
+        self.open_blocks.push((tok.kind, tok.range));
+        self.parse_class_body(CLASS_BODY);
+        self.open_blocks.pop();
+        self.class_depth -= 1;
+        self.finish_node();
+    }
+
+    /// Skips a `class` / `interface` type written where a type name is expected (E0404): up to
+    /// its `end` when it has a body, otherwise up to the end of the declaration (`;`, `)` or a
+    /// token of `stop` at the same parenthesis depth), as in `class of TFoo` or `class(TFoo)`.
+    fn skip_anonymous_class(&mut self, stop: &[SyntaxKind]) {
+        let mut k = 1;
+        if self.nth(k) == L_PAREN {
+            let mut depth = 0i32;
+            loop {
+                match self.nth(k) {
+                    L_PAREN => depth += 1,
+                    R_PAREN => depth -= 1,
+                    EOF | SEMICOLON | END_KW => break,
+                    _ => {}
+                }
+                k += 1;
+                if depth == 0 || k > 64 {
+                    break;
+                }
+            }
+        }
+        let next = self.nth(k);
+        let has_body = self.nth(1) != OF_KW
+            && !matches!(next, SEMICOLON | R_PAREN | EOF)
+            && (next == END_KW || !stop.contains(&next));
+        if has_body {
+            return recovery::skip_type_body(self);
+        }
+        self.start_node(ERROR_NODE);
+        self.bump(); // class / interface
+        let mut depth = 0i32;
+        while !self.at_eof() {
+            let c = self.current();
+            if depth == 0 && (c == SEMICOLON || c == R_PAREN || stop.contains(&c) || is_sync(c)) {
+                break;
+            }
+            match c {
+                L_PAREN => depth += 1,
+                R_PAREN => depth -= 1,
+                _ => {}
+            }
+            self.bump();
+        }
+        self.finish_node();
+    }
+
+    /// The spelling (lowercase) of the `n`-th significant token from the current one.
+    fn nth_lower(&self, n: usize) -> String {
+        let tok = self.tokens[self.index_of_nth(n)];
+        self.text_of(tok).to_ascii_lowercase()
+    }
+
+    /// `ClassRefType = "class" "of" TypeRef`.
+    fn parse_class_ref_type(&mut self) {
+        self.start_node(CLASS_REF_TYPE);
+        self.bump(); // class
+        self.bump(); // of
+        self.parse_type_ref(&[SEMICOLON]);
+        self.finish_node();
+    }
+
+    /// `ClassType = "class" {ClassModifier} ["(" TypeRef {"," TypeRef} ")"] [ClassBody "end"]`
+    /// (`docs/spec/objects.md` chapter 1). `class;` is a forward declaration.
+    fn parse_class_type(&mut self) {
+        self.start_node(CLASS_TYPE);
+        let class_tok = self.current_tok();
+        self.bump(); // class
+        if self.at(SEMICOLON) {
+            self.finish_node();
+            return;
+        }
+        // Modifiers: `abstract` / `sealed`, unless the word is a field name (`abstract: Integer`)
+        let mut seen: Vec<SyntaxKind> = Vec::new();
+        loop {
+            let kind = match self.current_lower().as_str() {
+                "abstract" if self.at(IDENT) => ABSTRACT_KW,
+                "sealed" if self.at(IDENT) => SEALED_KW,
+                _ => break,
+            };
+            if matches!(self.nth(1), COLON | COMMA) {
+                break;
+            }
+            if seen.contains(&kind) {
+                let tok = self.current_tok();
+                let msg = format!("unexpected `{}`", self.text_of(tok));
+                self.error_at(Code::E(401), msg, tok.range);
+                self.start_node(ERROR_NODE);
+                self.bump_as(kind);
+                self.finish_node();
+                continue;
+            }
+            seen.push(kind);
+            self.bump_as(kind);
+        }
+        if self.at(L_PAREN) {
+            self.start_node(CLASS_PARENTS);
+            self.bump(); // (
+            loop {
+                self.parse_type_ref(&[R_PAREN, COMMA, SEMICOLON]);
+                if self.at(COMMA) {
+                    self.bump();
+                    continue;
+                }
+                break;
+            }
+            self.expect(R_PAREN, &[SEMICOLON, END_KW, IDENT], &[]);
+            self.finish_node();
+        }
+        self.hint_directives();
+        if self.at(SEMICOLON) {
+            self.finish_node();
+            return;
+        }
+        if !self.enter_type_body(class_tok) {
+            self.finish_node();
+            return;
+        }
+        self.open_blocks.push((CLASS_KW, class_tok.range));
+        self.parse_class_body(CLASS_BODY);
+        self.open_blocks.pop();
+        self.class_depth -= 1;
+        self.finish_node();
+    }
+
+    /// `InterfaceType = "interface" ["(" TypeRef ")"] [GuidSpec] [InterfaceBody "end"]`
+    /// (`docs/spec/objects.md` 7.1). `interface;` is a forward declaration, `interface(IParent);`
+    /// a declaration without members.
+    fn parse_interface_type(&mut self) {
+        self.start_node(INTERFACE_TYPE);
+        let intf_tok = self.current_tok();
+        self.bump(); // interface
+        self.hint_directives();
+        if self.at(SEMICOLON) {
+            self.finish_node();
+            return;
+        }
+        if self.at(L_PAREN) {
+            self.bump(); // (
+            self.parse_type_ref(&[R_PAREN, COMMA, SEMICOLON]);
+            if self.at(COMMA) {
+                // One parent only (as in Delphi)
+                let tok = self.current_tok();
+                self.error_at(Code::E(400), "expected `)`, found `,`", tok.range);
+                self.start_node(ERROR_NODE);
+                while !self.at(R_PAREN) && !self.at(SEMICOLON) && !self.at_eof() {
+                    self.bump();
+                }
+                self.finish_node();
+            }
+            self.expect(R_PAREN, &[SEMICOLON, END_KW, IDENT], &[]);
+            self.hint_directives();
+            if self.at(SEMICOLON) {
+                self.finish_node();
+                return;
+            }
+        }
+        // A GUID is a string literal in brackets; any other `[` starts the first member's
+        // attributes (`docs/spec/objects.md` 7.1)
+        if self.at(L_BRACK) && self.nth(1) == STRING_LIT {
+            self.start_node(GUID_SPEC);
+            self.bump(); // [
+            self.parse_expr_or_missing(&[R_BRACK]);
+            self.expect(
+                R_BRACK,
+                &[PROCEDURE_KW, FUNCTION_KW, PROPERTY_KW, END_KW],
+                &[],
+            );
+            self.finish_node();
+        }
+        if !self.enter_type_body(intf_tok) {
+            self.finish_node();
+            return;
+        }
+        self.open_blocks.push((INTERFACE_KW, intf_tok.range));
+        self.parse_class_body(INTERFACE_BODY);
+        self.open_blocks.pop();
+        self.class_depth -= 1;
+        self.finish_node();
+    }
+
+    /// Before the body of a class or an interface: counts the nesting (`true`), or past the limit
+    /// skips the body as a whole up to its `end` (E0413; `false`).
+    fn enter_type_body(&mut self, tok: Token) -> bool {
+        if self.class_depth < MAX_NESTING {
+            self.class_depth += 1;
+            return true;
+        }
+        // Nested types past the limit: the body is skipped as a whole
+        self.error_at(
+            Code::E(413),
+            "type nesting is too deep (limit 256)",
+            tok.range,
+        )
+        .notes
+        .push("move the nested types out to the enclosing `type` section".into());
+        self.start_node(ERROR_NODE);
+        let mut depth = 0i32;
+        let mut prev = self.current();
+        while !self.at_eof() {
+            let cur = self.current();
+            match cur {
+                // `class` opens a body only as a type (`class procedure` has no `end`)
+                CLASS_KW | INTERFACE_KW if prev != EQ || recovery::class_has_no_end(self) => {}
+                RECORD_KW | CLASS_KW | INTERFACE_KW | BEGIN_KW | CASE_KW | TRY_KW => depth += 1,
+                END_KW if depth > 0 => depth -= 1,
+                END_KW => break,
+                _ => {}
+            }
+            prev = cur;
+            self.bump();
+        }
+        self.finish_node();
+        if self.at(END_KW) {
+            self.bump();
+        }
+        false
+    }
+
+    /// `MethodResolution = ("procedure" | "function") IDENT "." IDENT "=" IDENT ";"`
+    /// (`docs/spec/objects.md` 7.1).
+    fn parse_method_resolution(&mut self) {
+        self.start_node(METHOD_RESOLUTION);
+        self.bump(); // procedure / function
+        self.parse_qualified_name();
+        self.bump(); // =
+        if self.at(IDENT) {
+            self.bump();
+        } else {
+            self.supply_diag(Code::E(405), "expected an identifier".into(), None);
+        }
+        if !self.at(END_KW) {
+            self.expect(SEMICOLON, &[IDENT, END_KW], &[]);
+        }
+        self.finish_node();
+    }
+
+    /// Whether the current `procedure` / `function` starts a method resolution clause
+    /// (`procedure IFoo.Run = DoRun;`): a qualified name of two parts followed by `=`.
+    fn at_method_resolution(&self) -> bool {
+        matches!(self.current(), PROCEDURE_KW | FUNCTION_KW)
+            && self.nth(1) == IDENT
+            && self.nth(2) == DOT
+            && self.nth(3) == IDENT
+            && self.nth(4) == EQ
+    }
+
+    /// The hint directive at the `n`-th token, if it is one: `deprecated` / `experimental` /
+    /// `platform` (context-sensitive) or `library` (reserved).
+    fn hint_kind_at(&self, n: usize) -> Option<SyntaxKind> {
+        match self.nth(n) {
+            LIBRARY_KW => Some(LIBRARY_KW),
+            IDENT => match self.nth_lower(n).as_str() {
+                "deprecated" => Some(DEPRECATED_KW),
+                "experimental" => Some(EXPERIMENTAL_KW),
+                "platform" => Some(PLATFORM_KW),
+                _ => None,
+            },
+            _ => None,
         }
     }
 
-    /// `ExceptionClassType = "class" "(" TypeRef ")" ["end"]`.
-    fn parse_class_type(&mut self) {
-        self.start_node(CLASS_TYPE);
-        self.bump(); // class
-        self.bump(); // (
-        self.parse_type_ref(&[R_PAREN, SEMICOLON]);
-        self.expect(R_PAREN, &[SEMICOLON], &[]);
-        if self.at(END_KW) {
+    /// Hint directives after `class` / `class(…)` / `interface` / `interface(…)` and at the end
+    /// of a type, constant, variable, field or property declaration: `deprecated` /
+    /// `experimental` / `platform` / `library` followed by `;`, a string literal or another hint
+    /// directive (`docs/spec/attributes.md` 6.1). Each one is a `HINT_DIRECTIVE` node.
+    fn hint_directives(&mut self) {
+        if self.hint_kind_at(0).is_none()
+            || !(matches!(self.nth(1), SEMICOLON | STRING_LIT) || self.hint_kind_at(1).is_some())
+        {
+            return;
+        }
+        let mut seen = Vec::new();
+        while let Some(kind) = self.hint_kind_at(0) {
+            self.hint_directive(HINT_DIRECTIVE, kind, &mut seen);
+        }
+    }
+
+    /// One hint directive `kind` at the current token, as a `node` (`HINT_DIRECTIVE`,
+    /// `ROUTINE_DIRECTIVE` or `METHOD_DIRECTIVE`) with its description (a single string literal
+    /// after `deprecated` / `experimental`). The same directive written again in one declaration
+    /// (`seen`) is E0401 and goes into an `ERROR` node (`docs/spec/attributes.md` 6.1).
+    fn hint_directive(&mut self, node: SyntaxKind, kind: SyntaxKind, seen: &mut Vec<SyntaxKind>) {
+        let duplicate = seen.contains(&kind);
+        if duplicate {
+            let tok = self.current_tok();
+            let msg = format!("unexpected `{}`", self.text_of(tok));
+            self.error_at(Code::E(401), msg, tok.range);
+            self.start_node(ERROR_NODE);
+        } else {
+            seen.push(kind);
+            self.start_node(node);
+        }
+        if kind == LIBRARY_KW {
             self.bump();
+        } else {
+            self.bump_as(kind);
+        }
+        if matches!(kind, DEPRECATED_KW | EXPERIMENTAL_KW) && self.at(STRING_LIT) {
+            self.bump();
+        }
+        self.finish_node();
+    }
+
+    /// `ClassBody "end"`: members and visibility sections up to the class's `end`. An interface's
+    /// body (`kind` = `INTERFACE_BODY`) is read the same way.
+    fn parse_class_body(&mut self, kind: SyntaxKind) {
+        self.start_node(kind);
+        loop {
+            match self.current() {
+                END_KW => break,
+                PROCEDURE_KW | FUNCTION_KW if self.at_method_resolution() => {
+                    self.parse_method_resolution()
+                }
+                IDENT if self.at_visibility() => self.parse_visibility(),
+                IDENT => self.parse_field_decl(),
+                L_BRACK => self.parse_attributed_member(),
+                VAR_KW => self.parse_class_var_section(false),
+                CONST_KW => self.parse_const_section(),
+                TYPE_KW => self.parse_type_section(),
+                PROCEDURE_KW | FUNCTION_KW | CONSTRUCTOR_KW | DESTRUCTOR_KW => {
+                    self.parse_method_decl()
+                }
+                PROPERTY_KW => self.parse_property_decl(),
+                CLASS_KW => match self.nth(1) {
+                    VAR_KW => self.parse_class_var_section(true),
+                    PROPERTY_KW => self.parse_property_decl(),
+                    PROCEDURE_KW | FUNCTION_KW | CONSTRUCTOR_KW | DESTRUCTOR_KW => {
+                        self.parse_method_decl()
+                    }
+                    IDENT if self.nth_lower(1) == "operator" => self.parse_method_decl(),
+                    _ => {
+                        let tok = self.current_tok();
+                        self.bump_error_node();
+                        let next = self.current_tok();
+                        if !self.pending_has_lex_error() {
+                            let msg = format!(
+                                "expected `procedure`, `function` or `var` after `class`, found {}",
+                                self.found_text(next)
+                            );
+                            self.error_at(Code::E(400), msg, tok.range);
+                        }
+                    }
+                },
+                SEMICOLON => self.bump(),
+                c if c == EOF || is_sync(c) || c == BEGIN_KW || c == IMPLEMENTATION_KW => {
+                    // Unclosed class: supply `end`
+                    self.supply_diag(
+                        Code::E(400),
+                        format!(
+                            "expected `end`, found {}",
+                            self.found_text(self.current_tok())
+                        ),
+                        Some("end"),
+                    );
+                    self.finish_node();
+                    return;
+                }
+                _ => {
+                    let tok = self.current_tok();
+                    if !self.pending_has_lex_error() {
+                        let msg = format!(
+                            "expected a member declaration, found {}",
+                            self.found_text(tok)
+                        );
+                        self.error_at(Code::E(405), msg, tok.range);
+                    }
+                    self.bump_error_node();
+                }
+            }
+        }
+        self.finish_node();
+        self.bump(); // end
+    }
+
+    /// Puts the current token into an `ERROR` node.
+    fn bump_error_node(&mut self) {
+        self.start_node(ERROR_NODE);
+        self.bump();
+        self.finish_node();
+    }
+
+    /// Whether the current identifier starts a visibility section: a visibility word not followed
+    /// by `:` or `,` (a field named `private` is a field; `docs/spec/objects.md` chapter 1).
+    fn at_visibility(&self) -> bool {
+        matches!(
+            self.current_lower().as_str(),
+            "private" | "protected" | "public" | "published" | "strict" | "automated"
+        ) && !matches!(self.nth(1), COLON | COMMA)
+    }
+
+    /// `VisibilitySection = ["strict"] ("private" | "protected") | "public" | "published"`.
+    /// `automated` (COM) is E3010.
+    fn parse_visibility(&mut self) {
+        self.start_node(VISIBILITY);
+        let lower = self.current_lower();
+        match lower.as_str() {
+            "strict" => {
+                self.bump_as(STRICT_KW);
+                match self.current_lower().as_str() {
+                    "private" if self.at(IDENT) => self.bump_as(PRIVATE_KW),
+                    "protected" if self.at(IDENT) => self.bump_as(PROTECTED_KW),
+                    _ => {
+                        let msg = format!(
+                            "expected `private`, found {}",
+                            self.found_text(self.current_tok())
+                        );
+                        self.supply_diag(Code::E(400), msg, Some("private"));
+                    }
+                }
+            }
+            "automated" => {
+                let tok = self.current_tok();
+                self.error_at(
+                    Code::E(3010),
+                    "`automated` is not supported in Puy",
+                    tok.range,
+                )
+                .notes
+                .push("Puy does not support COM".into());
+                self.bump_as(AUTOMATED_KW);
+            }
+            _ => {
+                let kind = SyntaxKind::contextual_directive(&lower).unwrap_or(IDENT);
+                self.bump_as(kind);
+            }
+        }
+        self.finish_node();
+    }
+
+    // ---- Attributes (`docs/spec/attributes.md` 1.1, 1.3) ----
+
+    /// The position (as for `nth`) of the first token after the attribute lists starting at
+    /// `nth(start)`: `start` itself when none starts there. Brackets and parentheses are counted
+    /// to find each list's `]`; an unclosed list ends at the first `;` or at the end of the file.
+    fn attributes_end(&self, start: usize) -> usize {
+        let mut i = start;
+        while self.nth(i) == L_BRACK {
+            let mut depth = 0u32;
+            loop {
+                match self.nth(i) {
+                    L_BRACK | L_PAREN => depth += 1,
+                    R_BRACK | R_PAREN => {
+                        depth = depth.saturating_sub(1);
+                        if depth == 0 {
+                            i += 1;
+                            break;
+                        }
+                    }
+                    SEMICOLON | EOF => return i,
+                    _ => {}
+                }
+                i += 1;
+            }
+        }
+        i
+    }
+
+    /// `Attributes = AttrList {AttrList}` before a declaration: read, and the declaration that
+    /// [`Parser::start_decl`] starts next gets them as its first children.
+    fn parse_leading_attributes(&mut self) {
+        if self.at(L_BRACK) {
+            let cp = self.checkpoint();
+            self.parse_attribute_lists();
+            self.attr_start = Some(cp);
+        }
+    }
+
+    /// Starts the node of a declaration, at the attributes read before it if any.
+    fn start_decl(&mut self, kind: SyntaxKind) {
+        match self.attr_start.take() {
+            Some(cp) => self.start_node_at(cp, kind),
+            None => self.start_node(kind),
+        }
+    }
+
+    /// `AttrList {AttrList}` where the current token may be `[`.
+    fn parse_attribute_lists(&mut self) {
+        while self.at(L_BRACK) {
+            self.parse_attribute_list();
+        }
+    }
+
+    /// `AttrList = "[" Attribute {"," Attribute} "]"`, `Attribute = QualifiedName ["(" [AttrArg
+    /// {"," AttrArg}] ")"]`.
+    fn parse_attribute_list(&mut self) {
+        self.start_node(ATTRIBUTE_LIST);
+        self.bump(); // [
+        loop {
+            if self.at(IDENT) {
+                self.start_node(ATTRIBUTE);
+                self.parse_qualified_name();
+                if self.at(L_PAREN) {
+                    self.parse_arg_list(&[R_BRACK]);
+                }
+                self.finish_node();
+            } else {
+                self.supply_diag(Code::E(405), "expected an identifier".into(), None);
+            }
+            if self.at(COMMA) {
+                self.bump();
+                continue;
+            }
+            break;
+        }
+        self.expect(R_BRACK, &[IDENT], &[]);
+        self.finish_node();
+    }
+
+    /// A member of a class body starting with attributes: a field, a method (`class operator`
+    /// included) or a property gets them; before anything else they are E3401.
+    fn parse_attributed_member(&mut self) {
+        let k = self.attributes_end(0);
+        let member = match self.nth(k) {
+            IDENT => {
+                !matches!(
+                    self.nth_lower(k).as_str(),
+                    "private" | "protected" | "public" | "published" | "strict" | "automated"
+                ) || matches!(self.nth(k + 1), COLON | COMMA)
+            }
+            PROCEDURE_KW | FUNCTION_KW | CONSTRUCTOR_KW | DESTRUCTOR_KW | PROPERTY_KW => true,
+            CLASS_KW => {
+                matches!(
+                    self.nth(k + 1),
+                    PROCEDURE_KW | FUNCTION_KW | CONSTRUCTOR_KW | DESTRUCTOR_KW | PROPERTY_KW
+                ) || (self.nth(k + 1) == IDENT && self.nth_lower(k + 1) == "operator")
+            }
+            _ => false,
+        };
+        if !member {
+            return self.attributes_not_allowed_here();
+        }
+        match self.nth(k) {
+            IDENT => self.parse_field_decl(),
+            PROPERTY_KW => {
+                self.parse_leading_attributes();
+                self.parse_property_decl();
+            }
+            CLASS_KW if self.nth(k + 1) == PROPERTY_KW => {
+                self.parse_leading_attributes();
+                self.parse_property_decl();
+            }
+            _ => {
+                self.parse_leading_attributes();
+                self.parse_method_decl();
+            }
+        }
+    }
+
+    /// Whether attributes before a routine declaration start here (`docs/spec/attributes.md`
+    /// 1.3).
+    fn at_attributed_routine(&self) -> bool {
+        let k = self.attributes_end(0);
+        matches!(
+            self.nth(k),
+            PROCEDURE_KW | FUNCTION_KW | CONSTRUCTOR_KW | DESTRUCTOR_KW
+        ) || (self.nth(k) == CLASS_KW
+            && matches!(
+                self.nth(k + 1),
+                PROCEDURE_KW | FUNCTION_KW | CONSTRUCTOR_KW | DESTRUCTOR_KW
+            ))
+    }
+
+    /// Attributes where none can be written (`docs/spec/attributes.md` 1.2, 1.3): E3401 at the
+    /// lists, which go into an `ERROR` node; what follows is read as usual.
+    fn attributes_not_allowed_here(&mut self) {
+        let start = self.current_tok().range.start();
+        self.start_node(ERROR_NODE);
+        self.parse_attribute_lists();
+        self.finish_node();
+        let range = TextRange::new(start, self.last_end.into());
+        self.error_at(Code::E(3401), "attributes are not allowed here", range)
+            .notes
+            .push(ATTRIBUTE_PLACES_NOTE.into());
+    }
+
+    /// `["class"] "var" FieldDecl {FieldDecl}`: the section goes on while fields follow (up to a
+    /// visibility section or the next member keyword).
+    fn parse_class_var_section(&mut self, class: bool) {
+        self.start_node(CLASS_VAR_SECTION);
+        if class {
+            self.bump(); // class
+        }
+        self.bump(); // var
+        while (self.at(IDENT) && !self.at_visibility())
+            || (self.at(L_BRACK) && self.nth(self.attributes_end(0)) == IDENT)
+        {
+            self.parse_field_decl();
+        }
+        self.finish_node();
+    }
+
+    /// `MethodHeading = ["class"] ("procedure" | "function" | "constructor" | "destructor") IDENT
+    /// [FormalParams] [":" TypeRef] ";" {MethodDirective ";"}` (`class operator` is read the same way).
+    fn parse_method_decl(&mut self) {
+        self.start_decl(METHOD_DECL);
+        self.start_node(ROUTINE_HEADER);
+        if self.at(CLASS_KW) {
+            self.bump();
+        }
+        let is_operator = self.at_ident("operator");
+        let is_function = self.at(FUNCTION_KW) || is_operator;
+        if is_operator {
+            self.bump_as(OPERATOR_KW);
+        } else {
+            self.bump();
+        }
+        if is_operator && matches!(self.current(), IDENT | IN_KW) {
+            self.parse_operator_name();
+        } else if self.at(IDENT) {
+            self.parse_generic_name(&[L_PAREN, COLON, SEMICOLON]);
+        } else {
+            self.supply_diag(Code::E(405), "expected an identifier".into(), None);
+        }
+        if self.at(L_PAREN) {
+            self.parse_param_list();
+        }
+        if is_function && self.at(COLON) {
+            self.bump();
+            self.start_node(RETURN_TYPE);
+            self.parse_type_spec(&[SEMICOLON], TypeCtx::Return);
+            self.finish_node();
+        } else if is_function && matches!(self.current(), IDENT | STRING_KW) {
+            self.expect(COLON, &[IDENT, STRING_KW], &[]);
+            self.start_node(RETURN_TYPE);
+            self.parse_type_spec(&[SEMICOLON], TypeCtx::Return);
+            self.finish_node();
+        }
+        self.finish_node(); // ROUTINE_HEADER
+        if !self.at(END_KW) {
+            self.expect(SEMICOLON, &[IDENT, END_KW], &[]);
+        }
+        let mut seen_hints = Vec::new();
+        while let Some(kind) = self.method_directive_kind() {
+            if matches!(
+                kind,
+                DEPRECATED_KW | EXPERIMENTAL_KW | PLATFORM_KW | LIBRARY_KW
+            ) {
+                self.hint_directive(METHOD_DIRECTIVE, kind, &mut seen_hints);
+                if !self.at(END_KW) {
+                    self.expect(SEMICOLON, &[IDENT, END_KW], &[]);
+                }
+                continue;
+            }
+            self.start_node(METHOD_DIRECTIVE);
+            let takes_arg = matches!(kind, EXTERNAL_KW | MESSAGE_KW) || self.at_ident("dispid");
+            if kind == INLINE_KW || kind == LIBRARY_KW {
+                self.bump();
+            } else {
+                self.bump_as(kind);
+            }
+            if takes_arg {
+                // Directives taking an argument: everything up to the next `;`
+                while !self.at(SEMICOLON) && !self.at(END_KW) && !self.at_eof() {
+                    self.bump();
+                }
+            }
+            self.finish_node();
+            if !self.at(END_KW) {
+                self.expect(SEMICOLON, &[IDENT, END_KW], &[]);
+            }
+        }
+        self.finish_node();
+    }
+
+    /// The kind of the method directive at the current token, if it is one.
+    fn method_directive_kind(&self) -> Option<SyntaxKind> {
+        match self.current() {
+            INLINE_KW => return Some(INLINE_KW),
+            LIBRARY_KW => return Some(LIBRARY_KW),
+            IDENT => {}
+            _ => return None,
+        }
+        if matches!(self.nth(1), COLON | COMMA) {
+            // A field after the method
+            return None;
+        }
+        let lower = self.current_lower();
+        Some(match lower.as_str() {
+            "virtual" => VIRTUAL_KW,
+            "dynamic" => DYNAMIC_KW,
+            "abstract" => ABSTRACT_KW,
+            "override" => OVERRIDE_KW,
+            "reintroduce" => REINTRODUCE_KW,
+            "final" => FINAL_KW,
+            "static" => STATIC_KW,
+            "message" => MESSAGE_KW,
+            // `dispid` has no kind of its own (COM; E3010)
+            "dispid" => IDENT,
+            _ => return routine_directive_kind(&lower),
+        })
+    }
+
+    /// `PropertyDecl = ["class"] "property" IDENT [TypeParams] [PropertyParams] [":" TypeRef]
+    /// {PropertySpec} ";" ["default" ";"]` (`docs/spec/objects.md` chapter 1,
+    /// `docs/spec/generics.md` 2.1).
+    fn parse_property_decl(&mut self) {
+        self.start_decl(PROPERTY_DECL);
+        if self.at(CLASS_KW) {
+            self.bump();
+        }
+        self.bump(); // property
+        if self.at(IDENT) {
+            self.bump();
+        } else {
+            self.supply_diag(Code::E(405), "expected an identifier".into(), None);
+        }
+        if self.at(LT) {
+            // Read so that semantic analysis reports E0757 (`docs/spec/generics.md` 2.1)
+            self.parse_type_params(&[L_BRACK, COLON, SEMICOLON]);
+        }
+        if self.at(L_BRACK) {
+            self.start_node(PROPERTY_PARAMS);
+            self.bump(); // [
+            loop {
+                self.parse_param_group();
+                if self.at(SEMICOLON) {
+                    self.bump();
+                    continue;
+                }
+                break;
+            }
+            self.expect(R_BRACK, &[COLON, SEMICOLON], &[]);
+            self.finish_node();
+        }
+        if self.at(COLON) {
+            self.bump();
+            self.start_node(RETURN_TYPE);
+            self.parse_type_ref(&[SEMICOLON]);
+            self.finish_node();
+        }
+        loop {
+            let lower = self.current_lower();
+            let kind = match lower.as_str() {
+                _ if !self.at(IDENT) => break,
+                "index" => INDEX_KW,
+                "read" => READ_KW,
+                "write" => WRITE_KW,
+                "stored" => STORED_KW,
+                "default" => DEFAULT_KW,
+                "nodefault" => NODEFAULT_KW,
+                "readonly" => READONLY_KW,
+                "writeonly" => WRITEONLY_KW,
+                "implements" => IMPLEMENTS_KW,
+                "dispid" => IDENT,
+                _ => break,
+            };
+            self.start_node(PROPERTY_SPEC);
+            self.bump_as(kind);
+            match kind {
+                READ_KW | WRITE_KW => {
+                    if self.at(IDENT) {
+                        self.parse_qualified_name();
+                    } else {
+                        self.supply_diag(Code::E(405), "expected an identifier".into(), None);
+                    }
+                }
+                IMPLEMENTS_KW => loop {
+                    self.parse_type_ref(&[SEMICOLON, COMMA]);
+                    if self.at(COMMA) {
+                        self.bump();
+                        continue;
+                    }
+                    break;
+                },
+                INDEX_KW | STORED_KW | IDENT => {
+                    self.parse_expr_or_missing(&[SEMICOLON]);
+                }
+                DEFAULT_KW if !self.at(SEMICOLON) && can_start_expr(self.current()) => {
+                    self.parse_expr_or_missing(&[SEMICOLON]);
+                }
+                _ => {}
+            }
+            self.finish_node();
+        }
+        self.hint_directives();
+        if !self.at(END_KW) {
+            self.expect(SEMICOLON, &[IDENT, END_KW], &[]);
+        }
+        // `; default;`: a default array property (`docs/spec/objects.md` 12.1)
+        if self.at_ident("default") && self.nth(1) == SEMICOLON {
+            self.bump_as(DEFAULT_KW);
+            self.bump();
+        }
+        self.finish_node();
+    }
+
+    /// A procedural or anonymous method type where only a type name can be written (E0404; the
+    /// type is read into an error node).
+    fn anonymous_proc_type_here(&mut self, stop: &[SyntaxKind]) {
+        let tok = self.current_tok();
+        self.error_at(Code::E(404), "expected a type name", tok.range)
+            .notes
+            .push("declare the type in a `type` section and use its name".into());
+        self.start_node(ERROR_NODE);
+        self.parse_proc_or_ref_type(stop);
+        self.finish_node();
+    }
+
+    /// `ProcType` or `RefType` (`docs/spec/objects.md` 9.1), at `procedure`, `function` or
+    /// `reference to`.
+    fn parse_proc_or_ref_type(&mut self, stop: &[SyntaxKind]) {
+        if self.at_ident("reference") {
+            self.start_node(REF_TYPE);
+            self.bump_as(REFERENCE_KW);
+            self.bump(); // to
+            if matches!(self.current(), PROCEDURE_KW | FUNCTION_KW) {
+                // `reference to … of object` is E0400 at `of` (left to the caller)
+                self.parse_proc_type(stop, false);
+            } else {
+                self.expect(PROCEDURE_KW, &[], &[]);
+            }
+            self.finish_node();
+        } else {
+            self.parse_proc_type(stop, true);
+        }
+    }
+
+    /// `ProcType`: `procedure` / `function` with its parameters and return type, `of object`
+    /// (when `of_object` allows it), and the calling conventions after `;` (W0009).
+    fn parse_proc_type(&mut self, stop: &[SyntaxKind], of_object: bool) {
+        self.start_node(PROC_TYPE);
+        let is_function = self.at(FUNCTION_KW);
+        self.bump();
+        if self.at(L_PAREN) {
+            self.parse_param_list();
+        }
+        if is_function
+            && (self.expect(COLON, &[IDENT, STRING_KW], &[])
+                || self.at(IDENT)
+                || self.at(STRING_KW))
+        {
+            self.start_node(RETURN_TYPE);
+            let mut until = stop.to_vec();
+            until.push(OF_KW);
+            self.parse_type_spec(&until, TypeCtx::Return);
+            self.finish_node();
+        }
+        if of_object && self.at(OF_KW) && self.nth(1) == OBJECT_KW {
+            self.bump();
+            self.bump();
+        }
+        // `; cdecl` and the like: a calling convention followed by `;` or the end of the
+        // declaration
+        while self.at(SEMICOLON) && self.nth(1) == IDENT {
+            let tok = self.tokens[self.index_of_nth(1)];
+            let lower = self.text_of(tok).to_ascii_lowercase();
+            let Some(kind) = routine_directive_kind(&lower).filter(|k| {
+                matches!(
+                    k,
+                    CDECL_KW
+                        | STDCALL_KW
+                        | SAFECALL_KW
+                        | REGISTER_KW
+                        | PASCAL_KW
+                        | WINAPI_KW
+                        | EXPORT_KW
+                        | NEAR_KW
+                        | FAR_KW
+                        | LOCAL_KW
+                        | VARARGS_KW
+                )
+            }) else {
+                break;
+            };
+            let after = self.nth(2);
+            if !(after == SEMICOLON || after == EOF || stop.contains(&after)) {
+                break;
+            }
+            self.bump(); // ;
+            self.start_node(ROUTINE_DIRECTIVE);
+            self.bump_as(kind);
+            self.finish_node();
         }
         self.finish_node();
     }
@@ -2085,45 +3332,35 @@ impl<'a> Parser<'a> {
         let cur = self.current();
         match cur {
             IDENT if self.at_ident("reference") && self.nth(1) == TO_KW => {
-                // `reference to procedure(...)` (M3): skip to the `;` of the declaration
-                let tok = self.current_tok();
-                self.error_at(
-                    Code::E(3200),
-                    "`reference to` is not supported yet (planned for M3)",
-                    tok.range,
-                );
-                self.start_node(ERROR_NODE);
-                let mut depth = 0i32;
-                while !self.at_eof() {
-                    let c = self.current();
-                    if depth == 0 && (stop.contains(&c) || c == SEMICOLON) {
-                        break;
-                    }
-                    match c {
-                        L_PAREN => depth += 1,
-                        R_PAREN => depth -= 1,
-                        _ => {}
-                    }
-                    self.bump();
-                }
-                self.finish_node();
-            }
-            IDENT if self.current_lower() == "tarray" && self.nth(1) == LT => {
-                // `TArray<T>` (`docs/spec/types.md` chapter 1)
-                self.start_node(GENERIC_TYPE_REF);
-                self.parse_qualified_name();
-                self.bump(); // <
-                if matches!(self.current(), IDENT | STRING_KW) {
-                    self.parse_type_ref(&[GT]);
-                } else {
-                    self.supply_diag(Code::E(404), "expected a type".into(), None);
-                }
-                self.expect(GT, &[], &[GT]);
-                self.finish_node();
+                // Only a name can be written here (the argument of `TArray<…>`;
+                // `docs/spec/objects.md` 9.1)
+                self.anonymous_proc_type_here(stop);
             }
             IDENT => {
-                self.start_node(TYPE_REF);
+                // In a type position `<` after a name always starts type arguments: `TArray<T>`
+                // (`docs/spec/types.md` chapter 1) and the generic types of M4 (reported by the
+                // semantic analysis; `docs/spec/generics.md` 1.3)
+                let tarray = self.current_lower() == "tarray" && self.nth(1) == LT;
+                let cp = self.checkpoint();
                 self.parse_qualified_name();
+                if !self.at(LT) {
+                    self.start_node_at(cp, TYPE_REF);
+                    self.finish_node();
+                    return;
+                }
+                self.start_node_at(cp, GENERIC_TYPE_REF);
+                self.bump(); // <
+                // A type that is not a name is reported and skipped to the `>` there
+                if tarray {
+                    self.parse_type_ref(&[GT]);
+                } else {
+                    self.parse_type_ref(&[GT, COMMA]);
+                    while self.at(COMMA) {
+                        self.bump();
+                        self.parse_type_ref(&[GT, COMMA]);
+                    }
+                }
+                self.expect_closing_gt(stop);
                 self.finish_node();
             }
             STRING_KW => {
@@ -2152,40 +3389,36 @@ impl<'a> Parser<'a> {
                     self.finish_node();
                 }
             }
-            CLASS_KW | INTERFACE_KW | DISPINTERFACE_KW | OBJECT_KW => {
+            CLASS_KW | INTERFACE_KW => {
+                // A class, interface or helper type has to be declared in a `type` section
+                // (`docs/spec/grammar.md` 1.3)
                 let tok = self.current_tok();
-                match cur {
-                    OBJECT_KW => {
-                        self.error_at(Code::E(3002), "`object` is not supported in Puy", tok.range)
-                            .notes
-                            .push("use a `record` or a `class` instead".into());
-                    }
-                    DISPINTERFACE_KW => {
-                        self.error_at(
-                            Code::E(3010),
-                            "`dispinterface` is not supported in Puy",
-                            tok.range,
-                        )
+                self.error_at(Code::E(404), "expected a type", tok.range)
+                    .notes
+                    .push("declare the type in a `type` section and use its name".into());
+                self.skip_anonymous_class(stop);
+            }
+            DISPINTERFACE_KW | OBJECT_KW => {
+                let tok = self.current_tok();
+                if cur == OBJECT_KW {
+                    self.error_at(Code::E(3002), "`object` is not supported in Puy", tok.range)
                         .notes
-                        .push("Puy does not support COM".into());
-                    }
-                    _ => {
-                        let text = self.text_of(tok).to_ascii_lowercase();
-                        self.error_at(
-                            Code::E(3200),
-                            format!("`{text}` is not supported yet (planned for M3)"),
-                            tok.range,
-                        );
-                    }
+                        .push("use a `record` or a `class` instead".into());
+                } else {
+                    self.error_at(
+                        Code::E(3010),
+                        "`dispinterface` is not supported in Puy",
+                        tok.range,
+                    )
+                    .notes
+                    .push("Puy does not support COM".into());
                 }
                 recovery::skip_type_body(self);
             }
-            ARRAY_KW | SET_KW | RECORD_KW | PACKED_KW | PROCEDURE_KW | FUNCTION_KW | INT_LIT
-            | STRING_LIT | MINUS | L_PAREN | CARET | FILE_KW => {
+            PROCEDURE_KW | FUNCTION_KW => self.anonymous_proc_type_here(stop),
+            ARRAY_KW | SET_KW | RECORD_KW | PACKED_KW | INT_LIT | STRING_LIT | MINUS | L_PAREN
+            | CARET | FILE_KW => {
                 let tok = self.current_tok();
-                let text = self.text_of(tok).to_ascii_lowercase();
-                let is_reference = self.at_ident("reference");
-                let _ = is_reference;
                 match cur {
                     CARET => {
                         self.error_at(Code::E(3004), "`^` is not supported in Puy", tok.range)
@@ -2199,31 +3432,13 @@ impl<'a> Parser<'a> {
                             .notes
                             .push("use streams or `TFile` instead".into());
                     }
-                    OBJECT_KW => {
-                        self.error_at(Code::E(3002), "`object` is not supported in Puy", tok.range)
-                            .notes
-                            .push("use a `record` or a `class` instead".into());
-                    }
                     _ => {
-                        if matches!(cur, INT_LIT | STRING_LIT | MINUS | L_PAREN | SET_KW) {
-                            // An enumeration, subrange or set type where only a name can be
-                            // written (a `for var` loop variable, the argument of `TArray<…>`)
-                            self.error_at(Code::E(404), "expected a type name", tok.range)
-                                .notes
-                                .push(
-                                    "declare the type in a `type` section and use its name".into(),
-                                );
-                        } else {
-                            let m = match cur {
-                                CLASS_KW | INTERFACE_KW => "M3",
-                                _ => "M2",
-                            };
-                            self.error_at(
-                                Code::E(3200),
-                                format!("`{text}` is not supported yet (planned for {m})"),
-                                tok.range,
-                            );
-                        }
+                        // An enumeration, subrange, set, array or record type where only a name
+                        // can be written (a `for var` loop variable, the argument of `TArray<…>`;
+                        // `docs/spec/grammar.md` 1.3)
+                        self.error_at(Code::E(404), "expected a type name", tok.range)
+                            .notes
+                            .push("declare the type in a `type` section and use its name".into());
                     }
                 }
                 self.start_node(ERROR_NODE);
@@ -2238,8 +3453,6 @@ impl<'a> Parser<'a> {
                             c,
                             BEGIN_KW | CONST_KW | VAR_KW | PROCEDURE_KW | FUNCTION_KW | TYPE_KW
                         )
-                        && cur != PROCEDURE_KW
-                        && cur != FUNCTION_KW
                     {
                         break;
                     }
@@ -2258,7 +3471,6 @@ impl<'a> Parser<'a> {
                 self.finish_node();
             }
             _ => {
-                // reference to ... is an IDENT, so it becomes TYPE_REF above (sema reports E3200)
                 self.supply_diag(Code::E(404), "expected a type".into(), None);
             }
         }
@@ -2303,6 +3515,16 @@ impl<'a> Parser<'a> {
         self.parse_routine_decl_in(in_script, false);
     }
 
+    /// `class` followed by `procedure` / `function` / `constructor` / `destructor` / `operator`:
+    /// the heading of a class method's body (`docs/spec/objects.md` chapter 1, 11.1).
+    fn at_class_routine(&self) -> bool {
+        self.at(CLASS_KW)
+            && (matches!(
+                self.nth(1),
+                PROCEDURE_KW | FUNCTION_KW | CONSTRUCTOR_KW | DESTRUCTOR_KW
+            ) || (self.nth(1) == IDENT && self.nth_lower(1) == "operator"))
+    }
+
     /// A routine heading in the `interface` section (`ROUTINE_HEADER_DECL`; `docs/spec/units.md`
     /// chapter 1). A body written after it is E0415 and goes into an `ERROR` node.
     fn parse_routine_heading_decl(&mut self) {
@@ -2310,7 +3532,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_routine_decl_in(&mut self, in_script: bool, interface: bool) {
-        self.start_node(if interface {
+        self.start_decl(if interface {
             ROUTINE_HEADER_DECL
         } else {
             ROUTINE_DECL
@@ -2318,15 +3540,34 @@ impl<'a> Parser<'a> {
         let decl_start = self.current_tok().range.start();
         // Heading
         self.start_node(ROUTINE_HEADER);
-        let is_function = self.at(FUNCTION_KW);
-        self.bump();
+        let mut is_function = false;
+        let mut is_operator = false;
+        if self.at(CLASS_KW) {
+            self.bump();
+            // `class operator TVec.Add(…): TVec;` (`docs/spec/objects.md` 11.1)
+            if self.at_ident("operator") {
+                is_function = true;
+                is_operator = true;
+                self.bump_as(OPERATOR_KW);
+            }
+        }
+        if !is_function {
+            is_function = self.at(FUNCTION_KW);
+            self.bump();
+        }
         let mut name = String::new();
         let mut name_range = TextRange::empty(self.last_end.into());
+        // `procedure TFoo.Bar;`: the body of a method (`docs/spec/objects.md` chapter 1)
+        let method = self.at(IDENT) && self.heading_name_is_qualified();
         if self.at(IDENT) {
             let tok = self.current_tok();
             name = self.text_of(tok).to_ascii_lowercase();
             name_range = tok.range;
-            self.parse_qualified_name();
+            if is_operator {
+                self.parse_operator_name();
+            } else {
+                self.parse_generic_name(&[L_PAREN, COLON, SEMICOLON]);
+            }
         } else {
             self.supply_diag(Code::E(405), "expected an identifier".into(), None);
         }
@@ -2350,7 +3591,31 @@ impl<'a> Parser<'a> {
         );
         // Directives
         let mut has_forward = false;
+        let mut seen_hints = Vec::new();
         loop {
+            if method
+                && self.at(IDENT)
+                && matches!(
+                    self.current_lower().as_str(),
+                    "virtual"
+                        | "dynamic"
+                        | "abstract"
+                        | "override"
+                        | "reintroduce"
+                        | "final"
+                        | "static"
+                )
+            {
+                // A method directive belongs to the declaration in the class (E0401)
+                let tok = self.current_tok();
+                let msg = format!("unexpected `{}`", self.text_of(tok));
+                self.error_at(Code::E(401), msg, tok.range);
+                self.start_node(ERROR_NODE);
+                self.bump();
+                self.finish_node();
+                self.expect(SEMICOLON, &[BEGIN_KW, CONST_KW, VAR_KW, IDENT], &[]);
+                continue;
+            }
             let kind = if self.at(INLINE_KW) {
                 Some(INLINE_KW)
             } else if self.at(LIBRARY_KW) {
@@ -2361,6 +3626,14 @@ impl<'a> Parser<'a> {
                 None
             };
             let Some(kind) = kind else { break };
+            if matches!(
+                kind,
+                DEPRECATED_KW | EXPERIMENTAL_KW | PLATFORM_KW | LIBRARY_KW
+            ) {
+                self.hint_directive(ROUTINE_DIRECTIVE, kind, &mut seen_hints);
+                self.expect(SEMICOLON, &[BEGIN_KW, CONST_KW, VAR_KW, IDENT], &[]);
+                continue;
+            }
             self.start_node(ROUTINE_DIRECTIVE);
             if kind == INLINE_KW || kind == LIBRARY_KW {
                 self.bump();
@@ -2371,7 +3644,7 @@ impl<'a> Parser<'a> {
                 // `external` has no body either (sema reports E3011; `grammar.md` 1.3)
                 has_forward = true;
             }
-            if matches!(kind, DEPRECATED_KW | EXTERNAL_KW) {
+            if kind == EXTERNAL_KW {
                 // Directives that take arguments: everything up to the next `;` is part of the directive
                 while !self.at(SEMICOLON)
                     && !self.at_eof()
@@ -2505,7 +3778,8 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_param_group(&mut self) {
-        self.start_node(PARAM_GROUP);
+        self.parse_leading_attributes();
+        self.start_decl(PARAM_GROUP);
         let mut modifier: Option<SyntaxKind> = None;
         if self.at(CONST_KW) || self.at(VAR_KW) {
             modifier = Some(self.current());
@@ -2513,6 +3787,10 @@ impl<'a> Parser<'a> {
         } else if self.at_ident("out") {
             modifier = Some(OUT_KW);
             self.bump_as(OUT_KW);
+        }
+        if modifier.is_some() {
+            // `const [Ref] S: string` (`docs/spec/attributes.md` 1.3)
+            self.parse_attribute_lists();
         }
         if self.at(IDENT) {
             self.start_node(IDENT_LIST);
@@ -2587,6 +3865,13 @@ impl<'a> Parser<'a> {
                     // A nested routine (`docs/spec/semantics.md` 4.9)
                     self.parse_routine_decl(false);
                 }
+                // A nested routine takes no attributes; they are read into it and refused by the
+                // analysis (`docs/spec/attributes.md` 1.3)
+                L_BRACK if self.at_attributed_routine() && self.routine_depth < MAX_NESTING => {
+                    self.parse_leading_attributes();
+                    self.parse_routine_decl(false);
+                }
+                L_BRACK => self.attributes_not_allowed_here(),
                 TYPE_KW => self.parse_type_section(),
                 RESOURCESTRING_KW => self.parse_resourcestring_section(),
                 LABEL_KW | THREADVAR_KW | EXPORTS_KW => self.skip_unsupported_section(),
@@ -2934,14 +4219,7 @@ impl<'a> Parser<'a> {
                                 "Puy runs on a virtual machine and cannot execute assembly".into(),
                             );
                     }
-                    _ => {
-                        let name = self.text_of(tok).to_ascii_lowercase();
-                        self.error_at(
-                            Code::E(3200),
-                            format!("`{name}` is not supported yet (planned for M2)"),
-                            tok.range,
-                        );
-                    }
+                    _ => unreachable!("the outer arm matches only `with`, `goto` and `asm`"),
                 }
                 recovery::skip_statement(self);
             }
@@ -3348,6 +4626,7 @@ impl<'a> Parser<'a> {
         self.start_node(INLINE_VAR_DECL);
         let var_tok = self.current_tok();
         self.bump(); // var
+        self.parse_attribute_lists();
         let mut has_type = false;
         let mut has_init = false;
         if self.at(IDENT) {
@@ -3535,6 +4814,10 @@ impl<'a> Parser<'a> {
         self.start_node(FOR_VAR);
         if self.at(VAR_KW) {
             self.bump();
+            if self.at(L_BRACK) {
+                // `for var [weak] I` (`docs/spec/attributes.md` 1.2)
+                self.attributes_not_allowed_here();
+            }
             if self.at(IDENT) {
                 self.bump();
             } else {
@@ -3609,6 +4892,10 @@ impl<'a> Parser<'a> {
         }
         if can_start_expr(self.current()) {
             return self.parse_expr(1, extra_sync);
+        }
+        if self.at_anonymous_method() {
+            self.parse_anon_routine();
+            return ExprShape::NotCallable;
         }
         let cur = self.current();
         if is_sync(cur)
@@ -3749,6 +5036,9 @@ impl<'a> Parser<'a> {
                     self.start_node_at(cp, FIELD_EXPR);
                     self.bump();
                     self.bump();
+                    if self.at_expr_type_args() {
+                        self.parse_expr_type_args();
+                    }
                     self.finish_node();
                     shape = ExprShape::Callable;
                 }
@@ -3814,6 +5104,9 @@ impl<'a> Parser<'a> {
             IDENT => {
                 self.start_node(NAME_REF);
                 self.bump();
+                if self.at_expr_type_args() {
+                    self.parse_expr_type_args();
+                }
                 self.finish_node();
                 ExprShape::Callable
             }
@@ -3897,6 +5190,181 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Whether the `<` here, right after a name in an expression, starts type arguments rather
+    /// than a comparison (`docs/spec/grammar.md` 1.5): the tokens up to the matching `>` have the
+    /// form of `TypeArgs`, and the token after it is one that cannot start the right operand of a
+    /// comparison.
+    fn at_expr_type_args(&self) -> bool {
+        if !self.at(LT) {
+            return false;
+        }
+        match self.scan_type_args(self.index_of_nth(0)) {
+            Some(after) => follows_type_args(self.tokens[after].kind),
+            None => false,
+        }
+    }
+
+    /// Checks that the tokens from the `<` at `start` have the form of `TypeArgs` (names,
+    /// `string`, `.`, `,` and nested `<` `>`), and returns the index of the first token after the
+    /// matching `>`. Trivia inside is skipped; a lexical error makes the form fail (the tokens
+    /// are then read as a comparison).
+    fn scan_type_args(&self, start: usize) -> Option<usize> {
+        #[derive(Clone, Copy)]
+        enum State {
+            /// At the start of a type argument.
+            Arg,
+            /// After a name (a `.`, a nested `<`, a `,` or a `>` may follow).
+            Name,
+            /// After `.` (a name must follow).
+            Dot,
+            /// After a whole type argument (a `,` or a `>` may follow).
+            Done,
+        }
+        let mut i = start;
+        let mut depth = 0usize;
+        let mut state = State::Arg;
+        let mut first = true;
+        loop {
+            let k = self.tokens[i].kind;
+            if k == ERROR {
+                return None;
+            }
+            if k.is_trivia() {
+                i += 1;
+                continue;
+            }
+            if first {
+                debug_assert_eq!(k, LT);
+                first = false;
+                depth = 1;
+                i += 1;
+                continue;
+            }
+            state = match (state, k) {
+                (State::Arg, IDENT) | (State::Dot, IDENT) => State::Name,
+                (State::Arg, STRING_KW) => State::Done,
+                (State::Name, DOT) => State::Dot,
+                (State::Name, LT) => {
+                    depth += 1;
+                    State::Arg
+                }
+                (State::Name | State::Done, COMMA) => State::Arg,
+                (State::Name | State::Done, GT) => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return Some(self.index_after(i));
+                    }
+                    State::Done
+                }
+                _ => return None,
+            };
+            i += 1;
+        }
+    }
+
+    /// Index of the first token after the token at `i` that the parser does not skip.
+    fn index_after(&self, i: usize) -> usize {
+        let mut j = i + 1;
+        while self.tokens[j].kind != EOF && self.tokens[j].kind.is_skipped_by_parser() {
+            j += 1;
+        }
+        j
+    }
+
+    /// `TYPE_ARGS` in an expression. [`Self::at_expr_type_args`] has checked the form, so this
+    /// reads it without diagnostics; nested type arguments are `GENERIC_TYPE_REF` (the form in
+    /// type positions), read with a stack rather than recursion.
+    fn parse_expr_type_args(&mut self) {
+        self.start_node(TYPE_ARGS);
+        self.bump(); // <
+        // The number of nodes open inside `TYPE_ARGS` (each a `GENERIC_TYPE_REF`)
+        let mut open = 0usize;
+        loop {
+            // One type argument
+            if self.at(STRING_KW) {
+                self.start_node(TYPE_REF);
+                self.bump();
+                self.finish_node();
+            } else {
+                let cp = self.checkpoint();
+                self.start_node(QUALIFIED_NAME);
+                self.bump(); // IDENT
+                while self.at(DOT) {
+                    self.bump();
+                    self.bump(); // IDENT
+                }
+                self.finish_node();
+                if self.at(LT) {
+                    self.start_node_at(cp, GENERIC_TYPE_REF);
+                    self.bump();
+                    open += 1;
+                    continue;
+                }
+                self.start_node_at(cp, TYPE_REF);
+                self.finish_node();
+            }
+            // After a type argument: `,` or the `>` closing one or more lists
+            loop {
+                if self.at(COMMA) {
+                    self.bump();
+                    break;
+                }
+                debug_assert_eq!(self.current(), GT);
+                self.bump();
+                self.finish_node();
+                if open == 0 {
+                    return;
+                }
+                open -= 1;
+            }
+        }
+    }
+
+    /// Whether an anonymous method starts here (`docs/spec/objects.md` 9.6): `procedure` /
+    /// `function` followed by what can follow it only there (a routine declaration has its name
+    /// next): its parameters, its result type, or the start of its declarations or body.
+    fn at_anonymous_method(&self) -> bool {
+        matches!(self.current(), PROCEDURE_KW | FUNCTION_KW)
+            && matches!(
+                self.nth(1),
+                BEGIN_KW
+                    | L_PAREN
+                    | COLON
+                    | VAR_KW
+                    | CONST_KW
+                    | TYPE_KW
+                    | LABEL_KW
+                    | PROCEDURE_KW
+                    | FUNCTION_KW
+            )
+    }
+
+    /// `AnonRoutine` (`docs/spec/objects.md` 9.1): the heading without a name, then the
+    /// `RoutineBody`. A directive written before the body is E0400 (`expected `begin``).
+    fn parse_anon_routine(&mut self) {
+        self.start_node(ANON_ROUTINE);
+        let is_function = self.at(FUNCTION_KW);
+        self.bump(); // procedure / function
+        if self.at(L_PAREN) {
+            self.parse_param_list();
+        }
+        if is_function
+            && (self.expect(COLON, &[IDENT, STRING_KW], &[])
+                || self.at(IDENT)
+                || self.at(STRING_KW))
+        {
+            self.start_node(RETURN_TYPE);
+            self.parse_type_spec(&[BEGIN_KW, VAR_KW, CONST_KW], TypeCtx::Return);
+            self.finish_node();
+        }
+        if self.routine_depth >= MAX_NESTING {
+            self.skip_too_deep_routines();
+        } else {
+            self.parse_routine_body(false, false);
+        }
+        self.finish_node();
+    }
+
     // ---- Post-processing after building the tree ----
 
     fn post_pass(&mut self, root: &SyntaxNode) -> Vec<Diagnostic> {
@@ -3934,7 +5402,26 @@ impl<'a> Parser<'a> {
                 // Around the sections of a unit and between the declarations of its sections
                 // (`docs/spec/directives.md` 3.1)
                 | UNIT | INTERFACE_SECTION | IMPLEMENTATION_SECTION | INIT_SECTION | FINAL_SECTION
-                | ROUTINE_HEADER_DECL => true,
+                | ROUTINE_HEADER_DECL
+                // Between the members of a class, interface or helper
+                | CLASS_BODY | INTERFACE_BODY => true,
+                CLASS_TYPE | INTERFACE_TYPE | HELPER_TYPE => {
+                    // Before the first member or `end` (`docs/spec/directives.md` 3.1); the body
+                    // starts at its first member, so the directives before it are here
+                    let next = tok
+                        .siblings_with_tokens(rowan::Direction::Next)
+                        .skip(1)
+                        .find(|e| !e.kind().is_trivia() && !matches!(e.kind(), DIRECTIVE | INACTIVE));
+                    next.is_some_and(|e| matches!(e.kind(), CLASS_BODY | INTERFACE_BODY | END_KW))
+                }
+                CLASS_VAR_SECTION => {
+                    // Between the fields: after `var`
+                    let var = parent
+                        .children_with_tokens()
+                        .filter_map(|e| e.into_token())
+                        .find(|t| t.kind() == VAR_KW);
+                    var.is_some_and(|v| v.text_range().end() <= tok.text_range().start())
+                }
                 CASE_STMT => {
                     // Between the arms: after `of` (`docs/spec/directives.md` 3.1)
                     let of = parent

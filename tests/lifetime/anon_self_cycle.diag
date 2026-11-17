@@ -1,0 +1,17 @@
+warning[W0024]: anonymous method captures `Self` and is stored in a field reachable from `Self` (self-capture-cycle)
+   --> anon_self_cycle.pas:19:14
+    |
+ 19 |   OnClick := procedure
+    |              ^^^^^^^^^
+    |   ------- stored here
+ 20 |     begin
+ 21 |       WriteLn('clicked ', Caption);
+    |                           ------- `Self` captured here
+ 22 |     end;
+    | ^^^^^^^
+    |
+    = note: move the body to a method and store a reference to that method (a method reference does not count `Self`)
+    = note: or copy `Self` to a `[weak]` local variable and use that in the anonymous method
+    = note: disable with `{$WARN self-capture-cycle OFF}`
+
+warning: 1 warning emitted

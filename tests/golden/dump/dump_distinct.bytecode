@@ -1,0 +1,82 @@
+; puyc format 0
+.const
+  0: str "`TSmall` (0..255)"
+  1: str " "
+  2: str "\n"
+.type
+  64: class Hello.TBox<Hello.TUserId> slots=1 parent=ty19 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+  65: class Hello.TBox<Int64> slots=1 parent=ty19 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+.global
+  0: int A
+  1: int B
+  2: int S
+  3: int N
+.host
+  0: Console.Write params=1 ret=0
+.unit Hello file="dump_distinct.pas" init=- fini=- entry=0
+.func 0 Hello.<main> params=0 regs=9
+  .line 28
+  0000  LoadZero     r6
+  0001  New          r6, ty64
+  0002  StoreGlobal  r6, g0
+  .line 29
+  0003  LoadZero     r6
+  0004  New          r6, ty65
+  0005  StoreGlobal  r6, g1
+  .line 30
+  0006  LoadGlobal   r6, g0
+  0007  LoadInt      r7, 1
+  0008  ObjSet       r6, 0, r7
+  .line 31
+  0009  LoadGlobal   r6, g1
+  000a  LoadGlobal   r8, g0
+  000b  CallMethod   r8, f1
+  000c  Move         r7, r8
+  000d  LoadInt      r8, 1
+  000e  AddIntChk    r7, r7, r8
+  000f  ObjSet       r6, 0, r7
+  .line 32
+  0010  LoadInt      r6, 200
+  0011  StoreGlobal  r6, g3
+  .line 33
+  0012  Move         r7, r6
+  0013  LoadInt      r8, 256
+  0014  ChkRange     r7, r8, k0
+  0015  StoreGlobal  r6, g2
+  .line 34
+  0016  LoadGlobal   r7, g0
+  0017  CallMethod   r7, f1
+  0018  Move         r6, r7
+  0019  IntToStr     r0, r6
+  001a  LoadConst    r1, k1
+  001b  ConcatStr    r0, r0, r1
+  001c  LoadGlobal   r8, g1
+  001d  CallMethod   r8, f1
+  001e  Move         r7, r8
+  001f  IntToStr     r2, r7
+  0020  ConcatStr    r0, r0, r2
+  0021  LoadConst    r3, k1
+  0022  ConcatStr    r0, r0, r3
+  0023  LoadGlobal   r8, g2
+  0024  IntToStr     r4, r8
+  0025  ConcatStr    r0, r0, r4
+  0026  LoadConst    r5, k2
+  0027  ConcatStr    r0, r0, r5
+  0028  CallHost     r0, h0
+  .line 35
+  0029  LoadGlobal   r6, g0
+  002a  Free         r6
+  .line 36
+  002b  LoadGlobal   r6, g1
+  002c  Free         r6
+  .line 37
+  002d  RetVoid
+.finally r0, r1, r2, r3, r4, r5
+.func 1 Hello.TBox<T>.Get params=1 regs=2
+; shared by Hello.TBox<Hello.TUserId>, Hello.TBox<Int64>
+  .local r0 Self
+  .local r1 Result
+  .line 19
+  0000  ObjGet       r1, r0, 0
+  .line 20
+  0001  Ret          r1

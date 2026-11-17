@@ -19,6 +19,9 @@
   .reg t14: string temp
   .reg t15: string temp
   .reg t16: string temp
+  .reg t17: string temp
+  .reg t18: string temp
+  .reg t19: string temp
 bb0:
   .line 29
   LoadConst    t2, "World"
@@ -32,37 +35,39 @@ bb0:
   ConcatStr    t3, t3, t4
   CallHost     -, h0(t3)
   .line 31
-  LoadZero     t6
-  LoadGlobalRef t6, g0
+  LoadGlobalRef t7, g0
+  Move         t6, t7
   Call         t6, f2(t6)
   MoveRef      t5, t6
-  LoadConst    t7, "\n"
-  ConcatStr    t5, t5, t7
+  LoadConst    t8, "\n"
+  ConcatStr    t5, t5, t8
   CallHost     -, h0(t5)
+  Release      t7
   .line 32
-  LoadZero     t9
-  LoadGlobalRef t9, g0
-  Call         t9, f3(t9)
-  MoveRef      t8, t9
-  LoadConst    t10, "\n"
-  ConcatStr    t8, t8, t10
-  CallHost     -, h0(t8)
+  LoadGlobalRef t11, g0
+  Move         t10, t11
+  Call         t10, f3(t10)
+  MoveRef      t9, t10
+  LoadConst    t12, "\n"
+  ConcatStr    t9, t9, t12
+  CallHost     -, h0(t9)
+  Release      t11
   .line 33
-  LoadZero     t12
-  LoadConst    t12, "single"
-  Call         t12, f3(t12)
-  MoveRef      t11, t12
-  LoadConst    t13, "\n"
-  ConcatStr    t11, t11, t13
-  CallHost     -, h0(t11)
+  LoadConst    t15, "single"
+  Move         t14, t15
+  Call         t14, f3(t14)
+  MoveRef      t13, t14
+  LoadConst    t16, "\n"
+  ConcatStr    t13, t13, t16
+  CallHost     -, h0(t13)
   .line 34
-  LoadConst    t16, "discarded"
-  Move         t15, t16
-  Call         t15, f1(t15)
-  MoveRef      t14, t15
+  LoadConst    t19, "discarded"
+  Move         t18, t19
+  Call         t18, f1(t18)
+  MoveRef      t17, t18
   .line 35
   RetVoid
-.finally t0, t2, t3, t4, t5, t7, t8, t10, t11, t13, t14, t16
+.finally t0, t2, t3, t4, t5, t7, t8, t9, t11, t12, t13, t15, t16, t17, t19
 .func f1 ReturnValues.Greet params=1
   .reg v0 Name: string const param
   .reg v1 Result: string result
@@ -81,7 +86,7 @@ bb0:
   AssignRef    v1, v0
   .line 14
   Ret          v1
-.finally v0, v1
+.finally v1
 .func f3 ReturnValues.FirstWord params=1
   .reg v0 S: string param
   .reg v1 Result: string result
@@ -124,4 +129,4 @@ bb4:
   StrCopy      v1, t4, t5, t6
   .line 24
   Ret          v1
-.finally v0, v1, t2
+.finally v1, t2

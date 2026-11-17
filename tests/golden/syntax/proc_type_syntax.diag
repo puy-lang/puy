@@ -1,0 +1,10 @@
+warning[W0009]: calling convention `cdecl` is ignored (ignored-calling-convention)
+   --> proc_type_syntax.pas:11:22
+    |
+ 11 |   TCall = procedure; cdecl;
+    |                      ^^^^^
+    |
+    = note: disable with `{$WARN ignored-calling-convention OFF}`
+    = fix: remove `cdecl`
+
+warning: 1 warning emitted

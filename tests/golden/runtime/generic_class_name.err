@@ -1,0 +1,2 @@
+error: uncaught exception EBoxError<GenericClassName.TBox<Integer>>: uncaught
+  at GenericClassName.<main> (generic_class_name.pas:67)

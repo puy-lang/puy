@@ -1,0 +1,43 @@
+error[E2000]: variable `A` may be read before it is assigned
+   --> anon_flow.pas:14:8
+    |
+ 11 |   A, B, C, D: Integer;
+    |   - declared here
+...
+ 14 |   P := procedure
+    |        ^^^^^^^^^
+...
+ 19 |     end;
+    | ^^^^^^^ captured here
+    |
+    = note: Puy requires every local variable to be assigned before it is read
+    = note: declare `A` on its own to give it an initial value
+
+error[E2000]: variable `C` may be read before it is assigned
+   --> anon_flow.pas:20:8
+    |
+ 11 |   A, B, C, D: Integer;
+    |         - declared here
+...
+ 20 |   Q := procedure
+    |        ^^^^^^^^^
+...
+ 27 |     end;
+    | ^^^^^^^ captured here
+    |
+    = note: Puy requires every local variable to be assigned before it is read
+    = note: declare `C` on its own to give it an initial value
+
+error[E2000]: variable `D` may be read before it is assigned
+   --> anon_flow.pas:30:11
+    |
+ 11 |   A, B, C, D: Integer;
+    |            - declared here
+...
+ 30 |   WriteLn(D);
+    |           ^ read here
+    |
+    = note: Puy requires every local variable to be assigned before it is read
+    = note: declare `D` on its own to give it an initial value
+
+error: aborting due to 3 errors

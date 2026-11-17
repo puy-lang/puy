@@ -9,4 +9,5 @@ license.workspace = true
 
 [dependencies]
 puy-host.workspace = true
+puy-stdlib.workspace = true
 rowan.workspace = true

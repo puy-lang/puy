@@ -1,0 +1,14 @@
+read: array element 1 is passed to a var parameter of a call in progress
+write: array element 1 is passed to a var parameter of a call in progress
+copy: a value containing a location passed to a var parameter of a call in progress cannot be copied
+slice: a value containing a location passed to a var parameter of a call in progress cannot be copied
+concat: a value containing a location passed to a var parameter of a call in progress cannot be copied
+insert: a value containing a location passed to a var parameter of a call in progress cannot be copied
+delete: a value containing a location passed to a var parameter of a call in progress cannot be copied
+other: ok
+13 10 3
+argument: array element 0 is passed to a var parameter of a call in progress
+5
+4
+field: a record field is passed to a var parameter of a call in progress
+3

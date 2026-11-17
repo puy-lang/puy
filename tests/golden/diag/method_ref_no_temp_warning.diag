@@ -1,0 +1,11 @@
+warning[W0023]: method reference to a temporary instance of `TBase` (temporary-method-reference)
+   --> method_ref_no_temp_warning.pas:37:8
+    |
+ 37 |   E := TBase.Create.Show;
+    |        ^^^^^^^^^^^^
+    |
+    = note: the instance is released at the end of the routine, and the method reference is no longer assigned after that
+    = note: store the instance in a variable or a field, and make the method reference from it
+    = note: disable with `{$WARN temporary-method-reference OFF}`
+
+warning: 1 warning emitted

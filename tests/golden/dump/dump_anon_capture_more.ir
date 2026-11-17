@@ -1,0 +1,217 @@
+; puy ir 1
+.global
+  g0 B: TBox
+  g1 P: TProc
+.func f0 DumpAnonCaptureMore.<main> params=0
+  .reg t0: TBox temp
+  .reg t1: TBox temp
+  .reg t2: string temp
+  .reg t3: TProc temp
+  .reg t4: TBox temp
+  .reg t5: TBox temp
+  .reg t6: TProc temp
+  .reg t7: - ref
+  .reg t8: TProc temp
+  .reg t9: string temp
+  .reg t10: string temp
+bb0:
+  .line 44
+  New          t0, DumpAnonCaptureMore.TBox
+  StoreGlobalRef t0, g0
+  .line 45
+  LoadGlobal   t1, g0
+  LoadConst    t2, "box"
+  ObjSetRef    t1, 0, t2
+  .line 46
+  LoadGlobalRef t5, g0
+  Move         t4, t5
+  CallMethod   t4, f1(t4)
+  MoveRef      t3, t4
+  StoreGlobalRef t3, g1
+  .line 47
+  LoadGlobalRef t6, g1
+  CallClosure  -, t6()
+  .line 48
+  LoadConst    t10, "s"
+  Move         t9, t10
+  Call         t9, f3(t9)
+  MoveRef      t8, t9
+  StoreGlobalRef t8, g1
+  .line 49
+  RetVoid
+.finally t0, t2, t3, t5, t6, t8, t10
+.func f1 DumpAnonCaptureMore.TBox.Show params=1
+  .reg v0 Self: TBox self
+  .reg v1 Result: TProc result
+  .reg v2 Self: TBox cell v0
+  .reg t0: Int64 temp
+  .reg t1: Int64 temp
+  .reg t2: - temp
+bb0:
+  .line 14
+  NewCellRef   v2
+  CellSetRef   v2, v0
+  .line 16
+  LoadInt      t0, 2
+  LoadInt      t1, 1
+  Move         t2, v2
+  MakeClosure  v1, t0, t1, t2
+  .line 17
+  Ret          v1
+.finally v1, v2
+.func f2 DumpAnonCaptureMore.TBox.Show.<anon1> params=1
+  .reg link
+  .reg v0 Self: TBox outer v0 up=1
+  .reg v1 Self: TBox capture v0
+  .reg t0: string temp
+  .reg t1: TBox temp
+  .reg t2: string temp
+bb0:
+  .line 16
+  CapGet       v1, link, 0
+  CellRef      v0, v1
+  LoadRef      t1, v0
+  ObjGetRef    t0, t1, 0
+  LoadConst    t2, "\n"
+  ConcatStr    t0, t0, t2
+  CallHost     -, h0(t0)
+  RetVoid
+.finally t0, t2
+.func f3 DumpAnonCaptureMore.Make params=1
+  .reg v0 S: string const param
+  .reg v1 Result: TProc result
+  .reg v2 O: TObject local
+  .reg v3 Total: Integer local
+  .reg v4 -: TProc hidden
+  .reg v5 S: string cell v0
+  .reg v6 O: TObject cell v2
+  .reg v7 Total: Integer cell v3
+  .reg t0: Int64 temp
+  .reg t1: Int64 temp
+  .reg t2: - temp
+  .reg t3: TObject temp
+  .reg t4: Int64 temp
+  .reg t5: Integer temp
+  .reg t6: - ref
+  .reg t7: Int64 temp
+  .reg t8: Int64 temp
+  .reg t9: - temp
+  .reg t10: - temp
+  .reg t11: - temp
+  .reg t12: - ref
+  .reg t13: - temp
+  .reg t14: Int64 temp
+bb0:
+  .line 19
+  NewCellRef   v5
+  CellSetRef   v5, v0
+  NewCellObj   v6
+  CellRef      v2, v6
+  NewCell      v7
+  CellRef      v3, v7
+  LoadInt      t0, -1
+  LoadInt      t1, 1
+  Move         t2, v7
+  MakeClosure  v4, t0, t1, t2
+  .line 32
+  New          t3, DumpAnonCaptureMore.TBox
+  LoadRef      t4, v2
+  AddRefObj    t3
+  StoreRef     v2, t3
+  ReleaseObj   t4
+  .line 33
+  LoadZero     t5
+  StoreRef     v3, t5
+  .line 34
+  Move         t6, v4
+  Call         -, f4(t6)
+  .line 35
+  LoadInt      t7, 5
+  LoadInt      t8, 3
+  Move         t9, v5
+  Move         t10, v6
+  Move         t11, v7
+  MakeClosure  v1, t7, t8, t9, t10, t11
+  .line 36
+  CallClosure  -, v1()
+  .line 37
+  Move         t13, v4
+  LoadInt      t14, 4
+  ClosureWith  v1, t13
+  .line 38
+  Ret          v1
+.finally v1, v4, v5, v6, v7, t3:obj
+.func f4 DumpAnonCaptureMore.Make.Down params=1
+  .reg link
+  .reg v0 Total: Integer outer v3 up=1
+  .reg v1 Total: Integer capture v0
+  .reg t0: Integer temp
+  .reg t1: Integer temp
+  .reg t2: Integer temp
+  .reg t3: - ref
+bb0:
+  .line 24
+  CapGet       v1, link, 0
+  CellRef      v0, v1
+  .line 26
+  LoadRef      t0, v0
+  AddIntI      t0, t0, 1
+  NarrowOvf    t0, t0, 4
+  StoreRef     v0, t0
+  .line 27
+  LoadRef      t1, v0
+  LoadInt      t2, 2
+  JmpIfLeInt   t2, t1, bb2, bb1
+bb1:
+  .line 28
+  Move         t3, link
+  Call         -, f4(t3)
+  .line 27
+  Jmp          bb3
+bb2:
+  .line 27
+  Jmp          bb3
+bb3:
+  .line 29
+  RetVoid
+.finally
+.func f5 DumpAnonCaptureMore.Make.<anon1> params=1
+  .reg link
+  .reg v0 S: string outer v0 up=1
+  .reg v1 O: TObject outer v2 up=1
+  .reg v2 Total: Integer outer v3 up=1
+  .reg v3 S: string capture v0
+  .reg v4 O: TObject capture v1
+  .reg v5 Total: Integer capture v2
+  .reg t0: string temp
+  .reg t1: string temp
+  .reg t2: string temp
+  .reg t3: TObject temp
+  .reg t4: string temp
+  .reg t5: string temp
+  .reg t6: Integer temp
+  .reg t7: string temp
+bb0:
+  .line 35
+  CapGet       v3, link, 0
+  CellRef      v0, v3
+  CapGet       v4, link, 1
+  CellRef      v1, v4
+  CapGet       v5, link, 2
+  CellRef      v2, v5
+  LoadRefRef   t0, v0
+  LoadConst    t1, " "
+  ConcatStr    t0, t0, t1
+  LoadRef      t3, v1
+  ClassName    t2, t3
+  ConcatStr    t0, t0, t2
+  LoadConst    t4, " "
+  ConcatStr    t0, t0, t4
+  LoadRef      t6, v2
+  IntToStr     t5, t6
+  ConcatStr    t0, t0, t5
+  LoadConst    t7, "\n"
+  ConcatStr    t0, t0, t7
+  CallHost     -, h0(t0)
+  RetVoid
+.finally t0, t1, t2, t4, t5, t7

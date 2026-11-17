@@ -1,0 +1,75 @@
+; puyc format 0
+.const
+  0: str "a"
+  1: str "\n"
+.type
+  64: class DumpClass.TBase slots=1 refs=0 parent=ty19 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+  65: class DumpClass.TChild slots=4 refs=0,2 parent=ty64 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+  66: record DumpClass.TPoint slots=2
+.global
+  0: int C
+  1: obj O
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpClass file="dump_class.pas" init=- fini=- entry=0
+.func 0 DumpClass.<main> params=0 regs=12
+  .line 25
+  0000  LoadZero     r7
+  0001  New          r7, ty65
+  0002  StoreGlobal  r7, g0
+  .line 26
+  0003  LoadConst    r0, k0
+  0004  ObjSetRef    r7, 0, r0
+  .line 27
+  0005  LoadGlobal   r7, g0
+  0006  LoadGlobal   r9, g0
+  0007  ObjGet       r8, r9, 1
+  0008  AddIntI      r8, r8, 1
+  0009  NarrowOvf    r8, r8, 4
+  000a  ObjSet       r7, 1, r8
+  .line 28
+  000b  LoadGlobal   r7, g0
+  000c  LoadInt      r8, 2
+  000d  ObjGet       r9, r7, 2
+  000e  Unique       r9, ty66
+  000f  ObjSet       r7, 2, r9
+  0010  FieldSet     r9, 1, r8
+  .line 29
+  0011  LoadGlobal   r7, g0
+  0012  ObjGetRef    r1, r7, 0
+  0013  LoadGlobal   r8, g0
+  0014  ObjGet       r9, r8, 2
+  0015  FieldGet     r7, r9, 1
+  0016  IntToStr     r2, r7
+  0017  ConcatStr    r1, r1, r2
+  0018  LoadGlobal   r10, g0
+  0019  ObjGet       r9, r10, 3
+  001a  LoadZero     r10
+  001b  EqInt        r8, r9, r10
+  001c  NotBool      r8, r8
+  001d  BoolToStr    r3, r8
+  001e  ConcatStr    r1, r1, r3
+  001f  LoadGlobal   r10, g0
+  0020  LoadZero     r11
+  0021  EqInt        r9, r10, r11
+  0022  NotBool      r9, r9
+  0023  BoolToStr    r4, r9
+  0024  ConcatStr    r1, r1, r4
+  0025  LoadConst    r5, k1
+  0026  ConcatStr    r1, r1, r5
+  0027  CallHost     r1, h0
+  .line 30
+  0028  New          r6, ty19
+  0029  LoadGlobal   r7, g1
+  002a  AddRefObj    r6
+  002b  StoreGlobal  r6, g1
+  002c  ReleaseObj   r7
+  .line 31
+  002d  LoadGlobal   r7, g1
+  002e  Destroy      r7
+  .line 32
+  002f  LoadGlobal   r7, g0
+  0030  Free         r7
+  .line 33
+  0031  RetVoid
+.finally r0, r1, r2, r3, r4, r5, r6:obj

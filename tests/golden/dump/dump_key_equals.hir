@@ -1,0 +1,88 @@
+program DumpKeyEquals
+.type TPoint = record
+  .field 0 X: Integer
+  .field 1 Y: Integer
+.global g0 P: TPoint
+.global g1 Q: TPoint
+.global g2 B: Boolean
+.global g3 H: Int64
+.routine - Same<T>(const A: T; const B: T): Boolean
+  .var v0 A: T const param
+  .var v1 B: T const param
+  .var v2 Result: Boolean result
+  assign @15 R+
+    var v2 Result
+    call KeyEquals<T>: Boolean
+      var v0 A: T
+      var v1 B: T
+.instance Same<Integer>
+.routine f1 Same<Integer>(const A: Integer; const B: Integer): Boolean
+  .var v0 A: Integer const param
+  .var v1 B: Integer const param
+  .var v2 Result: Boolean result
+  assign @15 R+
+    var v2 Result
+    call KeyEquals<Integer>: Boolean
+      var v0 A: Integer
+      var v1 B: Integer
+.generated <eq:DumpKeyEquals.TPoint>
+.routine f2 <eq:DumpKeyEquals.TPoint>(const A: TPoint; const B: TPoint): Boolean
+  .var v0 A: TPoint const param
+  .var v1 B: TPoint const param
+  .var v2 Result: Boolean result
+  assign @9 R-
+    var v2 Result
+    binary Boolean
+      call KeyEquals<Integer>: Boolean
+        field Integer X #0
+          var v0 A: TPoint
+        field Integer X #0
+          var v1 B: TPoint
+      and Boolean bool
+        call KeyEquals<Integer>: Boolean
+          field Integer Y #1
+            var v0 A: TPoint
+          field Integer Y #1
+            var v1 B: TPoint
+.generated <hash:DumpKeyEquals.TPoint>
+.routine f3 <hash:DumpKeyEquals.TPoint>(const X: TPoint): Int64
+  .var v0 X: TPoint const param
+  .var v1 Result: Int64 result
+  assign @9 R-
+    var v1 Result
+    call KeyHash<Int64>: Int64
+      const Int64 2
+  assign @9 R-
+    var v1 Result
+    builtin HashCombine Int64
+      var v1 Result: Int64
+      call KeyHash<Integer>: Int64
+        field Integer X #0
+          var v0 X: TPoint
+  assign @9 R-
+    var v1 Result
+    builtin HashCombine Int64
+      var v1 Result: Int64
+      call KeyHash<Integer>: Int64
+        field Integer Y #1
+          var v0 X: TPoint
+.routine <main>
+  assign @23 R+
+    global g2 B
+    call KeyEquals<TPoint> via f2: Boolean
+      global g0 P: TPoint
+      global g1 Q: TPoint
+  assign @24 R+
+    global g3 H
+    call KeyHash<TPoint> via f3: Int64
+      global g0 P: TPoint
+  assign @25 R+
+    global g2 B
+    call KeyEquals<Char>: Boolean
+      const Char #97
+      const Char #98
+  assign @26 R+
+    global g2 B
+    call f1 Same<Integer>: Boolean
+      const Integer 1
+      const Integer 2

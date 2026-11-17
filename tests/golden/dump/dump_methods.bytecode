@@ -1,0 +1,135 @@
+; puyc format 0
+.const
+  0: str " "
+  1: str "\n"
+  2: str "box"
+.type
+  64: class DumpMethods.TShape abstract slots=0 parent=ty19 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4,abstract:TShape.Area,f1
+  65: class DumpMethods.TSquare slots=1 parent=ty64 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4,f3,f4
+  66: class DumpMethods.TBox sealed slots=1 parent=ty65 vmt=builtin0,builtin0,builtin0,f6,builtin3,builtin4,f5,f4
+.global
+  0: int S
+  1: int Q
+  2: int B
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpMethods file="dump_methods.pas" init=- fini=- entry=0
+.func 0 DumpMethods.<main> params=0 regs=10
+  .line 61
+  0000  LoadZero     r6
+  0001  New          r6, ty66
+  0002  StoreGlobal  r6, g2
+  .line 62
+  0003  LoadInt      r7, 1
+  0004  ObjSet       r6, 0, r7
+  .line 63
+  0005  LoadGlobal   r6, g2
+  0006  StoreGlobal  r6, g0
+  .line 64
+  0007  LoadGlobal   r6, g2
+  0008  StoreGlobal  r6, g1
+  .line 65
+  0009  LoadGlobal   r6, g0
+  000a  CallMethod   r6, f2
+  .line 66
+  000b  LoadGlobal   r7, g2
+  000c  CallMethod   r7, f5
+  000d  Move         r6, r7
+  000e  IntToStr     r0, r6
+  000f  LoadConst    r1, k0
+  0010  ConcatStr    r0, r0, r1
+  0011  LoadGlobal   r8, g1
+  0012  CallMethod   r8, f4
+  0013  Move         r7, r8
+  0014  IntToStr     r2, r7
+  0015  ConcatStr    r0, r0, r2
+  0016  LoadConst    r3, k0
+  0017  ConcatStr    r0, r0, r3
+  0018  LoadGlobal   r9, g0
+  0019  CallVirtual  r9, 6
+  001a  Move         r8, r9
+  001b  IntToStr     r4, r8
+  001c  ConcatStr    r0, r0, r4
+  001d  LoadConst    r5, k1
+  001e  ConcatStr    r0, r0, r5
+  001f  CallHost     r0, h0
+  .line 67
+  0020  LoadGlobal   r6, g2
+  0021  Free         r6
+  .line 68
+  0022  RetVoid
+.finally r0, r1, r2, r3, r4, r5
+.func 1 DumpMethods.TShape.Twice params=1 regs=4
+  .local r0 Self
+  .local r1 Result
+  .line 28
+  0000  LoadInt      r1, 2
+  0001  Move         r3, r0
+  0002  CallVirtual  r3, 6
+  0003  MulInt       r1, r1, r3
+  0004  NarrowOvf    r1, r1, 4
+  .line 29
+  0005  Ret          r1
+.func 2 DumpMethods.TShape.Show params=1 regs=9
+  .local r0 Self
+  .line 33
+  0000  Move         r8, r0
+  0001  CallVirtual  r8, 7
+  0002  Move         r7, r8
+  0003  IntToStr     r1, r7
+  0004  LoadConst    r2, k0
+  0005  ConcatStr    r1, r1, r2
+  0006  Move         r8, r0
+  0007  CallVirtual  r8, 3
+  0008  MoveRef      r3, r8
+  0009  ConcatStr    r1, r1, r3
+  000a  LoadConst    r4, k0
+  000b  ConcatStr    r1, r1, r4
+  000c  ClassName    r5, r0
+  000d  ConcatStr    r1, r1, r5
+  000e  LoadConst    r6, k1
+  000f  ConcatStr    r1, r1, r6
+  0010  CallHost     r1, h0
+  .line 34
+  0011  RetVoid
+.finally r1, r2, r3, r4, r5, r6
+.func 3 DumpMethods.TSquare.Area params=1 regs=3
+  .local r0 Self
+  .local r1 Result
+  .line 38
+  0000  ObjGet       r1, r0, 0
+  0001  ObjGet       r2, r0, 0
+  0002  MulInt       r1, r1, r2
+  0003  NarrowOvf    r1, r1, 4
+  .line 39
+  0004  Ret          r1
+.func 4 DumpMethods.TSquare.Twice params=1 regs=3
+  .local r0 Self
+  .local r1 Result
+  .line 43
+  0000  Move         r2, r0
+  0001  CallMethod   r2, f1
+  0002  Move         r1, r2
+  0003  AddIntI      r1, r1, 1
+  0004  NarrowOvf    r1, r1, 4
+  .line 44
+  0005  Ret          r1
+.func 5 DumpMethods.TBox.Area params=1 regs=4
+  .local r0 Self
+  .local r1 Result
+  .line 48
+  0000  LoadInt      r1, 6
+  0001  Move         r3, r0
+  0002  CallMethod   r3, f3
+  0003  MulInt       r1, r1, r3
+  0004  NarrowOvf    r1, r1, 4
+  .line 49
+  0005  Ret          r1
+.func 6 DumpMethods.TBox.ToString params=1 regs=2
+  .local r0 Self
+  .local r1 Result
+  .line 53
+  0000  LoadConst    r1, k2
+  .line 54
+  0001  Ret          r1
+.finally r1

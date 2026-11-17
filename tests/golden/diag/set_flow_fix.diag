@@ -1,0 +1,57 @@
+error[E2000]: variable `Result` may be read before it is assigned
+   --> set_flow_fix.pas:13:11
+    |
+ 13 |   Include(Result, TColor.Red);
+    |           ^^^^^^ read here
+    |
+    = note: Puy requires `Result` to be assigned before it is read
+    = fix: add `Result := [];` at the start of the body
+
+error[E2000]: variable `A` may be read before it is assigned
+   --> set_flow_fix.pas:23:25
+    |
+ 18 |   A: TColors;
+    |   - declared here
+...
+ 23 |   WriteLn(TColor.Red in A, 1 in B, 'a' in C, 2 in D, TColor.Green in Pick);
+    |                         ^ read here
+    |
+    = note: Puy requires every local variable to be assigned before it is read
+    = fix: add an initial value: `var A: TColors = [];`
+
+error[E2000]: variable `B` may be read before it is assigned
+   --> set_flow_fix.pas:23:33
+    |
+ 19 |   B: set of Byte;
+    |   - declared here
+...
+ 23 |   WriteLn(TColor.Red in A, 1 in B, 'a' in C, 2 in D, TColor.Green in Pick);
+    |                                 ^ read here
+    |
+    = note: Puy requires every local variable to be assigned before it is read
+    = fix: add an initial value: `var B: set of Byte = [];`
+
+error[E2000]: variable `C` may be read before it is assigned
+   --> set_flow_fix.pas:23:43
+    |
+ 20 |   C: set of Char;
+    |   - declared here
+...
+ 23 |   WriteLn(TColor.Red in A, 1 in B, 'a' in C, 2 in D, TColor.Green in Pick);
+    |                                           ^ read here
+    |
+    = note: Puy requires every local variable to be assigned before it is read
+    = fix: add an initial value: `var C: set of Char = [];`
+
+error[E2000]: variable `D` may be read before it is assigned
+   --> set_flow_fix.pas:23:51
+    |
+ 22 |   var D: set of Word;
+    |       - declared here
+ 23 |   WriteLn(TColor.Red in A, 1 in B, 'a' in C, 2 in D, TColor.Green in Pick);
+    |                                                   ^ read here
+    |
+    = note: Puy requires every local variable to be assigned before it is read
+    = fix: add an initial value: `var D: set of Word := [];`
+
+error: aborting due to 5 errors

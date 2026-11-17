@@ -11,6 +11,8 @@ error[E0730]: cannot iterate over a value of type `UTF8String`
     |
  21 |   for C in U do
     |            ^
+    |
+    = note: convert it with `string(S)` to iterate over its characters, or write a helper with `GetEnumerator`
 
 error[E0702]: type mismatch: expected `string`, found `UTF8String` (argument 1, parameter `S`)
    --> utf8_diag.pas:23:10

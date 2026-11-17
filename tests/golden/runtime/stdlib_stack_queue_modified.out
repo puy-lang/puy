@@ -1,0 +1,10 @@
+visit 1
+EInvalidOperation: `TStack<Integer>` was modified during enumeration
+EInvalidOperation: `TStack<Integer>` was modified during enumeration
+sum 18
+EInvalidOperation: `TStack<Integer>` was modified during enumeration
+EInvalidOperation: `TStack<Integer>` was modified during enumeration
+EInvalidOperation: `TQueue<Integer>` was modified during enumeration
+EInvalidOperation: `TQueue<Integer>` was modified during enumeration
+EInvalidOperation: `TMyQueue` was modified during enumeration
+EInvalidOperation: `TStack<StdlibStackQueueModified.TFoo>` was modified during enumeration

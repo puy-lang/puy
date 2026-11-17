@@ -1,0 +1,140 @@
+; puyc format 0
+.const
+  0: str "x"
+  1: str "1"
+  2: str "2"
+  3: str "3"
+  4: str "4"
+  5: str "5"
+  6: str "\n"
+.type
+  64: interface DumpCallArgs.IRun parent=ty24 methods=1
+  65: class DumpCallArgs.TBase ref slots=0 parent=ty20 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4,f1,f2,f4 intf=ty24:;ty64:f1
+.intfcall
+  0: ty64 #0
+.global
+  0: ref B
+  1: obj I
+  2: int C
+  3: ref X
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpCallArgs file="dump_call_args.pas" init=- fini=- entry=0
+.func 0 DumpCallArgs.<main> params=0 regs=24
+  .line 50
+  0000  LoadConst    r0, k0
+  0001  StoreGlobalRef r0, g3
+  .line 51
+  0002  New          r1, ty65
+  0003  StoreGlobalRef r1, g0
+  .line 52
+  0004  LoadGlobalRef r2, g0
+  0005  Move         r19, r2
+  0006  LoadGlobalRef r3, g3
+  0007  LoadConst    r4, k1
+  0008  ConcatStr    r3, r3, r4
+  0009  Move         r20, r3
+  000a  LoadInt      r21, 1
+  000b  CallVirtual  r19, 6
+  .line 53
+  000c  LoadGlobalRef r5, g0
+  000d  Move         r19, r5
+  000e  LoadGlobalRef r6, g3
+  000f  Move         r20, r6
+  0010  LoadGlobal   r23, g0
+  0011  AssignObj    r7, r23
+  0012  Move         r21, r7
+  0013  LoadGlobalRef r8, g3
+  0014  LoadConst    r9, k2
+  0015  ConcatStr    r8, r8, r9
+  0016  Move         r22, r8
+  0017  CallVirtual  r19, 7
+  0018  Release      r6
+  .line 54
+  0019  LoadGlobalRef r10, g0
+  001a  Move         r19, r10
+  001b  LoadGlobalRef r11, g3
+  001c  LoadConst    r12, k3
+  001d  ConcatStr    r11, r11, r12
+  001e  Move         r20, r11
+  001f  CallMethod   r19, f3
+  .line 55
+  0020  LoadInt      r19, 66
+  0021  StoreGlobal  r19, g2
+  .line 56
+  0022  LoadGlobalRef r13, g3
+  0023  LoadConst    r14, k4
+  0024  ConcatStr    r13, r13, r14
+  0025  Move         r20, r13
+  0026  CallVirtualClass r19, 8
+  .line 57
+  0027  LoadGlobal   r19, g0
+  0028  AssignObj    r15, r19
+  0029  LoadGlobal   r19, g1
+  002a  AddRefObj    r15
+  002b  StoreGlobal  r15, g1
+  002c  ReleaseObj   r19
+  .line 58
+  002d  LoadGlobal   r22, g1
+  002e  AssignObj    r16, r22
+  002f  Move         r19, r16
+  0030  LoadGlobalRef r17, g3
+  0031  LoadConst    r18, k5
+  0032  ConcatStr    r17, r17, r18
+  0033  Move         r20, r17
+  0034  LoadInt      r21, 5
+  0035  CallIntf     r19, ic0
+  .line 59
+  0036  RetVoid
+.finally r0, r1, r2, r3, r4, r5, r6, r7:obj, r8, r9, r10, r11, r12, r13, r14, r15:obj, r16:obj, r17, r18
+.func 1 DumpCallArgs.TBase.Run params=3 regs=6
+  .local r0 Self
+  .local r1 S
+  .local r2 N
+  .line 26
+  0000  AssignRef    r3, r1
+  0001  IntToStr     r4, r2
+  0002  ConcatStr    r3, r3, r4
+  0003  LoadConst    r5, k6
+  0004  ConcatStr    r3, r3, r5
+  0005  CallHost     r3, h0
+  .line 27
+  0006  RetVoid
+.finally r3, r4, r5
+.func 2 DumpCallArgs.TBase.Put params=4 regs=7
+  .local r0 Self
+  .local r1 C
+  .local r2 O
+  .local r3 S
+  .line 31
+  0000  AssignRef    r4, r1
+  0001  AssignRef    r5, r3
+  0002  ConcatStr    r4, r4, r5
+  0003  LoadConst    r6, k6
+  0004  ConcatStr    r4, r4, r6
+  0005  CallHost     r4, h0
+  .line 32
+  0006  RetVoid
+.finally r4, r5, r6
+.func 3 DumpCallArgs.TBase.Plain params=2 regs=4
+  .local r0 Self
+  .local r1 S
+  .line 36
+  0000  AssignRef    r2, r1
+  0001  LoadConst    r3, k6
+  0002  ConcatStr    r2, r2, r3
+  0003  CallHost     r2, h0
+  .line 37
+  0004  RetVoid
+.finally r2, r3
+.func 4 DumpCallArgs.TBase.Make params=2 regs=4
+  .local r0 Self
+  .local r1 S
+  .line 41
+  0000  AssignRef    r2, r1
+  0001  LoadConst    r3, k6
+  0002  ConcatStr    r2, r2, r3
+  0003  CallHost     r2, h0
+  .line 42
+  0004  RetVoid
+.finally r2, r3

@@ -1,0 +1,5 @@
+warning: 4 heap blocks were not freed
+  <cell Self>: 1
+  <closure AnonSelfCycle.TForm.Create.<anon1>>: 1
+  AnonSelfCycle.TForm: 1
+  string: 1

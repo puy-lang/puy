@@ -1,0 +1,10 @@
+caught outer
+caught outer
+caught outer
+caught outer
+suppressed 4
+destroy one
+destroy two
+destroy four
+outer cleared
+end

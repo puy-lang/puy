@@ -1,0 +1,80 @@
+program DumpProcs
+.type TCompare = function(A: Integer; B: Integer): Integer
+.type TNotify = procedure(Sender: TObject) of object
+.type TRun = reference to procedure
+.type TFoo = class(TRefObject) ref
+  .method f0 Handle virtual 6
+  .method f1 Go
+  .method f2 Hello class
+.global g0 C: TCompare
+.global g1 N: TNotify
+.global g2 R: TRun
+.global g3 O: TFoo
+.routine f0 TFoo.Handle(Sender: TObject)
+  .var v0 Self: TFoo self
+  .var v1 Sender: TObject param
+.routine f1 TFoo.Go()
+  .var v0 Self: TFoo self
+.routine f2 TFoo.Hello()
+  .var v0 Self: class of TFoo self
+.routine f3 Cmp(A: Integer; B: Integer): Integer
+  .var v0 A: Integer param
+  .var v1 B: Integer param
+  .var v2 Result: Integer result
+  assign @34 R+
+    var v2 Result
+    binary Integer
+      var v0 A: Integer
+      - Integer int:Integer
+        var v1 B: Integer
+.routine f4 Cmp2()
+.routine <main>
+  assign @47 R+
+    global g0 C
+    routine-ref f3 Cmp
+  writeln @48
+    arg
+      call-indirect: Integer
+        global g0 C: TCompare
+        const Integer 2
+        const Integer 1
+  assign @49 R+
+    global g3 O
+    create TFoo builtin
+  assign @50 R+
+    global g1 N
+    method-ref virtual 6 TFoo.Handle
+      global g3 O: TFoo
+  expr @51
+    call-closure: -
+      global g1 N: TNotify
+      global g3 O: TObject
+  assign @52 R+
+    global g2 R
+    method-ref f1 TFoo.Go
+      global g3 O: TFoo
+  expr @53
+    call-closure: -
+      global g2 R: TRun
+  assign @54 R+
+    global g2 R
+    class-method-ref f2 TFoo.Hello
+      classref TFoo
+  assign @55 R+
+    global g2 R
+    to-closure TRun
+      routine-ref f4 Cmp2
+  writeln @56
+    arg
+      builtin Assigned Boolean
+        global g2 R: TRun
+    arg
+      binary Boolean
+        global g0 C: TCompare
+        = Boolean ref
+          routine-ref f3 Cmp
+    arg
+      binary Boolean
+        global g1 N: TNotify
+        <> Boolean callable
+          const TNotify nil

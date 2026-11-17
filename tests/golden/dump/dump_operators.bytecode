@@ -1,0 +1,130 @@
+; puyc format 0
+.const
+  0: str "\n"
+  1: str " "
+.type
+  64: class DumpOperators.TNode ref slots=0 parent=ty20 vmt=builtin0,builtin0,builtin0,builtin1,f6,f5
+  65: record DumpOperators.TVec slots=1
+.global
+  0: ref V
+  1: ref N
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpOperators file="dump_operators.pas" init=- fini=- entry=0
+.func 0 DumpOperators.<main> params=0 regs=19
+  .line 52
+  0000  LoadInt      r16, 1
+  0001  Call         r16, f2
+  0002  MoveRef      r0, r16
+  0003  StoreGlobalRef r0, g0
+  .line 53
+  0004  LoadGlobalRef r2, g0
+  0005  Move         r16, r2
+  0006  LoadInt      r18, 2
+  0007  Call         r18, f2
+  0008  MoveRef      r3, r18
+  0009  Move         r17, r3
+  000a  Call         r16, f1
+  000b  MoveRef      r1, r16
+  000c  StoreGlobalRef r1, g0
+  000d  Release      r2
+  .line 54
+  000e  LoadGlobalRef r5, g0
+  000f  Move         r17, r5
+  0010  Call         r17, f3
+  0011  Move         r16, r17
+  0012  IntToStr     r4, r16
+  0013  LoadConst    r6, k0
+  0014  ConcatStr    r4, r4, r6
+  0015  CallHost     r4, h0
+  0016  Release      r5
+  .line 55
+  0017  New          r7, ty64
+  0018  StoreGlobalRef r7, g1
+  .line 56
+  0019  LoadGlobalRef r9, g1
+  001a  Move         r17, r9
+  001b  LoadGlobalRef r10, g1
+  001c  Move         r18, r10
+  001d  Call         r17, f4
+  001e  Move         r16, r17
+  001f  BoolToStr    r8, r16
+  0020  LoadConst    r11, k1
+  0021  ConcatStr    r8, r8, r11
+  0022  LoadGlobalRef r13, g1
+  0023  Release      r14
+  0024  EqInt        r17, r13, r14
+  0025  BoolToStr    r12, r17
+  0026  ConcatStr    r8, r8, r12
+  0027  LoadConst    r15, k0
+  0028  ConcatStr    r8, r8, r15
+  0029  CallHost     r8, h0
+  .line 57
+  002a  RetVoid
+.finally r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15
+.func 1 DumpOperators.TVec.Add params=2 regs=5
+  .local r0 A
+  .local r1 B
+  .local r2 Result
+  .line 23
+  0000  Release      r2
+  .line 24
+  0001  FieldGet     r3, r0, 0
+  0002  FieldGet     r4, r1, 0
+  0003  AddInt       r3, r3, r4
+  0004  NarrowOvf    r3, r3, 4
+  0005  Unique       r2, ty65
+  0006  FieldSet     r2, 0, r3
+  .line 25
+  0007  Ret          r2
+.finally r2
+.func 2 DumpOperators.TVec.Implicit params=1 regs=2
+  .local r0 N
+  .local r1 Result
+  .line 29
+  0000  Release      r1
+  .line 30
+  0001  Unique       r1, ty65
+  0002  FieldSet     r1, 0, r0
+  .line 31
+  0003  Ret          r1
+.finally r1
+.func 3 DumpOperators.TVec.explicit params=1 regs=2
+  .local r0 A
+  .local r1 Result
+  .line 35
+  0000  FieldGet     r1, r0, 0
+  .line 36
+  0001  Ret          r1
+.func 4 DumpOperators.TNode.Equal params=2 regs=3
+  .local r0 A
+  .local r1 B
+  .local r2 Result
+  .line 40
+  0000  LoadInt      r2, 1
+  .line 41
+  0001  Ret          r2
+.func 5 DumpOperators.TNode.GetHashCode params=1 regs=2
+  .local r0 Self
+  .local r1 Result
+  .line 45
+  0000  LoadZero     r1
+  .line 46
+  0001  Ret          r1
+.func 6 DumpOperators.TNode.Equals params=2 regs=6
+  .local r0 Self
+  .local r1 Obj
+  .local r2 Result
+  .line 17
+  0000  Move         r4, r1
+  0001  IsClass      r4, ty64
+  0002  Move         r2, r4
+  0003  JmpIfFalse   r2, -> 000a
+  0004  Move         r4, r0
+  0005  AssignObj    r3, r1
+  0006  AsClass      r3, ty64
+  0007  Move         r5, r3
+  0008  Call         r4, f4
+  0009  Move         r2, r4
+  000a  Ret          r2
+.finally r3

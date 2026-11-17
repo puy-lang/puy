@@ -1,0 +1,20 @@
+error[E0707]: cannot assign to `I`
+   --> anon_more_errors.pas:15:7
+    |
+ 15 |       I := 5;
+    |       ^ the loop variable of the enclosing routine
+ 16 |     end;
+ 17 |   for I := 1 to 2 do
+    |       - used as the loop variable here
+    |
+    = note: a nested routine or an anonymous method cannot write a variable its enclosing routine uses as a `for` loop variable
+
+error[E0729]: cannot infer the type of an anonymous method
+   --> anon_more_errors.pas:25:8
+    |
+ 25 |   N := procedure begin end;
+    |        ^^^^^^^^^^^^^^^^^^^
+    |
+    = note: give the anonymous method a type, as in `var P: TProc := procedure begin … end`
+
+error: aborting due to 2 errors

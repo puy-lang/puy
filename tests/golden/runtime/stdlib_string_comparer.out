@@ -1,0 +1,13 @@
+Ordinal
+abc / abc: TRUE TRUE
+abc / ABC: FALSE FALSE
+TRUE
+OrdinalIgnoreCase
+abc / abc: TRUE TRUE
+Hello, World / hELLO, wORLD: TRUE TRUE
+abc / abd: FALSE FALSE
+ / : TRUE TRUE
+[ / {: FALSE FALSE
+é / É: FALSE FALSE
+straße / STRASSE: FALSE FALSE
+Ａ / ａ: FALSE FALSE

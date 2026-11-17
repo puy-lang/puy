@@ -1,0 +1,2 @@
+error: uncaught exception EAccessViolation: access to a nil reference
+  at HelperNilReceiver.<main> (helper_nil_receiver.pas:26)

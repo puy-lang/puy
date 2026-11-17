@@ -1,6 +1,9 @@
 //! `Format` (`docs/spec/semantics.md` 5.3): reads the format and lays out the arguments of the
 //! `array of const`.
 
+use std::fmt::Write as _;
+
+use super::heap::{OutOfMemory, TextBuf};
 use crate::numfmt;
 use crate::sema::types::MAX_STRING_LEN;
 
@@ -25,8 +28,23 @@ pub enum FmtArg {
 pub enum FormatError {
     /// The format and the arguments do not match (`EConvertError`).
     Invalid,
-    /// The result would exceed the string length limit (`EOutOfMemory`).
-    TooLong,
+    /// The result would exceed the string length limit, or its buffer could not be allocated
+    /// (`EOutOfMemory`).
+    OutOfMemory,
+}
+
+impl From<OutOfMemory> for FormatError {
+    fn from(_: OutOfMemory) -> Self {
+        FormatError::OutOfMemory
+    }
+}
+
+impl From<std::fmt::Error> for FormatError {
+    /// A number written to a [`TextBuf`] fails only when the buffer is refused or the text is
+    /// over the length limit.
+    fn from(_: std::fmt::Error) -> Self {
+        FormatError::OutOfMemory
+    }
 }
 
 /// The default precision of `f` and `n`.
@@ -40,20 +58,20 @@ const MAX_PRECISION: i64 = MAX_STRING_LEN as i64 - 400;
 const G_MAX_DIGITS: i64 = 800;
 
 /// Formats `args` by `fmt`. `room` is the most code units the result can have (`Heap::str_room`):
-/// widths and precisions over it fail with `TooLong` before the text is built.
+/// widths and precisions over it fail with `OutOfMemory` before the text is built.
 pub fn format(fmt: &[u16], args: &[FmtArg], room: usize) -> Result<Vec<u16>, FormatError> {
-    let mut out: Vec<u16> = Vec::new();
+    let mut out = TextBuf::default();
     let mut i = 0;
     let mut next = 0usize;
     while i < fmt.len() {
         let u = fmt[i];
         i += 1;
         if u != u16::from(b'%') {
-            out.push(u);
+            out.push_units(&[u])?;
             continue;
         }
         if fmt.get(i) == Some(&u16::from(b'%')) {
-            out.push(u);
+            out.push_units(&[u])?;
             i += 1;
             continue;
         }
@@ -97,21 +115,21 @@ pub fn format(fmt: &[u16], args: &[FmtArg], room: usize) -> Result<Vec<u16>, For
         next += 1;
         let text = layout(kind, arg, spec.precision, room)?;
         if spec.width > room as u64 {
-            return Err(FormatError::TooLong);
+            return Err(FormatError::OutOfMemory);
         }
         let pad = (spec.width as usize).saturating_sub(text.len());
+        if out.len() + pad + text.len() > room {
+            return Err(FormatError::OutOfMemory);
+        }
         if !spec.left {
-            out.extend(std::iter::repeat_n(u16::from(b' '), pad));
+            out.fill(u16::from(b' '), pad)?;
         }
-        out.extend(&text);
+        out.push_units(&text)?;
         if spec.left {
-            out.extend(std::iter::repeat_n(u16::from(b' '), pad));
-        }
-        if out.len() > room {
-            return Err(FormatError::TooLong);
+            out.fill(u16::from(b' '), pad)?;
         }
     }
-    Ok(out)
+    Ok(out.finish()?)
 }
 
 #[derive(Default)]
@@ -175,26 +193,45 @@ fn layout(
     let kind = char::from_u32(u32::from(kind))
         .ok_or(FormatError::Invalid)?
         .to_ascii_lowercase();
-    let text = match (kind, arg) {
+    // `d`, `u`, `x`, `e` and `f` / `n` of a finite value have at least `precision` digits: a
+    // precision over the room fails first, otherwise the whole text is asked for before it is
+    // written (the digits and what can come with them, so the buffer never grows)
+    let digits = match (kind, arg) {
+        ('d' | 'u' | 'x', FmtArg::Int { .. }) | ('e' | 'f' | 'n', FmtArg::Curr(_)) => true,
+        ('e' | 'f' | 'n', FmtArg::Double(v)) => v.is_finite(),
+        ('e' | 'f' | 'n', FmtArg::Single(v)) => v.is_finite(),
+        _ => false,
+    };
+    let least = if digits {
+        check_precision(precision, room)?;
+        precision.map_or(0, |p| p.max(0) as usize)
+    } else {
+        0
+    };
+    let room_needed = if least > 0 {
+        least.saturating_add(numfmt::DIGITS_EXTRA)
+    } else {
+        0
+    };
+    let mut t = TextBuf::with_room(room_needed)?;
+    match (kind, arg) {
         ('d', FmtArg::Int { value, .. }) => {
-            check_precision(precision, room)?;
-            min_digits(*value, &value.unsigned_abs().to_string(), precision)
+            min_digits(&mut t, *value, &value.unsigned_abs().to_string(), precision)?;
         }
         ('u', FmtArg::Int { value, bits }) => {
-            check_precision(precision, room)?;
-            min_digits(0, &unsigned(*value, *bits).to_string(), precision)
+            min_digits(&mut t, 0, &unsigned(*value, *bits).to_string(), precision)?;
         }
         ('x', FmtArg::Int { value, bits }) => {
-            check_precision(precision, room)?;
-            min_digits(0, &format!("{:X}", unsigned(*value, *bits)), precision)
+            let digits = format!("{:X}", unsigned(*value, *bits));
+            min_digits(&mut t, 0, &digits, precision)?;
         }
-        ('s', FmtArg::Str(s)) => return Ok(truncated(s, precision)),
-        ('s', FmtArg::Char(c)) => return Ok(truncated(&[*c], precision)),
+        ('s', FmtArg::Str(s)) => t.push_units(truncated(s, precision))?,
+        ('s', FmtArg::Char(c)) => t.push_units(truncated(&[*c], precision))?,
         ('f' | 'n', FmtArg::Curr(c)) => {
-            check_precision(precision, room)?;
-            let t = numfmt::curr_fixed(*c, precision.unwrap_or(FIXED_DEFAULT))
-                .ok_or(FormatError::TooLong)?;
-            if kind == 'n' { grouped(&t) } else { t }
+            numfmt::curr_fixed(&mut t, *c, precision.unwrap_or(FIXED_DEFAULT))?;
+            if kind == 'n' {
+                grouped(t.units_mut())?;
+            }
         }
         ('f' | 'n' | 'e' | 'g', _) => {
             let v = match arg {
@@ -205,27 +242,25 @@ fn layout(
             };
             match kind {
                 'f' | 'n' => {
-                    if v.is_finite() {
-                        check_precision(precision, room)?;
-                    }
-                    let t = numfmt::f64_fixed(v, precision.unwrap_or(FIXED_DEFAULT))
-                        .ok_or(FormatError::TooLong)?;
+                    numfmt::f64_fixed(&mut t, v, precision.unwrap_or(FIXED_DEFAULT))?;
                     if kind == 'n' && v.is_finite() {
-                        grouped(&t)
-                    } else {
-                        t
+                        grouped(t.units_mut())?;
                     }
                 }
                 'e' => {
                     check_precision(precision, room)?;
-                    exponential(v, precision, matches!(arg, FmtArg::Single(_)))
+                    exponential(&mut t, v, precision, matches!(arg, FmtArg::Single(_)))?;
                 }
-                _ => general(v, precision, matches!(arg, FmtArg::Single(_))),
+                _ => write!(
+                    t,
+                    "{}",
+                    general(v, precision, matches!(arg, FmtArg::Single(_)))
+                )?,
             }
         }
         _ => return Err(FormatError::Invalid),
-    };
-    Ok(text.encode_utf16().collect())
+    }
+    Ok(t.finish()?)
 }
 
 /// `EOutOfMemory` for a precision that adds more digits than a string can hold or than `room`
@@ -233,7 +268,7 @@ fn layout(
 /// digits; the precision of `s` and `g` only shortens).
 fn check_precision(precision: Option<i64>, room: usize) -> Result<(), FormatError> {
     match precision {
-        Some(p) if p > MAX_PRECISION || p as u64 > room as u64 => Err(FormatError::TooLong),
+        Some(p) if p > MAX_PRECISION || p as u64 > room as u64 => Err(FormatError::OutOfMemory),
         _ => Ok(()),
     }
 }
@@ -248,66 +283,96 @@ fn unsigned(value: i128, bits: u32) -> u128 {
 }
 
 /// `digits` padded on the left with `0` to `precision` digits, after a `-` if `value` is negative.
-fn min_digits(value: i128, digits: &str, precision: Option<i64>) -> String {
-    let mut out = String::new();
+fn min_digits(
+    t: &mut TextBuf,
+    value: i128,
+    digits: &str,
+    precision: Option<i64>,
+) -> Result<(), FormatError> {
     if value < 0 {
-        out.push('-');
+        t.write_char('-')?;
     }
     let p = precision.unwrap_or(0).max(0) as usize;
-    for _ in digits.len()..p {
-        out.push('0');
-    }
-    out.push_str(digits);
-    out
+    numfmt::write_zeros(t, p.saturating_sub(digits.len()))?;
+    t.write_str(digits)?;
+    Ok(())
 }
 
 /// A string cut to at most `precision` code units.
-fn truncated(s: &[u16], precision: Option<i64>) -> Vec<u16> {
+fn truncated(s: &[u16], precision: Option<i64>) -> &[u16] {
     match precision {
-        Some(p) if (p.max(0) as usize) < s.len() => s[..p.max(0) as usize].to_vec(),
-        _ => s.to_vec(),
+        Some(p) if (p.max(0) as usize) < s.len() => &s[..p.max(0) as usize],
+        _ => s,
     }
 }
 
-/// `n`: the fixed text with `,` between the groups of three digits of the integer part.
-fn grouped(fixed: &str) -> String {
-    let (sign, rest) = match fixed.strip_prefix('-') {
-        Some(r) => ("-", r),
-        None => ("", fixed),
-    };
-    let (int, frac) = match rest.split_once('.') {
-        Some((a, b)) => (a, Some(b)),
-        None => (rest, None),
-    };
-    let mut out = String::from(sign);
-    for (k, c) in int.chars().enumerate() {
-        if k > 0 && (int.len() - k) % 3 == 0 {
-            out.push(',');
+/// `n`: puts `,` between the groups of three digits of the integer part of the fixed text
+/// `units` (in place: the fraction, which may be millions of digits, moves once).
+fn grouped(units: &mut Vec<u16>) -> Result<(), OutOfMemory> {
+    let start = usize::from(units.first() == Some(&u16::from(b'-')));
+    let int_end = units
+        .iter()
+        .position(|u| *u == u16::from(b'.'))
+        .unwrap_or(units.len());
+    let commas = (int_end - start).saturating_sub(1) / 3;
+    if commas == 0 {
+        return Ok(());
+    }
+    let len = units.len();
+    super::heap::try_reserve(units, commas)?;
+    units.resize(len + commas, 0);
+    units.copy_within(int_end..len, int_end + commas);
+    // The integer part from its last digit, each written `commas` places further right until
+    // the commas run out
+    let mut dst = int_end + commas;
+    for (k, src) in (start..int_end).rev().enumerate() {
+        if k > 0 && k % 3 == 0 {
+            dst -= 1;
+            units[dst] = u16::from(b',');
         }
-        out.push(c);
+        dst -= 1;
+        units[dst] = units[src];
     }
-    if let Some(f) = frac {
-        out.push('.');
-        out.push_str(f);
-    }
-    out
+    Ok(())
 }
 
 /// `e`: `d.ddd…E+ddd` with `precision` significant digits (the shortest digits that read back
 /// when omitted; a `Single` as binary32). INF and NaN use the default text.
-fn exponential(v: f64, precision: Option<i64>, single: bool) -> String {
+fn exponential(
+    t: &mut TextBuf,
+    v: f64,
+    precision: Option<i64>,
+    single: bool,
+) -> Result<(), FormatError> {
     if !v.is_finite() {
-        return numfmt::f64_to_str(v);
+        t.write_str(&numfmt::f64_to_str(v))?;
+        return Ok(());
     }
-    let sci = match precision {
-        Some(p) => format!("{v:.*e}", (p.max(1) - 1) as usize),
-        None if single => format!("{:e}", v as f32),
-        None => format!("{v:e}"),
-    };
-    let (mantissa, exp) = sci.split_once('e').expect("`{:e}` has an exponent");
-    let exp: i32 = exp.parse().expect("`{:e}` has a decimal exponent");
+    // Rust's formatting takes at most 65535 digits; the significant digits of a `Double` past
+    // its exact value are zeros, written before the exponent
+    let digits = precision.map(|p| p.max(1) - 1);
+    let exact = digits.map(|d| d.min(numfmt::EXACT_DIGITS));
+    match exact {
+        Some(d) => write!(t, "{v:.*e}", d as usize)?,
+        None if single => write!(t, "{:e}", v as f32)?,
+        None => write!(t, "{v:e}")?,
+    }
+    // Rust's exponent (`e-7`) ends the text; rewrite it as `E-007`
+    let units = t.units_mut();
+    let e = units
+        .iter()
+        .rposition(|u| *u == u16::from(b'e'))
+        .expect("`{:e}` has an exponent");
+    let exp: i32 = String::from_utf16_lossy(&units[e + 1..])
+        .parse()
+        .expect("`{:e}` has a decimal exponent");
+    units.truncate(e);
+    if let (Some(d), Some(x)) = (digits, exact) {
+        numfmt::write_zeros(t, (d - x) as usize)?;
+    }
     let sign = if exp < 0 { '-' } else { '+' };
-    format!("{mantissa}E{sign}{:03}", exp.unsigned_abs())
+    write!(t, "E{sign}{:03}", exp.unsigned_abs())?;
+    Ok(())
 }
 
 /// `g`: the default text when `precision` is omitted, otherwise rounded to `precision`

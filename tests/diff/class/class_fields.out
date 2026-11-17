@@ -1,0 +1,11 @@
+[] 0 0 0 FALSE
+Triangle! at 10,20
+4 30 7
+10 99
+shared 21 TRUE FALSE
+shared TRUE TRUE TRUE
+shared 4
+square 4
+pentagon 5
+FALSE TRUE TRUE
+TRUE

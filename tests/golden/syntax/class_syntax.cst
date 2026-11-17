@@ -1,0 +1,204 @@
+SOURCE_FILE@0..700
+  PROGRAM@0..700
+    PROGRAM_HEADER@0..20
+      PROGRAM_KW@0..7 "program"
+      WHITESPACE@7..8 " "
+      IDENT@8..19 "ClassSyntax"
+      SEMICOLON@19..20 ";"
+    NEWLINE@20..21 "\n"
+    NEWLINE@21..22 "\n"
+    LINE_COMMENT@22..117 "// The CST of a class declaration (objects.md chapter 1): parents, visibility sections (a field"
+    NEWLINE@117..118 "\n"
+    LINE_COMMENT@118..212 "// named `private` is a field), fields and `var` sections, a method heading with directives, a"
+    NEWLINE@212..213 "\n"
+    LINE_COMMENT@213..307 "// property with specifiers, a forward declaration and a class reference type. Only the CST is"
+    NEWLINE@307..308 "\n"
+    LINE_COMMENT@308..385 "// checked here; semantic analysis reports the members later items implement."
+    NEWLINE@385..386 "\n"
+    NEWLINE@386..387 "\n"
+    TYPE_SECTION@387..687
+      TYPE_KW@387..391 "type"
+      NEWLINE@391..392 "\n"
+      WHITESPACE@392..394 "  "
+      TYPE_DECL@394..407
+        IDENT@394..398 "TFwd"
+        WHITESPACE@398..399 " "
+        EQ@399..400 "="
+        WHITESPACE@400..401 " "
+        CLASS_TYPE@401..406
+          CLASS_KW@401..406 "class"
+        SEMICOLON@406..407 ";"
+      NEWLINE@407..408 "\n"
+      WHITESPACE@408..410 "  "
+      TYPE_DECL@410..635
+        IDENT@410..415 "TItem"
+        WHITESPACE@415..416 " "
+        EQ@416..417 "="
+        WHITESPACE@417..418 " "
+        CLASS_TYPE@418..634
+          CLASS_KW@418..423 "class"
+          CLASS_PARENTS@423..432
+            L_PAREN@423..424 "("
+            TYPE_REF@424..431
+              QUALIFIED_NAME@424..431
+                IDENT@424..431 "TObject"
+            R_PAREN@431..432 ")"
+          NEWLINE@432..433 "\n"
+          WHITESPACE@433..437 "    "
+          CLASS_BODY@437..628
+            FIELD_DECL@437..454
+              IDENT_LIST@437..444
+                IDENT@437..444 "private"
+              COLON@444..445 ":"
+              WHITESPACE@445..446 " "
+              TYPE_REF@446..453
+                QUALIFIED_NAME@446..453
+                  IDENT@446..453 "Integer"
+              SEMICOLON@453..454 ";"
+            NEWLINE@454..455 "\n"
+            WHITESPACE@455..457 "  "
+            VISIBILITY@457..471
+              STRICT_KW@457..463 "strict"
+              WHITESPACE@463..464 " "
+              PRIVATE_KW@464..471 "private"
+            NEWLINE@471..472 "\n"
+            WHITESPACE@472..476 "    "
+            FIELD_DECL@476..489
+              IDENT_LIST@476..480
+                IDENT@476..477 "A"
+                COMMA@477..478 ","
+                WHITESPACE@478..479 " "
+                IDENT@479..480 "B"
+              COLON@480..481 ":"
+              WHITESPACE@481..482 " "
+              TYPE_REF@482..488
+                STRING_KW@482..488 "string"
+              SEMICOLON@488..489 ";"
+            NEWLINE@489..490 "\n"
+            WHITESPACE@490..492 "  "
+            VISIBILITY@492..498
+              PUBLIC_KW@492..498 "public"
+            NEWLINE@498..499 "\n"
+            WHITESPACE@499..503 "    "
+            CLASS_VAR_SECTION@503..518
+              VAR_KW@503..506 "var"
+              WHITESPACE@506..507 " "
+              FIELD_DECL@507..518
+                IDENT_LIST@507..508
+                  IDENT@507..508 "C"
+                COLON@508..509 ":"
+                WHITESPACE@509..510 " "
+                TYPE_REF@510..517
+                  QUALIFIED_NAME@510..517
+                    IDENT@510..517 "Integer"
+                SEMICOLON@517..518 ";"
+            NEWLINE@518..519 "\n"
+            WHITESPACE@519..523 "    "
+            METHOD_DECL@523..568
+              ROUTINE_HEADER@523..548
+                PROCEDURE_KW@523..532 "procedure"
+                WHITESPACE@532..533 " "
+                QUALIFIED_NAME@533..536
+                  IDENT@533..536 "Run"
+                PARAM_LIST@536..548
+                  L_PAREN@536..537 "("
+                  PARAM_GROUP@537..547
+                    IDENT_LIST@537..538
+                      IDENT@537..538 "X"
+                    COLON@538..539 ":"
+                    WHITESPACE@539..540 " "
+                    TYPE_REF@540..547
+                      QUALIFIED_NAME@540..547
+                        IDENT@540..547 "Integer"
+                  R_PAREN@547..548 ")"
+              SEMICOLON@548..549 ";"
+              WHITESPACE@549..550 " "
+              METHOD_DIRECTIVE@550..557
+                VIRTUAL_KW@550..557 "virtual"
+              SEMICOLON@557..558 ";"
+              WHITESPACE@558..559 " "
+              METHOD_DIRECTIVE@559..567
+                ABSTRACT_KW@559..567 "abstract"
+              SEMICOLON@567..568 ";"
+            NEWLINE@568..569 "\n"
+            WHITESPACE@569..573 "    "
+            PROPERTY_DECL@573..628
+              PROPERTY_KW@573..581 "property"
+              WHITESPACE@581..582 " "
+              IDENT@582..586 "Size"
+              COLON@586..587 ":"
+              WHITESPACE@587..588 " "
+              RETURN_TYPE@588..595
+                TYPE_REF@588..595
+                  QUALIFIED_NAME@588..595
+                    IDENT@588..595 "Integer"
+              WHITESPACE@595..596 " "
+              PROPERTY_SPEC@596..603
+                INDEX_KW@596..601 "index"
+                WHITESPACE@601..602 " "
+                LITERAL@602..603
+                  INT_LIT@602..603 "1"
+              WHITESPACE@603..604 " "
+              PROPERTY_SPEC@604..610
+                READ_KW@604..608 "read"
+                WHITESPACE@608..609 " "
+                QUALIFIED_NAME@609..610
+                  IDENT@609..610 "A"
+              WHITESPACE@610..611 " "
+              PROPERTY_SPEC@611..618
+                WRITE_KW@611..616 "write"
+                WHITESPACE@616..617 " "
+                QUALIFIED_NAME@617..618
+                  IDENT@617..618 "B"
+              SEMICOLON@618..619 ";"
+              WHITESPACE@619..620 " "
+              DEFAULT_KW@620..627 "default"
+              SEMICOLON@627..628 ";"
+          NEWLINE@628..629 "\n"
+          WHITESPACE@629..631 "  "
+          END_KW@631..634 "end"
+        SEMICOLON@634..635 ";"
+      NEWLINE@635..636 "\n"
+      WHITESPACE@636..638 "  "
+      TYPE_DECL@638..662
+        IDENT@638..642 "TFwd"
+        WHITESPACE@642..643 " "
+        EQ@643..644 "="
+        WHITESPACE@644..645 " "
+        CLASS_TYPE@645..661
+          CLASS_KW@645..650 "class"
+          CLASS_PARENTS@650..657
+            L_PAREN@650..651 "("
+            TYPE_REF@651..656
+              QUALIFIED_NAME@651..656
+                IDENT@651..656 "TItem"
+            R_PAREN@656..657 ")"
+          WHITESPACE@657..658 " "
+          CLASS_BODY@658..658
+          END_KW@658..661 "end"
+        SEMICOLON@661..662 ";"
+      NEWLINE@662..663 "\n"
+      WHITESPACE@663..665 "  "
+      TYPE_DECL@665..687
+        IDENT@665..669 "TRef"
+        WHITESPACE@669..670 " "
+        EQ@670..671 "="
+        WHITESPACE@671..672 " "
+        CLASS_REF_TYPE@672..686
+          CLASS_KW@672..677 "class"
+          WHITESPACE@677..678 " "
+          OF_KW@678..680 "of"
+          WHITESPACE@680..681 " "
+          TYPE_REF@681..686
+            QUALIFIED_NAME@681..686
+              IDENT@681..686 "TItem"
+        SEMICOLON@686..687 ";"
+    NEWLINE@687..688 "\n"
+    NEWLINE@688..689 "\n"
+    COMPOUND_STMT@689..698
+      BEGIN_KW@689..694 "begin"
+      NEWLINE@694..695 "\n"
+      END_KW@695..698 "end"
+    DOT@698..699 "."
+    NEWLINE@699..700 "\n"
+    EOF@700..700 ""

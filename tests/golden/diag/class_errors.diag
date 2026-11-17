@@ -1,0 +1,136 @@
+error[E0723]: forward declaration of class `TFwd` has no body
+   --> class_errors.pas:14:3
+    |
+ 14 |   TFwd = class;
+    |   ^^^^
+
+error[E0701]: `Name` is already declared
+   --> class_errors.pas:23:5
+    |
+ 16 |     Name: string;
+    |     ---- declared here
+...
+ 23 |     Name: Integer;
+    |     ^^^^ declared again here
+
+error[E0401]: unexpected `sealed`
+   --> class_errors.pas:27:25
+    |
+ 27 |   TTwice = class sealed sealed
+    |                         ^^^^^^
+
+error[E0723]: method `TLater.Run` has no body
+   --> class_errors.pas:34:15
+    |
+ 34 |     procedure Run;
+    |               ^^^
+
+error[E0748]: `[weak]` can only be applied to a reference counted class or an interface
+   --> class_errors.pas:36:6
+    |
+ 36 |     [weak] Link: TLater;
+    |      ^^^^
+    |
+    = note: references to a manually managed class are not counted, so `[weak]` is not needed
+
+warning[W0010]: hint directive `platform` is ignored (ignored-hint-directive)
+   --> class_errors.pas:41:25
+    |
+ 41 |   TOld = class(TObject) platform deprecated 'use TBase';
+    |                         ^^^^^^^^
+    |
+    = note: disable with `{$WARN ignored-hint-directive OFF}`
+    = fix: remove `platform`
+
+error[E0761]: generic type `TFunc` needs type arguments
+   --> class_errors.pas:50:6
+    |
+ 50 |   F: TFunc;
+    |      ^^^^^
+
+error[E3200]: `TGUID` is not supported yet (planned for M5)
+   --> class_errors.pas:51:6
+    |
+ 51 |   G: TGUID;
+    |      ^^^^^
+
+error[E0702]: type mismatch: expected `TChild`, found `TBase`
+   --> class_errors.pas:55:8
+    |
+ 55 |   C := B;
+    |        ^
+    |
+    = note: use `as` to convert to a derived class
+
+error[E0702]: type mismatch: expected `TChild`, found `TObject`
+   --> class_errors.pas:56:8
+    |
+ 56 |   C := O;
+    |        ^
+    |
+    = note: use `as` to convert to a derived class
+
+error[E0718]: cannot write a value of type `TBase`
+   --> class_errors.pas:58:11
+    |
+ 58 |   WriteLn(B);
+    |           ^
+    |
+    = note: call `ToString` to write an object, as in `WriteLn(Obj.ToString)`
+
+error[E0743]: `Secret` is private to `TBase`
+   --> class_errors.pas:59:10
+    |
+ 18 |     Secret: Integer;
+    |     ------ declared here
+...
+ 59 |   I := B.Secret;
+    |          ^^^^^^
+
+error[E0700]: `TBase` has no member `Missing`
+   --> class_errors.pas:61:10
+    |
+ 61 |   I := B.Missing;
+    |          ^^^^^^^
+
+error[E0700]: `TObject` has no member `InstanceSize`
+   --> class_errors.pas:62:10
+    |
+ 62 |   I := B.InstanceSize;
+    |          ^^^^^^^^^^^^
+
+error[E0705]: wrong number of arguments: expected 0, found 1
+   --> class_errors.pas:64:8
+    |
+ 64 |   B := TBase.Create(1);
+    |        ^^^^^^^^^^^^^^^
+
+error[E0402]: expected a statement
+   --> class_errors.pas:65:3
+    |
+ 65 |   B.Name;
+    |   ^^^^^^
+
+error[E0733]: `TBase` is not an exception class
+   --> class_errors.pas:69:11
+    |
+ 69 |     on E: TBase do
+    |           ^^^^^
+    |
+    = note: every exception derives from `Exception`
+
+error[E0705]: wrong number of arguments: expected 0, found 1
+   --> class_errors.pas:72:3
+    |
+ 72 |   B.Free(1);
+    |   ^^^^^^^^^
+
+error[E3021]: raising `TBase` is not supported in Puy
+   --> class_errors.pas:73:9
+    |
+ 73 |   raise B;
+    |         ^
+    |
+    = note: raise an object whose class derives from `Exception`
+
+error: aborting due to 18 errors; 1 warning emitted

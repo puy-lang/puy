@@ -1,0 +1,24 @@
+b changed to x
+  EInvalidOperation: the key of entry #1 in `TDictionary<StdlibDictionaryChangedKey.TKey,Integer>` was changed after it was added
+  x: FALSE 0
+  a: TRUE 1
+  c: TRUE 3
+  entries: a=1
+  EInvalidOperation: the key of entry #1 in `TDictionary<StdlibDictionaryChangedKey.TKey,Integer>` was changed after it was added
+removing
+  EInvalidOperation: the key of entry #1 in `TDictionary<StdlibDictionaryChangedKey.TKey,Integer>` was changed after it was added
+growing places the entries again
+  count 4, capacity 4
+  EInvalidOperation: the key of entry #1 in `TDictionary<StdlibDictionaryChangedKey.TKey,Integer>` was changed after it was added
+  EInvalidOperation: the key of entry #1 in `TDictionary<StdlibDictionaryChangedKey.TKey,Integer>` was changed after it was added
+  EInvalidOperation: the key of entry #1 in `TDictionary<StdlibDictionaryChangedKey.TKey,Integer>` was changed after it was added
+  count 4, capacity 4
+copying the entries to a new dictionary
+  EInvalidOperation: the key of entry #1 in `TDictionary<StdlibDictionaryChangedKey.TKey,Integer>` was changed after it was added
+Clear always works
+  count 0
+  x: TRUE 2
+removing until the holes are squeezed out
+  EInvalidOperation: the key of entry #0 in `TDictionary<StdlibDictionaryChangedKey.TKey,Integer>` was changed after it was added
+  count 15 after removing r17
+  r17: TRUE 17

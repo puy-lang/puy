@@ -1,0 +1,2 @@
+error: uncaught exception EInvalidCast: invalid class typecast: `TShape` is not `TCircle`
+  at ClassCastErrors.<main> (class_cast_errors.pas:73)

@@ -1,0 +1,18 @@
+TList<TProc>
+2 2 1 TRUE
+two
+0 -1 2
+TList<Double>
+1 2 0
+TList<TPoint>
+0 2 -1
+classes
+1 FALSE
+1 1 FALSE
+IEqualityComparer<string>
+-1 0 2 TRUE FALSE
+0 2 banana
+  compare banana xxxxx
+  compare APPLE xxxxx
+1
+0 -1 1 TRUE 0

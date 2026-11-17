@@ -1,0 +1,9 @@
+error[E0413]: type nesting is too deep (limit 256)
+    --> class_nesting_limit.pas:264:522
+     |
+ 264 |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   T256 = class
+     |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          ^^^^^
+     |
+     = note: move the nested types out to the enclosing `type` section
+
+error: aborting due to 1 error

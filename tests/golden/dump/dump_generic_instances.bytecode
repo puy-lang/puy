@@ -1,0 +1,287 @@
+; puyc format 0
+.const
+  0: str "a"
+  1: str "\n"
+.type
+  64: class DumpGenericInstances.TList<Integer> slots=2 refs=0 parent=ty19 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+  65: class DumpGenericInstances.TList<string> slots=2 refs=0 parent=ty19 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+  66: class DumpGenericInstances.TList<DumpGenericInstances.TPoint> slots=2 refs=0 parent=ty19 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+  67: class DumpGenericInstances.TList<DumpGenericInstances.TFoo> slots=2 refs=0 parent=ty19 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+  68: class DumpGenericInstances.TList<DumpGenericInstances.TBar> slots=2 refs=0 parent=ty19 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+  69: class DumpGenericInstances.TList<DumpGenericInstances.TRef> slots=2 refs=0 parent=ty19 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+  70: class DumpGenericInstances.TRef ref slots=0 parent=ty20 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+  71: class DumpGenericInstances.TList<DumpGenericInstances.TRef2> slots=2 refs=0 parent=ty19 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+  72: class DumpGenericInstances.TRef2 ref slots=0 parent=ty20 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+  73: class DumpGenericInstances.TList<Int64> slots=2 refs=0 parent=ty19 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+  74: dynarray TArray<Integer> slots=0 elem=val
+  75: dynarray TArray<string> slots=0 elem=ref
+  76: dynarray TArray<DumpGenericInstances.TPoint> slots=0 elem=ref
+  77: dynarray TArray<DumpGenericInstances.TFoo> slots=0 elem=val
+  78: dynarray TArray<DumpGenericInstances.TBar> slots=0 elem=val
+  79: dynarray TArray<DumpGenericInstances.TRef> slots=0 elem=ref
+  80: dynarray TArray<DumpGenericInstances.TRef2> slots=0 elem=ref
+  81: dynarray TArray<Int64> slots=0 elem=val
+.global
+  0: int Ints
+  1: int Strs
+  2: int Points
+  3: int Foos
+  4: int Bars
+  5: int Refs
+  6: int Refs2
+  7: int Longs
+  8: ref Items
+  9: int Count
+  10: ref P
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpGenericInstances file="dump_generic_instances.pas" init=- fini=- entry=0
+.func 0 DumpGenericInstances.<main> params=0 regs=17
+  .line 70
+  0000  LoadZero     r12
+  0001  New          r12, ty64
+  0002  StoreGlobal  r12, g0
+  .line 71
+  0003  LoadInt      r13, 1
+  0004  CallMethod   r12, f2
+  .line 72
+  0005  LoadZero     r12
+  0006  New          r12, ty65
+  0007  StoreGlobal  r12, g1
+  .line 73
+  0008  LoadConst    r0, k0
+  0009  Move         r13, r0
+  000a  CallMethod   r12, f3
+  .line 74
+  000b  LoadZero     r12
+  000c  New          r12, ty66
+  000d  StoreGlobal  r12, g2
+  .line 75
+  000e  Release      r1
+  000f  StoreGlobalRef r1, g10
+  .line 76
+  0010  LoadGlobal   r12, g2
+  0011  LoadGlobalRef r2, g10
+  0012  Move         r13, r2
+  0013  CallMethod   r12, f3
+  0014  Release      r2
+  .line 77
+  0015  LoadZero     r12
+  0016  New          r12, ty67
+  0017  StoreGlobal  r12, g3
+  .line 78
+  0018  LoadZero     r13
+  0019  CallMethod   r12, f2
+  .line 79
+  001a  LoadZero     r12
+  001b  New          r12, ty68
+  001c  StoreGlobal  r12, g4
+  .line 80
+  001d  LoadZero     r13
+  001e  CallMethod   r12, f2
+  .line 81
+  001f  LoadZero     r12
+  0020  New          r12, ty69
+  0021  StoreGlobal  r12, g5
+  .line 82
+  0022  New          r3, ty70
+  0023  Move         r13, r3
+  0024  CallMethod   r12, f3
+  .line 83
+  0025  LoadZero     r12
+  0026  New          r12, ty71
+  0027  StoreGlobal  r12, g6
+  .line 84
+  0028  New          r4, ty72
+  0029  Move         r13, r4
+  002a  CallMethod   r12, f3
+  .line 85
+  002b  LoadZero     r12
+  002c  New          r12, ty73
+  002d  StoreGlobal  r12, g7
+  .line 86
+  002e  LoadInt      r13, 3
+  002f  CallMethod   r12, f2
+  .line 87
+  0030  LoadZero     r12
+  0031  StoreGlobal  r12, g9
+  .line 88
+  0032  MakeGlobalRef r12, g8
+  0033  MakeGlobalRef r13, g9
+  0034  LoadInt      r14, 2
+  0035  Call         r12, f1
+  .line 89
+  0036  LoadGlobal   r13, g0
+  0037  LoadZero     r14
+  0038  CallMethod   r13, f4
+  0039  Move         r12, r13
+  003a  IntToStr     r5, r12
+  003b  LoadGlobal   r13, g1
+  003c  LoadZero     r14
+  003d  CallMethod   r13, f5
+  003e  MoveRef      r6, r13
+  003f  ConcatStr    r5, r5, r6
+  0040  LoadGlobal   r14, g2
+  0041  LoadZero     r15
+  0042  CallMethod   r14, f5
+  0043  MoveRef      r8, r14
+  0044  FieldGet     r13, r8, 0
+  0045  IntToStr     r7, r13
+  0046  ConcatStr    r5, r5, r7
+  0047  LoadGlobal   r15, g7
+  0048  LoadZero     r16
+  0049  CallMethod   r15, f4
+  004a  Move         r14, r15
+  004b  IntToStr     r9, r14
+  004c  ConcatStr    r5, r5, r9
+  004d  LoadGlobal   r16, g8
+  004e  ArrLen       r15, r16
+  004f  IntToStr     r10, r15
+  0050  ConcatStr    r5, r5, r10
+  0051  LoadConst    r11, k1
+  0052  ConcatStr    r5, r5, r11
+  0053  CallHost     r5, h0
+  .line 90
+  0054  LoadGlobal   r12, g0
+  0055  Free         r12
+  .line 91
+  0056  LoadGlobal   r12, g1
+  0057  Free         r12
+  .line 92
+  0058  LoadGlobal   r12, g2
+  0059  Free         r12
+  .line 93
+  005a  LoadGlobal   r12, g3
+  005b  Free         r12
+  .line 94
+  005c  LoadGlobal   r12, g4
+  005d  Free         r12
+  .line 95
+  005e  LoadGlobal   r12, g5
+  005f  Free         r12
+  .line 96
+  0060  LoadGlobal   r12, g6
+  0061  Free         r12
+  .line 97
+  0062  LoadGlobal   r12, g7
+  0063  Free         r12
+  .line 98
+  0064  RetVoid
+.finally r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11
+.func 1 DumpGenericInstances.AddInt params=3 regs=7
+  .local r0 Items
+  .local r1 Count
+  .local r2 X
+  .line 51
+  0000  LoadRef      r3, r1
+  0001  LoadRef      r5, r0
+  0002  ArrLen       r4, r5
+  0003  JmpIfNeInt   r3, r4, -> 000f
+  .line 52
+  0004  LoadRef      r3, r1
+  0005  MulIntI      r3, r3, 2
+  0006  NarrowOvf    r3, r3, 4
+  0007  AddIntI      r3, r3, 4
+  0008  NarrowOvf    r3, r3, 4
+  0009  LoadRef      r4, r0
+  000a  Move         r5, r4
+  000b  Move         r6, r3
+  000c  SetLen       r5, ty74
+  000d  Move         r4, r5
+  000e  StoreRef     r0, r4
+  .line 53
+  000f  LoadRef      r3, r1
+  0010  LoadRef      r4, r0
+  0011  DynSet       r4, r3, r2
+  .line 54
+  0012  LoadRef      r3, r1
+  0013  AddIntI      r3, r3, 1
+  0014  NarrowOvf    r3, r3, 4
+  0015  StoreRef     r1, r3
+  .line 55
+  0016  RetVoid
+.func 2 DumpGenericInstances.TList<T>.Add params=2 regs=6
+; shared by DumpGenericInstances.TList<Integer>, DumpGenericInstances.TList<DumpGenericInstances.TFoo>, DumpGenericInstances.TList<DumpGenericInstances.TBar>, DumpGenericInstances.TList<Int64>
+  .local r0 Self
+  .local r1 X
+  .line 38
+  0000  ObjGet       r2, r0, 1
+  0001  ObjGet       r4, r0, 0
+  0002  ArrLen       r3, r4
+  0003  JmpIfNeInt   r2, r3, -> 000f
+  .line 39
+  0004  ObjGet       r2, r0, 1
+  0005  MulIntI      r2, r2, 2
+  0006  NarrowOvf    r2, r2, 4
+  0007  AddIntI      r2, r2, 4
+  0008  NarrowOvf    r2, r2, 4
+  0009  ObjGet       r3, r0, 0
+  000a  Move         r4, r3
+  000b  Move         r5, r2
+  000c  SetLen       r4, ty74
+  000d  Move         r3, r4
+  000e  ObjSet       r0, 0, r3
+  .line 40
+  000f  ObjGet       r3, r0, 1
+  0010  ObjGet       r4, r0, 0
+  0011  DynSet       r4, r3, r1
+  .line 41
+  0012  ObjGet       r2, r0, 1
+  0013  AddIntI      r2, r2, 1
+  0014  NarrowOvf    r2, r2, 4
+  0015  ObjSet       r0, 1, r2
+  .line 42
+  0016  RetVoid
+.func 3 DumpGenericInstances.TList<T>.Add params=2 regs=6
+; shared by DumpGenericInstances.TList<string>, DumpGenericInstances.TList<DumpGenericInstances.TPoint>, DumpGenericInstances.TList<DumpGenericInstances.TRef>, DumpGenericInstances.TList<DumpGenericInstances.TRef2>
+  .local r0 Self
+  .local r1 X
+  .line 38
+  0000  ObjGet       r2, r0, 1
+  0001  ObjGet       r4, r0, 0
+  0002  ArrLen       r3, r4
+  0003  JmpIfNeInt   r2, r3, -> 000f
+  .line 39
+  0004  ObjGet       r2, r0, 1
+  0005  MulIntI      r2, r2, 2
+  0006  NarrowOvf    r2, r2, 4
+  0007  AddIntI      r2, r2, 4
+  0008  NarrowOvf    r2, r2, 4
+  0009  ObjGet       r3, r0, 0
+  000a  Move         r4, r3
+  000b  Move         r5, r2
+  000c  SetLen       r4, ty75
+  000d  Move         r3, r4
+  000e  ObjSet       r0, 0, r3
+  .line 40
+  000f  ObjGet       r3, r0, 1
+  0010  ObjGet       r4, r0, 0
+  0011  DynSetRef    r4, r3, r1
+  .line 41
+  0012  ObjGet       r2, r0, 1
+  0013  AddIntI      r2, r2, 1
+  0014  NarrowOvf    r2, r2, 4
+  0015  ObjSet       r0, 1, r2
+  .line 42
+  0016  RetVoid
+.func 4 DumpGenericInstances.TList<T>.Get params=2 regs=5
+; shared by DumpGenericInstances.TList<Integer>, DumpGenericInstances.TList<Int64>
+  .local r0 Self
+  .local r1 I
+  .local r2 Result
+  .line 46
+  0000  ObjGet       r3, r0, 0
+  0001  DynGet       r2, r3, r1
+  .line 47
+  0002  Ret          r2
+.func 5 DumpGenericInstances.TList<T>.Get params=2 regs=5
+; shared by DumpGenericInstances.TList<string>, DumpGenericInstances.TList<DumpGenericInstances.TPoint>
+  .local r0 Self
+  .local r1 I
+  .local r2 Result
+  .line 46
+  0000  ObjGet       r3, r0, 0
+  0001  DynGetRef    r2, r3, r1
+  .line 47
+  0002  Ret          r2
+.finally r2

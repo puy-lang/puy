@@ -4,7 +4,7 @@ use super::builtins::{self, builtin_name, builtin_signature};
 use super::hir::*;
 use super::overload::Pick;
 use super::reals::{TRUNC_ROUND_NOTE, is_fractional, real_calc_type};
-use super::types::{Const, MAX_STRING_LEN, Ty, bound_text};
+use super::types::{Const, MAX_STRING_LEN, SelfKind, Ty, bound_text};
 use super::{Resolved, Sema};
 use crate::diagnostics::{Code, Diagnostic, Fix, Stage, TextEdit};
 use crate::lexer;
@@ -21,6 +21,23 @@ pub(super) fn err_expr(span: TextRange) -> Expr {
     }
 }
 
+/// The steps of a binary chain so far as one expression (`acc` when there are none), to be the
+/// left operand of what follows.
+fn fold_steps(acc: Expr, first_expr: &mut Option<Expr>, steps: &mut Vec<BinStep>) -> Expr {
+    match first_expr.take() {
+        Some(fe) => Expr {
+            kind: ExprKind::Binary {
+                first: Box::new(fe),
+                steps: std::mem::take(steps),
+            },
+            ty: acc.ty,
+            value: None,
+            span: acc.span,
+        },
+        None => acc,
+    }
+}
+
 fn const_expr(value: Const, ty: Ty, span: TextRange) -> Expr {
     Expr {
         kind: ExprKind::Const,
@@ -34,11 +51,21 @@ impl<'a, 's> Sema<'a, 's> {
     /// Types an expression. A value of a subrange type has its base type (`docs/spec/types.md`
     /// 8.2: operations, comparisons and conversions work on the base type).
     pub(super) fn lower_expr(&mut self, e: &ast::Expr) -> Expr {
-        let mut x = self.lower_expr_raw(e);
-        if let Ty::Subrange(_) = x.ty {
-            x.ty = self.types.base(x.ty);
-        }
-        x
+        self.lower_expr_declared(e).0
+    }
+
+    /// [`Self::lower_expr`] and the subrange type the value had (otherwise its type), for the
+    /// subrange type's own helpers (`docs/spec/objects.md` 10.4).
+    pub(super) fn lower_expr_declared(&mut self, e: &ast::Expr) -> (Expr, Ty) {
+        let (x, declared) = self.lower_value_declared(e);
+        // A procedural value written without parentheses is called here
+        // (`docs/spec/objects.md` 9.4)
+        let x = self.call_bare_value(e, x);
+        let declared = match declared {
+            Ty::Subrange(_) if self.types.base(declared) == x.ty => declared,
+            _ => x.ty,
+        };
+        (x, declared)
     }
 
     /// Types an expression, keeping a subrange type (`Low` / `High` of a variable).
@@ -71,12 +98,8 @@ impl<'a, 's> Sema<'a, 's> {
             ast::Expr::Index(i) => self.lower_index(i, span),
             ast::Expr::Deref(_) | ast::Expr::Error(_) => err_expr(span),
             ast::Expr::Nil(_) => {
-                // `nil` needs a dynamic array from the context (`lower_expected`, comparisons)
-                self.error(
-                    Code::E(3200),
-                    "`nil` without a dynamic array type is not supported yet (planned for M3)",
-                    span,
-                );
+                // `nil` takes its type from the context (`lower_expected`, comparisons)
+                self.nil_without_type(span);
                 err_expr(span)
             }
             ast::Expr::ArrayCtor(ac) => {
@@ -90,14 +113,8 @@ impl<'a, 's> Sema<'a, 's> {
                 .push("give the array a type, as in `var A: TArray<Integer> := [1, 2]`".into());
                 err_expr(span)
             }
-            ast::Expr::Inherited(_) => {
-                self.error(
-                    Code::E(3200),
-                    "`inherited` is not supported yet (planned for M3)",
-                    span,
-                );
-                err_expr(span)
-            }
+            ast::Expr::Inherited(_) => self.lower_name_use(e, span),
+            ast::Expr::Anon(_) => self.anon_without_type(span),
         }
     }
 
@@ -116,20 +133,27 @@ impl<'a, 's> Sema<'a, 's> {
                 }
                 _ => self.lower_expr(e),
             },
+            // A routine or method name is a value, and a procedural value is not called
+            // (`docs/spec/objects.md` 9.4)
+            _ if expected.is_procedural() && !matches!(e, ast::Expr::Nil(_)) => {
+                self.lower_proc_expected(e, expected)
+            }
+            ast::Expr::NameRef(_) | ast::Expr::Field(_)
+                if matches!(expected, Ty::ClassRef(_)) && self.class_name_of(e).is_some() =>
+            {
+                // A class as a value (`docs/spec/objects.md` 2.8)
+                let class = self.class_name_of(e).expect("checked above");
+                self.class_ref_value(class, span)
+            }
             ast::Expr::Nil(_) if !expected.is_error() => {
                 let target = match expected {
                     Ty::OpenArray(id) => Ty::DynArray(id),
                     t => t,
                 };
-                if matches!(target, Ty::DynArray(_) | Ty::Exception(_)) {
+                if self.takes_nil_ty(target) {
                     return const_expr(Const::Nil, target, span);
                 }
-                let t = self.tn(expected);
-                self.error(
-                    Code::E(702),
-                    format!("type mismatch: expected `{t}`, found `nil`"),
-                    span,
-                );
+                self.nil_mismatch(expected, span);
                 err_expr(span)
             }
             // The target has been diagnosed
@@ -140,6 +164,36 @@ impl<'a, 's> Sema<'a, 's> {
                 err_expr(span)
             }
             _ => self.lower_expr(e),
+        }
+    }
+
+    /// The class an expression names when it is just a class's name (`TCircle`, `Unit.TCircle`,
+    /// `TOuter.TInner`).
+    pub(super) fn class_name_of(&mut self, e: &ast::Expr) -> Option<super::types::TypeId> {
+        if !matches!(e, ast::Expr::NameRef(_) | ast::Expr::Field(_)) {
+            return None;
+        }
+        match self.dry_run(|s| s.resolve_name_expr(e)) {
+            Some((super::Resolved::Type(Ty::Class(id)), ..)) => Some(id),
+            _ => None,
+        }
+    }
+
+    /// A class as a value of its class reference type (`classref TFoo`; `docs/spec/objects.md`
+    /// 2.8).
+    pub(super) fn class_ref_value(&mut self, class: super::types::TypeId, span: TextRange) -> Expr {
+        let ty = self.types.class_ref(
+            class,
+            super::types::DynWritten::Anonymous {
+                generic: false,
+                span,
+            },
+        );
+        Expr {
+            kind: ExprKind::ClassRefValue(class),
+            ty,
+            value: None,
+            span,
         }
     }
 
@@ -256,6 +310,21 @@ impl<'a, 's> Sema<'a, 's> {
         }
     }
 
+    /// The value of a string literal token, or `None` after E0009 (a line of a multi-line
+    /// string shallower than its closing quotes).
+    pub(super) fn string_literal(&mut self, tok: &crate::syntax::SyntaxToken) -> Option<Vec<u16>> {
+        let base: u32 = tok.text_range().start().into();
+        match lexer::string_literal_value(self.text(tok).as_bytes(), base) {
+            Ok(units) => Some(units),
+            Err(e) => {
+                let d = Diagnostic::error(Code::E(9), "invalid multi-line string", Stage::Lexer)
+                    .with_primary(self.span(e.range), "shallower than the closing quotes");
+                self.push(d);
+                None
+            }
+        }
+    }
+
     fn lower_literal(&mut self, l: &ast::Literal, span: TextRange) -> Expr {
         let Some(tok) = l.token() else {
             return err_expr(span);
@@ -269,28 +338,13 @@ impl<'a, 's> Sema<'a, 's> {
                 let v = v as i128;
                 const_expr(Const::Int(v), Ty::of_literal(v), span)
             }
-            SyntaxKind::STRING_LIT => {
-                let base: u32 = tok.text_range().start().into();
-                match lexer::string_literal_value(text, base) {
-                    Ok(units) => {
-                        if units.len() == 1 {
-                            const_expr(Const::Char(units[0]), Ty::Char, span)
-                        } else {
-                            const_expr(Const::Str(units), Ty::String, span)
-                        }
-                    }
-                    Err(e) => {
-                        let d = Diagnostic::error(
-                            Code::E(9),
-                            "invalid multi-line string",
-                            Stage::Lexer,
-                        )
-                        .with_primary(self.span(e.range), "shallower than the closing quotes");
-                        self.push(d);
-                        err_expr(span)
-                    }
+            SyntaxKind::STRING_LIT => match self.string_literal(&tok) {
+                Some(units) if units.len() == 1 => {
+                    const_expr(Const::Char(units[0]), Ty::Char, span)
                 }
-            }
+                Some(units) => const_expr(Const::Str(units), Ty::String, span),
+                None => err_expr(span),
+            },
             SyntaxKind::FLOAT_LIT => {
                 // A `Double` constant, rounded to nearest even (`docs/spec/types.md` 8.4)
                 let digits: String = text
@@ -312,22 +366,33 @@ impl<'a, 's> Sema<'a, 's> {
         let Some((r, name, range)) = self.resolve_name_expr(e) else {
             return err_expr(span);
         };
+        self.resolved_use(r, &name, range, span)
+    }
+
+    /// What a name resolved to, used as a value.
+    pub(super) fn resolved_use(
+        &mut self,
+        r: Resolved,
+        name: &str,
+        range: TextRange,
+        span: TextRange,
+    ) -> Expr {
         match r {
             Resolved::Var(id) => {
                 self.mark_used(id, span);
-                Expr {
+                self.weak_read(Expr {
                     kind: ExprKind::Var(id),
                     ty: self.var(id).ty,
                     value: None,
                     span,
-                }
+                })
             }
-            Resolved::Global(id) => Expr {
+            Resolved::Global(id) => self.weak_read(Expr {
                 kind: ExprKind::Global(id),
                 ty: self.globals[id.0 as usize].ty,
                 value: None,
                 span,
-            },
+            }),
             Resolved::Const { value, ty, .. } => {
                 if ty.is_error() {
                     err_expr(span)
@@ -336,8 +401,9 @@ impl<'a, 's> Sema<'a, 's> {
                 }
             }
             Resolved::Bool(b) => const_expr(Const::Bool(b), Ty::Boolean, span),
-            Resolved::Routine(id) => self.lower_bare_routine_call(id, &name, range, span),
-            Resolved::Func(f) => self.lower_builtin_call(f, &name, &[], range, span),
+            Resolved::Routine(id) => self.lower_bare_routine_call(id, name, range, span),
+            Resolved::Func(f) => self.lower_builtin_call(f, name, &[], range, span),
+            Resolved::Key(op, t) => self.lower_key_call(op, t, &[], span),
             Resolved::Proc(p) => {
                 // A statement-only built-in (such as Break) written in an expression
                 let pname = builtins::proc_name(p);
@@ -366,8 +432,7 @@ impl<'a, 's> Sema<'a, 's> {
                 );
                 err_expr(span)
             }
-            Resolved::ExcCreate(id) => self.new_exception(id, &[], span),
-            Resolved::ExcCreateFmt(id) => self.new_exception_fmt(id, &[], span),
+            Resolved::ClassCreate(id, ctor) => self.new_instance(id, &ctor, &[], span, range, None),
             Resolved::RaiseOuter => {
                 self.error(
                     Code::E(725),
@@ -380,48 +445,178 @@ impl<'a, 's> Sema<'a, 's> {
                 self.std_file_misuse(f, range);
                 err_expr(span)
             }
+            Resolved::Member {
+                recv,
+                class,
+                member,
+                inherited,
+            } => self.member_expr(*recv, class, member, inherited, None, true, range, span),
             Resolved::Error => err_expr(span),
         }
     }
 
-    /// `T.Create(Msg)` (`docs/spec/exceptions.md` 5.6): one `string` argument.
-    pub(super) fn new_exception(
+    /// `TFoo.Create(…)` (`docs/spec/objects.md` 3.1): a new instance on which the constructor
+    /// `name` the class has (chosen among the overloads as for a method) runs. A class without a
+    /// constructor of its own has the built-in `TObject.Create`, which takes no argument.
+    /// `C.Create(…)` (`of`, a class reference whose static type's class is `id`) creates an
+    /// instance of the class `C` points to, and a virtual constructor is called through its table.
+    pub(super) fn new_instance(
         &mut self,
         id: super::types::TypeId,
+        name: &str,
         args: &[ast::Arg],
         span: TextRange,
+        name_range: TextRange,
+        of: Option<Expr>,
     ) -> Expr {
-        self.check_no_width(args);
-        let mut values: Vec<Expr> = args
-            .iter()
-            .filter_map(|a| a.value())
-            .map(|v| self.lower_expr(&v))
-            .collect();
-        if values.len() != 1 {
-            self.error(
-                Code::E(705),
-                format!(
-                    "wrong number of arguments: expected 1, found {}",
-                    values.len()
-                ),
+        if self.types.is_param(id) {
+            return self.param_new(id, args, span);
+        }
+        let after = of.is_some() || self.types.has_after_construction(id);
+        // An abstract class is only refused when created from its name (3.1)
+        let named = of.is_none();
+        let of = of.map(Box::new);
+        if self.types.is_exception_class(id) {
+            self.exception_create_routine();
+        }
+        let set = self.method_set(id, name);
+        if set.is_empty() && self.is_builtin_create_fmt(id, name) {
+            // `T.CreateFmt(Fmt, […])` (`docs/spec/objects.md` 8.2): `Message` is the `Format`
+            let Some(msg) = self.format_message(args, span) else {
+                return err_expr(span);
+            };
+            if named && self.check_abstract_create(id, span) {
+                return err_expr(span);
+            }
+            return Expr {
+                kind: ExprKind::New {
+                    class: Ty::Class(id),
+                    ctor: None,
+                    args: vec![CallArg::Value(msg)],
+                    after,
+                    of,
+                    dispatch: Dispatch::Method,
+                },
+                ty: Ty::Class(id),
+                value: None,
                 span,
-            );
+            };
+        }
+        let nearest = self
+            .methods_named(id, name)
+            .into_iter()
+            .next()
+            .filter(|(_, m)| m.routine.is_some());
+        if set.is_empty()
+            && let Some((owner, m)) = nearest
+        {
+            // Only constructors the code cannot see (E0743; `docs/spec/objects.md` 2.5)
+            for a in args {
+                if let Some(v) = a.value() {
+                    self.lower_expr(&v);
+                }
+            }
+            let owner_name = self.types.name(Ty::Class(owner));
+            let msg = match m.vis {
+                super::types::Visibility::StrictPrivate | super::types::Visibility::Private => {
+                    format!("`{}` is private to `{owner_name}`", m.name)
+                }
+                _ => format!("`{}` is protected in `{owner_name}`", m.name),
+            };
+            let mut d =
+                Diagnostic::error(Code::E(743), msg, Stage::Sema).with_primary(self.span(span), "");
+            if let Some(s) = self.method_span(owner, &m) {
+                d = d.with_secondary(s, "declared here");
+            }
+            self.push(d);
             return err_expr(span);
         }
-        let msg = values.pop().expect("one argument");
-        if msg.ty.is_error() {
+        if set.is_empty() {
+            // The built-in `TObject.Create`
+            self.check_no_width(args);
+            let values: Vec<Expr> = args
+                .iter()
+                .filter_map(|a| a.value())
+                .map(|v| self.lower_expr(&v))
+                .collect();
+            if named && self.check_abstract_create(id, span) {
+                return err_expr(span);
+            }
+            if !values.is_empty() {
+                self.error(
+                    Code::E(705),
+                    format!(
+                        "wrong number of arguments: expected 0, found {}",
+                        values.len()
+                    ),
+                    span,
+                );
+                return err_expr(span);
+            }
+            return Expr {
+                kind: ExprKind::New {
+                    class: Ty::Class(id),
+                    ctor: None,
+                    args: Vec::new(),
+                    after,
+                    of,
+                    dispatch: Dispatch::Method,
+                },
+                ty: Ty::Class(id),
+                value: None,
+                span,
+            };
+        }
+        let ctor = match self.pick_method(set, args, span, false) {
+            super::overload::Pick::Routine(r) => r,
+            super::overload::Pick::Failed => return err_expr(span),
+        };
+        self.routine_hint_use(ctor, name_range);
+        let call = self.lower_routine_call(ctor, args, span);
+        if named && self.check_abstract_create(id, span) {
             return err_expr(span);
         }
-        let msg = self.coerce(msg, Ty::String, false, Some((1, "Msg")));
-        if msg.ty.is_error() {
+        let ExprKind::Call { args, .. } = call.kind else {
             return err_expr(span);
+        };
+        self.check_dictionary_ownerships(ctor, &args, span);
+        if let Some(msg) = self.builtin_create_message(ctor, &args) {
+            // `T.Create(Msg)` of `Exception`, whose body is the compiler's (8.2)
+            return Expr {
+                kind: ExprKind::New {
+                    class: Ty::Class(id),
+                    ctor: None,
+                    args: vec![CallArg::Value(msg)],
+                    after,
+                    of,
+                    dispatch: Dispatch::Method,
+                },
+                ty: Ty::Class(id),
+                value: None,
+                span,
+            };
         }
+        // A virtual constructor is called through the table (`docs/spec/objects.md` 3.1, 15.1)
+        let sealed = matches!(
+            self.types.get(id).kind,
+            super::types::TypeKind::Class { sealed: true, .. }
+        );
+        let dispatch = match self.method_of_routine(ctor) {
+            Some((_, m)) if !sealed && !m.is_final => {
+                m.vmt.map_or(Dispatch::Method, Dispatch::Virtual)
+            }
+            _ => Dispatch::Method,
+        };
         Expr {
-            kind: ExprKind::NewExc {
-                class: Ty::Exception(id),
-                msg: Box::new(msg),
+            kind: ExprKind::New {
+                class: Ty::Class(id),
+                ctor: Some(ctor),
+                args,
+                after,
+                of,
+                dispatch,
             },
-            ty: Ty::Exception(id),
+            ty: Ty::Class(id),
             value: None,
             span,
         }
@@ -439,6 +634,7 @@ impl<'a, 's> Sema<'a, 's> {
             Pick::Routine(c) => c,
             Pick::Failed => return err_expr(span),
         };
+        self.routine_hint_use(id, range);
         // The function being analyzed or one enclosing it (`docs/spec/semantics.md` 4.3, 4.9).
         // `Result` names its result unless a nested function in between has its own
         let self_up = self.enclosing_function(id);
@@ -449,13 +645,16 @@ impl<'a, 's> Sema<'a, 's> {
             // A procedure used in an expression
             let n = info.name.clone();
             let name_span = self.routine_decl_span(id);
-            let d = Diagnostic::error(
+            let mut d = Diagnostic::error(
                 Code::E(725),
                 format!("procedure `{n}` has no value"),
                 Stage::Sema,
             )
             .with_primary(self.span(range), "")
             .with_secondary(name_span, "declared here");
+            if let Some(note) = self.procedure_value_note(id) {
+                d = d.with_note(note);
+            }
             self.push(d);
             return err_expr(span);
         }
@@ -505,13 +704,23 @@ impl<'a, 's> Sema<'a, 's> {
         let Some(base) = i.base() else {
             return err_expr(span);
         };
+        // `O.Items[I]` (`docs/spec/objects.md` 2.6)
+        if let Some(e) = self.indexed_property_read(i, span) {
+            return e;
+        }
+        // A distinct type of a string is indexed as its root (`docs/spec/types.md` 1.3)
         let base_e = self.lower_expr(&base);
+        let base_e = self.rooted(base_e);
         let indices = i.indices();
         if base_e.ty.is_error() {
             for ix in &indices {
                 self.lower_index_item_exprs(ix);
             }
             return err_expr(span);
+        }
+        if self.default_properties(base_e.ty).is_some() {
+            // `X[…]` of a default array property (`docs/spec/objects.md` 12.1)
+            return self.default_index_read(base_e, &indices, span);
         }
         if !self.check_index_count(base_e.ty, indices.len(), span) {
             return err_expr(span);
@@ -542,6 +751,7 @@ impl<'a, 's> Sema<'a, 's> {
                     Ty::Char
                 };
                 let idx = self.lower_expr(ix);
+                let idx = self.rooted(idx);
                 if idx.ty.is_error() {
                     return err_expr(span);
                 }
@@ -688,11 +898,18 @@ impl<'a, 's> Sema<'a, 's> {
             levels += 1;
         }
         if levels == 0 {
-            self.error(
+            let d = self.error(
                 Code::E(720),
                 format!("cannot index a value of type `{}`", self.tn(ty)),
                 span,
             );
+            if Self::indexable_type(ty).is_some() {
+                // `docs/spec/objects.md` 12.1
+                d.notes.push(
+                    "`X[…]` needs a default array property, as in `property Items[I: Integer]: T read GetItem; default;`"
+                        .into(),
+                );
+            }
             return false;
         }
         if n > levels || n == 0 {
@@ -711,6 +928,7 @@ impl<'a, 's> Sema<'a, 's> {
     /// subrange type has its base type, so this is assignment compatibility). E0719 names `index`.
     fn index_operand(&mut self, index: Ty, ix: &ast::Expr) -> Option<Expr> {
         let idx = self.lower_expr(ix);
+        let idx = self.rooted(idx);
         if idx.ty.is_error() {
             return None;
         }
@@ -771,6 +989,16 @@ impl<'a, 's> Sema<'a, 's> {
     /// Whether a `.` chain starts from a value (a variable, constant, `Result` or call) rather than
     /// from a unit or type name, so that `X.F` is a field of `X` (`docs/spec/types.md` 2.1).
     pub(super) fn is_value_chain(&self, e: &ast::Expr) -> bool {
+        // A member written with type arguments is resolved as a name (a generic routine or type;
+        // `docs/spec/generics.md` 1.4)
+        if let ast::Expr::Field(f) = e
+            && f.type_args().is_some()
+        {
+            return false;
+        }
+        if self.class_value_chain(e) {
+            return true;
+        }
         // `U.R.F` where `R` is a value of the unit `U` (`docs/spec/units.md` 3.2)
         if let Some(chain) = super::name_chain(e)
             && let Some((u, n)) = self.unit_prefix(&chain)
@@ -805,11 +1033,49 @@ impl<'a, 's> Sema<'a, 's> {
         if lower == "result" && self.result_owner().is_some() {
             return true;
         }
-        self.global_scope
-            .iter()
-            .rev()
-            .find(|(n, _)| n == lower)
-            .is_some_and(|(_, sym)| !matches!(sym, super::GSym::Type { .. }))
+        // `Self` and the members of `Self` in a method (`docs/spec/objects.md` 2.3)
+        if let Some(class) = self.method_class()
+            && (lower == "self"
+                || self.types.class_chain(class).iter().any(|&c| {
+                    // A class, or a record with methods (chapter 6)
+                    let has_field = match &self.types.get(c).kind {
+                        super::types::TypeKind::Class { fields, .. } => {
+                            fields.iter().any(|f| f.name.eq_ignore_ascii_case(lower))
+                        }
+                        super::types::TypeKind::Record { fields, .. } => {
+                            fields.iter().any(|f| f.name.eq_ignore_ascii_case(lower))
+                        }
+                        _ => false,
+                    };
+                    has_field
+                        || self
+                            .types
+                            .class_methods(c)
+                            .iter()
+                            .any(|m| m.name.eq_ignore_ascii_case(lower))
+                        || self
+                            .types
+                            .class_properties(c)
+                            .iter()
+                            .any(|p| p.name.eq_ignore_ascii_case(lower))
+                        || self.types.class_statics(c).iter().any(|s| {
+                            s.name.eq_ignore_ascii_case(lower)
+                                && !matches!(s.kind, super::types::StaticKind::Type(_))
+                        })
+                }))
+        {
+            return true;
+        }
+        if let Some((_, sym)) = self.global_scope.iter().rev().find(|(n, _)| n == lower) {
+            return !matches!(sym, super::GSym::Type { .. });
+        }
+        // `ExceptObject.Message` (`docs/spec/objects.md` 8.4): the only built-in function whose
+        // value has members
+        if lower == "exceptobject" {
+            return true;
+        }
+        // A variable or constant from the public part of a used unit (`docs/spec/units.md` 3.1)
+        self.unit_export_is_value(lower)
     }
 
     /// `R.F` where `R` is a value.
@@ -820,26 +1086,64 @@ impl<'a, 's> Sema<'a, 's> {
             }
             return err_expr(span);
         };
-        let b = self.lower_expr(&base);
+        let (b, declared) = self.lower_expr_declared(&base);
         if b.ty.is_error() {
             return err_expr(span);
         }
-        if let Ty::Exception(_) = b.ty {
-            return match self.find_exc_member(b.ty, &field) {
-                Some(member) => Expr {
-                    ty: super::dump::exc_member_type(member),
-                    kind: ExprKind::ExcMember {
-                        base: Box::new(b),
-                        member,
-                    },
-                    value: None,
-                    span,
-                },
-                None => err_expr(span),
+        let class = match b.ty {
+            Ty::Class(c) | Ty::Intf(c) => Some(c),
+            t @ Ty::ClassRef(_) => self.types.class_ref_target(t),
+            _ => None,
+        };
+        if let Some(class) = class {
+            let name = self.text(&field).to_string();
+            let range = field.text_range();
+            return match self.find_member(class, &name, range) {
+                Ok(member) => self.member_expr(b, class, member, false, None, true, range, span),
+                Err(true) => err_expr(span),
+                Err(false) => {
+                    // The helpers of the class (`docs/spec/objects.md` 10.4)
+                    let found = if matches!(b.ty, Ty::Intf(_)) {
+                        None
+                    } else {
+                        self.helper_resolved(b, &name, range)
+                    };
+                    match found {
+                        Some(r) => self.resolved_use(r, &name, range, span),
+                        None => {
+                            self.member_missing(class, &name, range);
+                            err_expr(span)
+                        }
+                    }
+                }
             };
         }
+        if let Ty::Record(rec) = b.ty {
+            let name = self.text(&field).to_string();
+            let range = field.text_range();
+            if self.record_has_member(rec, &name, range) {
+                // `docs/spec/objects.md` chapter 6
+                return match self.find_member(rec, &name, range) {
+                    Ok(member) => self.member_expr(b, rec, member, false, None, true, range, span),
+                    Err(_) => err_expr(span),
+                };
+            }
+        }
+        let name = self.text(&field).to_string();
+        let has_field = matches!(b.ty, Ty::Record(_))
+            && self
+                .types
+                .fields(b.ty)
+                .iter()
+                .any(|f| f.name.eq_ignore_ascii_case(&name));
+        if !has_field {
+            // The helpers of the value's type (`docs/spec/objects.md` 10.4)
+            let range = field.text_range();
+            let r = self.value_member(b, declared, &name, range, span);
+            return self.resolved_use(r, &name, range, span);
+        }
         match self.find_field(b.ty, &field, span) {
-            Some((index, ty, name)) => Expr {
+            Some((index, ty, name)) => self.weak_read(Expr {
                 kind: ExprKind::Field {
                     base: Box::new(b),
                     index,
@@ -848,9 +1152,24 @@ impl<'a, 's> Sema<'a, 's> {
                 ty,
                 value: None,
                 span,
-            },
+            }),
             None => err_expr(span),
         }
+    }
+
+    /// Whether an argument of a call whose callee has been diagnosed is a routine or procedural
+    /// value written as a bare name (`Addr(F)`): it is not typed, since it would be called there
+    /// (E0704, E0725) though it was meant as a value (`docs/spec/objects.md` 9.11).
+    pub(super) fn bare_routine_arg(&mut self, e: &ast::Expr) -> bool {
+        matches!(e, ast::Expr::NameRef(_) | ast::Expr::Field(_))
+            && self.dry_run(|s| {
+                let n = s.sink.len();
+                s.lower_expr(e);
+                s.sink
+                    .iter()
+                    .skip(n)
+                    .any(|d| matches!(d.code, Some(Code::E(704) | Code::E(725))))
+            })
     }
 
     /// The type of an expression, without reporting anything (to choose how to read it).
@@ -858,47 +1177,10 @@ impl<'a, 's> Sema<'a, 's> {
         self.dry_run(|s| s.lower_expr(e).ty)
     }
 
-    /// The member `name_tok` of an exception object (`docs/spec/exceptions.md` 2.1). `Free` /
-    /// `Destroy` are E3019; a name the class does not have is the E0700 variant.
-    pub(super) fn find_exc_member(
-        &mut self,
-        ty: Ty,
-        name_tok: &crate::syntax::SyntaxToken,
-    ) -> Option<ExcMember> {
-        let Ty::Exception(id) = ty else { return None };
-        let name = self.text(name_tok).to_string();
-        let lower = name.to_ascii_lowercase();
-        let range = name_tok.text_range();
-        let is = |anc: u32| self.types.is_descendant(id, super::types::TypeId(anc));
-        let m = match lower.as_str() {
-            "message" => Some(ExcMember::Message),
-            "stacktrace" => Some(ExcMember::StackTrace),
-            "suppressed" => Some(ExcMember::Suppressed),
-            "innerexception" => Some(ExcMember::InnerException),
-            "classname" => Some(ExcMember::ClassName),
-            "value" if is(crate::bytecode::exc::CONVERT_ERROR) => Some(ExcMember::Value),
-            "errorcode" if is(crate::bytecode::exc::IN_OUT_ERROR) => Some(ExcMember::ErrorCode),
-            "free" | "destroy" => {
-                self.error(
-                    Code::E(3019),
-                    format!("`{name}` is not supported in Puy"),
-                    range,
-                )
-                .notes
-                .push(builtins::deleted_note(Code::E(3019)).into());
-                return None;
-            }
-            _ => None,
-        };
-        if m.is_none() {
-            let t = self.tn(ty);
-            self.error(Code::E(700), format!("`{t}` has no member `{name}`"), range);
-        }
-        m
-    }
-
     /// The field `name_tok` of a record type: `(number, type, declared name)`. E0700 if the record
-    /// has no such field; E3200 if the value is not a record (type helpers come in M3).
+    /// has no such field. On a value that is not a record, a member of its helpers cannot be
+    /// written as a variable (E0707), and a name no helper has is the E3200 of the built-in types'
+    /// helpers (`docs/spec/objects.md` 10.4).
     pub(super) fn find_field(
         &mut self,
         ty: Ty,
@@ -907,12 +1189,25 @@ impl<'a, 's> Sema<'a, 's> {
     ) -> Option<(u32, Ty, String)> {
         let name = self.text(name_tok).to_string();
         if !matches!(ty, Ty::Record(_)) {
-            let text = self.src(whole);
-            self.error(
-                Code::E(3200),
-                format!("`{text}` is not supported yet (planned for M3)"),
-                whole,
-            );
+            match self.find_helper_member(
+                ty,
+                &name,
+                name_tok.text_range(),
+                super::helpers::HelperRecv::Implicit,
+            ) {
+                Ok((_, super::helpers::HelperMember::Builtin(_))) => {
+                    self.cannot_assign(whole, "a read-only property", None);
+                }
+                Ok(_) => self.cannot_assign(whole, "not a variable", None),
+                Err(true) => {}
+                Err(false) => {
+                    self.error(
+                        Code::E(3200),
+                        "type helpers for built-in types are not supported yet (planned for M5)",
+                        whole,
+                    );
+                }
+            }
             return None;
         }
         let found = self
@@ -921,7 +1216,27 @@ impl<'a, 's> Sema<'a, 's> {
             .iter()
             .enumerate()
             .find(|(_, f)| f.name.eq_ignore_ascii_case(&name))
-            .map(|(i, f)| (i as u32, f.ty, f.name.clone()));
+            .map(|(i, f)| (i as u32, f.ty, f.name.clone(), f.vis, f.span));
+        if let (Some((_, _, n, vis, decl)), Ty::Record(id)) = (&found, ty)
+            && !self.can_see(*vis, id)
+        {
+            // `docs/spec/objects.md` chapter 6 (2.5)
+            let t = self.tn(ty);
+            let msg = match vis {
+                super::types::Visibility::StrictPrivate | super::types::Visibility::Private => {
+                    format!("`{n}` is private to `{t}`")
+                }
+                _ => format!("`{n}` is protected in `{t}`"),
+            };
+            let mut d = Diagnostic::error(Code::E(743), msg, Stage::Sema)
+                .with_primary(self.span(name_tok.text_range()), "");
+            if let Some(u) = self.types.class_unit(id) {
+                d = d.with_secondary(Span::new(self.unit_file(u), *decl), "declared here");
+            }
+            self.push(d);
+            return None;
+        }
+        let found = found.map(|(i, t, n, _, _)| (i, t, n));
         if found.is_none() {
             let t = self.tn(ty);
             self.error(
@@ -940,19 +1255,63 @@ impl<'a, 's> Sema<'a, 's> {
             return err_expr(span);
         };
         let op_range = op_tok.text_range();
+        if op_tok.kind() == SyntaxKind::AT {
+            // `@F` (E3004, reported by the parser): a routine's name there is not called, and
+            // another operand is only checked for its own errors (`docs/spec/objects.md` 9.10)
+            if let Some(o) = u.operand()
+                && !self.is_code_name(&o)
+            {
+                self.lower_value(&o);
+            }
+            return err_expr(span);
+        }
         let operand = match u.operand() {
             Some(o) => self.lower_expr(&o),
             None => return err_expr(span),
         };
+        // A distinct type whose root is an integer type: its unary `-` / `+` / `not` is of the
+        // distinct type when the root's would be of the root (`docs/spec/types.md` 1.3)
+        let distinct = match operand.ty {
+            t @ Ty::Distinct(_) if self.types.root(t).is_integer() => Some(t),
+            _ => None,
+        };
+        let operand = self.rooted(operand);
+        // The distinct type kept as the result: only when the computation type `calc` of the
+        // root (`docs/spec/semantics.md` 3.2) is the root itself
+        let root = operand.ty;
+        let keep = |calc: Ty| distinct.filter(|_| calc == root);
         if operand.ty.is_error() {
             return err_expr(span);
         }
+        // An operand whose type may declare operators (`docs/spec/objects.md` 11.2)
+        let operand = if self.operator_owner(operand.ty).is_some() {
+            let (name, text) = match op_tok.kind() {
+                SyntaxKind::PLUS => ("Positive", "+"),
+                SyntaxKind::MINUS => ("Negative", "-"),
+                _ => ("LogicalNot", "not"),
+            };
+            match self.unary_operator(operand, name, text, op_range, span) {
+                Ok(x) => return x,
+                Err(o) => o,
+            }
+        } else {
+            operand
+        };
+        if let Ty::Param(p) = operand.ty {
+            // `docs/spec/generics.md` 3.3
+            let text = self.text(&op_tok).to_ascii_lowercase();
+            self.param_misuse(p, super::generics::ParamOp::Operator(&text), span);
+            return err_expr(span);
+        }
         match op_tok.kind() {
-            SyntaxKind::AT => err_expr(span),
             SyntaxKind::PLUS => {
                 if operand.ty.is_number() {
                     let mut e = operand;
                     e.span = span;
+                    // `+` computes in the root itself
+                    if let Some(t) = keep(root) {
+                        e.ty = t;
+                    }
                     e
                 } else {
                     self.error(
@@ -982,35 +1341,38 @@ impl<'a, 's> Sema<'a, 's> {
                     return err_expr(span);
                 }
                 if let Some(Const::Int(v)) = operand.value {
-                    // Negating a constant re-derives the type from the value
                     let nv = -v;
+                    if let Some(t) = neg_calc(operand.ty).and_then(keep) {
+                        // A constant of a distinct type stays of it, so the value must fit
+                        if !operand.ty.contains(nv) {
+                            self.const_out_of_range(nv, t, op_range);
+                            return err_expr(span);
+                        }
+                        return const_expr(Const::Int(nv), t, span);
+                    }
+                    // Negating a constant re-derives the type from the value
                     if !Ty::Int64.contains(nv) {
                         self.const_out_of_range(nv, Ty::Int64, op_range);
                         return err_expr(span);
                     }
                     return const_expr(Const::Int(nv), Ty::of_literal(nv), span);
                 }
-                let calc = match operand.ty {
-                    t if t.fits_in_integer() => Ty::Integer,
-                    Ty::Cardinal | Ty::Int64 => Ty::Int64,
-                    Ty::UInt64 => {
-                        let d = Diagnostic::error(
-                            Code::E(716),
-                            "cannot mix `UInt64` and signed integers",
-                            Stage::Sema,
-                        )
-                        .with_primary(self.span(op_range), "")
-                        .with_fix(Fix::suggestion(
-                            "convert to `Int64`",
-                            vec![
-                                TextEdit::insert(self.input.file, operand.span.start(), "Int64("),
-                                TextEdit::insert(self.input.file, operand.span.end(), ")"),
-                            ],
-                        ));
-                        self.push(d);
-                        return err_expr(span);
-                    }
-                    _ => unreachable!(),
+                let Some(calc) = neg_calc(operand.ty) else {
+                    let d = Diagnostic::error(
+                        Code::E(716),
+                        "cannot mix `UInt64` and signed integers",
+                        Stage::Sema,
+                    )
+                    .with_primary(self.span(op_range), "")
+                    .with_fix(Fix::suggestion(
+                        "convert to `Int64`",
+                        vec![
+                            TextEdit::insert(self.input.file, operand.span.start(), "Int64("),
+                            TextEdit::insert(self.input.file, operand.span.end(), ")"),
+                        ],
+                    ));
+                    self.push(d);
+                    return err_expr(span);
                 };
                 Expr {
                     kind: ExprKind::Unary {
@@ -1018,7 +1380,7 @@ impl<'a, 's> Sema<'a, 's> {
                         operand: Box::new(operand),
                         calc: Calc::Int(calc),
                     },
-                    ty: calc,
+                    ty: keep(calc).unwrap_or(calc),
                     value: None,
                     span,
                 }
@@ -1052,7 +1414,7 @@ impl<'a, 's> Sema<'a, 's> {
                             operand: Box::new(operand),
                             calc: Calc::Int(calc),
                         },
-                        ty: calc,
+                        ty: keep(calc).unwrap_or(calc),
                         value,
                         span,
                     }
@@ -1074,6 +1436,12 @@ impl<'a, 's> Sema<'a, 's> {
 
     /// Flattens a left-leaning chain of `BINARY_EXPR` and types it (recursing only into right operands).
     fn lower_binary(&mut self, b: &ast::BinaryExpr, span: TextRange) -> Expr {
+        if self.generic_call_needs_parens(b) {
+            if let Some(r) = b.rhs() {
+                self.lower_expr(&r);
+            }
+            return err_expr(span);
+        }
         // Collect the left-leaning chain
         let mut chain: Vec<ast::BinaryExpr> = vec![b.clone()];
         let mut first: Option<ast::Expr> = None;
@@ -1091,8 +1459,34 @@ impl<'a, 's> Sema<'a, 's> {
         let Some(first) = first else {
             return err_expr(span);
         };
+        // `F = G` / `F <> nil` of procedural values: compared without calling; an ordering of
+        // values that cannot be called without arguments is E0703 (`docs/spec/objects.md` 9.5)
+        if let [only] = chain.as_slice()
+            && let (Some(op_tok), Some(r)) = (only.op(), only.rhs())
+            && matches!(
+                op_tok.kind(),
+                SyntaxKind::EQ
+                    | SyntaxKind::NE
+                    | SyntaxKind::LT
+                    | SyntaxKind::LE
+                    | SyntaxKind::GT
+                    | SyntaxKind::GE
+            )
+        {
+            let op = match op_tok.kind() {
+                SyntaxKind::EQ => BinOp::Eq,
+                SyntaxKind::NE => BinOp::Ne,
+                SyntaxKind::LT => BinOp::Lt,
+                SyntaxKind::LE => BinOp::Le,
+                SyntaxKind::GT => BinOp::Gt,
+                _ => BinOp::Ge,
+            };
+            if let Some(x) = self.proc_comparison(&first, &r, op, op_tok.text_range(), span) {
+                return x;
+            }
+        }
         // `nil = A` takes the type of `nil` from the right operand (`docs/spec/types.md` 2.3)
-        let first_nil = matches!(first, ast::Expr::Nil(_));
+        let first_nil = is_nil(&first);
         // `[…] + S`: the constructor takes the type of the set on the right
         // `[…] + A`: likewise with the dynamic array on the right (`docs/spec/types.md` 8.6)
         let first_set = if ctor_of(&first).is_some()
@@ -1109,8 +1503,22 @@ impl<'a, 's> Sema<'a, 's> {
         } else {
             None
         };
+        // `TCircle = C`: a class as a value next to a class reference (`docs/spec/objects.md` 2.8)
+        let first_class = chain
+            .last()
+            .and_then(|n| n.op())
+            .filter(|t| matches!(t.kind(), SyntaxKind::EQ | SyntaxKind::NE))
+            .and_then(|_| self.class_name_of(&first))
+            .filter(|_| {
+                chain.last().and_then(|n| n.rhs()).is_some_and(|r| {
+                    self.class_name_of(&r).is_some()
+                        || matches!(self.trial_type(&r), Ty::ClassRef(_))
+                })
+            });
         let mut acc = if first_nil {
             const_expr(Const::Nil, Ty::Error, ast::trimmed_range(first.syntax()))
+        } else if let Some(c) = first_class {
+            self.class_ref_value(c, ast::trimmed_range(first.syntax()))
         } else if let Some(t) = first_set {
             self.lower_expected(&first, t)
         } else {
@@ -1125,6 +1533,36 @@ impl<'a, 's> Sema<'a, 's> {
                 continue;
             };
             let op_range = op_tok.text_range();
+            if matches!(op_tok.kind(), SyntaxKind::IS_KW | SyntaxKind::AS_KW) {
+                // `X is T` / `X as T` (`docs/spec/objects.md` 2.9): the right operand is a class
+                let target = match node.rhs() {
+                    Some(r) => self.class_check_target(&r),
+                    None => None,
+                };
+                if acc.value == Some(Const::Nil) && acc.ty.is_error() {
+                    // The leading `nil` of `nil is T`
+                    self.error(
+                        Code::E(702),
+                        "type mismatch: expected an instance of a class or an interface, found `nil`",
+                        acc.span,
+                    );
+                    had_error = true;
+                }
+                let Some(target) = target.filter(|_| !had_error) else {
+                    had_error = true;
+                    continue;
+                };
+                let x = fold_steps(acc, &mut first_expr, &mut steps);
+                let step_span = TextRange::new(x.span.start(), node.syntax().text_range().end());
+                let op = if op_tok.kind() == SyntaxKind::IS_KW {
+                    ClassCheckOp::Is
+                } else {
+                    ClassCheckOp::As
+                };
+                acc = self.class_check(x, target, op, step_span, node);
+                had_error = acc.ty.is_error();
+                continue;
+            }
             let nil_cmp = matches!(op_tok.kind(), SyntaxKind::EQ | SyntaxKind::NE);
             let rhs = match node.rhs() {
                 // A set constructor after `in` is a set of the left operand's type, and next to a
@@ -1135,6 +1573,24 @@ impl<'a, 's> Sema<'a, 's> {
                 {
                     self.lower_expr_unchecked_ctor(&r);
                     err_expr(ast::trimmed_range(r.syntax()))
+                }
+                // `X in […]` with `X` of a type parameter (`docs/spec/generics.md` 3.3)
+                Some(r)
+                    if op_tok.kind() == SyntaxKind::IN_KW
+                        && !had_error
+                        && matches!(acc.ty, Ty::Param(_))
+                        && ctor_of(&r).is_some() =>
+                {
+                    let ac = ctor_of(&r).expect("checked above");
+                    self.lower_ctor_elements_quietly(&ac);
+                    let rr = ast::trimmed_range(r.syntax());
+                    let Ty::Param(p) = acc.ty else {
+                        unreachable!("checked in the guard")
+                    };
+                    let range = TextRange::new(acc.span.start(), rr.end());
+                    self.param_misuse(p, super::generics::ParamOp::Operator("in"), range);
+                    had_error = true;
+                    err_expr(rr)
                 }
                 Some(r) if op_tok.kind() == SyntaxKind::IN_KW && ctor_of(&r).is_some() => {
                     let ac = ctor_of(&r).expect("checked above");
@@ -1156,38 +1612,55 @@ impl<'a, 's> Sema<'a, 's> {
                     };
                     self.lower_expected(&r, t)
                 }
-                // `A = nil` / `A <> nil`: `nil` takes the type of the dynamic array
-                Some(ast::Expr::Nil(n))
-                    if nil_cmp && matches!(acc.ty, Ty::DynArray(_) | Ty::Exception(_)) =>
+                // `C = TCircle`: a class as a value (`docs/spec/objects.md` 2.8)
+                Some(r)
+                    if nil_cmp
+                        && matches!(acc.ty, Ty::ClassRef(_))
+                        && self.class_name_of(&r).is_some() =>
                 {
-                    const_expr(Const::Nil, acc.ty, ast::trimmed_range(n.syntax()))
+                    let c = self.class_name_of(&r).expect("checked above");
+                    self.class_ref_value(c, ast::trimmed_range(r.syntax()))
+                }
+                // `A = nil` / `A <> nil`: `nil` takes the type of the dynamic array
+                Some(r) if nil_cmp && self.takes_nil_ty(acc.ty) && is_nil(&r) => {
+                    const_expr(Const::Nil, acc.ty, ast::trimmed_range(r.syntax()))
+                }
+                // `nil` next to an operand that cannot take it: the operand gives the expected
+                // type; next to an operand that failed, nothing more is reported
+                Some(n) if is_nil(&n) => {
+                    let r = ast::trimmed_range(n.syntax());
+                    if !had_error {
+                        if acc.value == Some(Const::Nil) && acc.ty.is_error() {
+                            // `nil = nil`: reported once, at the leading `nil`
+                            self.nil_without_type(acc.span);
+                            had_error = true;
+                        } else if self.takes_nil_ty(acc.ty) {
+                            self.nil_without_type(r);
+                        } else {
+                            self.nil_compare_mismatch(acc.ty, r);
+                        }
+                    }
+                    err_expr(r)
                 }
                 Some(r) => self.lower_expr(&r),
                 None => err_expr(TextRange::empty(op_range.end())),
             };
             if acc.value == Some(Const::Nil) && acc.ty.is_error() {
                 // The leading `nil` of `nil = A`
-                if nil_cmp && matches!(rhs.ty, Ty::DynArray(_) | Ty::Exception(_)) {
+                if nil_cmp && self.takes_nil_ty(rhs.ty) {
                     acc.ty = rhs.ty;
                 } else {
-                    if !rhs.ty.is_error() {
-                        self.error(
-                            Code::E(3200),
-                            "`nil` without a dynamic array type is not supported yet (planned for M3)",
-                            acc.span,
-                        );
+                    // An operand that failed has been reported (and `nil = nil` above)
+                    if self.takes_nil_ty(rhs.ty) {
+                        self.nil_without_type(acc.span);
+                    } else if !rhs.ty.is_error() {
+                        self.nil_compare_mismatch(rhs.ty, acc.span);
                     }
                     had_error = true;
                 }
             }
             let Some(op) = binop_of(op_tok.kind()) else {
-                // is / as
-                let t = self.text(&op_tok).to_string();
-                self.error(
-                    Code::E(3200),
-                    format!("`{t}` is not supported yet (planned for M3)"),
-                    op_range,
-                );
+                // The parser makes binary expressions only of the operators above
                 had_error = true;
                 continue;
             };
@@ -1195,22 +1668,36 @@ impl<'a, 's> Sema<'a, 's> {
                 had_error = true;
                 continue;
             }
+            // An operand whose type may declare operators (`docs/spec/objects.md` 11.3)
+            let rhs =
+                if self.operator_owner(acc.ty).is_some() || self.operator_owner(rhs.ty).is_some() {
+                    let lhs = fold_steps(acc, &mut first_expr, &mut steps);
+                    match self.binary_operator(lhs, op, rhs, op_range) {
+                        Ok(x) => {
+                            had_error = x.ty.is_error();
+                            acc = x;
+                            continue;
+                        }
+                        Err(operands) => {
+                            let (lhs, rhs) = *operands;
+                            acc = lhs;
+                            rhs
+                        }
+                    }
+                } else {
+                    rhs
+                };
+            // An operand of a distinct type is a value of its root type for the built-in
+            // operations; a user's operator was chosen above with the distinct type
+            // (`docs/spec/types.md` 1.3)
+            let rhs = self.rooted(rhs);
+            acc = self.rooted(acc);
             // A real or `Currency` operation converts its left operand to the computation type
             // (`docs/spec/types.md` 8.4); after earlier steps, they become the left operand
             if let Some(calc) = real_calc_type(acc.ty, op, rhs.ty)
                 && acc.ty != calc
             {
-                if let Some(fe) = first_expr.take() {
-                    acc = Expr {
-                        kind: ExprKind::Binary {
-                            first: Box::new(fe),
-                            steps: std::mem::take(&mut steps),
-                        },
-                        ty: acc.ty,
-                        value: None,
-                        span: acc.span,
-                    };
-                }
+                acc = fold_steps(acc, &mut first_expr, &mut steps);
                 acc = self.convert_num(acc, calc);
                 if acc.ty.is_error() {
                     had_error = true;
@@ -1223,17 +1710,7 @@ impl<'a, 's> Sema<'a, 's> {
                 && matches!(rhs.ty, Ty::String | Ty::Char)
                 && (op == BinOp::Add || op.is_comparison())
             {
-                if let Some(fe) = first_expr.take() {
-                    acc = Expr {
-                        kind: ExprKind::Binary {
-                            first: Box::new(fe),
-                            steps: std::mem::take(&mut steps),
-                        },
-                        ty: acc.ty,
-                        value: None,
-                        span: acc.span,
-                    };
-                }
+                acc = fold_steps(acc, &mut first_expr, &mut steps);
                 acc = self.convert_u8(acc, Ty::String);
             }
             let step_span = TextRange::new(acc.span.start(), rhs.span.end());
@@ -1290,6 +1767,278 @@ impl<'a, 's> Sema<'a, 's> {
             value: None,
             span,
         }
+    }
+
+    /// The class or interface after `is` / `as` (`docs/spec/objects.md` 2.9, 7.6). Anything else
+    /// is E0702.
+    fn class_check_target(&mut self, r: &ast::Expr) -> Option<super::types::TypeId> {
+        let range = ast::trimmed_range(r.syntax());
+        // A name that is a type is resolved again for its own diagnostics (as a value it would be
+        // E0708); anything else is typed as a value below
+        let is_type = matches!(r, ast::Expr::NameRef(_) | ast::Expr::Field(_))
+            && matches!(
+                self.dry_run(|s| s.resolve_name_expr(r)),
+                Some((Resolved::Type(_), ..))
+            );
+        let resolved = if is_type {
+            self.resolve_name_expr(r)
+        } else {
+            None
+        };
+        let found = match resolved {
+            Some((Resolved::Type(Ty::Class(id) | Ty::Intf(id)), ..)) => return Some(id),
+            Some((Resolved::Type(Ty::Error), ..)) => return None,
+            Some((Resolved::Type(t), ..)) => format!("`{}`", self.tn(t)),
+            _ => {
+                let e = self.lower_expr(r);
+                if e.ty.is_error() {
+                    return None;
+                }
+                format!("a value of type `{}`", self.tn(e.ty))
+            }
+        };
+        self.error(
+            Code::E(702),
+            format!("type mismatch: expected a class or an interface, found {found}"),
+            range,
+        );
+        None
+    }
+
+    /// `x is T` / `x as T` of a class or an interface `T` (`docs/spec/objects.md` 2.9, 7.6).
+    /// `span` is the whole expression; `node` gives the operator's place for `X <> nil`.
+    fn class_check(
+        &mut self,
+        x: Expr,
+        class: super::types::TypeId,
+        op: ClassCheckOp,
+        span: TextRange,
+        node: &ast::BinaryExpr,
+    ) -> Expr {
+        let target = self.class_or_intf(class);
+        // A value of a type parameter is seen as its constraint's class (any class or
+        // interface constraint for an interface; `docs/spec/generics.md` 3.3)
+        let x = match x.ty {
+            Ty::Param(p) => {
+                let view = if self.types.is_interface(class) {
+                    self.param_reference(x.ty)
+                } else {
+                    self.param_class(p).map(Ty::Class)
+                };
+                match view {
+                    Some(v) => Expr { ty: v, ..x },
+                    None => {
+                        let what = match op {
+                            ClassCheckOp::Is => super::generics::ParamOp::TypeTest,
+                            _ => super::generics::ParamOp::Convert,
+                        };
+                        self.param_misuse(p, what, span);
+                        return err_expr(span);
+                    }
+                }
+            }
+            _ => x,
+        };
+        if !matches!(x.ty, Ty::Class(_) | Ty::Intf(_)) {
+            let d = self.error(
+                Code::E(702),
+                format!(
+                    "type mismatch: expected an instance of a class or an interface, found `{}`",
+                    self.tn(x.ty)
+                ),
+                x.span,
+            );
+            if matches!(x.ty, Ty::ClassRef(_)) {
+                d.notes.push(
+                    "check a class reference with `InheritsFrom`, and convert it with the name of a class reference type, as in `TShapeClass(C)`".into(),
+                );
+            }
+            return err_expr(span);
+        }
+        let Some(holds) = self.check_holds_statically(x.ty, target, span) else {
+            return err_expr(span);
+        };
+        if holds {
+            // To an ancestor (or an implemented interface, or `TObject` from an interface): `is`
+            // is `X <> nil`, `as` does nothing (2.9, 7.6)
+            if op == ClassCheckOp::Is {
+                let x_ty = x.ty;
+                let nil = const_expr(Const::Nil, x_ty, TextRange::empty(span.end()));
+                let op_range = node.op().map_or(span, |t| t.text_range());
+                return match self.binary_step(&x, BinOp::Ne, nil, op_range, node) {
+                    Some((step, _)) => Expr {
+                        kind: ExprKind::Binary {
+                            first: Box::new(x),
+                            steps: vec![step],
+                        },
+                        ty: Ty::Boolean,
+                        value: None,
+                        span,
+                    },
+                    None => err_expr(span),
+                };
+            }
+            let mut e = x;
+            e.ty = target;
+            e.span = span;
+            return e;
+        }
+        Expr {
+            kind: ExprKind::ClassCheck {
+                operand: Box::new(x),
+                class,
+                op,
+            },
+            ty: if op == ClassCheckOp::Is {
+                Ty::Boolean
+            } else {
+                target
+            },
+            value: None,
+            span,
+        }
+    }
+
+    /// The type of a class or an interface by its type id.
+    pub(super) fn class_or_intf(&self, id: super::types::TypeId) -> Ty {
+        if self.types.is_interface(id) {
+            Ty::Intf(id)
+        } else {
+            Ty::Class(id)
+        }
+    }
+
+    /// Whether a check (`is`, `as` or a conversion by type name) of a value of the class or
+    /// interface type `from` against the class or interface `to` holds without looking at the
+    /// instance (`Some(true)`), is decided at run time (`Some(false)`), or can never hold (E0702,
+    /// `None`) (`docs/spec/objects.md` 2.9, 7.6).
+    pub(super) fn check_holds_statically(
+        &mut self,
+        from: Ty,
+        to: Ty,
+        span: TextRange,
+    ) -> Option<bool> {
+        let sealed = |s: &Self, c| {
+            matches!(
+                s.types.get(c).kind,
+                super::types::TypeKind::Class { sealed: true, .. }
+            )
+        };
+        let never = match (from, to) {
+            (Ty::Class(a), Ty::Class(b)) => {
+                if self.types.is_descendant(a, b) {
+                    return Some(true);
+                }
+                !self.types.is_descendant(b, a)
+            }
+            // A descendant of a class that does not implement the interface may (unless the class
+            // is sealed)
+            (Ty::Class(a), Ty::Intf(b)) => {
+                if self.types.implements(a, b) {
+                    return Some(true);
+                }
+                sealed(self, a)
+            }
+            (Ty::Intf(a), Ty::Intf(b)) => return Some(self.types.is_descendant(a, b)),
+            // Every instance is a `TObject`; an instance of a sealed class held by the interface
+            // implements it
+            (Ty::Intf(a), Ty::Class(b)) => {
+                if b == super::types::TOBJECT {
+                    return Some(true);
+                }
+                sealed(self, b) && !self.types.implements(b, a)
+            }
+            _ => return Some(false),
+        };
+        if never {
+            self.never_be(from, to, span);
+            return None;
+        }
+        Some(false)
+    }
+
+    /// The E0702 of a check between classes (or class references) neither of which descends from
+    /// the other (`docs/spec/objects.md` 2.8, 2.9).
+    fn never_be(&mut self, from: Ty, to: Ty, span: TextRange) {
+        self.error(
+            Code::E(702),
+            format!("`{}` can never be `{}`", self.tn(from), self.tn(to)),
+            span,
+        );
+    }
+
+    /// The conversion by type name `T(x)` of an instance, an interface value or a class reference
+    /// (`docs/spec/objects.md` 2.8, 2.9, 7.6): to an ancestor nothing, otherwise checked at run
+    /// time as `as`. Gives `x` back (`Err`) if neither type is a class, an interface or a class
+    /// reference.
+    fn class_cast(&mut self, x: Expr, t: Ty, span: TextRange) -> Result<Expr, Expr> {
+        let (from, to) = match (x.ty, t) {
+            (Ty::Class(_) | Ty::Intf(_), Ty::Class(to) | Ty::Intf(to)) => {
+                let Some(holds) = self.check_holds_statically(x.ty, t, span) else {
+                    return Ok(err_expr(span));
+                };
+                if holds {
+                    let mut e = x;
+                    e.ty = t;
+                    e.span = span;
+                    return Ok(e);
+                }
+                return Ok(Expr {
+                    kind: ExprKind::ClassCheck {
+                        operand: Box::new(x),
+                        class: to,
+                        op: ClassCheckOp::Cast,
+                    },
+                    ty: t,
+                    value: None,
+                    span,
+                });
+            }
+            (Ty::ClassRef(_), Ty::ClassRef(_)) => {
+                let bases = self
+                    .types
+                    .class_ref_target(x.ty)
+                    .zip(self.types.class_ref_target(t));
+                let Some((a, b)) = bases else {
+                    return Ok(err_expr(span));
+                };
+                (a, b)
+            }
+            (Ty::ClassRef(_), _) | (_, Ty::ClassRef(_)) => {
+                // Between a class reference and an instance or an integer (2.8)
+                self.error(
+                    Code::E(702),
+                    format!(
+                        "type mismatch: expected `{}`, found `{}`",
+                        self.tn(t),
+                        self.tn(x.ty)
+                    ),
+                    span,
+                );
+                return Ok(err_expr(span));
+            }
+            _ => return Err(x),
+        };
+        if self.types.is_descendant(from, to) {
+            let mut e = x;
+            e.ty = t;
+            e.span = span;
+            return Ok(e);
+        }
+        if !self.types.is_descendant(to, from) {
+            self.never_be(x.ty, t, span);
+            return Ok(err_expr(span));
+        }
+        Ok(Expr {
+            kind: ExprKind::ClassCheck {
+                operand: Box::new(x),
+                class: to,
+                op: ClassCheckOp::RefCast,
+            },
+            ty: t,
+            value: None,
+            span,
+        })
     }
 
     /// Typing and folding of one step of a binary operation. Looks only at the type and value of `lhs`.
@@ -1427,14 +2176,57 @@ impl<'a, 's> Sema<'a, 's> {
                     None,
                 ));
             }
-            if let (Ty::Exception(a), Ty::Exception(b)) = (lt, rt)
+            if matches!(op, BinOp::Eq | BinOp::Ne)
+                && matches!(
+                    (lt, rt),
+                    (Ty::Intf(_), Ty::Intf(_) | Ty::Class(_)) | (Ty::Class(_), Ty::Intf(_))
+                )
+            {
+                // The same instance or not, whatever the types (`docs/spec/objects.md` 7.4)
+                return Some((
+                    BinStep {
+                        op,
+                        rhs,
+                        calc: Calc::Ref,
+                        ty: Ty::Boolean,
+                        span: op_range,
+                    },
+                    None,
+                ));
+            }
+            let class_refs = (
+                self.types.class_ref_target(lt),
+                self.types.class_ref_target(rt),
+            );
+            let objects = match (lt, rt) {
+                (Ty::Class(a), Ty::Class(b)) => Some((a, b)),
+                _ => class_refs.0.zip(class_refs.1),
+            };
+            if let Some((a, b)) = objects
                 && matches!(op, BinOp::Eq | BinOp::Ne)
                 && (lhs.value == Some(Const::Nil)
                     || rhs.value == Some(Const::Nil)
                     || self.types.is_descendant(a, b)
                     || self.types.is_descendant(b, a))
             {
-                // The same object or not (`docs/spec/exceptions.md` chapter 1)
+                // The same object or not (`docs/spec/exceptions.md` chapter 1,
+                // `docs/spec/objects.md` 4.5)
+                return Some((
+                    BinStep {
+                        op,
+                        rhs,
+                        calc: Calc::Ref,
+                        ty: Ty::Boolean,
+                        span: op_range,
+                    },
+                    None,
+                ));
+            }
+            if matches!(op, BinOp::Eq | BinOp::Ne) && lt == rt && self.param_reference(lt).is_some()
+            {
+                // Values of a type parameter whose constraints make it a reference: the same
+                // instance or not, whatever its type's operators (`docs/spec/generics.md` 3.3,
+                // 4.3)
                 return Some((
                     BinStep {
                         op,
@@ -1792,7 +2584,8 @@ impl<'a, 's> Sema<'a, 's> {
         let msg = match ty {
             // An enumeration or subrange: the bounds as in the range message (`docs/spec/types.md`
             // 8.1, 8.2; the ordinal of an enumeration in decimal)
-            Ty::Enum(_) | Ty::Subrange(_) => format!(
+            // A distinct type: the root's range, the distinct type's name (`docs/spec/types.md` 1.3)
+            Ty::Enum(_) | Ty::Subrange(_) | Ty::Distinct(_) => format!(
                 "constant value {} is out of range for {}",
                 self.types.bound_text(ty, v),
                 self.types.range_tail(ty)
@@ -1862,6 +2655,16 @@ impl<'a, 's> Sema<'a, 's> {
         op_range: TextRange,
         node: &ast::BinaryExpr,
     ) {
+        if let Some(p) = super::Sema::param_of(lhs.ty).or(super::Sema::param_of(rhs.ty)) {
+            // `docs/spec/generics.md` 3.3
+            let what = match op {
+                BinOp::Eq | BinOp::Ne => super::generics::ParamOp::Compare,
+                _ => super::generics::ParamOp::Operator(op.text()),
+            };
+            let range = TextRange::new(lhs.span.start(), rhs.span.end());
+            self.param_misuse(p, what, range);
+            return;
+        }
         let msg = format!(
             "operator `{}` cannot be applied to `{}` and `{}`",
             op.text(),
@@ -2177,6 +2980,16 @@ impl<'a, 's> Sema<'a, 's> {
 
     // ---- Assignment compatibility ----
 
+    /// The expression as a value of its root type when its type is a distinct type
+    /// (`docs/spec/types.md` 1.3): the operand of an operator, a built-in routine or a statement
+    /// that takes the root type. The representation is the same, so nothing is converted.
+    pub(super) fn rooted(&self, mut e: Expr) -> Expr {
+        if let Ty::Distinct(_) = e.ty {
+            e.ty = self.types.root(e.ty);
+        }
+        e
+    }
+
     /// Converts an expression to type `target` (2.4). E0702 if incompatible. `range_check` is `{$R}`.
     /// `param` is the argument position and parameter name (for the message).
     pub(super) fn coerce(
@@ -2186,8 +2999,26 @@ impl<'a, 's> Sema<'a, 's> {
         range_check: bool,
         param: Option<(usize, &str)>,
     ) -> Expr {
+        self.coerce_with(e, target, range_check, param, true)
+    }
+
+    /// [`Self::coerce`], with `implicit` telling whether a user's `class operator Implicit` may
+    /// convert the value (`docs/spec/objects.md` 11.4: not in a condition).
+    pub(super) fn coerce_with(
+        &mut self,
+        e: Expr,
+        target: Ty,
+        range_check: bool,
+        param: Option<(usize, &str)>,
+        implicit: bool,
+    ) -> Expr {
+        // The names for this call's mismatch only (not for the conversions it makes)
+        let shown = self.mismatch_shown.take();
         if e.ty.is_error() || target.is_error() || e.ty == target {
             return e;
+        }
+        if matches!(e.ty, Ty::Distinct(_)) || matches!(target, Ty::Distinct(_)) {
+            return self.coerce_distinct(e, target, range_check, param, implicit);
         }
         let span = e.span;
         match (e.ty, target) {
@@ -2234,7 +3065,7 @@ impl<'a, 's> Sema<'a, 's> {
             (s, Ty::Subrange(_)) if self.base_accepts(self.types.base(target), s) => {
                 let base = self.types.base(target);
                 let src = e.ty;
-                let inner = self.coerce(e, base, range_check, param);
+                let inner = self.coerce_with(e, base, range_check, param, implicit);
                 if inner.ty.is_error() {
                     return inner;
                 }
@@ -2243,30 +3074,174 @@ impl<'a, 's> Sema<'a, 's> {
             // An open array parameter takes a dynamic array, a static array or an open array of
             // the same element type (`docs/spec/types.md` 2.4); the value keeps its own type
             (s, Ty::OpenArray(_)) if s.is_managed() && self.open_array_accepts(target, s) => e,
-            // A descendant class to an ancestor (`docs/spec/exceptions.md` chapter 1)
-            (Ty::Exception(s), Ty::Exception(t)) if self.types.is_descendant(s, t) => {
+            // A descendant class to an ancestor (`docs/spec/objects.md` 4.3), a descendant
+            // interface to an ancestor, and a class implementing an interface to the interface
+            // (7.4): the same handle
+            (Ty::Class(s), Ty::Class(t)) | (Ty::Intf(s), Ty::Intf(t))
+                if self.types.is_descendant(s, t) =>
+            {
+                let mut w = e;
+                w.ty = target;
+                w
+            }
+            (Ty::Class(s), Ty::Intf(t)) if self.types.implements(s, t) => {
+                let mut w = e;
+                w.ty = target;
+                w
+            }
+            // Procedural types of the same signature (`docs/spec/objects.md` 9.2)
+            (s, t) if self.procedural_assignable(s, t) => self.coerce_procedural(e, target),
+            // A descendant's class reference to an ancestor's (`docs/spec/objects.md` 4.3)
+            (Ty::ClassRef(_), Ty::ClassRef(_))
+                if self
+                    .types
+                    .class_ref_target(e.ty)
+                    .zip(self.types.class_ref_target(target))
+                    .is_some_and(|(s, t)| self.types.is_descendant(s, t)) =>
+            {
                 let mut w = e;
                 w.ty = target;
                 w
             }
             _ => {
+                // A user's `Implicit` (`docs/spec/objects.md` 11.4)
+                if implicit {
+                    match self.convert_by_operator(&e, target, &["Implicit"]) {
+                        Ok(Some(x)) => return x,
+                        Ok(None) => {}
+                        Err(()) => return err_expr(span),
+                    }
+                }
+                if self.param_upcast(&e, target) {
+                    // To a class or interface the constraints guarantee: the same handle
+                    // (`docs/spec/generics.md` 3.3)
+                    let mut w = e;
+                    w.ty = target;
+                    return w;
+                }
+                if let Some(p) = super::Sema::param_of(e.ty).or(super::Sema::param_of(target)) {
+                    // `docs/spec/generics.md` 3.3
+                    self.param_misuse(p, super::generics::ParamOp::Convert, span);
+                    return err_expr(span);
+                }
+                let (shown_target, shown_from) = shown.unwrap_or((target, e.ty));
                 let mut msg = format!(
                     "type mismatch: expected `{}`, found `{}`",
-                    self.tn(target),
-                    self.tn(e.ty)
+                    self.tn(shown_target),
+                    self.tn(shown_from)
                 );
                 if let Some((n, pname)) = param {
                     msg = format!("{msg} (argument {n}, parameter `{pname}`)");
                 }
                 let to_int = self.types.base(target).is_integer();
                 let from_real = is_fractional(e.ty);
+                let downcast = match (e.ty, target) {
+                    (Ty::Class(s), Ty::Class(t)) => self.types.is_descendant(t, s),
+                    _ => false,
+                };
+                // `docs/spec/objects.md` 7.4: an interface to a class, and a class that does not
+                // implement the interface (a descendant may, unless the class is sealed)
+                let intf_note = match (e.ty, target) {
+                    (Ty::Intf(_), Ty::Class(_)) => {
+                        Some("use `as` to convert an interface to a class")
+                    }
+                    (Ty::Class(s), Ty::Intf(_))
+                        if !matches!(
+                            self.types.get(s).kind,
+                            super::types::TypeKind::Class { sealed: true, .. }
+                        ) =>
+                    {
+                        Some("use `as` to check at run time")
+                    }
+                    _ => None,
+                };
                 let d = self.error(Code::E(702), msg, span);
                 if from_real && to_int {
                     d.notes.push(TRUNC_ROUND_NOTE.into());
                 }
+                if downcast {
+                    // An ancestor to a descendant (`docs/spec/objects.md` 4.3)
+                    d.notes
+                        .push("use `as` to convert to a derived class".into());
+                }
+                if let Some(n) = intf_note {
+                    d.notes.push(n.into());
+                }
                 err_expr(span)
             }
         }
+    }
+
+    /// [`Self::coerce_with`] when either type is a distinct type (`docs/spec/types.md` 1.3): the
+    /// value as one of its root type, converted to the root type of `target`; a range checked
+    /// there is reported with the name of `target`.
+    fn coerce_distinct(
+        &mut self,
+        e: Expr,
+        target: Ty,
+        range_check: bool,
+        param: Option<(usize, &str)>,
+        implicit: bool,
+    ) -> Expr {
+        let from = e.ty;
+        let e = self.rooted(e);
+        // A type mismatch names the types as written, not their roots
+        self.mismatch_shown = Some((target, from));
+        let x = self.coerce_root(e, target, range_check, param, implicit);
+        self.mismatch_shown = None;
+        x
+    }
+
+    /// [`Self::coerce_distinct`] of a value of a root type `e` to `target`.
+    fn coerce_root(
+        &mut self,
+        e: Expr,
+        target: Ty,
+        range_check: bool,
+        param: Option<(usize, &str)>,
+        implicit: bool,
+    ) -> Expr {
+        let Ty::Distinct(_) = target else {
+            return self.coerce_with(e, target, range_check, param, implicit);
+        };
+        let root = self.types.root(target);
+        let span = e.span;
+        if root.is_integer() && e.ty.is_integer() {
+            if let Some(Const::Int(v)) = &e.value {
+                if !root.contains(*v) {
+                    self.const_out_of_range(*v, target, span);
+                    return err_expr(span);
+                }
+                let mut c = e;
+                c.ty = target;
+                return c;
+            }
+            // A check against the range of the root type, named by `target` (as a subrange's).
+            // A 64-bit root, and a `UInt64` value, are checked by the conversion to the root,
+            // named by the root (`ChkRange` takes a range of at most 2^63 values)
+            let (lo, hi) = root.range().expect("an integer type has a range");
+            let (slo, shi) = e.ty.range().expect("an integer type has a range");
+            let wide = matches!(root, Ty::Int64 | Ty::UInt64) || e.ty == Ty::UInt64;
+            if range_check && !(lo <= slo && shi <= hi) && !wide {
+                return Expr {
+                    kind: ExprKind::Convert {
+                        operand: Box::new(e),
+                        kind: Conversion::Range {
+                            to: target,
+                            check: true,
+                        },
+                    },
+                    ty: target,
+                    value: None,
+                    span,
+                };
+            }
+        }
+        let mut x = self.coerce_with(e, root, range_check, param, implicit);
+        if !x.ty.is_error() {
+            x.ty = target;
+        }
+        x
     }
 
     /// Whether a value of type `s` is assignment compatible with the ordinal type `base` (the base
@@ -2295,6 +3270,12 @@ impl<'a, 's> Sema<'a, 's> {
             return err_expr(span);
         };
         let args = c.args();
+        if !c.has_error_arg()
+            && let Some(v) = self.procedural_callee(&callee)
+        {
+            // A call of a procedural value (`docs/spec/objects.md` 9.4)
+            return self.call_value(v, &args, span);
+        }
         let Some((r, name, range)) = self.resolve_name_expr(&callee) else {
             // An expression that cannot be called
             let callee_e = self.lower_expr(&callee);
@@ -2323,10 +3304,14 @@ impl<'a, 's> Sema<'a, 's> {
         }
         match r {
             Resolved::Routine(id) => match self.pick_overload(id, &args, span, false) {
-                Pick::Routine(c) => self.lower_routine_call(c, &args, span),
+                Pick::Routine(c) => {
+                    self.routine_hint_use(c, range);
+                    self.lower_routine_call(c, &args, span)
+                }
                 Pick::Failed => err_expr(span),
             },
             Resolved::Func(f) => self.lower_builtin_any(f, &name, &args, range, span),
+            Resolved::Key(op, t) => self.lower_key_call(op, t, &args, span),
             Resolved::Type(t) => self.lower_conversion(t, &args, range, span),
             Resolved::Proc(p) => {
                 for a in &args {
@@ -2377,8 +3362,24 @@ impl<'a, 's> Sema<'a, 's> {
                 );
                 err_expr(span)
             }
-            Resolved::ExcCreate(id) => self.new_exception(id, &args, span),
-            Resolved::ExcCreateFmt(id) => self.new_exception_fmt(id, &args, span),
+            Resolved::ClassCreate(id, ctor) => {
+                self.new_instance(id, &ctor, &args, span, range, None)
+            }
+            Resolved::Member {
+                recv,
+                class,
+                member,
+                inherited,
+            } => self.member_expr(
+                *recv,
+                class,
+                member,
+                inherited,
+                Some(&args),
+                true,
+                range,
+                span,
+            ),
             Resolved::RaiseOuter => {
                 for a in &args {
                     for x in a.exprs() {
@@ -2407,7 +3408,9 @@ impl<'a, 's> Sema<'a, 's> {
                 self.allow_type_as_value = true;
                 for a in &args {
                     for x in a.exprs() {
-                        self.lower_expr_unchecked_ctor(&x);
+                        if !self.bare_routine_arg(&x) {
+                            self.lower_expr_unchecked_ctor(&x);
+                        }
                     }
                 }
                 self.allow_type_as_value = false;
@@ -2462,6 +3465,20 @@ impl<'a, 's> Sema<'a, 's> {
             }
         };
         if ty.is_error() {
+            return err_expr(span);
+        }
+        // `Low` / `High` of a distinct type are of the distinct type, with the bounds of its
+        // root; `SizeOf` is its root's (`docs/spec/types.md` 1.3)
+        let distinct = matches!(ty, Ty::Distinct(_)).then_some(ty);
+        let ty = if f == Builtin::Default {
+            ty
+        } else {
+            self.types.root(ty)
+        };
+        let value_arg = value_arg.map(|x| self.rooted(x));
+        if let (Builtin::SizeOf, Ty::Param(p)) = (f, ty) {
+            // `docs/spec/generics.md` 6.1
+            self.param_misuse(p, super::generics::ParamOp::SizeOf, span);
             return err_expr(span);
         }
         if f == Builtin::SizeOf {
@@ -2569,7 +3586,7 @@ impl<'a, 's> Sema<'a, 's> {
             Ty::Boolean => Const::Bool(v != 0),
             _ => Const::Int(v),
         };
-        const_expr(value, vty, span)
+        const_expr(value, distinct.unwrap_or(vty), span)
     }
 
     /// `SizeOf(T)` (`docs/spec/semantics.md` 5.3), or `None` for a type without a memory layout
@@ -2808,7 +3825,6 @@ impl<'a, 's> Sema<'a, 's> {
         let params = self.routines[id.0 as usize].params.clone();
         let ret = self.routines[id.0 as usize].ret;
         let name = self.routines[id.0 as usize].name.clone();
-        let name_span = self.routine_decl_span(id);
         let min = self.routines[id.0 as usize].min_args();
         if args.len() < min || args.len() > params.len() {
             for a in args {
@@ -2829,14 +3845,16 @@ impl<'a, 's> Sema<'a, 's> {
                 ),
                 Stage::Sema,
             )
-            .with_primary(self.span(span), "")
-            .with_secondary(name_span, "declared here");
+            .with_primary(self.span(span), "");
+            let d = self.with_routine_decl(d, id, "declared here");
             self.push(d);
             return err_expr(span);
         }
         let mut out: Vec<CallArg> = Vec::new();
         let mut failed = false;
         let checks = self.checks_at(span.start());
+        // The `var` / `out` arguments: (argument number, place, written range)
+        let mut refs: Vec<(usize, Place, TextRange)> = Vec::new();
         for (i, (a, p)) in args.iter().zip(&params).enumerate() {
             let Some(v) = a.value() else {
                 failed = true;
@@ -2846,7 +3864,10 @@ impl<'a, 's> Sema<'a, 's> {
                 ParamMode::Var | ParamMode::Out => {
                     let is_out = p.mode == ParamMode::Out;
                     match self.ref_arg(&v, (i + 1, &p.name), p.ty, is_out, Some(p.span)) {
-                        Some(place) => out.push(CallArg::Ref { place, is_out }),
+                        Some(place) => {
+                            refs.push((i + 1, place.clone(), ast::trimmed_range(v.syntax())));
+                            out.push(CallArg::Ref { place, is_out });
+                        }
                         None => failed = true,
                     }
                 }
@@ -2879,7 +3900,15 @@ impl<'a, 's> Sema<'a, 's> {
         if failed {
             return err_expr(span);
         }
+        if self.same_location_args(&refs) {
+            return err_expr(span);
+        }
         let _ = name;
+        // A closure-form nested routine gets its group's block (`docs/spec/objects.md` 14.9)
+        let dispatch = match self.routines[id.0 as usize].closure_info.group {
+            Some(_) => Dispatch::Group(self.group_block(id)),
+            None => Dispatch::Routine,
+        };
         // For the static link (`docs/spec/semantics.md` 4.9)
         if self.dry_run == 0
             && let Some(c) = &mut self.cur
@@ -2891,11 +3920,44 @@ impl<'a, 's> Sema<'a, 's> {
             kind: ExprKind::Call {
                 routine: id,
                 args: out,
+                dispatch,
             },
             ty: ret.unwrap_or(Ty::Error),
             value: None,
             span,
         }
+    }
+
+    /// E0741 for the first `var` / `out` argument known to be the same location as an earlier one
+    /// (`docs/spec/types.md` chapter 3): the same variable, or the same path whose indices are equal
+    /// constants or the same variable. Returns whether it was reported.
+    fn same_location_args(&mut self, refs: &[(usize, Place, TextRange)]) -> bool {
+        for (k, (m, b, rb)) in refs.iter().enumerate() {
+            let Some((n, _, ra)) = refs[..k].iter().find(|(_, a, _)| same_location(a, b)) else {
+                continue;
+            };
+            let mut d = Diagnostic::error(
+                Code::E(741),
+                format!(
+                    "the same location is passed to two `var` or `out` parameters (arguments {n} and {m})"
+                ),
+                Stage::Sema,
+            )
+            .with_primary(self.span(*rb), "")
+            .with_secondary(self.span(*ra), "also passed here")
+            .with_note("Puy does not let two `var` or `out` parameters refer to the same location");
+            d = if matches!(b, Place::Elem { .. }) {
+                d.with_note(
+                    "copy the value to a local variable and pass that, or use `Exchange` to swap \
+                     two array elements",
+                )
+            } else {
+                d.with_note("copy the value to a local variable and pass that")
+            };
+            self.push(d);
+            return true;
+        }
+        false
     }
 
     /// The place of an argument for a `var` / `out` parameter `param` (its number and name) of
@@ -2910,35 +3972,47 @@ impl<'a, 's> Sema<'a, 's> {
         is_out: bool,
         decl: Option<TextRange>,
     ) -> Option<Place> {
-        let mode = if is_out { "out" } else { "var" };
-        let mut result = None;
-        if let Some((place, found)) = self.lower_place(v, PlaceUse::RefArg { is_out }) {
-            let open_ok = matches!(ty, Ty::OpenArray(_)) && self.open_array_accepts(ty, found);
-            if !found.is_error() && !ty.is_error() && found != ty && !open_ok {
-                let r = ast::trimmed_range(v.syntax());
-                let d = Diagnostic::error(
-                    Code::E(702),
-                    format!(
-                        "type mismatch: expected `{}`, found `{}` (argument {}, parameter `{}`)",
-                        self.tn(ty),
-                        self.tn(found),
-                        param.0,
-                        param.1
-                    ),
-                    Stage::Sema,
-                )
-                .with_primary(self.span(r), "")
-                .with_note(format!(
-                    "a `{mode}` parameter needs a variable of exactly the same type"
-                ));
-                self.push(d);
-            } else {
-                result = Some(place);
-            }
+        let (place, found) = self.ref_place(v, param, is_out, decl)?;
+        let open_ok = matches!(ty, Ty::OpenArray(_)) && self.open_array_accepts(ty, found);
+        if !found.is_error() && !ty.is_error() && found != ty && !open_ok {
+            let mode = if is_out { "out" } else { "var" };
+            let r = ast::trimmed_range(v.syntax());
+            let d = Diagnostic::error(
+                Code::E(702),
+                format!(
+                    "type mismatch: expected `{}`, found `{}` (argument {}, parameter `{}`)",
+                    self.tn(ty),
+                    self.tn(found),
+                    param.0,
+                    param.1
+                ),
+                Stage::Sema,
+            )
+            .with_primary(self.span(r), "")
+            .with_note(format!(
+                "a `{mode}` parameter needs a variable of exactly the same type"
+            ));
+            self.push(d);
+            return None;
         }
+        Some(place)
+    }
+
+    /// The place and type of an argument for a `var` / `out` parameter `param` (its number and
+    /// name), without checking the type: E0706 if the argument is not a variable (`decl`: the
+    /// parameter's declaration, for the secondary label). `None` on an error.
+    pub(super) fn ref_place(
+        &mut self,
+        v: &ast::Expr,
+        param: (usize, &str),
+        is_out: bool,
+        decl: Option<TextRange>,
+    ) -> Option<(Place, Ty)> {
+        let result = self.lower_place(v, PlaceUse::RefArg { is_out });
         if let PlaceResult::NotVariable(r) =
             self.last_place_result.take().unwrap_or(PlaceResult::Ok)
         {
+            let mode = if is_out { "out" } else { "var" };
             let mut d = Diagnostic::error(
                 Code::E(706),
                 format!(
@@ -2973,6 +4047,7 @@ impl<'a, 's> Sema<'a, 's> {
             Builtin::Concat => self.concat(args, span),
             Builtin::Format => self.format_call(args, span),
             Builtin::TryStrToInt => self.try_str_to_int(args, span),
+            Builtin::Supports => self.supports(args, span),
             Builtin::Eof | Builtin::Eoln => self.eof_call(f, args, name_range, span),
             _ => self.lower_builtin_call(f, name, args, name_range, span),
         }
@@ -3002,6 +4077,63 @@ impl<'a, 's> Sema<'a, 's> {
         self.int_calc_type(lhs, rhs, op_range)
     }
 
+    /// `IsOverridden(M)` (`docs/spec/collections.md` 12.1, `docs/spec/bytecode.md` 2.22): `M` is
+    /// the name of a virtual instance method of the class whose method is being analyzed. Only
+    /// the units of the standard library see the name.
+    fn is_overridden(&mut self, args: &[ast::Arg], span: TextRange) -> Expr {
+        let name = match args {
+            [a] => match a.value() {
+                Some(ast::Expr::NameRef(n)) => Some(n.text().to_string()),
+                _ => None,
+            },
+            _ => None,
+        };
+        // The one method of the name, which must be a virtual instance method (an overloaded
+        // name would leave open which entry is meant)
+        let found = name.as_deref().and_then(|name| {
+            // `Self` is an instance (not the class reference of a class method)
+            if self.method_self_kind() != Some(SelfKind::Instance) {
+                return None;
+            }
+            let class = self.method_class()?;
+            match self.methods_named(class, name).as_slice() {
+                [(_, m)] => match (m.vmt, m.routine, m.self_kind) {
+                    (Some(k), Some(r), SelfKind::Instance) => Some((k, r)),
+                    _ => None,
+                },
+                _ => None,
+            }
+        });
+        let recv = found.and_then(|_| self.self_expr(span));
+        let (Some((k, routine)), Some(recv)) = (found, recv) else {
+            self.error(
+                Code::E(702),
+                "type mismatch: expected the name of a virtual method of `Self`".to_string(),
+                span,
+            );
+            return err_expr(span);
+        };
+        let method = Expr {
+            kind: ExprKind::RoutineRef(routine),
+            ty: Ty::Int64,
+            value: None,
+            span,
+        };
+        Expr {
+            kind: ExprKind::Builtin {
+                func: Builtin::IsOverridden,
+                args: vec![
+                    recv,
+                    const_expr(Const::Int(i128::from(k)), Ty::Int64, span),
+                    method,
+                ],
+            },
+            ty: Ty::Boolean,
+            value: None,
+            span,
+        }
+    }
+
     /// A call to a built-in function.
     fn lower_builtin_call(
         &mut self,
@@ -3012,6 +4144,9 @@ impl<'a, 's> Sema<'a, 's> {
         span: TextRange,
     ) -> Expr {
         self.check_no_width(args);
+        if f == Builtin::IsOverridden {
+            return self.is_overridden(args, span);
+        }
         let (sig, ret) = builtin_signature(f);
         let shown = builtin_name(f);
         let _ = name;
@@ -3036,6 +4171,8 @@ impl<'a, 's> Sema<'a, 's> {
             .map(|(i, a)| {
                 a.value().map(|v| match params.get(i) {
                     Some(t) if t.is_set() => self.lower_expected(&v, *t),
+                    // `Assigned(F)` looks at the value (`docs/spec/objects.md` 9.5)
+                    _ if f == Builtin::Assigned => self.lower_value(&v),
                     _ => self.lower_expr(&v),
                 })
             })
@@ -3046,7 +4183,19 @@ impl<'a, 's> Sema<'a, 's> {
         {
             return err_expr(span);
         }
-        let mut lowered: Vec<Expr> = lowered.into_iter().map(|e| e.unwrap()).collect();
+        // A distinct type is passed as its root type (`docs/spec/types.md` 1.3)
+        let mut lowered: Vec<Expr> = lowered
+            .into_iter()
+            .map(|e| {
+                let e = e.expect("checked above");
+                // `Succ` / `Pred` return the distinct type
+                if matches!(f, Builtin::Succ | Builtin::Pred) {
+                    e
+                } else {
+                    self.rooted(e)
+                }
+            })
+            .collect();
         if f == Builtin::Copy
             && let Some(elem) = lowered.first().and_then(|a| self.types.elem_of(a.ty))
         {
@@ -3054,6 +4203,46 @@ impl<'a, 's> Sema<'a, 's> {
         }
         if f == Builtin::Assigned {
             return self.assigned(lowered, span);
+        }
+        if matches!(
+            f,
+            Builtin::IsRefCountedObject | Builtin::IsSameInstance | Builtin::ObjectClassName
+        ) {
+            // `docs/spec/collections.md` 12.1: values of any type; lower expands them by the type
+            let expected = if f == Builtin::IsSameInstance { 2 } else { 1 };
+            if lowered.len() != expected {
+                self.error(
+                    Code::E(705),
+                    format!(
+                        "wrong number of arguments: expected {expected}, found {}",
+                        lowered.len()
+                    ),
+                    span,
+                );
+                return err_expr(span);
+            }
+            if f == Builtin::IsSameInstance && lowered[0].ty != lowered[1].ty {
+                // Only the bodies of the standard library call it, with two values of one type
+                self.error(
+                    Code::E(702),
+                    format!(
+                        "type mismatch: expected `{}`, found `{}` (argument 2, parameter `Y`)",
+                        self.tn(lowered[0].ty),
+                        self.tn(lowered[1].ty)
+                    ),
+                    lowered[1].span,
+                );
+                return err_expr(span);
+            }
+            return Expr {
+                kind: ExprKind::Builtin {
+                    func: f,
+                    args: lowered,
+                },
+                ty: ret,
+                value: None,
+                span,
+            };
         }
         // `BoolToStr(B)` is `BoolToStr(B, False)`, and the `Ansi*` case routines take the first
         // value of their option type (`docs/spec/semantics.md` 5.3)
@@ -3105,6 +4294,11 @@ impl<'a, 's> Sema<'a, 's> {
                         let mut e = x;
                         e.span = span;
                         return e;
+                    }
+                    Ty::Param(p) => {
+                        // `docs/spec/generics.md` 3.3
+                        self.param_misuse(p, super::generics::ParamOp::Ordinal, span);
+                        return err_expr(span);
                     }
                     t => {
                         let r = x.span;
@@ -3227,6 +4421,21 @@ impl<'a, 's> Sema<'a, 's> {
             Builtin::Trunc | Builtin::Round | Builtin::FloatToStr => {
                 // A real or `Currency` keeps its type; an integer becomes a `Double`
                 let x = lowered.pop().unwrap();
+                // `class operator Trunc` / `Round` (`docs/spec/objects.md` 11.2)
+                let x = if f != Builtin::FloatToStr && self.operator_owner(x.ty).is_some() {
+                    let name = if f == Builtin::Trunc {
+                        "Trunc"
+                    } else {
+                        "Round"
+                    };
+                    let at = x.span;
+                    match self.unary_operator(x, name, name, at, span) {
+                        Ok(e) => return e,
+                        Err(x) => x,
+                    }
+                } else {
+                    x
+                };
                 let x = if x.ty.is_integer() || (f == Builtin::FloatToStr && x.ty == Ty::Currency) {
                     self.convert_num(x, Ty::Double)
                 } else {
@@ -3424,6 +4633,10 @@ impl<'a, 's> Sema<'a, 's> {
     /// type (`{$Q}`), converted back to the type of `X` (`{$R}`; a subrange is already its base
     /// type). A constant folds, and is E0714 outside the type.
     fn succ_pred(&mut self, x: Expr, pred: bool, span: TextRange, checks: Checks) -> Expr {
+        // A distinct type: computed in its root type, the result of the distinct type, whose
+        // name the range check reports (`docs/spec/types.md` 1.3)
+        let target = x.ty;
+        let x = self.rooted(x);
         let ty = x.ty;
         if !ty.is_ordinal() {
             let r = x.span;
@@ -3442,7 +4655,7 @@ impl<'a, 's> Sema<'a, 's> {
             let n = v + delta;
             let (lo, hi) = self.types.ord_range(ty).unwrap_or((0, 0));
             if n < lo || n > hi {
-                self.const_out_of_range(n, ty, span);
+                self.const_out_of_range(n, target, span);
                 return err_expr(span);
             }
             let value = match ty {
@@ -3450,7 +4663,7 @@ impl<'a, 's> Sema<'a, 's> {
                 Ty::Boolean => Const::Bool(n != 0),
                 _ => Const::Int(n),
             };
-            return const_expr(value, ty, span);
+            return const_expr(value, target, span);
         }
         let (operand, calc) = if ty.is_integer() {
             let calc = if ty.fits_in_integer() {
@@ -3490,7 +4703,11 @@ impl<'a, 's> Sema<'a, 's> {
             span,
         };
         let mut out = match ty {
-            t if t.is_integer() => self.coerce(sum, t, checks.range, None),
+            t if t.is_integer() => self.coerce(sum, target, checks.range, None),
+            // Checked against the range of `Char`, named by the distinct type
+            Ty::Char if matches!(target, Ty::Distinct(_)) => {
+                self.convert_to_ranged(sum, Ty::Integer, target, checks.range)
+            }
             Ty::Char => Expr {
                 kind: ExprKind::Convert {
                     operand: Box::new(sum),
@@ -3505,6 +4722,9 @@ impl<'a, 's> Sema<'a, 's> {
             t => self.convert_to_ranged(sum, Ty::Integer, t, checks.range),
         };
         out.span = span;
+        if !out.ty.is_error() {
+            out.ty = target;
+        }
         out
     }
 
@@ -3564,7 +4784,14 @@ impl<'a, 's> Sema<'a, 's> {
             return err_expr(span);
         }
         let x = args.pop().unwrap();
-        if !matches!(x.ty, Ty::DynArray(_) | Ty::Exception(_)) {
+        if let Ty::Param(p) = x.ty
+            && self.param_reference(x.ty).is_none()
+        {
+            // `docs/spec/generics.md` 3.3
+            self.param_misuse(p, super::generics::ParamOp::Compare, span);
+            return err_expr(span);
+        }
+        if !self.takes_nil_ty(x.ty) {
             let r = x.span;
             self.error(
                 Code::E(702),
@@ -3619,8 +4846,24 @@ impl<'a, 's> Sema<'a, 's> {
         if x.ty.is_error() || t.is_error() {
             return err_expr(span);
         }
-        let checks = self.checks_at(span.start());
         let _ = name_range;
+        if x.ty != t && (matches!(x.ty, Ty::Distinct(_)) || matches!(t, Ty::Distinct(_))) {
+            // A distinct type converts as its root type; the result is of the type written
+            // (`docs/spec/types.md` 1.3)
+            let x = self.rooted(x);
+            let root = self.types.root(t);
+            let mut e = self.convert_to(x, root, &v, span);
+            if !e.ty.is_error() {
+                e.ty = t;
+            }
+            return e;
+        }
+        self.convert_to(x, t, &v, span)
+    }
+
+    /// `T(x)` of the value `x` (2.5); `v` is the argument as written.
+    fn convert_to(&mut self, x: Expr, t: Ty, v: &ast::Expr, span: TextRange) -> Expr {
+        let checks = self.checks_at(span.start());
         if matches!(t, Ty::Enum(_) | Ty::Subrange(_)) && x.ty != t {
             // To an enumeration (from an integer) or a subrange (as to its base type), with the
             // range checked by `{$R}` (`docs/spec/types.md` 8.1, 8.2)
@@ -3646,7 +4889,7 @@ impl<'a, 's> Sema<'a, 's> {
                     );
                     return err_expr(span);
                 }
-                _ => self.convert_explicit(x, base, &v, span, checks),
+                _ => self.convert_explicit(x, base, v, span, checks),
             };
             if inner.ty.is_error() {
                 return inner;
@@ -3658,7 +4901,7 @@ impl<'a, 's> Sema<'a, 's> {
             e.span = span;
             return e;
         }
-        self.convert_explicit(x, t, &v, span, checks)
+        self.convert_explicit(x, t, v, span, checks)
     }
 
     /// `T(x)` for a type that is not an enumeration or a subrange (2.5). `v` is the argument as
@@ -3676,6 +4919,15 @@ impl<'a, 's> Sema<'a, 's> {
             e.span = span;
             return e;
         }
+        if let Some(p) = super::Sema::param_of(x.ty).or(super::Sema::param_of(t)) {
+            // `docs/spec/generics.md` 3.3
+            self.param_misuse(p, super::generics::ParamOp::Convert, span);
+            return err_expr(span);
+        }
+        let x = match self.class_cast(x, t, span) {
+            Ok(e) => return e,
+            Err(x) => x,
+        };
         match (x.ty, t) {
             // To a real or `Currency`, as assignment compatibility (`docs/spec/types.md` 8.4)
             (s, t) if is_fractional(t) && s.is_number() => {
@@ -3828,6 +5080,17 @@ impl<'a, 's> Sema<'a, 's> {
                 e
             }
             (s, t) => {
+                // A user's `Explicit`, or else `Implicit` (`docs/spec/objects.md` 11.4)
+                for names in [["Explicit"], ["Implicit"]] {
+                    match self.convert_by_operator(&x, t, &names) {
+                        Ok(Some(mut e)) => {
+                            e.span = span;
+                            return e;
+                        }
+                        Ok(None) => {}
+                        Err(()) => return err_expr(span),
+                    }
+                }
                 let d = self.error(
                     Code::E(724),
                     format!(
@@ -3848,7 +5111,37 @@ impl<'a, 's> Sema<'a, 's> {
     // ---- Assignment targets ----
 
     /// Resolves an expression as an assignment target. Returns `(place, type)`. On error, reports a diagnostic and returns `None`.
+    /// The type of a `[weak]` place is the class it takes (`docs/spec/objects.md` 4.4); the
+    /// place is not passed to a `var` / `out` parameter (E0706), whose writes would count.
     pub(super) fn lower_place(&mut self, e: &ast::Expr, usage: PlaceUse) -> Option<(Place, Ty)> {
+        let (place, ty) = self.lower_place_storage(e, usage)?;
+        if matches!(ty, Ty::Weak(_)) && usage.wants_variable() {
+            let diag = match usage {
+                PlaceUse::Container { whole, .. } => whole,
+                _ => ast::trimmed_range(e.syntax()),
+            };
+            let kind = match usage {
+                PlaceUse::RefArg { is_out: true } => "an `out` parameter",
+                _ => "a `var` parameter",
+            };
+            self.error(
+                Code::E(706),
+                format!("a `[weak]` reference cannot be passed to {kind}"),
+                diag,
+            )
+            .notes
+            .push(
+                "copy it to a variable without `[weak]`, pass that variable, and assign it back"
+                    .into(),
+            );
+            return None;
+        }
+        Some((place, self.types.strong(ty)))
+    }
+
+    /// [`Sema::lower_place`] with the type of the place's storage (`Ty::Weak` for a `[weak]`
+    /// variable or field).
+    fn lower_place_storage(&mut self, e: &ast::Expr, usage: PlaceUse) -> Option<(Place, Ty)> {
         self.last_place_result = None;
         let span = ast::trimmed_range(e.syntax());
         // Diagnostics about a container (`R` in `R.F := 1`) point at the whole target
@@ -3863,27 +5156,66 @@ impl<'a, 's> Sema<'a, 's> {
                     self.lower_expr(&base);
                     return None;
                 };
-                if matches!(self.trial_type(&base), Ty::Exception(_)) {
-                    // A member of an exception object: the object is read, its slot written
+                if matches!(self.trial_type(&base), Ty::Class(_) | Ty::ClassRef(_)) {
+                    // A field of a class instance: the handle is read, its slot written. A
+                    // `class var` through an instance or a class reference is the class's global
+                    // (`docs/spec/objects.md` 2.2)
                     let b = self.lower_expr(&base);
-                    let member = self.find_exc_member(b.ty, &field)?;
-                    if usage.wants_variable() {
-                        self.last_place_result = Some(PlaceResult::NotVariable(diag));
-                        return None;
-                    }
-                    if member != ExcMember::Message {
-                        self.cannot_assign(diag, "a read-only property", None);
-                        return None;
-                    }
-                    return Some((
-                        Place::ExcMember {
-                            base: Box::new(b),
-                            member,
+                    let class = match b.ty {
+                        Ty::Class(c) => c,
+                        t => self.types.class_ref_target(t)?,
+                    };
+                    let fname = self.text(&field).to_string();
+                    let frange = field.text_range();
+                    return match self.find_member(class, &fname, frange) {
+                        Ok(super::methods::Member::Static(_, st)) => match st.kind {
+                            super::types::StaticKind::Var(g, ty) => Some((Place::Global(g), ty)),
+                            _ => {
+                                if usage.wants_variable() {
+                                    self.last_place_result = Some(PlaceResult::NotVariable(diag));
+                                } else {
+                                    self.cannot_assign(diag, "not a variable", None);
+                                }
+                                None
+                            }
                         },
-                        Ty::String,
-                    ));
+                        Ok(super::methods::Member::Field { name, .. })
+                            if matches!(b.ty, Ty::ClassRef(_)) =>
+                        {
+                            self.instance_member_error(&name, None, frange);
+                            None
+                        }
+                        Ok(super::methods::Member::Field { slot, ty, name }) => Some((
+                            Place::ObjField {
+                                base: Box::new(b),
+                                slot,
+                                ty,
+                                name,
+                            },
+                            ty,
+                        )),
+                        Ok(super::methods::Member::Property(..)) => {
+                            self.property_place_error(usage, diag);
+                            None
+                        }
+                        Ok(_) => {
+                            if usage.wants_variable() {
+                                self.last_place_result = Some(PlaceResult::NotVariable(diag));
+                            } else {
+                                self.cannot_assign(diag, "not a variable", None);
+                            }
+                            None
+                        }
+                        Err(true) => None,
+                        Err(false) => {
+                            let t = self.tn(Ty::Class(class));
+                            self.class_member_missing(&t, &fname, frange);
+                            None
+                        }
+                    };
                 }
                 let (bp, bty) = self.lower_place(&base, usage.container(diag))?;
+                self.mark_container_written(&bp, bty);
                 if bty.is_error() {
                     return None;
                 }
@@ -3929,10 +5261,19 @@ impl<'a, 's> Sema<'a, 's> {
                             self.cannot_assign(diag, "the exception variable", Some(v.span));
                             return None;
                         }
+                        // `docs/spec/objects.md` 2.3
+                        if self.var_decl(id).kind == VarKind::SelfParam && usage.is_write() {
+                            self.cannot_assign(diag, "Self", None);
+                            return None;
+                        }
                         if usage.reads() {
                             self.mark_used(id, span);
                         }
                         self.mark_written(id, span);
+                        // A container is marked by its field or element once its type is known
+                        if !matches!(usage, PlaceUse::Container { .. }) {
+                            self.mark_value_written(id);
+                        }
                         Some((Place::Var(id, span), v.ty))
                     }
                     Resolved::Global(id) => {
@@ -3958,6 +5299,46 @@ impl<'a, 's> Sema<'a, 's> {
                         None
                     }
                     Resolved::Error => None,
+                    Resolved::Member {
+                        recv,
+                        member: super::methods::Member::Field { slot, ty, name },
+                        ..
+                    } => Some((
+                        Place::ObjField {
+                            base: recv,
+                            slot,
+                            ty,
+                            name,
+                        },
+                        ty,
+                    )),
+                    Resolved::Member {
+                        recv,
+                        member: super::methods::Member::RecField { index, ty, name },
+                        ..
+                    } => {
+                        // A field of `Self` in a record method (`docs/spec/objects.md` chapter 6)
+                        let Some(base) = self.receiver_place(&recv) else {
+                            self.cannot_assign(diag, "not a variable", None);
+                            return None;
+                        };
+                        Some((
+                            Place::Field {
+                                base: Box::new(base),
+                                index,
+                                ty,
+                                name,
+                            },
+                            ty,
+                        ))
+                    }
+                    Resolved::Member {
+                        member: super::methods::Member::Property(..),
+                        ..
+                    } => {
+                        self.property_place_error(usage, diag);
+                        None
+                    }
                     Resolved::Routine(id)
                         if usage == PlaceUse::Assign
                             && let Some(up) = self.enclosing_function(id) =>
@@ -3987,6 +5368,15 @@ impl<'a, 's> Sema<'a, 's> {
             ast::Expr::Index(i) => {
                 let base = i.base()?;
                 let indices = i.indices();
+                if self.indexes_default_property(&base) {
+                    // A default array property is not a variable (`docs/spec/objects.md` 12.1)
+                    self.lower_expr(&base);
+                    for ix in &indices {
+                        self.lower_index_item_exprs(ix);
+                    }
+                    self.property_place_error(usage, diag);
+                    return None;
+                }
                 if indices
                     .iter()
                     .any(|ix| matches!(ix, ast::IndexItem::Slice(_)))
@@ -4017,6 +5407,7 @@ impl<'a, 's> Sema<'a, 's> {
                     }
                     return None;
                 };
+                self.mark_container_written(&place, ty);
                 if ty.is_error() {
                     return None;
                 }
@@ -4145,6 +5536,18 @@ impl<'a, 's> Sema<'a, 's> {
     }
 }
 
+impl Sema<'_, '_> {
+    /// A field or element of the variable `place` (of type `ty`) is written: its value changes
+    /// ([`Sema::mark_value_written`]), unless it is a dynamic array, whose elements are shared.
+    fn mark_container_written(&mut self, place: &Place, ty: Ty) {
+        if let Place::Var(id, _) = place
+            && !matches!(ty, Ty::DynArray(_))
+        {
+            self.mark_value_written(*id);
+        }
+    }
+}
+
 /// How an assignment target is used.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum PlaceUse {
@@ -4254,21 +5657,38 @@ fn compare(op: BinOp, ord: std::cmp::Ordering) -> bool {
 
 /// String comparison (by Unicode code point order; surrogate pairs are combined).
 pub fn compare_strings(a: &[u16], b: &[u16]) -> std::cmp::Ordering {
-    let ia = char::decode_utf16(a.iter().copied()).map(|r| {
+    compare_units(a.iter().copied(), b.iter().copied())
+}
+
+/// [`compare_strings`] of code units read from iterators (the VM reads either representation of
+/// a string without copying it).
+pub fn compare_units(
+    a: impl IntoIterator<Item = u16>,
+    b: impl IntoIterator<Item = u16>,
+) -> std::cmp::Ordering {
+    let code = |r: Result<char, std::char::DecodeUtf16Error>| {
         r.map(|c| c as u32)
             .unwrap_or_else(|e| e.unpaired_surrogate() as u32)
-    });
-    let ib = char::decode_utf16(b.iter().copied()).map(|r| {
-        r.map(|c| c as u32)
-            .unwrap_or_else(|e| e.unpaired_surrogate() as u32)
-    });
-    ia.cmp(ib)
+    };
+    char::decode_utf16(a)
+        .map(code)
+        .cmp(char::decode_utf16(b).map(code))
 }
 
 fn is_paren(e: &ast::BinaryExpr) -> bool {
     // BINARY_EXPR contains no parentheses (parentheses are PAREN_EXPR)
     let _ = e;
     false
+}
+
+/// The computation type of unary `-` on an integer type (`docs/spec/semantics.md` 3.2), or
+/// `None` for `UInt64` (E0716).
+fn neg_calc(t: Ty) -> Option<Ty> {
+    match t {
+        t if t.fits_in_integer() => Some(Ty::Integer),
+        Ty::Cardinal | Ty::Int64 => Some(Ty::Int64),
+        _ => None,
+    }
 }
 
 /// Whether the argument is a literal (including with a unary `-`).
@@ -4288,4 +5708,124 @@ fn is_literal_arg(e: &ast::Expr) -> bool {
 fn is_hex_literal(e: &ast::Expr, bytes: &[u8]) -> bool {
     let r = ast::trimmed_range(e.syntax());
     bytes[usize::from(r.start())..usize::from(r.end())].contains(&b'$')
+}
+
+/// Whether two `var` / `out` arguments are known at compile time to be the same location
+/// (E0741): the same variable, or the same fields and elements of it with indices that are equal
+/// constants or the same variable.
+fn same_location(a: &Place, b: &Place) -> bool {
+    match (a, b) {
+        (Place::Var(x, _), Place::Var(y, _)) => x == y,
+        (Place::Global(x), Place::Global(y)) => x == y,
+        (
+            Place::Field {
+                base: x, index: i, ..
+            },
+            Place::Field {
+                base: y, index: j, ..
+            },
+        ) => i == j && same_location(x, y),
+        (
+            Place::Elem {
+                base: x, index: i, ..
+            },
+            Place::Elem {
+                base: y, index: j, ..
+            },
+        ) => same_index(i, j) && same_location(x, y),
+        (
+            Place::ObjField {
+                base: x, slot: i, ..
+            },
+            Place::ObjField {
+                base: y, slot: j, ..
+            },
+        ) => i == j && same_instance(x, y),
+        _ => false,
+    }
+}
+
+/// Whether two instance expressions are known to be the same instance: the same variable, or
+/// `Self` (`docs/spec/objects.md` 2.2).
+fn same_instance(a: &Expr, b: &Expr) -> bool {
+    match (&a.kind, &b.kind) {
+        (ExprKind::Var(x), ExprKind::Var(y)) => x == y,
+        (ExprKind::Global(x), ExprKind::Global(y)) => x == y,
+        _ => false,
+    }
+}
+
+/// Whether two indices are known to be equal: equal constants, or the same variable.
+fn same_index(a: &Expr, b: &Expr) -> bool {
+    match (&a.value, &b.value) {
+        (Some(x), Some(y)) => x.as_int().is_some() && x.as_int() == y.as_int(),
+        (None, None) => match (&a.kind, &b.kind) {
+            (ExprKind::Var(x), ExprKind::Var(y)) => x == y,
+            (ExprKind::Global(x), ExprKind::Global(y)) => x == y,
+            _ => false,
+        },
+        _ => false,
+    }
+}
+
+impl Sema<'_, '_> {
+    /// E0702 for a `nil` whose type no context gives (`docs/spec/semantics.md` chapter 8).
+    fn nil_without_type(&mut self, span: TextRange) {
+        self.error(
+            Code::E(702),
+            "type mismatch: expected a dynamic array, a class, a class reference or an interface, found `nil`",
+            span,
+        )
+        .notes
+        .push("`nil` takes its type from the variable or the operand it is used with".into());
+    }
+
+    /// Whether `nil` can be a value of the type: [`takes_nil`], or a type parameter whose
+    /// constraints make it a reference (`docs/spec/generics.md` 3.3).
+    pub(super) fn takes_nil_ty(&self, ty: Ty) -> bool {
+        takes_nil(ty) || self.param_reference(ty).is_some()
+    }
+
+    /// [`Self::nil_mismatch`] for a `nil` compared with an operand of a type that cannot be
+    /// `nil` (E0762 `compare` for a type parameter; `docs/spec/generics.md` 3.3).
+    fn nil_compare_mismatch(&mut self, other: Ty, span: TextRange) {
+        match other {
+            Ty::Param(p) => self.param_misuse(p, super::generics::ParamOp::Compare, span),
+            _ => self.nil_mismatch(other, span),
+        }
+    }
+
+    /// E0702 for a `nil` where a type that cannot be `nil` is expected.
+    fn nil_mismatch(&mut self, expected: Ty, span: TextRange) {
+        if let Ty::Param(p) = expected {
+            // `docs/spec/generics.md` 3.3
+            self.param_misuse(p, super::generics::ParamOp::AssignNil, span);
+            return;
+        }
+        let t = self.tn(expected);
+        self.error(
+            Code::E(702),
+            format!("type mismatch: expected `{t}`, found `nil`"),
+            span,
+        );
+    }
+}
+
+/// Whether the expression is `nil`, possibly in parentheses.
+pub(super) fn is_nil(e: &ast::Expr) -> bool {
+    matches!(super::overload::strip_parens(e), ast::Expr::Nil(_))
+}
+
+/// Whether `nil` can be a value of the type: a dynamic array or a class
+/// (`docs/spec/types.md` 2.3, `docs/spec/objects.md` 4.5).
+pub(super) fn takes_nil(ty: Ty) -> bool {
+    matches!(
+        ty,
+        Ty::DynArray(_)
+            | Ty::Class(_)
+            | Ty::ClassRef(_)
+            | Ty::Intf(_)
+            | Ty::Proc(_)
+            | Ty::Callable(_)
+    )
 }

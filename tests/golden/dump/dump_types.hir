@@ -8,34 +8,34 @@ program DumpTypes
 .global g2 I: Integer
 .routine f0 Fill(var N: Integer)
   .var v0 N: Integer var param
-  assign @18 R+
+  assign @19 R+
     var v0 N
     const Integer 3
 .routine <main>
-  assign @26 R+
+  assign @27 R+
     field Integer X #0
       global g0 P
     const Integer 1
-  assign @27 R+
+  assign @28 R+
     global g0 P
     const TPoint (X: 1; Name: "a")
-  assign @28 R+
+  assign @29 R+
     global g2 I
     const Integer 2
-  assign @29 R+
+  assign @30 R+
     field string Name #1
       index TPoint
         global g1 R
         global g2 I: Integer
     const string "b"
-  expr @30
+  expr @31
     call f0 Fill: -
       ref
         field Integer X #0
           index TPoint
             global g1 R
             const Integer 1
-  writeln @31
+  writeln @32
     arg
       field Integer X #0
         global g0 P: TPoint

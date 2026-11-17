@@ -4,9 +4,10 @@
 //! The instructions are restartable: one that needs another line asks the host for it and runs
 //! again from the start once the line is in the buffer (the position it reached is kept here).
 
+use super::heap::{OutOfMemory, try_reserve};
 use super::host_error_to_rt;
 use super::strconv::is_blank;
-use super::{Extra, Isolate, PStr, PendingHost, PendingKind, PollError, RtError, Step, rt};
+use super::{Extra, Isolate, PStr, PendingHost, PendingKind, PollError, RtError, Step, oom, rt};
 use crate::bytecode::{exc, op};
 use crate::sema::types::MAX_STRING_LEN;
 
@@ -62,11 +63,11 @@ impl InputBuf {
 
     /// A word for a number: blanks are skipped (in `Read`, line ends too), then up to the next
     /// blank or line end. `''` when there is none (or at the end of input).
-    fn word(&mut self, depth: usize) -> Result<Vec<u16>, Need> {
+    fn word(&mut self, depth: usize) -> Result<Result<PStr, OutOfMemory>, Need> {
         let cross = !self.in_readln(depth);
         loop {
             let Some((line, pos)) = self.current()? else {
-                return Ok(Vec::new());
+                return Ok(PStr::from_units(&[]));
             };
             while *pos < line.len() && is_blank(line[*pos]) {
                 *pos += 1;
@@ -79,18 +80,18 @@ impl InputBuf {
             while *pos < line.len() && !is_blank(line[*pos]) {
                 *pos += 1;
             }
-            return Ok(line[start..*pos].to_vec());
+            return Ok(PStr::from_units(&line[start..*pos]));
         }
     }
 
     /// From the position to the end of the line (`''` at the end of input).
-    fn rest(&mut self) -> Result<Vec<u16>, Need> {
+    fn rest(&mut self) -> Result<Result<PStr, OutOfMemory>, Need> {
         let Some((line, pos)) = self.current()? else {
-            return Ok(Vec::new());
+            return Ok(PStr::from_units(&[]));
         };
         let start = *pos;
         *pos = line.len();
-        Ok(line[start..].to_vec())
+        Ok(PStr::from_units(&line[start..]))
     }
 
     /// One code unit; the line break at the end of a line (`Read` then goes on with the next
@@ -177,7 +178,9 @@ impl InputBuf {
         if text.encode_utf16().count() > MAX_STRING_LEN {
             return Err(rt(exc::OUT_OF_MEMORY, "out of memory"));
         }
-        let units: Vec<u16> = text.encode_utf16().collect();
+        let mut units = Vec::new();
+        try_reserve(&mut units, text.encode_utf16().count()).map_err(|_| oom())?;
+        units.extend(text.encode_utf16());
         if ahead {
             self.ahead = Some(units);
         } else {
@@ -200,14 +203,14 @@ pub(super) fn input_error(message: String) -> RtError {
 /// What an instruction writes to `rA`.
 enum Out {
     Nothing,
-    Str(Vec<u16>),
+    Str(Result<PStr, OutOfMemory>),
     Int(i64),
 }
 
 impl Isolate {
-    /// The instructions of 2.17 (`pc` is this instruction, `next` the one after it).
-    pub(super) fn input_op(&mut self, opc: u8, ra: usize, pc: u32, next: u32) -> Step {
-        if opc == op::FLUSH_OUT {
+    /// The intrinsics of 2.17 (`id`; `pc` is this instruction, `next` the one after it).
+    pub(super) fn input_op(&mut self, id: u8, ra: usize, pc: u32, next: u32) -> Step {
+        if id == op::intr::FLUSH_OUT {
             if let Err(e) = self.flush_stdout() {
                 return Step::Error(host_error_to_rt(e));
             }
@@ -215,30 +218,30 @@ impl Isolate {
             return Step::Continue;
         }
         let depth = self.frames.len();
-        let r: Result<Out, Need> = match opc {
-            op::READ_WORD => self.input.word(depth).map(Out::Str),
-            op::READ_REST => self.input.rest().map(Out::Str),
-            op::READ_LN_BEGIN => {
+        let r: Result<Out, Need> = match id {
+            op::intr::READ_WORD => self.input.word(depth).map(Out::Str),
+            op::intr::READ_REST => self.input.rest().map(Out::Str),
+            op::intr::READ_LN_BEGIN => {
                 self.input.readln.push(depth);
                 Ok(Out::Nothing)
             }
-            op::READ_CHAR => match self.input.char(depth) {
+            op::intr::READ_CHAR => match self.input.char(depth) {
                 Ok(Some(u)) => Ok(Out::Int(u as i64)),
                 Ok(None) => return Step::Error(input_error("read past end of input".into())),
                 Err(n) => Err(n),
             },
-            op::READ_LN_END => self.input.end_line().map(|()| Out::Nothing),
-            op::IN_EOF => self.input.at_eof().map(|b| Out::Int(b as i64)),
-            op::IN_EOLN => self.input.at_eoln().map(|b| Out::Int(b as i64)),
-            _ => return Step::Fatal(format!("unknown input opcode {opc}")),
+            op::intr::READ_LN_END => self.input.end_line().map(|()| Out::Nothing),
+            op::intr::IN_EOF => self.input.at_eof().map(|b| Out::Int(b as i64)),
+            op::intr::IN_EOLN => self.input.at_eoln().map(|b| Out::Int(b as i64)),
+            _ => return Step::Fatal(format!("unknown input intrinsic {id}")),
         };
         match r {
             Ok(out) => {
                 match out {
                     Out::Nothing => {}
                     Out::Int(v) => self.regs[ra] = v,
-                    Out::Str(units) => {
-                        let s = match self.alloc_string(PStr::from_units(&units)) {
+                    Out::Str(text) => {
+                        let s = match text.map_err(|_| oom()).and_then(|p| self.alloc_string(p)) {
                             Ok(s) => s,
                             Err(e) => return Step::Error(e),
                         };

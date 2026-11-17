@@ -1,0 +1,6 @@
+variable cleared
+hello from g
+destroy g
+value cleared
+plain m
+end

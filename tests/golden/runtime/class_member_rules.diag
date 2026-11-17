@@ -1,0 +1,10 @@
+warning[W0021]: method `Equals` hides virtual method of `TObject` (hidden-virtual-method)
+   --> class_member_rules.pas:34:14
+    |
+ 34 |     function Equals(Other: TBase): Boolean;
+    |              ^^^^^^
+    |
+    = note: disable with `{$WARN hidden-virtual-method OFF}`
+    = suggestion: add `reintroduce`
+
+warning: 1 warning emitted

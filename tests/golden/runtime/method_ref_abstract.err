@@ -1,0 +1,2 @@
+error: uncaught exception EAbstractError: abstract method `TShape.Draw` called
+  at MethodRefAbstract.<main> (method_ref_abstract.pas:24)

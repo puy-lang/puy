@@ -1,0 +1,67 @@
+error[E0723]: cannot inherit from `TLater` before its declaration is complete
+   --> class_parent_order.pas:9:23
+    |
+  9 |   TLaterChild = class(TLater)
+    |                       ^^^^^^
+...
+ 12 |   TLater = class
+    |   ------ declared here
+
+error[E0723]: cannot inherit from `TFwd` before its declaration is complete
+   --> class_parent_order.pas:18:21
+    |
+ 18 |   TFwdChild = class(TFwd)
+    |                     ^^^^
+...
+ 21 |   TFwd = class
+    |   ---- declared here
+
+error[E0723]: cannot inherit from `TBox<Integer>` before its declaration is complete
+   --> class_parent_order.pas:26:21
+    |
+ 26 |   TBoxChild = class(TBox<Integer>)
+    |                     ^^^^^^^^^^^^^
+...
+ 29 |   TBox<T> = class
+    |   ---- declared here
+
+error[E0723]: cannot inherit from `TOuter` before its declaration is complete
+   --> class_parent_order.pas:37:22
+    |
+ 34 |   TOuter = class
+    |   ------ declared here
+...
+ 37 |       TInner = class(TOuter)
+    |                      ^^^^^^
+
+error[E0723]: cannot inherit from `TMeth` before its declaration is complete
+   --> class_parent_order.pas:43:22
+    |
+ 43 |   TMethChild = class(TMeth)
+    |                      ^^^^^
+ 44 |   end;
+ 45 |   TMeth = class
+    |   ----- declared here
+
+error[E0723]: cannot inherit from `ELater` before its declaration is complete
+   --> class_parent_order.pas:50:18
+    |
+ 50 |   EChild = class(ELater);
+    |                  ^^^^^^
+ 51 |   ELater = class(Exception);
+    |   ------ declared here
+
+error[E0727]: type `TSelf` inherits from itself
+   --> class_parent_order.pas:54:3
+    |
+ 54 |   TSelf = class(TSelf)
+    |   ^^^^^
+    |                 ----- part of the cycle
+
+error[E0700]: `TLaterChild` has no member `X`
+   --> class_parent_order.pas:70:5
+    |
+ 70 |   C.X := 1;
+    |     ^
+
+error: aborting due to 8 errors

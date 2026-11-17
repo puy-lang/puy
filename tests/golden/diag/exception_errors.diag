@@ -1,148 +1,143 @@
-error[E0727]: type `EB` inherits from itself
-   --> exception_errors.pas:12:3
+error[E0723]: cannot inherit from `EB` before its declaration is complete
+   --> exception_errors.pas:12:14
     |
- 12 |   EB = class(EA);
-    |   ^^
-    |              -- part of the cycle
+ 12 |   EA = class(EB);
+    |              ^^
+ 13 |   EB = class(EA);
+    |   -- declared here
 
-error[E0733]: `TRec` is not an exception class
-   --> exception_errors.pas:13:16
-    |
- 13 |   EBad = class(TRec);
-    |                ^^^^
-
-error[E0733]: `Integer` is not an exception class
+error[E0733]: `TRec` is not a class
    --> exception_errors.pas:14:16
     |
- 14 |   EInt = class(Integer);
-    |                ^^^^^^^
+ 14 |   EBad = class(TRec);
+    |                ^^^^
 
-error[E3200]: `TObject` is not supported yet (planned for M3)
+error[E0733]: `Integer` is not a class
    --> exception_errors.pas:15:16
     |
- 15 |   EObj = class(TObject);
+ 15 |   EInt = class(Integer);
     |                ^^^^^^^
 
-error[E3200]: `class` is not supported yet (planned for M3)
-   --> exception_errors.pas:16:10
+error[E0723]: forward declaration of class `EFwd` has no body
+   --> exception_errors.pas:17:3
     |
- 16 |   EFwd = class;
-    |          ^^^^^
-
-error[E3200]: `class` is not supported yet (planned for M3)
-   --> exception_errors.pas:17:10
-    |
- 17 |   EMem = class(Exception) X: Integer; end;
-    |          ^^^^^
+ 17 |   EFwd = class;
+    |   ^^^^
 
 error[E0732]: `raise` without an exception is only allowed in an `except` block
-   --> exception_errors.pas:29:3
+   --> exception_errors.pas:30:3
     |
- 29 |   raise;
+ 30 |   raise;
     |   ^^^^^
 
 error[E0702]: type mismatch: expected `Exception`, found `Integer`
-   --> exception_errors.pas:30:9
+   --> exception_errors.pas:31:9
     |
- 30 |   raise 1;
+ 31 |   raise 1;
     |         ^
 
 error[E3004]: `at` is not supported in Puy
-   --> exception_errors.pas:31:11
+   --> exception_errors.pas:32:11
     |
- 31 |   raise E at nil;
+ 32 |   raise E at nil;
     |           ^^
     |
     = note: use a class, a dynamic array or a `var` parameter instead
 
 error[E0702]: type mismatch: expected `EOk`, found `Exception`
-   --> exception_errors.pas:32:8
+   --> exception_errors.pas:33:8
     |
- 32 |   F := E;
+ 33 |   F := E;
     |        ^
+    |
+    = note: use `as` to convert to a derived class
 
 error[E0700]: `Exception` has no member `Foo`
-   --> exception_errors.pas:33:10
+   --> exception_errors.pas:34:10
     |
- 33 |   S := E.Foo;
+ 34 |   S := E.Foo;
     |          ^^^
 
 error[E0707]: cannot assign to `E.ClassName`
-   --> exception_errors.pas:34:3
+   --> exception_errors.pas:35:3
     |
- 34 |   E.ClassName := 'x';
-    |   ^^^^^^^^^^^ a read-only property
+ 35 |   E.ClassName := 'x';
+    |   ^^^^^^^^^^^ not a variable
 
 error[E3019]: `Free` is not supported in Puy
-   --> exception_errors.pas:35:5
+   --> exception_errors.pas:36:5
     |
- 35 |   E.Free;
+ 36 |   E.Free;
     |     ^^^^
     |
     = note: assign `nil` instead; reference counted objects are freed automatically
+    = suggestion: replace with `E := nil`
 
 error[E3019]: `Destroy` is not supported in Puy
-   --> exception_errors.pas:36:5
+   --> exception_errors.pas:37:5
     |
- 36 |   E.Destroy;
+ 37 |   E.Destroy;
     |     ^^^^^^^
     |
     = note: assign `nil` instead; reference counted objects are freed automatically
+    = suggestion: replace with `E := nil`
 
 error[E3019]: `FreeAndNil` is not supported in Puy
-   --> exception_errors.pas:37:3
+   --> exception_errors.pas:38:3
     |
- 37 |   FreeAndNil(E);
+ 38 |   FreeAndNil(E);
     |   ^^^^^^^^^^
     |
     = note: assign `nil` instead; reference counted objects are freed automatically
 
 error[E0718]: cannot write a value of type `Exception`
-   --> exception_errors.pas:38:11
+   --> exception_errors.pas:39:11
     |
- 38 |   WriteLn(E);
+ 39 |   WriteLn(E);
     |           ^
+    |
+    = note: call `ToString` to write an object, as in `WriteLn(Obj.ToString)`
 
 error[E0705]: wrong number of arguments: expected 1, found 0
-   --> exception_errors.pas:39:8
+   --> exception_errors.pas:40:8
     |
- 39 |   E := EOk.Create;
+ 40 |   E := EOk.Create;
     |        ^^^^^^^^^^
 
 error[E0705]: wrong number of arguments: expected 1, found 2
-   --> exception_errors.pas:40:8
+   --> exception_errors.pas:41:8
     |
- 40 |   E := EOk.Create('a', 'b');
+ 41 |   E := EOk.Create('a', 'b');
     |        ^^^^^^^^^^^^^^^^^^^^
 
 error[E0703]: operator `=` cannot be applied to `Exception` and `Integer`
-   --> exception_errors.pas:41:8
+   --> exception_errors.pas:42:8
     |
- 41 |   if E = I then
+ 42 |   if E = I then
     |        ^
 
 error[E0703]: operator `=` cannot be applied to `EOk` and `EA`
-   --> exception_errors.pas:43:8
+   --> exception_errors.pas:44:8
     |
- 43 |   if F = EA.Create('x') then
+ 44 |   if F = EA.Create('x') then
     |        ^
 
 error[E0732]: `RaiseOuterException` is only allowed in an `except` block
-   --> exception_errors.pas:45:13
+   --> exception_errors.pas:46:13
     |
- 45 |   Exception.RaiseOuterException(E);
+ 46 |   Exception.RaiseOuterException(E);
     |             ^^^^^^^^^^^^^^^^^^^
 
 error[E0700]: `Exception` has no member `Make`
-   --> exception_errors.pas:46:18
+   --> exception_errors.pas:47:18
     |
- 46 |   E := Exception.Make('x');
+ 47 |   E := Exception.Make('x');
     |                  ^^^^
 
 error[E0725]: procedure `RaiseOuterException` has no value
-   --> exception_errors.pas:47:18
+   --> exception_errors.pas:48:18
     |
- 47 |   I := Exception.RaiseOuterException(E);
+ 48 |   I := Exception.RaiseOuterException(E);
     |                  ^^^^^^^^^^^^^^^^^^^
 
-error: aborting due to 23 errors
+error: aborting due to 21 errors

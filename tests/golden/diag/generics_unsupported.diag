@@ -1,0 +1,37 @@
+error[E0700]: undeclared identifier `TList`
+   --> generics_unsupported.pas:17:20
+    |
+ 17 |   TIntList = class(TList<Integer>)
+    |                    ^^^^^
+
+error[E0700]: undeclared identifier `IEnumerable`
+   --> generics_unsupported.pas:19:32
+    |
+ 19 |   TCounted = class(TRefObject, IEnumerable<Integer>)
+    |                                ^^^^^^^^^^^
+
+error[E0700]: undeclared identifier `TList`
+   --> generics_unsupported.pas:21:25
+    |
+ 21 |   TListClass = class of TList<Integer>;
+    |                         ^^^^^
+
+error[E0700]: undeclared identifier `IEnumerable`
+   --> generics_unsupported.pas:22:26
+    |
+ 22 |   IIntSource = interface(IEnumerable<Integer>)
+    |                          ^^^^^^^^^^^
+
+error[E0700]: undeclared identifier `TList`
+   --> generics_unsupported.pas:27:6
+    |
+ 27 |   L: TList<string>;
+    |      ^^^^^
+
+error[E0700]: undeclared identifier `EWrapped`
+   --> generics_unsupported.pas:50:11
+    |
+ 50 |     on E: EWrapped<Integer> do
+    |           ^^^^^^^^
+
+error: aborting due to 6 errors

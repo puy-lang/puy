@@ -1,0 +1,79 @@
+; puy ir 1
+.global
+  g0 S: IShape2
+.func f0 DumpInterface.<main> params=0
+  .reg t0: IShape2 temp
+  .reg t1: Int64 temp
+  .reg t2: IShape2 temp
+  .reg t3: Integer temp
+  .reg t4: IShape2 temp
+  .reg t5: Int64 temp
+  .reg t6: string temp
+  .reg t7: IShape2 temp
+  .reg t8: IShape2 temp
+  .reg t9: Int64 temp
+  .reg t10: string temp
+  .reg t11: string temp
+  .reg t12: Integer temp
+  .reg t13: IShape2 temp
+  .reg t14: IShape2 temp
+  .reg t15: Int64 temp
+  .reg t16: string temp
+bb0:
+  .line 49
+  New          t0, DumpInterface.TSquare
+  LoadGlobal   t1, g0
+  AddRefObj    t0
+  StoreGlobal  t0, g0
+  ReleaseObj   t1
+  .line 50
+  LoadGlobal   t5, g0
+  AssignObj    t4, t5
+  Move         t2, t4
+  LoadInt      t3, 2
+  CallIntf     -, DumpInterface.IShape2.Scale[2](t2, t3)
+  .line 51
+  LoadGlobal   t9, g0
+  AssignObj    t8, t9
+  Move         t7, t8
+  CallIntf     t7, DumpInterface.IShape2.GetName[1](t7)
+  MoveRef      t6, t7
+  LoadConst    t10, " "
+  ConcatStr    t6, t6, t10
+  LoadGlobal   t15, g0
+  AssignObj    t14, t15
+  Move         t13, t14
+  CallIntf     t12, DumpInterface.IShape2.Area[0](t13)
+  IntToStr     t11, t12
+  ConcatStr    t6, t6, t11
+  LoadConst    t16, "\n"
+  ConcatStr    t6, t6, t16
+  CallHost     -, h0(t6)
+  .line 52
+  RetVoid
+.finally t0:obj, t4:obj, t6, t8:obj, t10, t11, t14:obj, t16
+.func f1 DumpInterface.TBase.GetName params=1
+  .reg v0 Self: TBase self
+  .reg v1 Result: string result
+bb0:
+  .line 34
+  LoadConst    v1, "shape"
+  .line 35
+  Ret          v1
+.finally v1
+.func f2 DumpInterface.TBase.Scale params=2
+  .reg v0 Self: TBase self
+  .reg v1 F: Integer param
+bb0:
+  .line 39
+  RetVoid
+.finally
+.func f3 DumpInterface.TSquare.Area params=1
+  .reg v0 Self: TSquare self
+  .reg v1 Result: Integer result
+bb0:
+  .line 43
+  LoadInt      v1, 4
+  .line 44
+  Ret          v1
+.finally

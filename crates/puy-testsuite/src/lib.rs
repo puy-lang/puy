@@ -164,6 +164,43 @@ pub fn parse_size(s: &str) -> Result<usize, String> {
         .map_err(|_| format!("invalid size `{s}`"))
 }
 
+/// The switches put before a `diff/` case when it is compiled by FPC or Delphi
+/// (`docs/design/testing.md` 3.3): Puy's debug defaults, or all off for `release`.
+pub fn diff_switches(cfg: &CaseConfig) -> &'static str {
+    if cfg.release {
+        "{$R-,Q-,C-}"
+    } else {
+        "{$R+,Q+,C+}"
+    }
+}
+
+/// Normalizes the exit code of a `diff/` case built by FPC or Delphi to Puy's
+/// (`docs/design/testing.md` 3.3): 217 (unhandled exception), and any other non-zero code with a
+/// runtime error reported on standard error (one of `error_markers`), become 1.
+pub fn normalize_exit_code(code: i32, stderr: &str, error_markers: &[&str]) -> i32 {
+    let runtime_error = error_markers.iter().any(|m| stderr.contains(m));
+    if code == 217 || (code != 0 && runtime_error) {
+        1
+    } else {
+        code
+    }
+}
+
+/// Replaces `pat` in `text` (ASCII case-insensitive) with `rep`.
+pub fn replace_ascii_case_insensitive(text: &str, pat: &str, rep: &str) -> String {
+    let lower = text.to_ascii_lowercase();
+    let pat_lower = pat.to_ascii_lowercase();
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0;
+    while let Some(off) = lower[i..].find(&pat_lower) {
+        out.push_str(&text[i..i + off]);
+        out.push_str(rep);
+        i += off + pat.len();
+    }
+    out.push_str(&text[i..]);
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,0 +1,69 @@
+; puyc format 0
+.const
+  0: str "dump"
+  1: str "bye "
+  2: str "\n"
+  3: str "hello "
+.type
+  64: class DumpCtorDtor.TNamed slots=1 refs=0 parent=ty19 vmt=f2,f3,builtin0,builtin1,builtin3,builtin4
+.global
+  0: int N
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpCtorDtor file="dump_ctor_dtor.pas" init=- fini=- entry=0
+.func 0 DumpCtorDtor.<main> params=0 regs=8
+  .try 0004..0009 finally 0009..000b r1
+  .line 38
+  0000  LoadConst    r0, k0
+  0001  Move         r6, r0
+  0002  LoadZero     r4
+  0003  New          r4, ty64
+  0004  Move         r5, r4
+  0005  CallMethod   r5, f1
+  0006  Move         r7, r4
+  0007  CallVirtual  r7, 1
+  0008  LoadZero     r1
+  0009  JmpIfNeIntI  r1, 1, -> 000b
+  000a  DestroyFailed r4
+  000b  EndFinally   r1, 0
+  000c  Move         r3, r4
+  000d  StoreGlobal  r3, g0
+  .line 39
+  000e  Free         r3
+  .line 40
+  000f  RetVoid
+.finally r0, r2
+.func 1 DumpCtorDtor.TNamed.Create params=2 regs=2
+  .local r0 Self
+  .local r1 AName
+  .line 21
+  0000  ObjSetRef    r0, 0, r1
+  .line 22
+  0001  RetVoid
+.func 2 DumpCtorDtor.TNamed.Destroy params=1 regs=5
+  .local r0 Self
+  .line 24
+  0000  LoadInt      r4, 64
+  0001  DtorEnter    r0, r4
+  .line 26
+  0002  LoadConst    r1, k1
+  0003  ObjGetRef    r2, r0, 0
+  0004  ConcatStr    r1, r1, r2
+  0005  LoadConst    r3, k2
+  0006  ConcatStr    r1, r1, r3
+  0007  CallHost     r1, h0
+  .line 28
+  0008  RetVoid
+.finally r1, r2, r3
+.func 3 DumpCtorDtor.TNamed.AfterConstruction params=1 regs=4
+  .local r0 Self
+  .line 32
+  0000  LoadConst    r1, k3
+  0001  ObjGetRef    r2, r0, 0
+  0002  ConcatStr    r1, r1, r2
+  0003  LoadConst    r3, k2
+  0004  ConcatStr    r1, r1, r3
+  0005  CallHost     r1, h0
+  .line 33
+  0006  RetVoid
+.finally r1, r2, r3

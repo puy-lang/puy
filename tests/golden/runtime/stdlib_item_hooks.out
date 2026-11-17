@@ -1,0 +1,108 @@
+list: Create, Add, Insert, AddRange, InsertRange
+  adding 1
+  adding 2
+  adding 3
+  adding 0
+  adding 4
+  adding 5
+  adding 7
+  [ 0 7 1 2 3 4 5 ]
+list: cnAdding raises
+  adding -1
+  negative -1
+  adding 8
+  adding -2
+  negative -2
+  [ 0 7 1 2 3 4 5 ]
+list: L[I] := X
+  adding 10
+  removed 0
+list: a larger Count tells nothing
+  [ 10 7 1 2 3 4 5 0 ]
+list: Extract, ExtractAt, Sort, Exchange, Move, Reverse, Capacity tell nothing
+  [ 5 4 3 1 2 0 ]
+list: Delete, Remove
+  removed 5
+  removed 3
+  [ 4 1 2 0 ]
+list: Clear tells every item in index order, also after an exception
+  removed 4
+  removed 1
+  removed 2
+  removed 0
+  adding 12
+  adding 13
+  adding 14
+  adding 13
+  removed 12
+  removed 13
+  removed 14
+  removed 13
+  unlucky 13, suppressed 1
+  unlucky 13
+  count 0
+list of instances: writing the same instance removes nothing
+  foo adding a
+  foo adding a
+  foo adding c
+  foo removed a
+  foo removed c
+list whose constructor skips the inherited one
+  bare adding 1
+  bare removed 1
+stack
+  stack adding a
+  stack adding b
+  stack adding c
+  pop c
+  extract b
+  stack adding d
+  stack removed a
+  stack removed d
+  stack adding e
+  free
+  stack removed e
+queue
+  queue adding a
+  queue adding b
+  queue adding c
+  dequeue a
+  free
+  queue removed b
+  queue removed c
+dictionary
+  dict key adding a
+  dict value adding 1
+  dict key adding b
+  dict value adding 2
+  TryAdd new TRUE
+  TryAdd existing FALSE
+  duplicate key in `TLogDict`
+  dict key adding a
+  dict value adding 3
+  dict value removed 1
+  dict key removed a
+  dict key adding c
+  dict value adding 4
+  dict key adding b
+  dict value adding 5
+  dict value removed 2
+  dict key removed b
+  dict key removed b
+  dict value removed 5
+  dict key adding d
+  dict value adding 6
+  dict key removed a
+  dict value removed 3
+  dict key removed d
+  dict value removed 6
+  dict key adding e
+  dict value adding 7
+  free
+  dict key removed e
+  dict value removed 7
+dictionary telling the values only
+  value adding 1
+  value adding 2
+  value removed 1
+  value removed 2

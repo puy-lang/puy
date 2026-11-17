@@ -1,0 +1,26 @@
+program DumpHints
+.type TOld = Integer deprecated
+.type TFoo = class(TObject) deprecated
+  .field 0 F: Integer experimental
+  .classvar g0 Count: Integer deprecated
+  .method f0 Run deprecated
+  .property P: Integer read=#0 write=- deprecated experimental
+.global g0 TFoo.Count: Integer
+.global g1 G: Integer experimental
+.routine f0 TFoo.Run()
+  .var v0 Self: TFoo self
+.routine f1 Old() deprecated
+  .var v0 L: Integer local deprecated
+  assign @27 R+
+    var v0 L
+    global g1 G: Integer
+  writeln @28
+    arg
+      var v0 L: Integer
+.routine <init>
+  assign @17 R+ init
+    global g1 G
+    const Integer 1
+.routine <main>
+  expr @32
+    call f1 Old: -

@@ -1,0 +1,29 @@
+Create(nil) sorts in the default order
+  sorted: 1 2 3
+  BinarySearch 2: TRUE 1
+the comparer of Create is not used for equality
+  sorted: Apple banana
+  IndexOf('APPLE') -1, BinarySearch('APPLE') TRUE 0
+Extract finds by key equality
+  NAN count 2
+  0 count 1
+LastIndexOf asks the comparer from the end
+  equals d xx
+  equals cc xx
+  2
+Exchange(I, I) and Sort of one item are changes
+  `TList<Integer>` was modified during enumeration
+  `TList<Integer>` was modified during enumeration
+a comparer that raises leaves the list as it was
+  stop
+  after: 4 2 9 1 7 3 8 6 5 0 11 10
+BinarySearch of an unsorted list raises nothing
+  TRUE TRUE
+  FALSE TRUE
+a record item is copied out
+  1 9
+a user's TEnumerable<T>
+  Create: 7 8 9
+  AddRange, InsertRange: 7 7 8 9 8 9 7 8 9
+  copy of a list: 9
+  UnionWith: 1 8 7 9

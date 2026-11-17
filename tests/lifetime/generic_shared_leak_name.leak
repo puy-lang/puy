@@ -1,0 +1,3 @@
+warning: 2 heap blocks were not freed
+  GenericSharedLeakName.TList<GenericSharedLeakName.TBar>: 1
+  TArray<GenericSharedLeakName.TFoo>: 1

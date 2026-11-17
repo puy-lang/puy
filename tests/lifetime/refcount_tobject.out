@@ -1,0 +1,6 @@
+one reference left: TRUE FALSE
+destroy counted
+none left: FALSE
+destroy manual
+freed handle copied: TRUE
+end

@@ -1,0 +1,93 @@
+program DumpHelpers
+.type TCounter = class(TObject)
+  .field 0 N: Integer
+.type TCounterHelper = class helper for TCounter
+  .method f0 Bump
+  .method f1 Make class
+.type TTextHelper = record helper for string
+  .method f2 Twice
+.type TTextMore = record helper(TTextHelper) for string
+  .classvar g0 Calls: Integer
+  .method f3 Size
+  .property Len: Integer read=f3 write=-
+.global g0 TTextMore.Calls: Integer
+.global g1 C: TCounter
+.global g2 S: string
+.global g3 I: Integer
+.routine f0 TCounterHelper.Bump()
+  .var v0 Self: TCounter self
+  assign @31 R+
+    objfield Integer N #0
+      self TCounter
+    binary Integer
+      objfield Integer N #0
+        self TCounter
+      + Integer int:Integer
+        const Integer 1
+.routine f1 TCounterHelper.Make(): TCounter
+  .var v0 Self: class of TCounter self
+  .var v1 Result: TCounter result
+  assign @36 R+
+    var v1 Result
+    create TCounter builtin
+.routine f2 TTextHelper.Twice(): string
+  .var v0 Self: string var self
+  .var v1 Result: string result
+  assign @41 R+
+    var v1 Result
+    binary string
+      self string
+      + string str
+        self string
+.routine f3 TTextMore.Size(): Integer
+  .var v0 Self: string var self
+  .var v1 Result: Integer result
+  assign @46 R+
+    global g0 TTextMore.Calls
+    binary Integer
+      global g0 TTextMore.Calls: Integer
+      + Integer int:Integer
+        const Integer 1
+  assign @47 R+
+    var v1 Result
+    builtin Length Integer
+      self string
+.routine <main>
+  assign @55 R+
+    global g1 C
+    helper-call f1 TCounterHelper.Make: TCounter
+      classref TCounter
+  expr @56
+    helper-call f0 TCounterHelper.Bump: -
+      global g1 C: TCounter
+  expr @57
+    helper-call f0 TCounterHelper.Bump: -
+      global g1 C: TCounter
+  assign @58 R+
+    global g2 S
+    const string "ab"
+  writeln @59
+    arg
+      helper-call f2 TTextHelper.Twice: string
+        ref
+          global g2 S
+    arg
+      helper-call f3 TTextMore.Size: Integer
+        ref
+          global g2 S
+    arg
+      builtin ToString string
+        objfield Integer N #0
+          global g1 C: TCounter
+    arg
+      builtin Length Integer
+        global g2 S: string
+  assign @60 R+
+    global g3 I
+    const Integer 3
+  writeln @61
+    arg
+      builtin ToString string
+        global g3 I: Integer
+  free @62
+    global g1 C: TCounter

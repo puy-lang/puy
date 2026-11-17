@@ -1,0 +1,10 @@
+error[E3401]: attributes must be written on the declaration of `Wave`
+   --> src/Marks.pas:26:1
+    |
+ 17 | procedure Wave;
+    |           ---- declared here
+...
+ 26 | [Mark]
+    | ^^^^^^
+
+error: aborting due to 1 error

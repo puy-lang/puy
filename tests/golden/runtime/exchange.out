@@ -1,0 +1,5 @@
+cba
+zyx xyz
+array index 3 is out of range 0..2
+index 4 is out of range for `TArr` (1..3)
+cba zyx

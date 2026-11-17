@@ -1,0 +1,13 @@
+warning[W0024]: anonymous method captures `Self` and is stored in a field reachable from `Self` (self-capture-cycle)
+   --> anon_self_capture_more.pas:26:22
+    |
+ 26 |   Items[I].OnDone := procedure begin WriteLn(Caption) end;
+    |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   --------------- stored here
+    |                                              ------- `Self` captured here
+    |
+    = note: move the body to a method and store a reference to that method (a method reference does not count `Self`)
+    = note: or copy `Self` to a `[weak]` local variable and use that in the anonymous method
+    = note: disable with `{$WARN self-capture-cycle OFF}`
+
+warning: 1 warning emitted

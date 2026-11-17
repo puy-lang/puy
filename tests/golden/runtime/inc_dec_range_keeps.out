@@ -1,0 +1,15 @@
+Byte Inc: 255 (value 256 is out of range for Byte (0..255))
+Byte Dec: 0
+Byte Inc by N: 250
+Byte Dec by 300: 5
+subrange Inc: 9
+subrange Dec in finally: 0
+subrange Dec caught: 0
+enum Inc: 2
+distinct Inc: 255
+distinct Dec: 0
+Char Inc: 65535
+Integer Inc: 2147483647
+in range: 5 4
+var parameter Inc: 255
+global Dec: 0

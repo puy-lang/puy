@@ -15,7 +15,7 @@ error: uncaught exception EStackOverflow: stack overflow (limit 65536 bytes)
   at OverflowWithArgs.Deep (overflow_with_args.pas:9)
   at OverflowWithArgs.Deep (overflow_with_args.pas:9)
   at OverflowWithArgs.Deep (overflow_with_args.pas:9)
-  ... 1606 more frames
+  ... 1333 more frames
   at OverflowWithArgs.Deep (overflow_with_args.pas:9)
   at OverflowWithArgs.Deep (overflow_with_args.pas:9)
   at OverflowWithArgs.Deep (overflow_with_args.pas:9)

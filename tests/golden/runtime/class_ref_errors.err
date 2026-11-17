@@ -1,0 +1,3 @@
+error: uncaught exception EAbstractError: abstract method `TShape.Area` called
+  at ClassRefErrors.Area (class_ref_errors.pas:54)
+  at ClassRefErrors.<main> (class_ref_errors.pas:70)

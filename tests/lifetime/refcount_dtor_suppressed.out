@@ -1,0 +1,5 @@
+AB
+destroy A
+destroy B
+from B, suppressed: 1
+from A

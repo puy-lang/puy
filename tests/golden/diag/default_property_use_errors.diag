@@ -1,0 +1,152 @@
+error[E0735]: no overload of `Items` matches these indices
+   --> default_property_use_errors.pas:91:11
+    |
+ 19 |     property Items[I: Integer]: Integer read GetI; default;
+    |              ----- candidate
+ 20 |     property Items[const S: string]: Integer read GetS; default;
+    |              ----- candidate
+...
+ 91 |   WriteLn(B[1.5]);
+    |           ^^^^^^
+    |
+    = note: the indices have types `Double`
+
+error[E0735]: no overload of `Items` matches these indices
+   --> default_property_use_errors.pas:92:11
+    |
+ 19 |     property Items[I: Integer]: Integer read GetI; default;
+    |              ----- candidate
+ 20 |     property Items[const S: string]: Integer read GetS; default;
+    |              ----- candidate
+...
+ 92 |   WriteLn(B[1..2]);
+    |           ^^^^^^^
+    |
+    = note: the indices have types `TIndexRange`
+    = note: a range is passed as a `TIndexRange`; declare a default property taking one, as in `property Items[const R: TIndexRange]: TArray<Integer> read GetRange; default;`
+
+error[E0735]: no overload of `Items` matches these indices
+   --> default_property_use_errors.pas:93:11
+    |
+ 19 |     property Items[I: Integer]: Integer read GetI; default;
+    |              ----- candidate
+ 20 |     property Items[const S: string]: Integer read GetS; default;
+    |              ----- candidate
+...
+ 93 |   WriteLn(B[1, 2]);
+    |           ^^^^^^^
+    |
+    = note: the indices have types `Integer`, `Integer`
+
+error[E0734]: ambiguous call to overloaded `Items`
+   --> default_property_use_errors.pas:94:11
+    |
+ 26 |     property Items[I: Int64]: Integer read GetA; default;
+    |              ----- candidate
+ 27 |     property Items[I: Cardinal]: Integer read GetB; default;
+    |              ----- candidate
+...
+ 94 |   WriteLn(W[Byte(1)]);
+    |           ^^^^^^^^^^
+
+error[E0720]: a slice cannot be taken of an indexed property
+   --> default_property_use_errors.pas:95:19
+    |
+ 95 |   WriteLn(B.Items[1..2]);
+    |                   ^^^^
+
+error[E0719]: slice bounds must be integers
+   --> default_property_use_errors.pas:96:13
+    |
+ 96 |   WriteLn(B['a'..'b']);
+    |             ^^^
+
+error[E0719]: slice bounds must be integers
+   --> default_property_use_errors.pas:96:18
+    |
+ 96 |   WriteLn(B['a'..'b']);
+    |                  ^^^
+
+error[E0707]: cannot assign to `B[1]`
+   --> default_property_use_errors.pas:97:3
+    |
+ 19 |     property Items[I: Integer]: Integer read GetI; default;
+    |              ----- declared here
+...
+ 97 |   B[1] := 2;
+    |   ^^^^ a read-only property
+
+error[E0706]: a property cannot be passed to a `var` parameter
+   --> default_property_use_errors.pas:98:8
+    |
+ 98 |   Bump(B[1]);
+    |        ^^^^
+
+error[E0706]: a property cannot be passed to a `var` parameter
+   --> default_property_use_errors.pas:99:7
+    |
+ 99 |   Inc(B['a']);
+    |       ^^^^^^
+
+error[E0707]: cannot assign to `P[0].X`
+    --> default_property_use_errors.pas:100:3
+     |
+ 100 |   P[0].X := 1;
+     |   ^^^^^^ part of a property
+     |
+     = note: read the property into a variable, change it, and assign it back
+
+error[E0743]: `Items` is private to `THidden`
+    --> default_property_use_errors.pas:101:11
+     |
+  38 |     property Items[I: Integer]: Integer read GetH; default;
+     |              ----- declared here
+...
+ 101 |   WriteLn(H[1]);
+     |           ^^^^
+
+error[E0720]: cannot index a value of type `TPoint`
+    --> default_property_use_errors.pas:102:11
+     |
+ 102 |   WriteLn(Pt[1]);
+     |           ^^^^^
+     |
+     = note: `X[…]` needs a default array property, as in `property Items[I: Integer]: T read GetItem; default;`
+
+error[E0705]: wrong number of indices: expected 1, found 2
+    --> default_property_use_errors.pas:103:11
+     |
+ 103 |   WriteLn(P[1, 2].X);
+     |           ^^^^^^^
+
+error[E0705]: wrong number of arguments: expected 4, found 3
+    --> default_property_use_errors.pas:104:3
+     |
+ 104 |   R.Clamp(0, 9, F);
+     |   ^^^^^^^^^^^^^^^^
+
+error[E0706]: argument 4 must be a variable (parameter `ALast` is `out`)
+    --> default_property_use_errors.pas:105:20
+     |
+ 105 |   R.Clamp(0, 9, F, 1);
+     |                    ^
+
+error[E0702]: type mismatch: expected `Integer`, found `Char`
+    --> default_property_use_errors.pas:106:14
+     |
+ 106 |   R.Clamp(0, 'x', F, L);
+     |              ^^^
+
+error[E0725]: procedure `TIndexRange.Clamp` has no value
+    --> default_property_use_errors.pas:107:10
+     |
+ 107 |   F := R.Clamp(0, 9, F, L);
+     |          ^^^^^
+
+error[E0752]: `Clamp` cannot be used as a procedural value
+    --> default_property_use_errors.pas:108:13
+     |
+ 108 |   Proc := R.Clamp;
+     |             ^^^^^
+
+error: aborting due to 19 errors

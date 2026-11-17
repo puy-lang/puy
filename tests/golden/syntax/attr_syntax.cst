@@ -1,0 +1,198 @@
+SOURCE_FILE@0..548
+  LINE_COMMENT@0..97 "// Attributes at the top level of a script (attributes.md 1.3): before `procedure` they belong to"
+  NEWLINE@97..98 "\n"
+  LINE_COMMENT@98..192 "// the routine; a statement starting with `[` stays a set constructor (E0402). A `var` section"
+  NEWLINE@192..193 "\n"
+  LINE_COMMENT@193..285 "// ends when what follows the attributes is not a variable, and a parameter takes attributes"
+  NEWLINE@285..286 "\n"
+  LINE_COMMENT@286..319 "// before and after its modifier."
+  NEWLINE@319..320 "\n"
+  NEWLINE@320..321 "\n"
+  SCRIPT@321..548
+    TYPE_SECTION@321..374
+      TYPE_KW@321..325 "type"
+      NEWLINE@325..326 "\n"
+      WHITESPACE@326..328 "  "
+      TYPE_DECL@328..374
+        IDENT@328..341 "MarkAttribute"
+        WHITESPACE@341..342 " "
+        EQ@342..343 "="
+        WHITESPACE@343..344 " "
+        CLASS_TYPE@344..373
+          CLASS_KW@344..349 "class"
+          CLASS_PARENTS@349..367
+            L_PAREN@349..350 "("
+            TYPE_REF@350..366
+              QUALIFIED_NAME@350..366
+                IDENT@350..366 "TCustomAttribute"
+            R_PAREN@366..367 ")"
+          NEWLINE@367..368 "\n"
+          WHITESPACE@368..370 "  "
+          CLASS_BODY@370..370
+          END_KW@370..373 "end"
+        SEMICOLON@373..374 ";"
+    NEWLINE@374..375 "\n"
+    NEWLINE@375..376 "\n"
+    VAR_SECTION@376..414
+      VAR_KW@376..379 "var"
+      NEWLINE@379..380 "\n"
+      WHITESPACE@380..382 "  "
+      VAR_DECL@382..393
+        IDENT_LIST@382..383
+          IDENT@382..383 "X"
+        COLON@383..384 ":"
+        WHITESPACE@384..385 " "
+        TYPE_REF@385..392
+          QUALIFIED_NAME@385..392
+            IDENT@385..392 "Integer"
+        SEMICOLON@392..393 ";"
+      NEWLINE@393..394 "\n"
+      WHITESPACE@394..396 "  "
+      VAR_DECL@396..414
+        ATTRIBUTE_LIST@396..402
+          L_BRACK@396..397 "["
+          ATTRIBUTE@397..401
+            QUALIFIED_NAME@397..401
+              IDENT@397..401 "Mark"
+          R_BRACK@401..402 "]"
+        WHITESPACE@402..403 " "
+        IDENT_LIST@403..404
+          IDENT@403..404 "Y"
+        COLON@404..405 ":"
+        WHITESPACE@405..406 " "
+        TYPE_REF@406..413
+          QUALIFIED_NAME@406..413
+            IDENT@406..413 "Integer"
+        SEMICOLON@413..414 ";"
+    NEWLINE@414..415 "\n"
+    ROUTINE_DECL@415..509
+      ATTRIBUTE_LIST@415..421
+        L_BRACK@415..416 "["
+        ATTRIBUTE@416..420
+          QUALIFIED_NAME@416..420
+            IDENT@416..420 "Mark"
+        R_BRACK@420..421 "]"
+      ATTRIBUTE_LIST@421..427
+        L_BRACK@421..422 "["
+        ATTRIBUTE@422..426
+          QUALIFIED_NAME@422..426
+            IDENT@422..426 "Mark"
+        R_BRACK@426..427 "]"
+      NEWLINE@427..428 "\n"
+      ROUTINE_HEADER@428..487
+        PROCEDURE_KW@428..437 "procedure"
+        WHITESPACE@437..438 " "
+        QUALIFIED_NAME@438..439
+          IDENT@438..439 "P"
+        PARAM_LIST@439..487
+          L_PAREN@439..440 "("
+          PARAM_GROUP@440..463
+            CONST_KW@440..445 "const"
+            WHITESPACE@445..446 " "
+            ATTRIBUTE_LIST@446..452
+              L_BRACK@446..447 "["
+              ATTRIBUTE@447..451
+                QUALIFIED_NAME@447..451
+                  IDENT@447..451 "Mark"
+              R_BRACK@451..452 "]"
+            WHITESPACE@452..453 " "
+            IDENT_LIST@453..454
+              IDENT@453..454 "A"
+            COLON@454..455 ":"
+            WHITESPACE@455..456 " "
+            TYPE_REF@456..463
+              QUALIFIED_NAME@456..463
+                IDENT@456..463 "Integer"
+          SEMICOLON@463..464 ";"
+          WHITESPACE@464..465 " "
+          PARAM_GROUP@465..486
+            ATTRIBUTE_LIST@465..471
+              L_BRACK@465..466 "["
+              ATTRIBUTE@466..470
+                QUALIFIED_NAME@466..470
+                  IDENT@466..470 "Mark"
+              R_BRACK@470..471 "]"
+            WHITESPACE@471..472 " "
+            VAR_KW@472..475 "var"
+            WHITESPACE@475..476 " "
+            IDENT_LIST@476..477
+              IDENT@476..477 "B"
+            COLON@477..478 ":"
+            WHITESPACE@478..479 " "
+            TYPE_REF@479..486
+              QUALIFIED_NAME@479..486
+                IDENT@479..486 "Integer"
+          R_PAREN@486..487 ")"
+      SEMICOLON@487..488 ";"
+      NEWLINE@488..489 "\n"
+      ROUTINE_BODY@489..508
+        COMPOUND_STMT@489..508
+          BEGIN_KW@489..494 "begin"
+          NEWLINE@494..495 "\n"
+          WHITESPACE@495..497 "  "
+          ASSIGN_STMT@497..503
+            NAME_REF@497..498
+              IDENT@497..498 "B"
+            WHITESPACE@498..499 " "
+            ASSIGN@499..501 ":="
+            WHITESPACE@501..502 " "
+            NAME_REF@502..503
+              IDENT@502..503 "A"
+          SEMICOLON@503..504 ";"
+          NEWLINE@504..505 "\n"
+          END_KW@505..508 "end"
+      SEMICOLON@508..509 ";"
+    NEWLINE@509..510 "\n"
+    NEWLINE@510..511 "\n"
+    ASSIGN_STMT@511..517
+      NAME_REF@511..512
+        IDENT@511..512 "X"
+      WHITESPACE@512..513 " "
+      ASSIGN@513..515 ":="
+      WHITESPACE@515..516 " "
+      LITERAL@516..517
+        INT_LIT@516..517 "1"
+    SEMICOLON@517..518 ";"
+    NEWLINE@518..519 "\n"
+    EXPR_STMT@519..526
+      CALL_EXPR@519..526
+        NAME_REF@519..520
+          IDENT@519..520 "P"
+        ARG_LIST@520..526
+          L_PAREN@520..521 "("
+          ARG@521..522
+            NAME_REF@521..522
+              IDENT@521..522 "X"
+          COMMA@522..523 ","
+          WHITESPACE@523..524 " "
+          ARG@524..525
+            NAME_REF@524..525
+              IDENT@524..525 "Y"
+          R_PAREN@525..526 ")"
+    SEMICOLON@526..527 ";"
+    NEWLINE@527..528 "\n"
+    EXPR_STMT@528..538
+      CALL_EXPR@528..538
+        NAME_REF@528..535
+          IDENT@528..535 "WriteLn"
+        ARG_LIST@535..538
+          L_PAREN@535..536 "("
+          ARG@536..537
+            NAME_REF@536..537
+              IDENT@536..537 "Y"
+          R_PAREN@537..538 ")"
+    SEMICOLON@538..539 ";"
+    NEWLINE@539..540 "\n"
+    EXPR_STMT@540..546
+      ARRAY_CTOR@540..546
+        L_BRACK@540..541 "["
+        LITERAL@541..542
+          INT_LIT@541..542 "1"
+        COMMA@542..543 ","
+        WHITESPACE@543..544 " "
+        LITERAL@544..545
+          INT_LIT@544..545 "2"
+        R_BRACK@545..546 "]"
+    SEMICOLON@546..547 ";"
+    NEWLINE@547..548 "\n"
+    EOF@548..548 ""

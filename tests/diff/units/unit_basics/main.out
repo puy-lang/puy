@@ -1,0 +1,15 @@
+init Log
+[init Shapes]
+[init Geometry]
+[init Counter]
+main
+-1 12 14 10
+0 0 1 3
+4 7 -1 4
+11 10
+2 2
+11 wide
+[fini Counter]
+[fini Geometry]
+[fini Shapes]
+fini Log

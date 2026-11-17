@@ -1,0 +1,119 @@
+error[E0758]: `TArray<T>` cannot be used as a constraint
+   --> generic_constraint_type_arg_errors.pas:39:11
+    |
+ 39 |   TBad<T: TArray<T>> = class
+    |           ^^^^^^^^^
+
+error[E0759]: `TOther` does not satisfy the constraint `IComparable<TOther>` of `T` in `TSorted<T>`
+   --> generic_constraint_type_arg_errors.pas:52:25
+    |
+ 30 |   TSorted<T: IComparable<T>> = class
+    |           - type parameter declared here
+...
+ 52 |   TUser = class(TSorted<TOther>)            // E0759 in a parent
+    |                         ^^^^^^
+
+error[E0759]: `TNum` does not satisfy the constraint `IKeyed<Integer>` of `V` in `TBy<K, V>`
+   --> generic_constraint_type_arg_errors.pas:53:21
+    |
+ 33 |   TBy<K; V: IKeyed<K>> = class
+    |          - type parameter declared here
+...
+ 53 |     F: TBy<Integer, TNum>;                  // E0759 in a field
+    |                     ^^^^
+
+error[E0759]: `Integer` does not satisfy the constraint `IComparable<Integer>` of `T` in `TSorted<T>`
+   --> generic_constraint_type_arg_errors.pas:54:34
+    |
+ 30 |   TSorted<T: IComparable<T>> = class
+    |           - type parameter declared here
+...
+ 54 |     procedure P(const X: TSorted<Integer>); // E0759 in a method heading
+    |                                  ^^^^^^^
+
+error[E0759]: `T` does not satisfy the constraint `IComparable<T>` of `T` in `TSorted<T>`
+   --> generic_constraint_type_arg_errors.pas:69:19
+    |
+ 42 |   TPlain<T> = class
+    |          - type parameter declared here
+...
+ 69 |   WriteLn(TSorted<T>.ClassName); // E0759: `T` has no constraint
+    |                   ^
+    |
+    = note: add the constraint `IComparable<T>` to `T`
+
+error[E0759]: `Integer` does not satisfy the constraint `IComparable<Integer>` of `T` in `TSorted<T>`
+   --> generic_constraint_type_arg_errors.pas:77:36
+    |
+ 30 |   TSorted<T: IComparable<T>> = class
+    |           - type parameter declared here
+...
+ 77 | procedure TUser.P(const X: TSorted<Integer>);
+    |                                    ^^^^^^^
+
+error[E0759]: `Integer` does not satisfy the constraint `IComparable<Integer>` of `T` in `TSorted<T>`
+   --> generic_constraint_type_arg_errors.pas:87:14
+    |
+ 30 |   TSorted<T: IComparable<T>> = class
+    |           - type parameter declared here
+...
+ 87 |   A: TSorted<Integer>;     // E0759
+    |              ^^^^^^^
+
+error[E0759]: `TOther` does not satisfy the constraint `IComparable<TOther>` of `T` in `TSorted<T>`
+   --> generic_constraint_type_arg_errors.pas:88:14
+    |
+ 30 |   TSorted<T: IComparable<T>> = class
+    |           - type parameter declared here
+...
+ 88 |   B: TSorted<TOther>;      // E0759: `IComparable<TOther>`
+    |              ^^^^^^
+
+error[E0759]: `TNum` does not satisfy the constraint `IKeyed<Integer>` of `V` in `TBy<K, V>`
+   --> generic_constraint_type_arg_errors.pas:89:19
+    |
+ 33 |   TBy<K; V: IKeyed<K>> = class
+    |          - type parameter declared here
+...
+ 89 |   C: TBy<Integer, TNum>;   // E0759: `IKeyed<Integer>`
+    |                   ^^^^
+
+error[E0759]: `TNum` does not satisfy the constraint `TNode<TNum>` of `T` in `TNode<T>`
+   --> generic_constraint_type_arg_errors.pas:90:12
+    |
+ 36 |   TNode<T: TNode<T>> = class
+    |         - type parameter declared here
+...
+ 90 |   D: TNode<TNum>;          // E0759: `TNode<TNum>`
+    |            ^^^^
+
+error[E0759]: `TOther` does not satisfy the constraint `IComparable<TOther>` of `T` in `Largest`
+   --> generic_constraint_type_arg_errors.pas:93:11
+    |
+ 81 | function Largest<T: IComparable<T>>(const A, B: T): T;
+    |                  - type parameter declared here
+...
+ 93 |   Largest<TOther>(TOther.Create, TOther.Create); // E0759
+    |           ^^^^^^
+
+error[E0759]: `TOther` does not satisfy the constraint `IComparable<TOther>` of `T` in `Largest`
+   --> generic_constraint_type_arg_errors.pas:94:3
+    |
+ 81 | function Largest<T: IComparable<T>>(const A, B: T): T;
+    |                  - type parameter declared here
+...
+ 94 |   Largest(TOther.Create, TOther.Create);         // E0759, inferred
+    |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: the type arguments were inferred from the arguments as `Largest<TOther>`
+
+error[E0759]: `TNum` does not satisfy the constraint `IComparable<Integer>` of `C` in `TBox<Integer>.Pick`
+   --> generic_constraint_type_arg_errors.pas:95:12
+    |
+ 47 |     function Pick<C: IComparable<T>>(const Cmp: C): T;
+    |                   - type parameter declared here
+...
+ 95 |   Box.Pick<TNum>(TNum.Create);                   // E0759: `IComparable<Integer>`
+    |            ^^^^
+
+error: aborting due to 13 errors

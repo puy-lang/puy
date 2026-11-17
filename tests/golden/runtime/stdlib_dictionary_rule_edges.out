@@ -1,0 +1,18 @@
+Create(array of TPair) and Create(Source)
+  b=2
+  a=1
+  c=3
+  2 3
+ContainsValue uses key equality
+  TRUE TRUE FALSE
+owning dictionary with a comparer
+  free v1
+  1 v2
+  free v2
+  TRUE TRUE
+  free v3
+inherited Create in a subclass is checked at run time
+  TOwnStringKeys.Create
+  TOwnStringKeys.Destroy
+  `doOwnsKeys` needs a class type for the keys, but `string` is not a class
+  TRUE

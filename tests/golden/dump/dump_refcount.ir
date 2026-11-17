@@ -1,0 +1,80 @@
+; puy ir 1
+.global
+  g0 Shared: TObject
+.func f0 DumpRefcount.<main> params=0
+  .reg t0: - temp
+  .reg t1: TObject temp
+  .reg t2: Int64 temp
+bb0:
+  .line 34
+  Call         -, f1()
+  .line 35
+  ReleaseObj   t1
+  LoadGlobal   t2, g0
+  AddRefObj    t1
+  StoreGlobal  t1, g0
+  ReleaseObj   t2
+  .line 36
+  RetVoid
+.finally t1:obj
+.func f1 DumpRefcount.Run params=0
+  .reg v0 B: TBox local
+  .reg v1 O: TObject local
+  .reg v2 P: TObject local
+  .reg t0: Int64 temp
+  .reg t1: TObject temp
+  .reg t2: Int64 temp
+  .reg t3: Int64 temp
+  .reg t4: Int64 temp
+  .reg t5: string temp
+  .reg t6: Integer temp
+  .reg t7: string temp
+  .reg t8: Boolean temp
+  .reg t9: Int64 temp
+  .reg t10: string temp
+  .reg t11: Boolean temp
+  .reg t12: Int64 temp
+  .reg t13: string temp
+bb0:
+  .line 23
+  New          v0, DumpRefcount.TBox
+  .line 24
+  AssignObj    v1, v0
+  .line 25
+  New          v2, DumpRefcount.TBox
+  .line 26
+  AssignObj    v1, v2
+  .line 27
+  ObjGet       t0, v0, 0
+  AddRefObj    v2
+  ObjSet       v0, 0, v2
+  ReleaseObj   t0
+  .line 28
+  ObjGet       t2, v0, 0
+  AssignObj    t1, t2
+  LoadGlobal   t3, g0
+  AddRefObj    t1
+  StoreGlobal  t1, g0
+  ReleaseObj   t3
+  .line 29
+  LoadGlobal   t4, g0
+  AssignObj    v1, t4
+  .line 30
+  RefCount     t6, v0
+  IntToStr     t5, t6
+  LoadZero     t9
+  EqInt        t8, v1, t9
+  NotBool      t8, t8
+  BoolToStr    t7, t8
+  ConcatStr    t5, t5, t7
+  LoadZero     t12
+  EqInt        t11, v2, t12
+  NotBool      t11, t11
+  BoolToStr    t10, t11
+  ConcatStr    t5, t5, t10
+  LoadConst    t13, "\n"
+  ConcatStr    t5, t5, t13
+  CallHost     -, h0(t5)
+  .line 31
+  RetVoid
+.finally v0, v1:obj, v2:obj, t1:obj, t5, t7, t10, t13

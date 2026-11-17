@@ -362,6 +362,115 @@ fn nesting_limit_on_main_thread() {
     );
 }
 
+/// A string the system refuses to allocate is `EOutOfMemory`, caught by the program, on every
+/// path that takes the length of a new string from a value (`docs/spec/semantics.md` 3.5). The
+/// refusal comes from `ulimit -v`, so this runs on Linux only (a case in `tests/` cannot limit
+/// the process; `design/testing.md` 3.6).
+#[cfg(target_os = "linux")]
+#[test]
+fn string_refused_by_the_system_is_out_of_memory() {
+    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("refused-string");
+    fs::create_dir_all(&dir).unwrap();
+    // Each length is within the string length limit and there is no isolate limit, so only the
+    // system (1 GB of address space) refuses the gigabytes asked for
+    let program = "program Refused;
+uses System.SysUtils;
+var
+  N: Integer;
+  S: string;
+  U: UTF8String;
+
+procedure Report(const What: string; E: Exception);
+begin
+  WriteLn(What, ': ', E.ClassName, ': ', E.Message);
+end;
+
+begin
+  N := 2147483000;
+  try S := StringOfChar('x', N); except on E: Exception do Report('StringOfChar', E); end;
+  try SetLength(S, N); except on E: Exception do Report('SetLength', E); end;
+  try SetLength(U, N); except on E: Exception do Report('SetLength UTF8String', E); end;
+  try WriteLn('x':N); except on E: Exception do Report('width', E); end;
+  try S := Format('%*d', [N, 1]); except on E: Exception do Report('Format width', E); end;
+  try S := Format('%.*f', [N - 1000, 1.5]); except on E: Exception do Report('Format f', E); end;
+  try S := Format('%.*e', [N - 1000, 1.5]); except on E: Exception do Report('Format e', E); end;
+  try WriteLn(1.5:0:N - 1000); except on E: Exception do Report('X:W:D', E); end;
+  S := StringOfChar('y', 3);
+  WriteLn('still running: ', S);
+end.
+";
+    fs::write(dir.join("refused.pas"), program).unwrap();
+    let out = Command::new("sh")
+        .arg("-c")
+        .arg("ulimit -v 1000000 && exec \"$0\" run refused.pas")
+        .arg(puy())
+        .current_dir(&dir)
+        .output()
+        .expect("spawn sh");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stdout:\n{stdout}\nstderr:\n{stderr}"
+    );
+    assert_eq!(
+        stdout,
+        "StringOfChar: EOutOfMemory: out of memory
+SetLength: EOutOfMemory: out of memory
+SetLength UTF8String: EOutOfMemory: out of memory
+width: EOutOfMemory: out of memory
+Format width: EOutOfMemory: out of memory
+Format f: EOutOfMemory: out of memory
+Format e: EOutOfMemory: out of memory
+X:W:D: EOutOfMemory: out of memory
+still running: yyy
+"
+    );
+    assert_eq!(stderr, "");
+}
+
+/// The copy of a written string into the standard output buffer is a copy of a Pascal value, so
+/// a refusal of the system is `EOutOfMemory` the program catches, not F0003
+/// (`docs/spec/semantics.md` 7.1). Linux only, for `ulimit -v` (`design/testing.md` 3.6).
+#[cfg(target_os = "linux")]
+#[test]
+fn stdout_buffer_refused_by_the_system_is_out_of_memory() {
+    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("refused-stdout");
+    fs::create_dir_all(&dir).unwrap();
+    // The string (300 MB as UTF-16) and its UTF-8 text (450 MB) fit in the 1 GB of address
+    // space, but a third copy of 450 MB into the buffer does not
+    let program = "program Refused;
+uses System.SysUtils;
+var
+  S: string;
+begin
+  S := StringOfChar('あ', 150000000);
+  try Write(S); except on E: Exception do WriteLn('Write: ', E.ClassName, ': ', E.Message); end;
+  S := '';
+  WriteLn('still running');
+end.
+";
+    fs::write(dir.join("refused.pas"), program).unwrap();
+    let out = Command::new("sh")
+        .arg("-c")
+        .arg("ulimit -v 1000000 && exec \"$0\" run refused.pas")
+        .arg(puy())
+        .current_dir(&dir)
+        .output()
+        .expect("spawn sh");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(0), "stderr:\n{stderr}");
+    assert_eq!(
+        stdout,
+        "Write: EOutOfMemory: out of memory
+still running
+"
+    );
+    assert_eq!(stderr, "");
+}
+
 /// Cases in `tests/cli/<name>/`. The directory is copied to `target/tmp` before running (because
 /// `puy fix` rewrites files).
 #[test]

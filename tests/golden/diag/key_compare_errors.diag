@@ -1,0 +1,91 @@
+error[E0713]: constant expression required
+   --> key_compare_errors.pas:23:7
+    |
+ 23 |   C = KeyCompare(1, 2);
+    |       ^^^^^^^^^^^^^^^^
+
+error[E0703]: `TObject` has no default order
+   --> key_compare_errors.pas:41:8
+    |
+ 41 |   N := KeyCompare(O, O);
+    |        ^^^^^^^^^^^^^^^^
+    |
+    = note: pass a comparer, as in `TComparer<TObject>.Construct(…)`
+
+error[E0703]: `IInterface` has no default order
+   --> key_compare_errors.pas:42:8
+    |
+ 42 |   N := KeyCompare(I, I);
+    |        ^^^^^^^^^^^^^^^^
+    |
+    = note: pass a comparer, as in `TComparer<IInterface>.Construct(…)`
+
+error[E0703]: `TPlain` has no default order
+   --> key_compare_errors.pas:43:8
+    |
+ 43 |   N := KeyCompare(P, P);
+    |        ^^^^^^^^^^^^^^^^
+    |
+    = note: pass a comparer, as in `TComparer<TPlain>.Construct(…)`
+
+error[E0703]: `TOther` has no default order
+   --> key_compare_errors.pas:44:8
+    |
+ 44 |   N := KeyCompare(Q, Q);
+    |        ^^^^^^^^^^^^^^^^
+    |
+    = note: pass a comparer, as in `TComparer<TOther>.Construct(…)`
+
+error[E0703]: `TSmall` has no default order
+   --> key_compare_errors.pas:45:8
+    |
+ 45 |   N := KeyCompare(S, S);
+    |        ^^^^^^^^^^^^^^^^
+    |
+    = note: pass a comparer, as in `TComparer<TSmall>.Construct(…)`
+
+error[E0703]: `array of Integer` has no default order
+   --> key_compare_errors.pas:46:8
+    |
+ 46 |   N := KeyCompare(A, A);
+    |        ^^^^^^^^^^^^^^^^
+    |
+    = note: pass a comparer, as in `TComparer<array of Integer>.Construct(…)`
+
+error[E0703]: `TCmp` has no default order
+   --> key_compare_errors.pas:47:8
+    |
+ 47 |   N := KeyCompare(F, F);
+    |        ^^^^^^^^^^^^^^^^
+    |
+    = note: pass a comparer, as in `TComparer<TCmp>.Construct(…)`
+
+error[E0703]: `TClass` has no default order
+   --> key_compare_errors.pas:48:8
+    |
+ 48 |   N := KeyCompare<TClass>(R, R);
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: pass a comparer, as in `TComparer<TClass>.Construct(…)`
+
+error[E0752]: `KeyCompare` cannot be used as a procedural value
+   --> key_compare_errors.pas:49:8
+    |
+ 49 |   F := KeyCompare;
+    |        ^^^^^^^^^^
+
+error[E0763]: conflicting types `Integer` and `Double` for the type argument `T` of `KeyCompare`
+   --> key_compare_errors.pas:50:8
+    |
+ 50 |   N := KeyCompare(1, 2.5);
+    |        ^^^^^^^^^^^^^^^^^^
+    |
+    = note: write the type arguments, as in `KeyCompare<T>(…)`
+
+error[E0705]: wrong number of arguments: expected 2, found 1
+   --> key_compare_errors.pas:51:8
+    |
+ 51 |   N := KeyCompare(1);
+    |        ^^^^^^^^^^^^^
+
+error: aborting due to 12 errors

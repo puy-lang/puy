@@ -1,0 +1,106 @@
+error[E0744]: a method cannot be both `dynamic` and `override`
+   --> method_variant_errors.pas:21:30
+    |
+ 21 |     procedure Walk; dynamic; override;
+    |                              ^^^^^^^^
+
+error[E0744]: `static` can only be applied to class methods
+   --> method_variant_errors.pas:22:23
+    |
+ 22 |     constructor Make; static;
+    |                       ^^^^^^
+
+error[E0744]: `static` can only be applied to class methods
+   --> method_variant_errors.pas:23:35
+    |
+ 23 |     destructor Destroy; override; static;
+    |                                   ^^^^^^
+
+error[E0744]: `Run` does not override a virtual method of `TBase`
+   --> method_variant_errors.pas:24:15
+    |
+ 14 |     procedure Run(X: Integer); virtual;
+    |               --- declared here
+...
+ 24 |     procedure Run(S: string); override;
+    |               ^^^
+
+error[E0744]: `Run` does not override a virtual method of `TBase`
+   --> method_variant_errors.pas:28:21
+    |
+ 14 |     procedure Run(X: Integer); virtual;
+    |               --- declared here
+...
+ 28 |     class procedure Run(X: Integer); override;
+    |                     ^^^
+
+warning[W0021]: method `Run` hides virtual method of `TBase` (hidden-virtual-method)
+   --> method_variant_errors.pas:32:15
+    |
+ 32 |     procedure Run(S: string);
+    |               ^^^
+    |
+    = note: disable with `{$WARN hidden-virtual-method OFF}`
+    = suggestion: add `reintroduce`
+
+error[E0723]: method `TOver.Go` has no body
+   --> method_variant_errors.pas:45:15
+    |
+ 45 |     procedure Go(X: Integer); overload;
+    |               ^^
+
+error[E0723]: body of `TOver.Go` does not match its declaration
+   --> method_variant_errors.pas:98:11
+    |
+ 45 |     procedure Go(X: Integer); overload;
+    |               -- declared here
+...
+ 98 | procedure TOver.Go;
+    |           ^^^^^^^^
+
+error[E0700]: `inherited` is only allowed in a method
+    --> method_variant_errors.pas:106:5
+     |
+ 106 |     inherited;
+     |     ^^^^^^^^^
+
+error[E0747]: a destructor must be declared in a class
+    --> method_variant_errors.pas:113:12
+     |
+ 113 | destructor Stray;
+     |            ^^^^^
+
+error[E0702]: type mismatch: expected `string`, found `Integer` (argument 1, parameter `S`)
+    --> method_variant_errors.pas:124:9
+     |
+ 124 |   O.Add(1);
+     |         ^
+
+error[E3200]: `TOther.UnitName` is not supported yet (planned for M5)
+    --> method_variant_errors.pas:126:13
+     |
+ 126 |   WriteLn(O.UnitName);
+     |             ^^^^^^^^
+
+error[E3200]: `TOther.QualifiedClassName` is not supported yet (planned for M5)
+    --> method_variant_errors.pas:127:13
+     |
+ 127 |   WriteLn(O.QualifiedClassName);
+     |             ^^^^^^^^^^^^^^^^^^
+
+error[E0742]: cannot create an instance of abstract class `TPlain`
+    --> method_variant_errors.pas:128:8
+     |
+ 128 |   P := TPlain.Create;
+     |        ^^^^^^^^^^^^^
+
+error[E0742]: cannot create an instance of abstract class `TLeaf`
+    --> method_variant_errors.pas:129:8
+     |
+  17 |     function Area: Integer; virtual; abstract;
+     |              ---- abstract method declared here
+...
+ 129 |   L := TLeaf.Make;
+     |        ^^^^^^^^^^
+
+error: aborting due to 14 errors; 1 warning emitted

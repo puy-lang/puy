@@ -1,0 +1,118 @@
+; puy ir 1
+.global
+  g0 X: TShape
+.func f0 DumpClassCast.<main> params=0
+  .reg t0: TShape temp
+  .reg t1: TShape temp
+  .reg t2: TShapeClass temp
+  .reg t3: TShape temp
+bb0:
+  .line 37
+  LoadZero     t0
+  New          t0, DumpClassCast.TCircle
+  StoreGlobal  t0, g0
+  .line 38
+  LoadGlobal   t1, g0
+  LoadInt      t2, class DumpClassCast.TCircle
+  Call         -, f1(t1, t2)
+  .line 39
+  LoadGlobal   t3, g0
+  Free         t3
+  .line 40
+  RetVoid
+.finally
+.func f1 DumpClassCast.Check params=2
+  .reg v0 S: TShape param
+  .reg v1 K: TShapeClass param
+  .reg v2 C: TCircle local
+  .reg v3 CK: TCircleClass local
+  .reg v4 B: Boolean local
+  .reg t0: Boolean temp
+  .reg t1: TShape temp
+  .reg t2: TShape temp
+  .reg t3: TShapeClass temp
+  .reg t4: Integer temp
+  .reg t5: string temp
+  .reg t6: Integer temp
+  .reg t7: TCircle temp
+  .reg t8: string temp
+  .reg t9: Integer temp
+  .reg t10: TCircle temp
+  .reg t11: string temp
+  .reg t12: Boolean temp
+  .reg t13: string temp
+  .reg t14: Boolean temp
+  .reg t15: TCircle temp
+  .reg t16: string temp
+  .reg t17: string temp
+  .reg t18: Boolean temp
+  .reg t19: TShape temp
+  .reg t20: string temp
+  .reg t21: Boolean temp
+  .reg t22: TCircleClass temp
+  .reg t23: string temp
+bb0:
+  .line 24
+  Move         t0, v0
+  IsClass      t0, DumpClassCast.TCircle
+  Move         v4, t0
+  .line 25
+  Move         t1, v0
+  AsClass      t1, DumpClassCast.TCircle
+  Move         v2, t1
+  .line 26
+  Move         t2, v0
+  AsClass      t2, DumpClassCast.TCircle
+  Move         v2, t2
+  .line 27
+  Move         t3, v1
+  LoadInt      t4, DumpClassCast.TCircle
+  AsClassRef   t3, t4
+  Move         v3, t3
+  .line 28
+  Move         t7, v0
+  AsClass      t7, DumpClassCast.TCircle
+  ObjGet       t6, t7, 0
+  IntToStr     t5, t6
+  Move         t10, v0
+  AsClass      t10, DumpClassCast.TCircle
+  ObjGet       t9, t10, 0
+  IntToStr     t8, t9
+  ConcatStr    t5, t5, t8
+  Move         t12, v0
+  IsClass      t12, DumpClassCast.TCircle
+  BoolToStr    t11, t12
+  ConcatStr    t5, t5, t11
+  LoadConst    t13, "\n"
+  ConcatStr    t5, t5, t13
+  CallHost     -, h0(t5)
+  .line 29
+  Move         t14, v4
+  JmpIfFalse   t14, bb2, bb1
+bb1:
+  .line 29
+  LoadZero     t15
+  EqInt        t14, v2, t15
+  NotBool      t14, t14
+  Jmp          bb2
+bb2:
+  .line 29
+  Move         v4, t14
+  .line 30
+  Move         v0, v2
+  .line 31
+  BoolToStr    t16, v4
+  LoadZero     t19
+  EqInt        t18, v0, t19
+  BoolToStr    t17, t18
+  ConcatStr    t16, t16, t17
+  LoadZero     t22
+  EqInt        t21, v3, t22
+  BoolToStr    t20, t21
+  ConcatStr    t16, t16, t20
+  LoadConst    t23, "\n"
+  ConcatStr    t16, t16, t23
+  CallHost     -, h0(t16)
+  .line 32
+  RetVoid
+.finally t5, t8, t11, t13, t16, t17, t20, t23

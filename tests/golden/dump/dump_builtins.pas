@@ -1,6 +1,6 @@
 program DumpBuiltins;
 
-// The hir and bytecode dumps of the M2b System built-ins (semantics.md 9.1, bytecode.md 5.2):
+// The hir and bytecode dumps of the M2b System built-ins (semantics.md chapter 9, bytecode.md 5.2):
 // insert / delete statements, the `arr` concatenation, Odd / UpCase, the `ExitCode` global
 // (kind `exitcode`) and `Halt` without a code reading it.
 

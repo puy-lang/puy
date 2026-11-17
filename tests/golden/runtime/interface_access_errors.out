@@ -1,0 +1,4 @@
+run
+EAccessViolation: access to a freed object
+EAccessViolation: access to a nil reference
+EAbstractError: abstract method called through interface `IRun`

@@ -1,0 +1,19 @@
+search 0: FALSE at 0
+search 1: TRUE at 0
+search 3: TRUE at 1
+search 4: FALSE at 4
+search 5: TRUE at 4
+search 9: TRUE at 7
+search 10: FALSE at 11
+search 11: TRUE at 11
+search 12: FALSE at 12
+after Insert(4, 4): TRUE at 4
+empty list: FALSE at 0
+descending (Create): TRUE at 1
+descending (Create): FALSE at 3
+Sort(nil), BinarySearch(nil): TRUE at 2
+TArray bee: TRUE at 1
+TArray ant: TRUE at 0
+TArray cow: FALSE at 4
+TArray eel: FALSE at 5
+TArray : FALSE at 0

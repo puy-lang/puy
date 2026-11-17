@@ -1,11 +1,12 @@
 //! The `System.SysUtils` built-ins that do not take plain value arguments
 //! (`docs/spec/semantics.md` 5.3): `Format` and `Exception.CreateFmt` with their `array of const`,
-//! and `TryStrToInt` with its `out` argument.
+//! `TryStrToInt` with its `out` argument, and `Supports` with its interface name
+//! (`docs/spec/objects.md` 7.6).
 
-use super::Sema;
 use super::expr::{ctor_of, err_expr};
 use super::hir::*;
 use super::types::{Ty, TypeId};
+use super::{Resolved, Sema};
 use crate::diagnostics::Code;
 use crate::source::TextRange;
 use crate::syntax::ast::{self, AstNode};
@@ -19,25 +20,10 @@ impl Sema<'_, '_> {
         }
     }
 
-    /// `T.CreateFmt(Fmt, […])` (`docs/spec/exceptions.md` 2.1): `T.Create(Format(Fmt, […]))`.
-    pub(super) fn new_exception_fmt(
-        &mut self,
-        id: TypeId,
-        args: &[ast::Arg],
-        span: TextRange,
-    ) -> Expr {
-        let Some(msg) = self.format_args(args, span) else {
-            return err_expr(span);
-        };
-        Expr {
-            kind: ExprKind::NewExc {
-                class: Ty::Exception(id),
-                msg: Box::new(msg),
-            },
-            ty: Ty::Exception(id),
-            value: None,
-            span,
-        }
+    /// The message of `T.CreateFmt(Fmt, […])` (`docs/spec/exceptions.md` 2.1,
+    /// `docs/spec/objects.md` 8.2): `Format(Fmt, […])`.
+    pub(super) fn format_message(&mut self, args: &[ast::Arg], span: TextRange) -> Option<Expr> {
+        self.format_args(args, span)
     }
 
     /// The `Format` call of `Format` / `CreateFmt`: the format and the elements of the `array of
@@ -108,7 +94,9 @@ impl Sema<'_, '_> {
         for el in ac.elements() {
             match el {
                 ast::CtorElem::Expr(x) => {
+                    // A distinct type as its root (`docs/spec/types.md` 1.3)
                     let e = self.lower_expr(&x);
+                    let e = self.rooted(e);
                     if e.ty.is_error() {
                         failed = true;
                         continue;
@@ -184,6 +172,156 @@ impl Sema<'_, '_> {
             value: None,
             span,
         }
+    }
+}
+
+impl Sema<'_, '_> {
+    /// `Supports(X, IA)`, `Supports(X, IA, V)` and `Supports(C, IA)` (`docs/spec/objects.md`
+    /// 7.6): `X` is a class, `TObject` or interface value, `C` a class reference (or a class
+    /// name), `IA` the name of an interface and `V` a variable of `IA` or an ancestor of it.
+    pub(super) fn supports(&mut self, args: &[ast::Arg], span: TextRange) -> Expr {
+        self.check_no_width_pub(args);
+        if !(2..=3).contains(&args.len()) {
+            for (i, a) in args.iter().enumerate() {
+                if let Some(v) = a.value() {
+                    if i == 1 {
+                        self.intf_name_arg(&v);
+                    } else {
+                        self.lower_expr(&v);
+                    }
+                }
+            }
+            self.error(
+                Code::E(705),
+                format!(
+                    "wrong number of arguments: expected 2 to 3, found {}",
+                    args.len()
+                ),
+                span,
+            );
+            return err_expr(span);
+        }
+        let x = args[0].value().map(|v| match self.class_name_of(&v) {
+            Some(c) => self.class_ref_value(c, ast::trimmed_range(v.syntax())),
+            None => self.lower_expr(&v),
+        });
+        let intf = args[1].value().and_then(|v| self.intf_name_arg(&v));
+        let target = match args.get(2).map(|a| a.value()) {
+            Some(Some(v)) => match self.ref_place(&v, (3, "Intf"), true, None) {
+                Some((p, found)) => Some((p, found, ast::trimmed_range(v.syntax()))),
+                None => return err_expr(span),
+            },
+            Some(None) => return err_expr(span),
+            None => None,
+        };
+        let (Some(x), Some(intf)) = (x, intf) else {
+            return err_expr(span);
+        };
+        if x.ty.is_error() {
+            return err_expr(span);
+        }
+        // A value of a type parameter is seen as its constraint (`docs/spec/generics.md` 3.3)
+        let x = match x.ty {
+            Ty::Param(p) => match self.param_reference(x.ty) {
+                Some(v) => Expr { ty: v, ..x },
+                None => {
+                    self.param_misuse(p, super::generics::ParamOp::TypeTest, x.span);
+                    return err_expr(span);
+                }
+            },
+            _ => x,
+        };
+        let class_ref = matches!(x.ty, Ty::ClassRef(_));
+        if !(matches!(x.ty, Ty::Class(_) | Ty::Intf(_)) || class_ref && target.is_none()) {
+            let expected = if target.is_none() {
+                "an instance of a class, an interface or a class reference"
+            } else {
+                "an instance of a class or an interface"
+            };
+            self.error(
+                Code::E(702),
+                format!(
+                    "type mismatch: expected {expected}, found `{}` (argument 1, parameter `Instance`)",
+                    self.tn(x.ty)
+                ),
+                x.span,
+            );
+            return err_expr(span);
+        }
+        if !class_ref
+            && self
+                .check_holds_statically(x.ty, Ty::Intf(intf), span)
+                .is_none()
+        {
+            return err_expr(span);
+        }
+        let target = match target {
+            Some((p, found, r)) => {
+                let fits = match found {
+                    Ty::Intf(j) => self.types.is_descendant(intf, j),
+                    _ => found.is_error(),
+                };
+                if !fits {
+                    let msg = format!(
+                        "type mismatch: expected `{}`, found `{}` (argument 3, parameter `Intf`)",
+                        self.tn(Ty::Intf(intf)),
+                        self.tn(found)
+                    );
+                    self.error(Code::E(702), msg, r).notes.push(
+                        "the variable must be of the interface or one of its ancestors".into(),
+                    );
+                    return err_expr(span);
+                }
+                Some(p)
+            }
+            None => None,
+        };
+        Expr {
+            kind: ExprKind::Supports {
+                operand: Box::new(x),
+                intf,
+                target,
+                class_ref,
+            },
+            ty: Ty::Boolean,
+            value: None,
+            span,
+        }
+    }
+
+    /// The interface named by the second argument of `Supports` (`docs/spec/objects.md` 7.6).
+    /// Anything else is E0750.
+    fn intf_name_arg(&mut self, r: &ast::Expr) -> Option<TypeId> {
+        let range = ast::trimmed_range(r.syntax());
+        let is_type = matches!(r, ast::Expr::NameRef(_) | ast::Expr::Field(_))
+            && matches!(
+                self.dry_run(|s| s.resolve_name_expr(r)),
+                Some((Resolved::Type(_), ..))
+            );
+        if is_type {
+            match self.resolve_name_expr(r) {
+                Some((Resolved::Type(Ty::Intf(id)), ..)) => return Some(id),
+                Some((Resolved::Type(Ty::Error), ..)) | None => return None,
+                Some(_) => {}
+            }
+        } else {
+            let ty = self.lower_expr(r).ty;
+            if ty.is_error() {
+                return None;
+            }
+            if ty == Ty::String {
+                // Querying with a GUID (`docs/spec/objects.md` 7.1)
+                self.error(
+                    Code::E(3200),
+                    "querying with a GUID is not supported yet (planned for M5)",
+                    range,
+                );
+                return None;
+            }
+        }
+        let text = self.src(range);
+        self.error(Code::E(750), format!("`{text}` is not an interface"), range);
+        None
     }
 }
 

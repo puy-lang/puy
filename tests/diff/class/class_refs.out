@@ -1,0 +1,13 @@
+TShape 0 1 shape TShape shape TShape
+TSquare 4 0 square / shape TSquare square / shape TSquare
+TCube 4 0 square / shape TCube square / shape TCube
+3 3 SSQSQ
+10
+TPlainChild plain
+14 10
+TCube TSquare TSquare
+TRUE FALSE TRUE TRUE
+TRUE FALSE
+TRUE TRUE FALSE TRUE TRUE
+FALSE
+8 4 8 shape 1

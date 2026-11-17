@@ -1,0 +1,11 @@
+neighbour: 0 8
+lent element: array element 1 is passed to a var parameter of a call in progress
+neighbour: 0 8
+lent element: array element 1 is passed to a var parameter of a call in progress
+5 2 7 3
+copy: a value containing a location passed to a var parameter of a call in progress cannot be copied
+1 2 0 0
+3 2 1
+42 42 0
+43 43 0
+captured: 20 10

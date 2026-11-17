@@ -1,0 +1,8 @@
+keys: 3 1 2
+values: three one two
+counts 3 3 3
+same view: TRUE
+keys now: 3 2 4
+keys again: 3 2 4
+values again: 3
+done

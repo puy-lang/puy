@@ -100,6 +100,8 @@ error[E0720]: cannot index a value of type `TPoint`
     |
  54 |   P[1] := 2;                               // E0720
     |   ^^^^
+    |
+    = note: `X[…]` needs a default array property, as in `property Items[I: Integer]: T read GetItem; default;`
 
 error[E0707]: cannot assign to `Origin.X`
    --> type_use_errors.pas:55:3

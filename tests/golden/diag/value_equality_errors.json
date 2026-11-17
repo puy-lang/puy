@@ -1,0 +1,364 @@
+[
+  {
+    "schema": "puy.diagnostics/1",
+    "diagnostics": [
+      {
+        "code": "E0767",
+        "severity": "error",
+        "name": null,
+        "message": "`[ValueEquality]` can only be applied to a class",
+        "primary": {
+          "file": "value_equality_errors.pas",
+          "start": 571,
+          "end": 584,
+          "line": 11,
+          "column": 4,
+          "end_line": 11,
+          "end_column": 17,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "records are already compared field by field"
+        ],
+        "fixes": [
+          {
+            "title": "remove `[ValueEquality]`",
+            "applicability": "safe",
+            "edits": [
+              {
+                "file": "value_equality_errors.pas",
+                "start": 568,
+                "end": 586,
+                "line": 11,
+                "column": 1,
+                "end_line": 12,
+                "end_column": 1,
+                "original": "  [ValueEquality]\n",
+                "replacement": ""
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E0767]: `[ValueEquality]` can only be applied to a class\n   --> value_equality_errors.pas:11:4\n    |\n 11 |   [ValueEquality]\n    |    ^^^^^^^^^^^^^\n    |\n    = note: records are already compared field by field\n    = fix: remove `[ValueEquality]`"
+      },
+      {
+        "code": "E0767",
+        "severity": "error",
+        "name": null,
+        "message": "`[ValueEquality]` can only be applied to a class",
+        "primary": {
+          "file": "value_equality_errors.pas",
+          "start": 634,
+          "end": 647,
+          "line": 16,
+          "column": 4,
+          "end_line": 16,
+          "end_column": 17,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [],
+        "fixes": [
+          {
+            "title": "remove `[ValueEquality]`",
+            "applicability": "safe",
+            "edits": [
+              {
+                "file": "value_equality_errors.pas",
+                "start": 631,
+                "end": 649,
+                "line": 16,
+                "column": 1,
+                "end_line": 17,
+                "end_column": 1,
+                "original": "  [ValueEquality]\n",
+                "replacement": ""
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E0767]: `[ValueEquality]` can only be applied to a class\n   --> value_equality_errors.pas:16:4\n    |\n 16 |   [ValueEquality]\n    |    ^^^^^^^^^^^^^\n    |\n    = fix: remove `[ValueEquality]`"
+      },
+      {
+        "code": "E0767",
+        "severity": "error",
+        "name": null,
+        "message": "`[EqualityMember]` can only be applied to a field of a class with `[ValueEquality]`",
+        "primary": {
+          "file": "value_equality_errors.pas",
+          "start": 697,
+          "end": 711,
+          "line": 20,
+          "column": 6,
+          "end_line": 20,
+          "end_column": 20,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [],
+        "fixes": [
+          {
+            "title": "remove `[EqualityMember]`",
+            "applicability": "safe",
+            "edits": [
+              {
+                "file": "value_equality_errors.pas",
+                "start": 696,
+                "end": 713,
+                "line": 20,
+                "column": 5,
+                "end_line": 20,
+                "end_column": 22,
+                "original": "[EqualityMember] ",
+                "replacement": ""
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E0767]: `[EqualityMember]` can only be applied to a field of a class with `[ValueEquality]`\n   --> value_equality_errors.pas:20:6\n    |\n 20 |     [EqualityMember] A: Integer;\n    |      ^^^^^^^^^^^^^^\n    |\n    = fix: remove `[EqualityMember]`"
+      },
+      {
+        "code": "E0767",
+        "severity": "error",
+        "name": null,
+        "message": "`[EqualityMember]` can only be applied to a field of a class with `[ValueEquality]`",
+        "primary": {
+          "file": "value_equality_errors.pas",
+          "start": 780,
+          "end": 794,
+          "line": 26,
+          "column": 6,
+          "end_line": 26,
+          "end_column": 20,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [],
+        "fixes": [
+          {
+            "title": "remove `[EqualityMember]`",
+            "applicability": "safe",
+            "edits": [
+              {
+                "file": "value_equality_errors.pas",
+                "start": 779,
+                "end": 796,
+                "line": 26,
+                "column": 5,
+                "end_line": 26,
+                "end_column": 22,
+                "original": "[EqualityMember] ",
+                "replacement": ""
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E0767]: `[EqualityMember]` can only be applied to a field of a class with `[ValueEquality]`\n   --> value_equality_errors.pas:26:6\n    |\n 26 |     [EqualityMember] V: Integer;\n    |      ^^^^^^^^^^^^^^\n    |\n    = fix: remove `[EqualityMember]`"
+      },
+      {
+        "code": "E0767",
+        "severity": "error",
+        "name": null,
+        "message": "`[weak]` field `Parent` cannot be an equality member",
+        "primary": {
+          "file": "value_equality_errors.pas",
+          "start": 898,
+          "end": 904,
+          "line": 32,
+          "column": 28,
+          "end_line": 32,
+          "end_column": 34,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0767]: `[weak]` field `Parent` cannot be an equality member\n   --> value_equality_errors.pas:32:28\n    |\n 32 |     [EqualityMember, weak] Parent: TItem;\n    |                            ^^^^^^"
+      },
+      {
+        "code": "E0767",
+        "severity": "error",
+        "name": null,
+        "message": "`[EqualityMember]` can only be applied to a field of a class with `[ValueEquality]`",
+        "primary": {
+          "file": "value_equality_errors.pas",
+          "start": 955,
+          "end": 969,
+          "line": 35,
+          "column": 16,
+          "end_line": 35,
+          "end_column": 30,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [],
+        "fixes": [
+          {
+            "title": "remove `[EqualityMember]`",
+            "applicability": "safe",
+            "edits": [
+              {
+                "file": "value_equality_errors.pas",
+                "start": 954,
+                "end": 971,
+                "line": 35,
+                "column": 15,
+                "end_line": 35,
+                "end_column": 32,
+                "original": "[EqualityMember] ",
+                "replacement": ""
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E0767]: `[EqualityMember]` can only be applied to a field of a class with `[ValueEquality]`\n   --> value_equality_errors.pas:35:16\n    |\n 35 |     class var [EqualityMember] Count: Integer;\n    |                ^^^^^^^^^^^^^^\n    |\n    = fix: remove `[EqualityMember]`"
+      },
+      {
+        "code": "E0767",
+        "severity": "error",
+        "name": null,
+        "message": "`[EqualityMember]` can only be applied to a field of a class with `[ValueEquality]`",
+        "primary": {
+          "file": "value_equality_errors.pas",
+          "start": 1177,
+          "end": 1191,
+          "line": 47,
+          "column": 6,
+          "end_line": 47,
+          "end_column": 20,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [],
+        "fixes": [
+          {
+            "title": "remove `[EqualityMember]`",
+            "applicability": "safe",
+            "edits": [
+              {
+                "file": "value_equality_errors.pas",
+                "start": 1176,
+                "end": 1193,
+                "line": 47,
+                "column": 5,
+                "end_line": 47,
+                "end_column": 22,
+                "original": "[EqualityMember] ",
+                "replacement": ""
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E0767]: `[EqualityMember]` can only be applied to a field of a class with `[ValueEquality]`\n   --> value_equality_errors.pas:47:6\n    |\n 47 |     [EqualityMember] W: Integer;\n    |      ^^^^^^^^^^^^^^\n    |\n    = fix: remove `[EqualityMember]`"
+      },
+      {
+        "code": "E0765",
+        "severity": "error",
+        "name": null,
+        "message": "`TOverriding` has `[ValueEquality]`, so `Equals` and `GetHashCode` are generated and cannot be overridden",
+        "primary": {
+          "file": "value_equality_errors.pas",
+          "start": 1388,
+          "end": 1394,
+          "line": 56,
+          "column": 14,
+          "end_line": 56,
+          "end_column": 20,
+          "label": ""
+        },
+        "secondary": [
+          {
+            "file": "value_equality_errors.pas",
+            "start": 1313,
+            "end": 1326,
+            "line": 52,
+            "column": 4,
+            "end_line": 52,
+            "end_column": 17,
+            "label": "`[ValueEquality]` written here"
+          }
+        ],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0765]: `TOverriding` has `[ValueEquality]`, so `Equals` and `GetHashCode` are generated and cannot be overridden\n   --> value_equality_errors.pas:56:14\n    |\n 52 |   [ValueEquality]\n    |    ------------- `[ValueEquality]` written here\n...\n 56 |     function Equals(Obj: TObject): Boolean; override;\n    |              ^^^^^^"
+      },
+      {
+        "code": "E0765",
+        "severity": "error",
+        "name": null,
+        "message": "`[ValueEquality]` cannot be used with operator `Equal`",
+        "primary": {
+          "file": "value_equality_errors.pas",
+          "start": 1575,
+          "end": 1580,
+          "line": 64,
+          "column": 20,
+          "end_line": 64,
+          "end_column": 25,
+          "label": ""
+        },
+        "secondary": [
+          {
+            "file": "value_equality_errors.pas",
+            "start": 1483,
+            "end": 1496,
+            "line": 60,
+            "column": 4,
+            "end_line": 60,
+            "end_column": 17,
+            "label": "`[ValueEquality]` written here"
+          }
+        ],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0765]: `[ValueEquality]` cannot be used with operator `Equal`\n   --> value_equality_errors.pas:64:20\n    |\n 60 |   [ValueEquality]\n    |    ------------- `[ValueEquality]` written here\n...\n 64 |     class operator Equal(const A, B: TWithEqual): Boolean;\n    |                    ^^^^^"
+      },
+      {
+        "code": "E0767",
+        "severity": "error",
+        "name": null,
+        "message": "`[ValueEquality]` can only be applied to a class",
+        "primary": {
+          "file": "value_equality_errors.pas",
+          "start": 1738,
+          "end": 1751,
+          "line": 69,
+          "column": 4,
+          "end_line": 69,
+          "end_column": 17,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "records are already compared field by field"
+        ],
+        "fixes": [
+          {
+            "title": "remove `[ValueEquality]`",
+            "applicability": "safe",
+            "edits": [
+              {
+                "file": "value_equality_errors.pas",
+                "start": 1735,
+                "end": 1753,
+                "line": 69,
+                "column": 1,
+                "end_line": 70,
+                "end_column": 1,
+                "original": "  [ValueEquality]\n",
+                "replacement": ""
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E0767]: `[ValueEquality]` can only be applied to a class\n   --> value_equality_errors.pas:69:4\n    |\n 69 |   [ValueEquality]\n    |    ^^^^^^^^^^^^^\n    |\n    = note: records are already compared field by field\n    = fix: remove `[ValueEquality]`"
+      }
+    ],
+    "summary": {
+      "errors": 10,
+      "warnings": 0,
+      "notes": 0
+    }
+  }
+]

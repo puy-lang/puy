@@ -7,16 +7,49 @@ Puy is an Object Pascal implementation modeled on the feel of writing Delphi cod
 It compiles Pascal source to bytecode and runs it on a stackless VM written in Rust,
 aiming at single native binaries, WASI and the browser from the same source.
 
-Puy keeps the syntax of Delphi and its deterministic lifetime management, and takes
-newer data-type operations (dynamic arrays, slices, collections) from modern languages.
+Puy aims to keep the feel of the Object Pascal that people have written with Delphi and
+Free Pascal, while adding modern features and making it hard to write unsafe code:
+
+- **Familiar Pascal.** Delphi's syntax, deterministic lifetime management, and the names
+  of commonly used units and routines.
+- **Modern features.** Newer data-type operations (dynamic arrays, slices, collections)
+  follow modern languages such as Python, Go and Rust.
+- **Safe by default.** Mistakes are reported as compile errors or exceptions instead of
+  passing silently.
+- **Written by people and coding agents.** Puy is designed with AI coding agents in mind
+  as well as people: knowledge of Delphi carries over, and diagnostics come with
+  suggested fixes and machine-readable output.
+
 It does not promise compatibility with Delphi or Free Pascal, and does not follow the
-ISO Pascal standards. Where Puy differs, it tries not to silently change the meaning of
-ported code.
+ISO Pascal standards (see [Compatibility](#compatibility)).
 
 > **Status: early development.** The current release covers integers, strings,
 > `if` / `while`, procedures and functions, and `WriteLn`. Records, arrays, exceptions,
 > units, classes and the standard library are not implemented yet; using them reports
 > a "not supported yet" error (E3200).
+
+## Compatibility
+
+Puy follows Delphi's syntax, so everyday Object Pascal (units, records, classes,
+exceptions, `try..finally`, `for..in`, and so on) reads and is written the same way.
+Keeping the syntax does not mean keeping every behavior, though:
+
+- **Safer by default.** Some rules are stricter than Delphi's so that mistakes are caught
+  instead of passing silently. For example, reading a variable before it is assigned is a
+  compile error, using a freed object raises an exception, typecasts are checked, and
+  overflow in constant expressions is a compile error.
+- **Some features are left out.** Features tied to a particular OS, CPU or memory layout
+  are not supported: inline assembler (`asm`), pointers (for now), variant records and `absolute`,
+  `library` / `exports` / `external`, COM and `Variant`. A few legacy constructs
+  (`with`, `goto`, the old `object` type) are also removed. Using any of these is a
+  compile error with a hint on what to write instead.
+- **No silent changes in meaning.** Where Puy behaves differently, it prefers an error to
+  quietly running ported code with a different result.
+
+Puy also keeps an eye on Free Pascal. Programs in the common core of the language are
+tested against the output of Free Pascal (`{$mode delphiunicode}`), so code written for
+that mode should behave the same where Puy supports it. Free Pascal's own dialects
+(`{$mode objfpc}`, `specialize`, and so on) are not accepted for now.
 
 ## Installation
 
@@ -51,12 +84,25 @@ More samples are in [`examples/`](examples/):
 | `primes.pas` | Dynamic arrays, `for..in`, `Write` with a width |
 | `records.pas` | Records, value semantics, `var` and open-array parameters, `Format` |
 | `enums_sets.pas` | Enumerated types, sets, `case` |
-| `exceptions.pas` | Custom exception classes, `try..except`, `try..finally` |
+| `exceptions.pas` | Exception classes with fields and constructors, `try..except`, `try..finally` |
 | `temperature.pas` | Floating point, `overload`, default parameters |
 | `strings.pas` | String routines from `System.SysUtils`, UTF-16 strings |
 | `nested.pas` | Nested routines that use the outer routine's variables and `Result` |
 | `arrays.pas` | Static arrays with subrange and multi-dimensional indexes, typed array constants, slices, `Insert` / `Delete` |
 | `invoice.pas` | `Currency`, `case` on strings, `UTF8String`, `AnsiUpperCase` / `AnsiSameText` |
+| `shapes.pas` | Classes: inheritance, virtual and abstract methods, constructors and destructors, properties, `class of`, `is` / `as`, `Free` |
+| `interfaces.pas` | Interfaces, `TInterfacedObject`, automatic freeing by reference counting, `Supports` |
+| `tree.pas` | Reference counted classes (`TRefObject`), `[weak]` fields |
+| `vectors.pas` | Records with methods, constructors, static class functions and properties |
+| `closures.pas` | Procedural types, method references (`of object`) as events, anonymous methods that capture variables, nested routines as values, `TProc` |
+| `helpers.pas` | Record helpers for `string`, `Integer` and an enumerated type, class helpers and their inheritance, the built-in `ToString` / `Length` |
+| `fractions.pas` | Operator overloading on a record: arithmetic, comparison, `Inc` / `Dec`, `Trunc`, `Implicit` / `Explicit` |
+| `collections.pas` | Default array properties overloaded by index type, slices through `TIndexRange`, `for..in` with `GetEnumerator` (record and class enumerators) |
+| `generics.pas` | Generic records, classes and routines, type arguments inferred from the arguments, `TFunc` / `TPredicate` / `TProc`, class, interface and `constructor` constraints |
+| `containers.pas` | `System.Generics.Collections`: `TList<T>` (slices, stable `Sort` with a comparer, `BinarySearch`), `TArray.Sort`, `TDictionary<K, V>` in insertion order, a case-insensitive comparer, `THashSet<T>` set operations, `TStack<T>` / `TQueue<T>` |
+| `equality.pas` | Keys in containers: records compared field by field, a record with `Equal` / `GetHashCode` / `LessThan`, classes overriding `Equals` / `GetHashCode`, `KeyEquals` / `KeyHash` / `KeyCompare` / `HashCombine` |
+| `owning.pas` | Owning containers for manually managed objects: `TObjectList<T>`, `TObjectStack<T>` / `TObjectQueue<T>`, `TObjectDictionary<K, V>`, `Extract` |
+| `distinct.pas` | Distinct types (`type X = type Y`): overloads and helpers of their own, assignment compatibility with the root type |
 | `todo/` | A multi-file package: `puy.toml`, units under `src/` (`interface` / `implementation`, `initialization`), `uses … as`. Run `puy run examples/todo/main.pas` |
 
 ## Building

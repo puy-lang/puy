@@ -1,0 +1,64 @@
+program DumpAnon
+.routine f0 Run(N: Integer)
+  .var v0 N: Integer param cell
+  .var v1 Total: Integer local cell
+  .var v2 P: TProc local
+  .var v3 I: Integer for var cell
+  .var v4 K: Integer local cell
+  assign @14 R+
+    var v1 Total
+    const Integer 0
+  for @15 to Q+R+
+    var v3 I
+    from
+      const Integer 1
+    to
+      const Integer 2
+    body
+      block @16
+        assign @18 R+
+          var v4 K
+          var v3 I: Integer
+        assign @19 R+
+          var v2 P
+          anon f1
+        expr @27
+          call-closure: -
+            var v2 P: TProc
+.routine f1 Run.<anon1>() closure
+  .var v0 Q: TProc local
+  .var v1 Total: Integer outer v1 up=1
+  .var v2 I: Integer outer v3 up=1
+  .var v3 K: Integer outer v4 up=1
+  .var v4 N: Integer outer v0 up=1
+  .capture #0 Total: Integer from v1
+  .capture #1 I: Integer from v3
+  .capture #2 K: Integer from v4
+  .capture #3 N: Integer from v0
+  assign @23 R+
+    var v1 Total
+    binary Integer
+      var v1 Total: Integer
+      + Integer int:Integer
+        binary Integer
+          var v2 I: Integer
+          * Integer int:Integer
+            var v3 K: Integer
+      + Integer int:Integer
+        var v4 N: Integer
+  assign @24 R+
+    var v0 Q
+    anon f2
+  expr @25
+    call-closure: -
+      var v0 Q: TProc
+.routine f2 Run.<anon1>.<anon1>() closure
+  .var v0 Total: Integer outer v1 up=2
+  .capture #0 Total: Integer from Run.v1
+  writeln @24
+    arg
+      var v0 Total: Integer
+.routine <main>
+  expr @32
+    call f0 Run: -
+      const Integer 10

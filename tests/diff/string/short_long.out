@@ -1,0 +1,19 @@
+28 28 abcdefghijklmnopqrstuvwxyzab
+29 29 abcdefghijklmnopqrstuvwxyzabc
+30 30 abcdefghijklmnopqrstuvwxyzabcd
+31 31 abcdefghijklmnopqrstuvwxyzabcde
+32 32 abcdefghijklmnopqrstuvwxyzabcdef
+33 33 abcdefghijklmnopqrstuvwxyzabcdefg
+30 abcdefghijklmnoabcdefghijklmno
+32 abcdefghijklmnopabcdefghijklmnop
+short|short and then some more text past the boundary
+Jello hello
+Jellö 5 hello
+abcé 4
+xü12345 7
+FALSE TRUE TRUE TRUE 1 34
+TRUE abcdefghijklmnopqrstuvwxyz0123456789 36
+ABCDEFGHIJ ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 abcdefghijklmnopqrstuvwxyz0123456789
+efghijklmnopqrstuvwxyz01234567 efghijklmnopqrstuvwxyz012345678 efghijklmnopqrstuvwxyz0123456789
+0-0 1000003--1 2000006--2 3000009--3 4000012--4 
+9223372036854775807 -9223372036854775808

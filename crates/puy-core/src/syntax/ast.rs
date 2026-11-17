@@ -84,6 +84,7 @@ ast_node!(ParamList, PARAM_LIST);
 ast_node!(ParamGroup, PARAM_GROUP);
 ast_node!(ReturnType, RETURN_TYPE);
 ast_node!(RoutineDirective, ROUTINE_DIRECTIVE);
+ast_node!(MethodDirective, METHOD_DIRECTIVE);
 ast_node!(RoutineBody, ROUTINE_BODY);
 ast_node!(CompoundStmt, COMPOUND_STMT);
 ast_node!(AssignStmt, ASSIGN_STMT);
@@ -122,8 +123,29 @@ ast_node!(FieldConst, FIELD_CONST);
 ast_node!(ArrayConst, ARRAY_CONST);
 ast_node!(ArrayCtor, ARRAY_CTOR);
 ast_node!(GenericTypeRef, GENERIC_TYPE_REF);
+ast_node!(TypeArgs, TYPE_ARGS);
+ast_node!(TypeParams, TYPE_PARAMS);
+ast_node!(TypeParamGroup, TYPE_PARAM_GROUP);
+ast_node!(Constraint, CONSTRAINT);
 ast_node!(RaiseStmt, RAISE_STMT);
 ast_node!(ClassType, CLASS_TYPE);
+ast_node!(HelperType, HELPER_TYPE);
+ast_node!(ClassRefType, CLASS_REF_TYPE);
+ast_node!(ProcType, PROC_TYPE);
+ast_node!(AnonRoutine, ANON_ROUTINE);
+ast_node!(RefType, REF_TYPE);
+ast_node!(ClassParents, CLASS_PARENTS);
+ast_node!(ClassBody, CLASS_BODY);
+ast_node!(Visibility, VISIBILITY);
+ast_node!(ClassVarSection, CLASS_VAR_SECTION);
+ast_node!(MethodDecl, METHOD_DECL);
+ast_node!(InterfaceType, INTERFACE_TYPE);
+ast_node!(GuidSpec, GUID_SPEC);
+ast_node!(InterfaceBody, INTERFACE_BODY);
+ast_node!(MethodResolution, METHOD_RESOLUTION);
+ast_node!(PropertyDecl, PROPERTY_DECL);
+ast_node!(PropertyParams, PROPERTY_PARAMS);
+ast_node!(PropertySpec, PROPERTY_SPEC);
 ast_node!(TryStmt, TRY_STMT);
 ast_node!(ExceptBlock, EXCEPT_BLOCK);
 ast_node!(FinallyBlock, FINALLY_BLOCK);
@@ -132,6 +154,7 @@ ast_node!(HandlerElse, HANDLER_ELSE);
 ast_node!(EnumType, ENUM_TYPE);
 ast_node!(EnumValue, ENUM_VALUE);
 ast_node!(SubrangeType, SUBRANGE_TYPE);
+ast_node!(DistinctType, DISTINCT_TYPE);
 ast_node!(SetType, SET_TYPE);
 ast_node!(CaseStmt, CASE_STMT);
 ast_node!(CaseArm, CASE_ARM);
@@ -419,14 +442,26 @@ pub enum TypeSpec {
     Generic(GenericTypeRef),
     Record(RecordType),
     Array(ArrayType),
-    /// `class(Parent)`: an exception class (`docs/spec/exceptions.md` chapter 3).
+    /// A class type (`docs/spec/objects.md` chapter 1; an exception class is the form without a body).
     Class(ClassType),
+    /// `class of T` (`docs/spec/objects.md` 2.8).
+    ClassRef(ClassRefType),
+    /// An interface type (`docs/spec/objects.md` 7.1).
+    Interface(InterfaceType),
     /// `(Red, Green, Blue)` (`docs/spec/types.md` 8.1).
     Enum(EnumType),
     /// `0..9` (`docs/spec/types.md` 8.2).
     Subrange(SubrangeType),
     /// `set of T` (`docs/spec/types.md` 8.3).
     Set(SetType),
+    /// `procedure(…)` / `function(…): T` [`of object`] (`docs/spec/objects.md` 9.1).
+    Proc(ProcType),
+    /// `reference to procedure(…)` (`docs/spec/objects.md` 9.1).
+    Reference(RefType),
+    /// `class helper for T` / `record helper for T` (`docs/spec/objects.md` 10.1).
+    Helper(HelperType),
+    /// `type T`: a distinct type (`docs/spec/types.md` 1.3). Only a type declaration has it.
+    Distinct(DistinctType),
 }
 
 impl TypeSpec {
@@ -437,9 +472,15 @@ impl TypeSpec {
             RECORD_TYPE => TypeSpec::Record(RecordType(node)),
             ARRAY_TYPE => TypeSpec::Array(ArrayType(node)),
             CLASS_TYPE => TypeSpec::Class(ClassType(node)),
+            CLASS_REF_TYPE => TypeSpec::ClassRef(ClassRefType(node)),
+            INTERFACE_TYPE => TypeSpec::Interface(InterfaceType(node)),
             ENUM_TYPE => TypeSpec::Enum(EnumType(node)),
             SUBRANGE_TYPE => TypeSpec::Subrange(SubrangeType(node)),
             SET_TYPE => TypeSpec::Set(SetType(node)),
+            PROC_TYPE => TypeSpec::Proc(ProcType(node)),
+            REF_TYPE => TypeSpec::Reference(RefType(node)),
+            HELPER_TYPE => TypeSpec::Helper(HelperType(node)),
+            DISTINCT_TYPE => TypeSpec::Distinct(DistinctType(node)),
             _ => return None,
         })
     }
@@ -450,9 +491,15 @@ impl TypeSpec {
             TypeSpec::Record(n) => &n.0,
             TypeSpec::Array(n) => &n.0,
             TypeSpec::Class(n) => &n.0,
+            TypeSpec::ClassRef(n) => &n.0,
+            TypeSpec::Interface(n) => &n.0,
             TypeSpec::Enum(n) => &n.0,
             TypeSpec::Subrange(n) => &n.0,
             TypeSpec::Set(n) => &n.0,
+            TypeSpec::Proc(n) => &n.0,
+            TypeSpec::Reference(n) => &n.0,
+            TypeSpec::Helper(n) => &n.0,
+            TypeSpec::Distinct(n) => &n.0,
         }
     }
     /// The type name, if the type is written as a name.
@@ -480,6 +527,10 @@ impl TypeSection {
 impl TypeDecl {
     pub fn name(&self) -> Option<SyntaxToken> {
         token(&self.0, IDENT)
+    }
+    /// The type parameters of a generic type (`docs/spec/generics.md` 1.1).
+    pub fn type_params(&self) -> Option<TypeParams> {
+        child(&self.0)
     }
     pub fn type_spec(&self) -> Option<TypeSpec> {
         self.0.children().find_map(TypeSpec::cast)
@@ -517,8 +568,69 @@ impl RecordType {
     pub fn record_token(&self) -> Option<SyntaxToken> {
         token(&self.0, RECORD_KW)
     }
-    pub fn fields(&self) -> impl Iterator<Item = FieldDecl> {
+    /// The members and visibility sections in source order (`docs/spec/objects.md` chapter 6),
+    /// as in a class body.
+    pub fn members(&self) -> impl Iterator<Item = ClassMember> {
+        class_members(&self.0)
+    }
+    /// `record(TBase)`: the names in parentheses (an error; `docs/spec/objects.md` chapter 6).
+    pub fn parents(&self) -> Option<SyntaxNode> {
+        self.0.children().find(|n| n.kind() == CLASS_PARENTS)
+    }
+    /// `record abstract` / `record sealed` (an error).
+    pub fn modifiers(&self) -> impl Iterator<Item = SyntaxToken> {
+        self.0
+            .children_with_tokens()
+            .filter_map(|e| e.into_token())
+            .filter(|t| matches!(t.kind(), ABSTRACT_KW | SEALED_KW))
+    }
+}
+
+impl TypeArgs {
+    /// The type arguments, in order (`docs/spec/generics.md` 1.4).
+    pub fn args(&self) -> impl Iterator<Item = TypeSpec> {
+        self.0.children().filter_map(TypeSpec::cast)
+    }
+}
+
+impl TypeParams {
+    /// The groups separated by `;` (`docs/spec/generics.md` 1.1).
+    pub fn groups(&self) -> impl Iterator<Item = TypeParamGroup> {
         children(&self.0)
+    }
+}
+
+impl TypeParamGroup {
+    /// The names of the type parameters sharing the group's constraints.
+    pub fn names(&self) -> Vec<SyntaxToken> {
+        child::<IdentList>(&self.0)
+            .map(|l| l.idents().collect())
+            .unwrap_or_default()
+    }
+    /// The `:` before the constraints.
+    pub fn colon_token(&self) -> Option<SyntaxToken> {
+        token(&self.0, COLON)
+    }
+    pub fn constraints(&self) -> impl Iterator<Item = Constraint> {
+        children(&self.0)
+    }
+}
+
+impl Constraint {
+    /// `class`, `record` or `constructor`.
+    pub fn keyword(&self) -> Option<SyntaxToken> {
+        self.0
+            .children_with_tokens()
+            .filter_map(|e| e.into_token())
+            .find(|t| matches!(t.kind(), CLASS_KW | RECORD_KW | CONSTRUCTOR_KW))
+    }
+    /// A type name (a class type, an interface type or `NotRefCounted`).
+    pub fn type_ref(&self) -> Option<TypeRef> {
+        child(&self.0)
+    }
+    /// A type name with type arguments (`IComparable<T>`).
+    pub fn generic_ref(&self) -> Option<GenericTypeRef> {
+        child(&self.0)
     }
 }
 
@@ -615,12 +727,333 @@ impl ArrayCtor {
 }
 
 impl ClassType {
-    /// The parent class.
+    /// The parentheses after `class` (`CLASS_PARENTS`).
+    pub fn parent_list(&self) -> Option<SyntaxNode> {
+        self.0.children().find(|n| n.kind() == CLASS_PARENTS)
+    }
+    /// The names in parentheses: the parent class, then the interfaces.
+    pub fn parents(&self) -> Vec<TypeRef> {
+        child::<ClassParents>(&self.0)
+            .map(|p| children(&p.0).collect())
+            .unwrap_or_default()
+    }
+    /// The parent class (the first name in parentheses).
     pub fn parent(&self) -> Option<TypeRef> {
-        child(&self.0)
+        self.parents().into_iter().next()
+    }
+    /// The types in parentheses, names and names with type arguments (`TList<Integer>`;
+    /// `docs/spec/generics.md` 2.4): the parent class, then the interfaces.
+    pub fn parent_specs(&self) -> Vec<TypeSpec> {
+        child::<ClassParents>(&self.0)
+            .map(|p| p.0.children().filter_map(TypeSpec::cast).collect())
+            .unwrap_or_default()
     }
     pub fn class_token(&self) -> Option<SyntaxToken> {
         token(&self.0, CLASS_KW)
+    }
+    /// The `abstract` / `sealed` modifiers as written (a repeated one is in an `ERROR` node).
+    pub fn modifiers(&self) -> impl Iterator<Item = SyntaxToken> {
+        self.0
+            .children_with_tokens()
+            .filter_map(|e| e.into_token())
+            .filter(|t| matches!(t.kind(), ABSTRACT_KW | SEALED_KW))
+    }
+    pub fn body(&self) -> Option<ClassBody> {
+        child(&self.0)
+    }
+    /// `class;`: a forward declaration (`docs/spec/objects.md` chapter 1).
+    pub fn is_forward(&self) -> bool {
+        child::<ClassParents>(&self.0).is_none()
+            && self.body().is_none()
+            && self.modifiers().next().is_none()
+            && !self.0.children().any(|n| n.kind() == ERROR_NODE)
+    }
+}
+
+impl HelperType {
+    /// `class helper` (as opposed to `record helper`).
+    pub fn is_class(&self) -> bool {
+        token(&self.0, CLASS_KW).is_some()
+    }
+    /// The `class` / `record` keyword.
+    pub fn kind_token(&self) -> Option<SyntaxToken> {
+        token(&self.0, CLASS_KW).or_else(|| token(&self.0, RECORD_KW))
+    }
+    /// The parentheses after `helper` (`CLASS_PARENTS`).
+    pub fn parent_list(&self) -> Option<SyntaxNode> {
+        self.0.children().find(|n| n.kind() == CLASS_PARENTS)
+    }
+    /// The parent helper written in parentheses (`docs/spec/objects.md` 10.6).
+    pub fn parent(&self) -> Option<TypeRef> {
+        child::<ClassParents>(&self.0).and_then(|p| children(&p.0).next())
+    }
+    /// The type after `for`.
+    pub fn target(&self) -> Option<TypeSpec> {
+        self.0.children().find_map(TypeSpec::cast)
+    }
+    pub fn body(&self) -> Option<ClassBody> {
+        child(&self.0)
+    }
+}
+
+impl InterfaceType {
+    pub fn interface_token(&self) -> Option<SyntaxToken> {
+        token(&self.0, INTERFACE_KW)
+    }
+    /// The parent interface written in parentheses.
+    pub fn parent(&self) -> Option<TypeRef> {
+        child(&self.0)
+    }
+    /// The parent interface written in parentheses, a name or a name with type arguments
+    /// (`IEnumerable<T>`; `docs/spec/generics.md` 2.4).
+    pub fn parent_spec(&self) -> Option<TypeSpec> {
+        self.0.children().find_map(TypeSpec::cast)
+    }
+    pub fn guid(&self) -> Option<GuidSpec> {
+        child(&self.0)
+    }
+    pub fn body(&self) -> Option<InterfaceBody> {
+        child(&self.0)
+    }
+    /// `interface;`: a forward declaration (`docs/spec/objects.md` 7.1).
+    pub fn is_forward(&self) -> bool {
+        token(&self.0, L_PAREN).is_none()
+            && self.guid().is_none()
+            && self.body().is_none()
+            && !self.0.children().any(|n| n.kind() == ERROR_NODE)
+    }
+}
+
+impl GuidSpec {
+    pub fn expr(&self) -> Option<Expr> {
+        self.0.children().find_map(Expr::cast)
+    }
+}
+
+impl InterfaceBody {
+    /// The members in source order (only methods and properties are allowed;
+    /// `docs/spec/objects.md` 7.1).
+    pub fn members(&self) -> impl Iterator<Item = ClassMember> {
+        class_members(&self.0)
+    }
+}
+
+impl MethodResolution {
+    /// `IFoo.Run`: the interface's name and the method's name.
+    pub fn target(&self) -> Option<QualifiedName> {
+        child(&self.0)
+    }
+    /// The name of the class's method after `=`.
+    pub fn method(&self) -> Option<SyntaxToken> {
+        token(&self.0, IDENT)
+    }
+    pub fn is_function(&self) -> bool {
+        token(&self.0, FUNCTION_KW).is_some()
+    }
+}
+
+impl ProcType {
+    pub fn is_function(&self) -> bool {
+        token(&self.0, FUNCTION_KW).is_some()
+    }
+    /// `procedure` / `function`.
+    pub fn keyword(&self) -> Option<SyntaxToken> {
+        token(&self.0, PROCEDURE_KW).or_else(|| token(&self.0, FUNCTION_KW))
+    }
+    /// Whether `of object` is written (a method reference type).
+    pub fn of_object(&self) -> bool {
+        token(&self.0, OBJECT_KW).is_some()
+    }
+    pub fn params(&self) -> Vec<ParamGroup> {
+        child::<ParamList>(&self.0)
+            .map(|l| l.groups().collect())
+            .unwrap_or_default()
+    }
+    pub fn return_type(&self) -> Option<TypeSpec> {
+        child::<ReturnType>(&self.0).and_then(|r| r.0.children().find_map(TypeSpec::cast))
+    }
+    /// The calling conventions after `;` (W0009).
+    pub fn directives(&self) -> impl Iterator<Item = RoutineDirective> {
+        children(&self.0)
+    }
+}
+
+impl AnonRoutine {
+    pub fn is_function(&self) -> bool {
+        token(&self.0, FUNCTION_KW).is_some()
+    }
+    /// `procedure` / `function`.
+    pub fn keyword(&self) -> Option<SyntaxToken> {
+        token(&self.0, PROCEDURE_KW).or_else(|| token(&self.0, FUNCTION_KW))
+    }
+    pub fn params(&self) -> Vec<ParamGroup> {
+        child::<ParamList>(&self.0)
+            .map(|l| l.groups().collect())
+            .unwrap_or_default()
+    }
+    pub fn return_type(&self) -> Option<TypeSpec> {
+        child::<ReturnType>(&self.0).and_then(|r| r.0.children().find_map(TypeSpec::cast))
+    }
+    pub fn body(&self) -> Option<RoutineBody> {
+        child(&self.0)
+    }
+}
+
+impl RefType {
+    pub fn proc_type(&self) -> Option<ProcType> {
+        child(&self.0)
+    }
+}
+
+impl DistinctType {
+    /// The original type (`T` of `type T`): a name, or a name with type arguments.
+    pub fn target(&self) -> Option<TypeSpec> {
+        self.0.children().find_map(TypeSpec::cast)
+    }
+    /// The `type` keyword.
+    pub fn type_token(&self) -> Option<SyntaxToken> {
+        token(&self.0, TYPE_KW)
+    }
+}
+
+impl ClassRefType {
+    pub fn target(&self) -> Option<TypeRef> {
+        child(&self.0)
+    }
+}
+
+/// A member or a visibility section of a class body, in source order.
+#[derive(Debug, Clone)]
+pub enum ClassMember {
+    Visibility(Visibility),
+    Field(FieldDecl),
+    /// `var` / `class var` section.
+    Var(ClassVarSection),
+    Const(ConstSection),
+    Type(TypeSection),
+    Method(MethodDecl),
+    Property(PropertyDecl),
+    /// `procedure IFoo.Run = DoRun;` (`docs/spec/objects.md` 7.1).
+    Resolution(MethodResolution),
+}
+
+impl ClassBody {
+    pub fn members(&self) -> impl Iterator<Item = ClassMember> {
+        class_members(&self.0)
+    }
+}
+
+/// The members of a class body or a record (`docs/spec/objects.md` chapters 1 and 6).
+fn class_members(node: &SyntaxNode) -> impl Iterator<Item = ClassMember> + use<> {
+    node.children().filter_map(|n| {
+        Some(match n.kind() {
+            VISIBILITY => ClassMember::Visibility(Visibility(n)),
+            FIELD_DECL => ClassMember::Field(FieldDecl(n)),
+            CLASS_VAR_SECTION => ClassMember::Var(ClassVarSection(n)),
+            CONST_SECTION => ClassMember::Const(ConstSection(n)),
+            TYPE_SECTION => ClassMember::Type(TypeSection(n)),
+            METHOD_DECL => ClassMember::Method(MethodDecl(n)),
+            PROPERTY_DECL => ClassMember::Property(PropertyDecl(n)),
+            METHOD_RESOLUTION => ClassMember::Resolution(MethodResolution(n)),
+            _ => return None,
+        })
+    })
+}
+
+impl Visibility {
+    /// The visibility keyword (`private`, `protected`, `public`, `published`; `automated` for
+    /// the COM section), not `strict`.
+    pub fn keyword(&self) -> Option<SyntaxToken> {
+        self.0
+            .children_with_tokens()
+            .filter_map(|e| e.into_token())
+            .find(|t| {
+                matches!(
+                    t.kind(),
+                    PRIVATE_KW | PROTECTED_KW | PUBLIC_KW | PUBLISHED_KW | AUTOMATED_KW
+                )
+            })
+    }
+    pub fn is_strict(&self) -> bool {
+        token(&self.0, STRICT_KW).is_some()
+    }
+}
+
+impl ClassVarSection {
+    /// `class var` (as opposed to `var`).
+    pub fn is_class(&self) -> bool {
+        token(&self.0, CLASS_KW).is_some()
+    }
+    pub fn fields(&self) -> impl Iterator<Item = FieldDecl> {
+        children(&self.0)
+    }
+}
+
+impl MethodDecl {
+    pub fn header(&self) -> Option<RoutineHeader> {
+        child(&self.0)
+    }
+    pub fn directives(&self) -> impl Iterator<Item = MethodDirective> {
+        children(&self.0)
+    }
+}
+
+impl PropertyDecl {
+    /// `property` (or `class` of `class property`): where the declaration starts.
+    pub fn first_token(&self) -> Option<SyntaxToken> {
+        self.0.first_token()
+    }
+    /// `class property` (`docs/spec/objects.md` 2.6).
+    pub fn is_class(&self) -> bool {
+        token(&self.0, CLASS_KW).is_some()
+    }
+    pub fn property_token(&self) -> Option<SyntaxToken> {
+        token(&self.0, PROPERTY_KW)
+    }
+    /// The property's name.
+    pub fn name(&self) -> Option<SyntaxToken> {
+        token(&self.0, IDENT)
+    }
+    /// Type parameters written after the name (E0757; `docs/spec/generics.md` 2.1).
+    pub fn type_params(&self) -> Option<TypeParams> {
+        child(&self.0)
+    }
+    /// `[I: Integer; …]` of an indexed property.
+    pub fn params_node(&self) -> Option<PropertyParams> {
+        child(&self.0)
+    }
+    /// The groups of the index parameters (empty for a property without `[…]`).
+    pub fn params(&self) -> Vec<ParamGroup> {
+        self.params_node()
+            .map(|p| children(&p.0).collect())
+            .unwrap_or_default()
+    }
+    /// The type after `:` (`None` for `property Name;`).
+    pub fn type_spec(&self) -> Option<TypeSpec> {
+        child::<ReturnType>(&self.0).and_then(|r| r.0.children().find_map(TypeSpec::cast))
+    }
+    /// `read`, `write`, `index`, … in order.
+    pub fn specs(&self) -> impl Iterator<Item = PropertySpec> {
+        children(&self.0)
+    }
+    /// The `default` of `; default;` (a default array property; `docs/spec/objects.md` 12.1).
+    pub fn default_token(&self) -> Option<SyntaxToken> {
+        token(&self.0, DEFAULT_KW)
+    }
+}
+
+impl PropertySpec {
+    /// The specifier's word (`read`, `index`, …; `dispid` is an `IDENT`).
+    pub fn keyword(&self) -> Option<SyntaxToken> {
+        self.0.first_token()
+    }
+    /// The name after `read` / `write`.
+    pub fn name(&self) -> Option<QualifiedName> {
+        child(&self.0)
+    }
+    /// The expression after `index`, `stored`, `default` or `dispid`.
+    pub fn expr(&self) -> Option<Expr> {
+        self.0.children().find_map(Expr::cast)
     }
 }
 
@@ -709,6 +1142,16 @@ impl GenericTypeRef {
     pub fn arg(&self) -> Option<TypeSpec> {
         self.0.children().find_map(TypeSpec::cast)
     }
+    /// The type arguments, in order (`docs/spec/generics.md` 1.3).
+    pub fn args(&self) -> impl Iterator<Item = TypeSpec> {
+        self.0.children().filter_map(TypeSpec::cast)
+    }
+    /// From `<` to `>` (the type arguments as written).
+    pub fn args_range(&self) -> Option<rowan::TextRange> {
+        let lt = self.lt_token()?;
+        let end = self.0.text_range().end();
+        Some(rowan::TextRange::new(lt.text_range().start(), end))
+    }
     pub fn lt_token(&self) -> Option<SyntaxToken> {
         token(&self.0, LT)
     }
@@ -753,14 +1196,30 @@ impl RoutineDecl {
 }
 
 impl RoutineHeader {
+    /// A function, or a `class operator` (which always returns a value;
+    /// `docs/spec/objects.md` 11.1).
     pub fn is_function(&self) -> bool {
-        token(&self.0, FUNCTION_KW).is_some()
+        token(&self.0, FUNCTION_KW).is_some() || self.is_operator()
+    }
+    /// `class operator` (`docs/spec/objects.md` 11.1).
+    pub fn is_operator(&self) -> bool {
+        token(&self.0, OPERATOR_KW).is_some()
+    }
+    /// The first token: `class` of a class method, or `procedure` / `function` /
+    /// `constructor` / `destructor` (`docs/spec/objects.md` chapter 1).
+    pub fn first_token(&self) -> Option<SyntaxToken> {
+        self.0.first_token()
     }
     pub fn keyword(&self) -> Option<SyntaxToken> {
         token(&self.0, PROCEDURE_KW).or_else(|| token(&self.0, FUNCTION_KW))
     }
     pub fn name(&self) -> Option<QualifiedName> {
         child(&self.0)
+    }
+    /// The first type parameters written in the name (`function Max<T>`, `procedure
+    /// TStack<T>.Push`; `docs/spec/generics.md` 1.2).
+    pub fn type_params(&self) -> Option<TypeParams> {
+        self.name().and_then(|n| child(&n.0))
     }
     pub fn param_list(&self) -> Option<ParamList> {
         child(&self.0)
@@ -817,6 +1276,25 @@ impl ParamGroup {
     /// The expression of the default value.
     pub fn default_value(&self) -> Option<Expr> {
         self.default_node()?.children().find_map(Expr::cast)
+    }
+}
+
+impl InheritedExpr {
+    pub fn inherited_token(&self) -> Option<SyntaxToken> {
+        token(&self.0, INHERITED_KW)
+    }
+    /// The method's name (`None` for `inherited` alone).
+    pub fn name(&self) -> Option<SyntaxToken> {
+        token(&self.0, IDENT)
+    }
+}
+
+impl MethodDirective {
+    pub fn kind(&self) -> Option<SyntaxKind> {
+        self.0.first_token().map(|t| t.kind())
+    }
+    pub fn keyword(&self) -> Option<SyntaxToken> {
+        self.0.first_token()
     }
 }
 
@@ -1103,6 +1581,11 @@ impl ForVar {
     pub fn type_ref(&self) -> Option<TypeSpec> {
         self.0.children().find_map(TypeSpec::cast)
     }
+    /// The `:` of `for var X: T`. Present without `type_ref` when the parser reported and skipped
+    /// the written type.
+    pub fn colon_token(&self) -> Option<SyntaxToken> {
+        token(&self.0, COLON)
+    }
 }
 
 // ---- Expressions ----
@@ -1123,6 +1606,8 @@ pub enum Expr {
     RecordConst(RecordConst),
     ArrayConst(ArrayConst),
     ArrayCtor(ArrayCtor),
+    /// An anonymous method (`docs/spec/objects.md` 9.6).
+    Anon(AnonRoutine),
     Error(ErrorNode),
 }
 
@@ -1143,6 +1628,7 @@ impl Expr {
             RECORD_CONST => Expr::RecordConst(RecordConst(node)),
             ARRAY_CONST => Expr::ArrayConst(ArrayConst(node)),
             ARRAY_CTOR => Expr::ArrayCtor(ArrayCtor(node)),
+            ANON_ROUTINE => Expr::Anon(AnonRoutine(node)),
             ERROR_NODE => Expr::Error(ErrorNode(node)),
             _ => return None,
         })
@@ -1164,6 +1650,7 @@ impl Expr {
             Expr::RecordConst(n) => &n.0,
             Expr::ArrayConst(n) => &n.0,
             Expr::ArrayCtor(n) => &n.0,
+            Expr::Anon(n) => &n.0,
             Expr::Error(n) => &n.0,
         }
     }
@@ -1187,6 +1674,10 @@ impl NameRef {
     }
     pub fn is_string_keyword(&self) -> bool {
         self.token().is_some_and(|t| t.kind() == STRING_KW)
+    }
+    /// The type arguments written after the name (`Max<Integer>`; `docs/spec/grammar.md` 1.5).
+    pub fn type_args(&self) -> Option<TypeArgs> {
+        child(&self.0)
     }
 }
 
@@ -1333,6 +1824,11 @@ impl FieldExpr {
     pub fn dot(&self) -> Option<SyntaxToken> {
         token(&self.0, DOT)
     }
+    /// The type arguments written after the field's name (`TUtil.Max<Double>`;
+    /// `docs/spec/grammar.md` 1.5).
+    pub fn type_args(&self) -> Option<TypeArgs> {
+        child(&self.0)
+    }
 }
 
 impl DerefExpr {
@@ -1377,4 +1873,32 @@ pub fn source_text_normalized(node: &SyntaxNode) -> String {
         out.push_str(t.text());
     }
     out
+}
+
+// ---- Attributes (`docs/spec/attributes.md` 1.3) ----
+
+ast_node!(AttributeList, ATTRIBUTE_LIST);
+ast_node!(Attribute, ATTRIBUTE);
+
+impl AttributeList {
+    pub fn attributes(&self) -> impl Iterator<Item = Attribute> {
+        children(&self.0)
+    }
+}
+
+impl Attribute {
+    pub fn name(&self) -> Option<QualifiedName> {
+        child(&self.0)
+    }
+    pub fn args(&self) -> Option<ArgList> {
+        child(&self.0)
+    }
+}
+
+/// The attributes written on a declaration: those of the `ATTRIBUTE_LIST`s directly under its
+/// node (`FIELD_DECL`, `VAR_DECL`, `PARAM_GROUP`, …), in source order.
+pub fn attributes(decl: &SyntaxNode) -> Vec<Attribute> {
+    children::<AttributeList>(decl)
+        .flat_map(|l| l.attributes().collect::<Vec<_>>())
+        .collect()
 }

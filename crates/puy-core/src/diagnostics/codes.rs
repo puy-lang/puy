@@ -138,6 +138,35 @@ pub const CODES: &[CodeInfo] = &[
     e(738, 2),
     e(739, 2),
     e(740, 2),
+    e(741, 3),
+    e(742, 3),
+    e(743, 3),
+    e(744, 3),
+    e(745, 3),
+    e(746, 3),
+    e(747, 3),
+    e(748, 3),
+    e(749, 3),
+    e(750, 3),
+    e(751, 3),
+    e(752, 3),
+    e(753, 3),
+    e(754, 3),
+    e(755, 3),
+    e(756, 3),
+    e(757, 4),
+    e(758, 4),
+    e(759, 4),
+    e(760, 4),
+    e(761, 4),
+    e(762, 4),
+    e(763, 4),
+    e(764, 4),
+    e(765, 4),
+    reserved(766),
+    e(767, 4),
+    e(768, 4),
+    e(769, 4),
     // 4.5 Control flow
     e(2000, 1),
     e(2001, 1),
@@ -179,6 +208,9 @@ pub const CODES: &[CodeInfo] = &[
     // 4.8 Unsupported features and code generation limits
     e(3200, 1),
     e(3400, 1),
+    // Attributes (`docs/spec/attributes.md` 8)
+    e(3401, 3),
+    e(3402, 3),
     // Chapter 5 Warnings
     w(1, 1, "unused-variable"),
     w(2, 2, "unused-value"),
@@ -200,6 +232,12 @@ pub const CODES: &[CodeInfo] = &[
     w(18, 1, "empty-statement"),
     w(19, 2, "unreachable-handler"),
     w(20, 2, "legacy-unit-init"),
+    w(21, 3, "hidden-virtual-method"),
+    w(22, 3, "ignored-property-specifier"),
+    w(23, 3, "temporary-method-reference"),
+    w(24, 3, "self-capture-cycle"),
+    w(25, 3, "unknown-attribute"),
+    w(26, 3, "unneeded-reintroduce"),
     // 4.9 Fatal errors
     f(1),
     f(2),
@@ -237,6 +275,7 @@ pub fn delphi_warning_name(name: &str) -> Option<&'static str> {
         "SYMBOL_PLATFORM" | "UNIT_PLATFORM" | "SYMBOL_LIBRARY" | "UNIT_LIBRARY" => {
             "ignored-hint-directive"
         }
+        "HIDDEN_VIRTUAL" => "hidden-virtual-method",
         _ => return None,
     })
 }
@@ -267,6 +306,8 @@ pub const LABELS: &[&str] = &[
     "included from here",
     "first `uses` here",
     "project manifest here",
+    "abstract method declared here",
+    "Self",
 ];
 
 /// Similar names (2.1): measures the case-insensitive edit distance and picks the smallest among those within 1/3 of the

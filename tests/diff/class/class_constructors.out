@@ -1,0 +1,33 @@
+TShape.Create square
+AfterConstruction square
+square
+BeforeDestruction square
+TShape.Destroy square
+TShape.Create circle
+TCircle.Create 5
+radius set
+AfterConstruction circle
+circle 5
+BeforeDestruction circle
+TCircle.Destroy 5
+TShape.Destroy circle
+TShape.Create dot
+TCircle.Create 0
+AfterConstruction dot
+BeforeDestruction dot
+TCircle.Destroy 0
+TShape.Destroy dot
+TShape.Create unit
+AfterConstruction unit
+unit 1
+BeforeDestruction unit
+TCircle.Destroy 1
+TShape.Destroy unit
+TPart.Create 1
+not reached
+TPart.Create -2
+TMachine.Destroy -2
+TPart.Destroy -2
+EPartError: negative id
+1
+TPart.Destroy 1

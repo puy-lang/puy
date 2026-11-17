@@ -1,0 +1,45 @@
+error[E0700]: undeclared identifier `TList`
+   --> generic_expr_type_args.pas:14:8
+    |
+ 14 |   O := TList<Integer>.Create;
+    |        ^^^^^
+
+error[E0700]: undeclared identifier `Max`
+   --> generic_expr_type_args.pas:15:8
+    |
+ 15 |   X := Max<Integer>(1, 2);
+    |        ^^^
+
+error[E0700]: undeclared identifier `TUtil`
+   --> generic_expr_type_args.pas:16:8
+    |
+ 16 |   X := TUtil.Max<Double>(A, B);
+    |        ^^^^^
+
+error[E0700]: undeclared identifier `Identity`
+   --> generic_expr_type_args.pas:17:8
+    |
+ 17 |   P := Identity<string>;
+    |        ^^^^^^^^
+
+error[E0700]: undeclared identifier `Count`
+   --> generic_expr_type_args.pas:18:8
+    |
+ 18 |   X := Count<string> * 2;
+    |        ^^^^^
+
+error[E0761]: `A` is not generic
+   --> generic_expr_type_args.pas:19:8
+    |
+ 19 |   F := A < B > (C);
+    |        ^^^^^^^
+    |
+    = note: to compare, write `(A < B) > (C)`
+
+error[E0700]: undeclared identifier `TDict`
+   --> generic_expr_type_args.pas:20:8
+    |
+ 20 |   O := TDict<string, TList<System.Integer>>.Create;
+    |        ^^^^^
+
+error: aborting due to 7 errors

@@ -1,0 +1,44 @@
+error[E0765]: class `TOnlyEqual` declares operator `Equal` but does not override `GetHashCode`
+   --> ref_class_hash_errors.pas:12:20
+    |
+ 12 |     class operator Equal(const A, B: TOnlyEqual): Boolean;
+    |                    ^^^^^
+    |
+    = note: override `GetHashCode` so that equal objects return the same value
+    = suggestion: override `GetHashCode`
+
+error[E0765]: `TWithEquals` declares operator `Equal`, so `Equals` is generated and cannot be overridden
+   --> ref_class_hash_errors.pas:18:14
+    |
+ 17 |     class operator Equal(const A, B: TWithEquals): Boolean;
+    |                    ----- operator `Equal` declared here
+ 18 |     function Equals(Obj: TObject): Boolean; override;
+    |              ^^^^^^
+
+error[E0765]: `TEqualsNoHash` declares operator `Equal`, so `Equals` is generated and cannot be overridden
+   --> ref_class_hash_errors.pas:25:14
+    |
+ 24 |     class operator Equal(const A, B: TEqualsNoHash): Boolean;
+    |                    ----- operator `Equal` declared here
+ 25 |     function Equals(Obj: TObject): Boolean; override;
+    |              ^^^^^^
+
+error[E0765]: class `TSubKey` declares operator `Equal` but does not override `GetHashCode`
+   --> ref_class_hash_errors.pas:36:20
+    |
+ 36 |     class operator Equal(const A, B: TSubKey): Boolean;
+    |                    ^^^^^
+    |
+    = note: override `GetHashCode` so that equal objects return the same value
+    = suggestion: override `GetHashCode`
+
+error[E0744]: `GetHashCode` does not override a virtual method of `TRefObject`
+   --> ref_class_hash_errors.pas:53:14
+    |
+ 53 |     function GetHashCode: Integer; override;
+    |              ^^^^^^^^^^^
+    |
+    = note: `GetHashCode` returns `Int64` in Puy
+    = fix: change the return type to `Int64`
+
+error: aborting due to 5 errors

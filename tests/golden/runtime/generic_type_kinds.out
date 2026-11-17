@@ -1,0 +1,16 @@
+42 42
+ab b
+a TRUE
+b
+n3
+3
+value 2.5
+TProc
+TProc<Integer> 3
+TProc<string, Integer> x4
+7 10 6 FALSE TRUE
+2q
+1.50
+9
+EWrapped<Integer>
+Integer boom 0

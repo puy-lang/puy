@@ -1,0 +1,72 @@
+error[E0700]: undeclared identifier `Thrice`
+   --> helper_use_errors.pas:70:13
+    |
+ 70 |   Result := Thrice;                                // E0700: other helpers are not searched
+    |             ^^^^^^
+
+error[E0700]: undeclared identifier `ToString`
+   --> helper_use_errors.pas:77:8
+    |
+ 77 |   S := ToString;                                   // E0700: nor the built-in helper
+    |        ^^^^^^^^
+
+error[E0702]: type mismatch: expected `TFoo`, found `TBar`
+    --> helper_use_errors.pas:112:17
+     |
+ 112 |   TFooHelper.Hi(B);                                // E0702
+     |                 ^
+
+error[E0705]: wrong number of arguments: expected 1, found 0
+    --> helper_use_errors.pas:113:3
+     |
+ 113 |   TFooHelper.Hi;                                   // E0705
+     |   ^^^^^^^^^^^^^
+
+error[E0705]: wrong number of arguments: expected 1, found 0
+    --> helper_use_errors.pas:114:3
+     |
+ 114 |   TFooHelper.Hi();                                 // E0705
+     |   ^^^^^^^^^^^^^^^
+
+error[E0700]: `P` is an instance member and cannot be used through a class
+    --> helper_use_errors.pas:115:22
+     |
+  20 |     property P: Integer read GetP;
+     |              - declared here
+...
+ 115 |   WriteLn(TFooHelper.P);                           // E0700: an instance member
+     |                      ^
+
+error[E0752]: `Bump` cannot be used as a procedural value
+    --> helper_use_errors.pas:116:10
+     |
+ 116 |   M := N.Bump;                                     // E0752
+     |          ^^^^
+
+error[E0754]: `GetEnumerator` is ambiguous: it is declared in helpers `TBagA` and `TBagB`
+    --> helper_use_errors.pas:117:16
+     |
+  42 |     function GetEnumerator: TEnum;
+     |              ------------- candidate
+...
+  46 |     function GetEnumerator: TEnum;
+     |              ------------- candidate
+...
+ 117 |   for var Z in Bag do                              // E0754
+     |                ^^^
+     |
+     = note: `for..in` cannot select a helper; leave only one of the helpers visible here
+
+error[E0705]: wrong number of arguments: expected 1, found 0
+    --> helper_use_errors.pas:119:11
+     |
+ 119 |   WriteLn(Length.ToString);                        // E0705: `Length` is called first
+     |           ^^^^^^
+
+error[E3200]: type helpers for built-in types are not supported yet (planned for M5)
+    --> helper_use_errors.pas:120:11
+     |
+ 120 |   WriteLn(WriteLn.ToString);                       // E3200: a procedure is not a value
+     |           ^^^^^^^^^^^^^^^^
+
+error: aborting due to 10 errors

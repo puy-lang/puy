@@ -1,0 +1,167 @@
+; puy ir 1
+.global
+  g0 S: TShape
+  g1 Q: TSquare
+  g2 B: TBox
+.func f0 DumpMethods.<main> params=0
+  .reg t0: TBox temp
+  .reg t1: TBox temp
+  .reg t2: Integer temp
+  .reg t3: TShape temp
+  .reg t4: TSquare temp
+  .reg t5: TShape temp
+  .reg t6: string temp
+  .reg t7: Integer temp
+  .reg t8: TBox temp
+  .reg t9: string temp
+  .reg t10: string temp
+  .reg t11: Integer temp
+  .reg t12: TSquare temp
+  .reg t13: string temp
+  .reg t14: string temp
+  .reg t15: Integer temp
+  .reg t16: TShape temp
+  .reg t17: string temp
+  .reg t18: TBox temp
+bb0:
+  .line 61
+  LoadZero     t0
+  New          t0, DumpMethods.TBox
+  StoreGlobal  t0, g2
+  .line 62
+  LoadGlobal   t1, g2
+  LoadInt      t2, 1
+  ObjSet       t1, 0, t2
+  .line 63
+  LoadGlobal   t3, g2
+  StoreGlobal  t3, g0
+  .line 64
+  LoadGlobal   t4, g2
+  StoreGlobal  t4, g1
+  .line 65
+  LoadGlobal   t5, g0
+  CallMethod   -, f2(t5)
+  .line 66
+  LoadGlobal   t8, g2
+  CallMethod   t7, f5(t8)
+  IntToStr     t6, t7
+  LoadConst    t9, " "
+  ConcatStr    t6, t6, t9
+  LoadGlobal   t12, g1
+  CallMethod   t11, f4(t12)
+  IntToStr     t10, t11
+  ConcatStr    t6, t6, t10
+  LoadConst    t13, " "
+  ConcatStr    t6, t6, t13
+  LoadGlobal   t16, g0
+  CallVirtual  t15, DumpMethods.TShape.Area[6](t16)
+  IntToStr     t14, t15
+  ConcatStr    t6, t6, t14
+  LoadConst    t17, "\n"
+  ConcatStr    t6, t6, t17
+  CallHost     -, h0(t6)
+  .line 67
+  LoadGlobal   t18, g2
+  Free         t18
+  .line 68
+  RetVoid
+.finally t6, t9, t10, t13, t14, t17
+.func f1 DumpMethods.TShape.Twice params=1
+  .reg v0 Self: TShape self
+  .reg v1 Result: Integer result
+  .reg t0: Integer temp
+  .reg t1: TShape temp
+bb0:
+  .line 28
+  LoadInt      v1, 2
+  Move         t1, v0
+  CallVirtual  t0, DumpMethods.TShape.Area[6](t1)
+  MulInt       v1, v1, t0
+  NarrowOvf    v1, v1, 4
+  .line 29
+  Ret          v1
+.finally
+.func f2 DumpMethods.TShape.Show params=1
+  .reg v0 Self: TShape self
+  .reg t0: string temp
+  .reg t1: Integer temp
+  .reg t2: TShape temp
+  .reg t3: string temp
+  .reg t4: string temp
+  .reg t5: TShape temp
+  .reg t6: string temp
+  .reg t7: string temp
+  .reg t8: string temp
+bb0:
+  .line 33
+  Move         t2, v0
+  CallVirtual  t1, DumpMethods.TShape.Twice[7](t2)
+  IntToStr     t0, t1
+  LoadConst    t3, " "
+  ConcatStr    t0, t0, t3
+  Move         t5, v0
+  CallVirtual  t5, TObject.ToString[3](t5)
+  MoveRef      t4, t5
+  ConcatStr    t0, t0, t4
+  LoadConst    t6, " "
+  ConcatStr    t0, t0, t6
+  ClassName    t7, v0
+  ConcatStr    t0, t0, t7
+  LoadConst    t8, "\n"
+  ConcatStr    t0, t0, t8
+  CallHost     -, h0(t0)
+  .line 34
+  RetVoid
+.finally t0, t3, t4, t6, t7, t8
+.func f3 DumpMethods.TSquare.Area params=1
+  .reg v0 Self: TSquare self
+  .reg v1 Result: Integer result
+  .reg t0: Integer temp
+bb0:
+  .line 38
+  ObjGet       v1, v0, 0
+  ObjGet       t0, v0, 0
+  MulInt       v1, v1, t0
+  NarrowOvf    v1, v1, 4
+  .line 39
+  Ret          v1
+.finally
+.func f4 DumpMethods.TSquare.Twice params=1
+  .reg v0 Self: TSquare self
+  .reg v1 Result: Integer result
+  .reg t0: TSquare temp
+  .reg t1: Integer temp
+bb0:
+  .line 43
+  Move         t0, v0
+  CallMethod   v1, f1(t0)
+  LoadInt      t1, 1
+  AddInt       v1, v1, t1
+  NarrowOvf    v1, v1, 4
+  .line 44
+  Ret          v1
+.finally
+.func f5 DumpMethods.TBox.Area params=1
+  .reg v0 Self: TBox self
+  .reg v1 Result: Integer result
+  .reg t0: Integer temp
+  .reg t1: TBox temp
+bb0:
+  .line 48
+  LoadInt      v1, 6
+  Move         t1, v0
+  CallMethod   t0, f3(t1)
+  MulInt       v1, v1, t0
+  NarrowOvf    v1, v1, 4
+  .line 49
+  Ret          v1
+.finally
+.func f6 DumpMethods.TBox.ToString params=1
+  .reg v0 Self: TBox self
+  .reg v1 Result: string result
+bb0:
+  .line 53
+  LoadConst    v1, "box"
+  .line 54
+  Ret          v1
+.finally v1

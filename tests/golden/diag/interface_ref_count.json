@@ -1,0 +1,147 @@
+[
+  {
+    "schema": "puy.diagnostics/1",
+    "diagnostics": [
+      {
+        "code": "E3017",
+        "severity": "error",
+        "name": null,
+        "message": "`_AddRef` is not supported in Puy",
+        "primary": {
+          "file": "interface_ref_count.pas",
+          "start": 314,
+          "end": 321,
+          "line": 9,
+          "column": 14,
+          "end_line": 9,
+          "end_column": 21,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "remove the declaration; Puy manages reference counts itself"
+        ],
+        "fixes": [
+          {
+            "title": "remove the declaration",
+            "applicability": "safe",
+            "edits": [
+              {
+                "file": "interface_ref_count.pas",
+                "start": 301,
+                "end": 332,
+                "line": 9,
+                "column": 1,
+                "end_line": 10,
+                "end_column": 1,
+                "original": "    function _AddRef: Integer;\n",
+                "replacement": ""
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E3017]: `_AddRef` is not supported in Puy\n  --> interface_ref_count.pas:9:14\n   |\n 9 |     function _AddRef: Integer;\n   |              ^^^^^^^\n   |\n   = note: remove the declaration; Puy manages reference counts itself\n   = fix: remove the declaration"
+      },
+      {
+        "code": "E3017",
+        "severity": "error",
+        "name": null,
+        "message": "`_Release` is not supported in Puy",
+        "primary": {
+          "file": "interface_ref_count.pas",
+          "start": 422,
+          "end": 430,
+          "line": 15,
+          "column": 14,
+          "end_line": 15,
+          "end_column": 22,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "remove the declaration; Puy manages reference counts itself"
+        ],
+        "fixes": [
+          {
+            "title": "remove the declaration",
+            "applicability": "safe",
+            "edits": [
+              {
+                "file": "interface_ref_count.pas",
+                "start": 409,
+                "end": 441,
+                "line": 15,
+                "column": 1,
+                "end_line": 16,
+                "end_column": 1,
+                "original": "    function _Release: Integer;\n",
+                "replacement": ""
+              },
+              {
+                "file": "interface_ref_count.pas",
+                "start": 468,
+                "end": 531,
+                "line": 19,
+                "column": 1,
+                "end_line": 23,
+                "end_column": 1,
+                "original": "function TCounted._Release: Integer;\nbegin\n  Result := 0;\nend;\n",
+                "replacement": ""
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E3017]: `_Release` is not supported in Puy\n   --> interface_ref_count.pas:15:14\n    |\n 15 |     function _Release: Integer;\n    |              ^^^^^^^^\n    |\n    = note: remove the declaration; Puy manages reference counts itself\n    = fix: remove the declaration"
+      },
+      {
+        "code": "E3017",
+        "severity": "error",
+        "name": null,
+        "message": "`_AddRef` is not supported in Puy",
+        "primary": {
+          "file": "interface_ref_count.pas",
+          "start": 612,
+          "end": 619,
+          "line": 32,
+          "column": 5,
+          "end_line": 32,
+          "end_column": 12,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "remove the declaration; Puy manages reference counts itself"
+        ],
+        "fixes": [],
+        "rendered": "error[E3017]: `_AddRef` is not supported in Puy\n   --> interface_ref_count.pas:32:5\n    |\n 32 |   C._AddRef;\n    |     ^^^^^^^\n    |\n    = note: remove the declaration; Puy manages reference counts itself"
+      },
+      {
+        "code": "E3017",
+        "severity": "error",
+        "name": null,
+        "message": "`QueryInterface` is not supported in Puy",
+        "primary": {
+          "file": "interface_ref_count.pas",
+          "start": 625,
+          "end": 639,
+          "line": 33,
+          "column": 5,
+          "end_line": 33,
+          "end_column": 19,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "remove the declaration; Puy manages reference counts itself"
+        ],
+        "fixes": [],
+        "rendered": "error[E3017]: `QueryInterface` is not supported in Puy\n   --> interface_ref_count.pas:33:5\n    |\n 33 |   T.QueryInterface;\n    |     ^^^^^^^^^^^^^^\n    |\n    = note: remove the declaration; Puy manages reference counts itself"
+      }
+    ],
+    "summary": {
+      "errors": 4,
+      "warnings": 0,
+      "notes": 0
+    }
+  }
+]

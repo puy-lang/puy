@@ -1,0 +1,8 @@
+static nil: EAccessViolation: access to a nil reference
+virtual nil: EAccessViolation: access to a nil reference
+ToString nil: EAccessViolation: access to a nil reference
+ClassName nil: EAccessViolation: access to a nil reference
+static freed: EAccessViolation: access to a freed object
+virtual freed: EAccessViolation: access to a freed object
+ToString freed: EAccessViolation: access to a freed object
+ClassName freed: EAccessViolation: access to a freed object

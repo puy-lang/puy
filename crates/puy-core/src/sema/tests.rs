@@ -106,14 +106,16 @@ fn undeclared_and_types() {
     assert_eq!(codes("var N := 1; WriteLn(N[1]);"), ["E0720"]);
     assert_eq!(codes("var S := 'ab'; WriteLn(S['a']);"), ["E0719"]);
     assert_clean("var X := 1.5; var Y := 1 / 2;");
-    assert_eq!(codes("var X := ExceptObject;"), ["E3200"]);
+    assert_eq!(codes("var X := TCustomAttribute;"), ["E0708"]);
     assert_eq!(
-        msgs("var X := ExceptObject;"),
-        ["`ExceptObject` is not supported yet (planned for M2)"]
+        msgs("var X := TFunc;"),
+        ["generic type `TFunc` needs type arguments"]
     );
+    assert_eq!(codes("var X := TProc;"), ["E0708"]);
+    assert_eq!(codes("var X := ExceptAddr;"), ["E3004"]);
     assert_eq!(codes("var P: Pointer;"), ["E3004"]);
     assert_eq!(codes("var S: AnsiString;"), ["E3003"]);
-    assert_eq!(codes("var I := 1; WriteLn(I.ToString);"), ["E3200"]);
+    assert_eq!(codes("var I := 1; WriteLn(I.ToHexString);"), ["E3200"]);
 }
 
 #[test]
@@ -588,4 +590,59 @@ fn unused_value_deeply_nested_loops() {
     // The same nesting with a value overwritten in the outermost loop
     let src = src.replacen("X := X + 1;\n", "X := X + 1; X := 1;\n", 1);
     assert_eq!(codes(&src), ["W0002"]);
+}
+
+/// The public names of a unit of the standard library that uses no other unit, analyzed alone.
+fn stdlib_unit_exports(name: &str) -> Vec<String> {
+    use crate::diagnostics::DiagnosticSink;
+    use crate::source::{SourceFile, SourceMap};
+    let unit = puy_stdlib::find(name).expect("a unit of the standard library");
+    let mut sources = SourceMap::new();
+    let file = sources.add(SourceFile::new(
+        format!("<stdlib>/{}.pas", unit.name),
+        unit.source.as_bytes().to_vec(),
+    ));
+    let mut sink = DiagnosticSink::new();
+    let mut provider = MemorySourceProvider::new();
+    let fr = crate::driver::front(
+        file,
+        &mut sources,
+        &mut provider,
+        &crate::directives::BuildConfig::default(),
+        &mut sink,
+    );
+    let bytes = sources.get(file).bytes.clone();
+    let mut state = super::ModuleState::with_plan(Default::default());
+    super::analyze(
+        &super::SemaInput {
+            file,
+            root: &fr.root,
+            bytes: &bytes,
+            directives: &fr.dir,
+            script_name: "",
+            uses: &[],
+            has_root: false,
+            stdlib: true,
+        },
+        &mut state,
+        &mut sink,
+    );
+    assert!(!sink.has_errors(), "{name} has errors");
+    state.units[0]
+        .exports
+        .iter()
+        .map(|(n, _)| n.clone())
+        .collect()
+}
+
+// The Pascal part of System.SysUtils declares no name of the built-in table: a qualified name
+// would resolve to the table while an unqualified one could not (docs/spec/collections.md 1.2).
+#[test]
+fn sysutils_pascal_part_avoids_builtin_names() {
+    let names = stdlib_unit_exports("System.SysUtils");
+    assert!(names.iter().any(|n| n == "elisterror"), "{names:?}");
+    for n in &names {
+        assert!(super::builtins::lookup_sysutils(n).is_none(), "{n}");
+        assert!(super::builtins::builtin_exception(n).is_none(), "{n}");
+    }
 }

@@ -1,0 +1,15 @@
+after construction
+destroy after
+caught in AfterConstruction FALSE
+caught in an argument FALSE
+release child
+destroy b1
+destroy b2
+destroy c1
+EInvalidOperation FALSE
+destroy weak target
+copy is nil: TRUE
+still alive: TRUE
+destroy weak created
+after WeakCreate
+destroy object

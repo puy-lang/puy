@@ -30,6 +30,24 @@ pub enum BuiltinProc {
     /// `docs/spec/types.md` 8.6).
     Insert,
     Delete,
+    /// `Exchange` of two array elements (`docs/spec/types.md` chapter 7).
+    Exchange,
+    /// `FreeAndNil` of `System.SysUtils` (`docs/spec/objects.md` 3.2).
+    FreeAndNil,
+    /// `ArrayMoveRange(var A, FromIndex, ToIndex, Count)`: rotates a range of a dynamic array in
+    /// place. Seen only from the units of the standard library (`docs/spec/collections.md` 12.1).
+    ArrayMoveRange,
+    /// `FreeIfClass(X)`: `X.Free` when the type of `X` is a class, nothing otherwise. Seen only
+    /// from the units of the standard library (`docs/spec/collections.md` 12.1).
+    FreeIfClass,
+    /// `CheckDefaultOrder(X)`: `EInvalidOperation` when the type of `X` has no default order,
+    /// nothing otherwise. Seen only from the units of the standard library
+    /// (`docs/spec/collections.md` 10.2, 12.1).
+    CheckDefaultOrder,
+    /// `CheckClassType(X, What)`: `EInvalidOperation` (`What`, then `, but `…` is not a class`)
+    /// when the type of `X` is not a class, nothing otherwise. Seen only from the units of the
+    /// standard library (`docs/spec/collections.md` 9.3, 12.1).
+    CheckClassType,
 }
 
 /// The special variables `Input`, `Output` and `ErrOutput` of `System` (`docs/spec/semantics.md`
@@ -59,6 +77,9 @@ pub enum SystemName {
     False,
     Func(Builtin),
     Proc(BuiltinProc),
+    /// `KeyEquals` / `KeyHash` (`docs/spec/equality.md` chapter 4) and `KeyCompare`
+    /// (`docs/spec/collections.md` 10.2): built-in generic routines.
+    Key(super::hir::KeyOp),
     /// `ExitCode` (`docs/spec/semantics.md` 5.3): the `System` global variable.
     ExitCode,
     /// `MaxInt`: the `Integer` constant 2147483647.
@@ -67,7 +88,7 @@ pub enum SystemName {
     LineBreak,
     /// `Input` / `Output` / `ErrOutput` (`docs/spec/semantics.md` 6.1).
     StdFile(StdFile),
-    /// Reserved for M2 or later (the planned milestone).
+    /// Reserved for M3 or later (the planned milestone).
     Reserved(&'static str),
     /// A removed name (with its code).
     Deleted(Code),
@@ -76,6 +97,40 @@ pub enum SystemName {
 pub fn lookup_system(lower: &str) -> Option<SystemName> {
     if let Some(t) = Ty::from_name(lower).or_else(|| builtin_exception(lower)) {
         return Some(SystemName::Type(t));
+    }
+    if lower == "tobject" {
+        // The root class (`docs/spec/objects.md` chapter 5)
+        return Some(SystemName::Type(Ty::Class(super::types::TOBJECT)));
+    }
+    if lower == "trefobject" || lower == "tinterfacedobject" {
+        // The root of the reference counted classes (`docs/spec/objects.md` 2.1);
+        // `TInterfacedObject` is another name for it (7.2)
+        return Some(SystemName::Type(Ty::Class(super::types::TREFOBJECT)));
+    }
+    if lower == "tcustomattribute" {
+        // The root of the attribute classes (`docs/spec/attributes.md` 4.1)
+        return Some(SystemName::Type(Ty::Class(super::types::TCUSTOMATTRIBUTE)));
+    }
+    if lower == "iinterface" || lower == "iunknown" {
+        // The root of the interfaces; `IUnknown` is another name for it (`docs/spec/objects.md`
+        // 7.2)
+        return Some(SystemName::Type(Ty::Intf(super::types::IINTERFACE)));
+    }
+    if lower == "tindexrange" {
+        // The range written as an index of a default array property (`docs/spec/objects.md` 12.3)
+        return Some(SystemName::Type(Ty::Record(super::types::TINDEXRANGE)));
+    }
+    if lower == "tproc" {
+        // `reference to procedure` (`docs/spec/objects.md` 9.9)
+        return Some(SystemName::Type(Ty::Callable(super::types::TPROC)));
+    }
+    if let Some(h) = super::helpers::builtin_helper_id(lower) {
+        // A built-in helper (`docs/spec/objects.md` 10.7)
+        return Some(SystemName::Type(Ty::Helper(h)));
+    }
+    if lower == "tclass" {
+        // `class of TObject` (`docs/spec/objects.md` 2.8)
+        return Some(SystemName::Type(Ty::ClassRef(super::types::TCLASS)));
     }
     Some(match lower {
         "true" => SystemName::True,
@@ -87,6 +142,7 @@ pub fn lookup_system(lower: &str) -> Option<SystemName> {
         "chr" => SystemName::Func(Builtin::Chr),
         "abs" => SystemName::Func(Builtin::Abs),
         "paramcount" => SystemName::Func(Builtin::ParamCount),
+        "exceptobject" => SystemName::Func(Builtin::ExceptObject),
         "paramstr" => SystemName::Func(Builtin::ParamStr),
         "low" => SystemName::Func(Builtin::Low),
         "high" => SystemName::Func(Builtin::High),
@@ -116,6 +172,10 @@ pub fn lookup_system(lower: &str) -> Option<SystemName> {
         "succ" => SystemName::Func(Builtin::Succ),
         "pred" => SystemName::Func(Builtin::Pred),
         "sqrt" => SystemName::Func(Builtin::Sqrt),
+        "hashcombine" => SystemName::Func(Builtin::HashCombine),
+        "keyequals" => SystemName::Key(super::hir::KeyOp::Equals),
+        "keyhash" => SystemName::Key(super::hir::KeyOp::Hash),
+        "keycompare" => SystemName::Key(super::hir::KeyOp::Compare),
         "sqr" => SystemName::Func(Builtin::Sqr),
         "pi" => SystemName::Func(Builtin::Pi),
         "trunc" => SystemName::Func(Builtin::Trunc),
@@ -126,6 +186,7 @@ pub fn lookup_system(lower: &str) -> Option<SystemName> {
         "concat" => SystemName::Func(Builtin::Concat),
         "insert" => SystemName::Proc(BuiltinProc::Insert),
         "delete" => SystemName::Proc(BuiltinProc::Delete),
+        "exchange" => SystemName::Proc(BuiltinProc::Exchange),
         "exitcode" => SystemName::ExitCode,
         "maxint" => SystemName::MaxInt,
         _ => {
@@ -140,19 +201,36 @@ pub fn lookup_system(lower: &str) -> Option<SystemName> {
     })
 }
 
+/// The built-ins only the units of the standard library see (`docs/spec/collections.md` 12.1,
+/// `docs/spec/bytecode.md` 2.22): looked up after the names of `System`, and only there.
+pub fn lookup_stdlib_only(lower: &str) -> Option<SystemName> {
+    Some(match lower {
+        "arraymoverange" => SystemName::Proc(BuiltinProc::ArrayMoveRange),
+        "freeifclass" => SystemName::Proc(BuiltinProc::FreeIfClass),
+        "checkdefaultorder" => SystemName::Proc(BuiltinProc::CheckDefaultOrder),
+        "checkclasstype" => SystemName::Proc(BuiltinProc::CheckClassType),
+        "sameinstance" => SystemName::Func(Builtin::IsSameInstance),
+        "objectclassname" => SystemName::Func(Builtin::ObjectClassName),
+        "isrefcountedobject" => SystemName::Func(Builtin::IsRefCountedObject),
+        "isoverridden" => SystemName::Func(Builtin::IsOverridden),
+        _ => return None,
+    })
+}
+
 /// A built-in exception class (`docs/spec/exceptions.md` chapter 2; in `System`, and also named
 /// through `System.SysUtils`).
 pub fn builtin_exception(lower: &str) -> Option<Ty> {
     crate::bytecode::BUILTIN_EXCEPTIONS
         .iter()
         .find(|(_, name, _, _)| name.eq_ignore_ascii_case(lower))
-        .map(|(i, ..)| Ty::Exception(TypeId(*i)))
+        .map(|(i, ..)| Ty::Class(TypeId(*i)))
 }
 
 /// A name in `System.SysUtils`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SysUtilsName {
     Func(Builtin),
+    Proc(BuiltinProc),
     /// `TReplaceFlag` / `TReplaceFlags` of `StringReplace` (`docs/spec/semantics.md` 5.3).
     ReplaceFlag,
     ReplaceFlags,
@@ -168,6 +246,7 @@ pub fn lookup_sysutils(lower: &str) -> Option<SysUtilsName> {
         "treplaceflags" => return Some(SysUtilsName::ReplaceFlags),
         "tcasemapping" => return Some(SysUtilsName::CaseMapping),
         "tcasefold" => return Some(SysUtilsName::CaseFold),
+        "freeandnil" => return Some(SysUtilsName::Proc(BuiltinProc::FreeAndNil)),
         _ => {}
     }
     lookup_sysutils_func(lower).map(SysUtilsName::Func)
@@ -199,6 +278,7 @@ fn lookup_sysutils_func(lower: &str) -> Option<Builtin> {
         "stringofchar" => Builtin::StringOfChar,
         "quotedstr" => Builtin::QuotedStr,
         "trystrtoint" => Builtin::TryStrToInt,
+        "supports" => Builtin::Supports,
         "ansiuppercase" => Builtin::AnsiUpperCase,
         "ansilowercase" => Builtin::AnsiLowerCase,
         "ansisametext" => Builtin::AnsiSameText,
@@ -207,10 +287,8 @@ fn lookup_sysutils_func(lower: &str) -> Option<Builtin> {
     })
 }
 
-/// Names reserved for M2 or later (the table in chapter 5).
+/// Names reserved for M3 or later (the table in chapter 5).
 fn reserved_milestone(lower: &str) -> Option<&'static str> {
-    const M2: &[&str] = &["exceptobject"];
-    const M3: &[&str] = &["tobject", "trefobject"];
     const M5: &[&str] = &[
         "random",
         "randomize",
@@ -219,16 +297,14 @@ fn reserved_milestone(lower: &str) -> Option<&'static str> {
         "date",
         "time",
         "sleep",
+        "tguid",
+        "isequalguid",
+        "guidtostring",
+        "stringtoguid",
+        "createguid",
+        "typeinfo",
     ];
-    if M2.contains(&lower) {
-        Some("M2")
-    } else if M3.contains(&lower) {
-        Some("M3")
-    } else if M5.contains(&lower) {
-        Some("M5")
-    } else {
-        None
-    }
+    M5.contains(&lower).then_some("M5")
 }
 
 /// Removed names (the table in chapter 8).
@@ -236,13 +312,17 @@ fn deleted_code(lower: &str) -> Option<Code> {
     Some(match lower {
         "shortstring" | "ansistring" | "widestring" | "rawbytestring" | "pchar" | "pansichar"
         | "pwidechar" | "ansichar" => Code::E(3003),
-        "pointer" | "new" | "dispose" | "getmem" | "freemem" => Code::E(3004),
+        "pointer" | "new" | "dispose" | "getmem" | "freemem" | "exceptaddr" | "addr" => {
+            Code::E(3004)
+        }
         "text" | "textfile" | "assignfile" | "closefile" | "reset" | "rewrite" | "append"
         | "blockread" | "blockwrite" | "ioresult" => Code::E(3006),
         "variant" | "olevariant" => Code::E(3007),
         "real48" | "comp" => Code::E(3013),
         "tvarrec" => Code::E(3015),
         "acquireexceptionobject" | "releaseexceptionobject" => Code::E(3016),
+        "idispatch" => Code::E(3010),
+        "taggregatedobject" | "tcontainedobject" => Code::E(3020),
         _ => return None,
     })
 }
@@ -262,11 +342,14 @@ pub fn deleted_note(code: Code) -> &'static str {
         Code::E(3010) => "Puy does not support COM",
         Code::E(3011) => "Puy has no DLLs; extend it with the Rust extension mechanism instead",
         Code::E(3013) => "use `Double` or `Int64` instead",
+        Code::E(3014) => "use a class derived from `TRefObject` instead",
         Code::E(3015) => "use `TValue` instead",
         Code::E(3016) => {
             "store a reference to the exception in a variable instead; exception objects are reference counted"
         }
         Code::E(3019) => "assign `nil` instead; reference counted objects are freed automatically",
+        Code::E(3020) => "use `TRefObject` instead",
+        Code::E(3021) => "raise an object whose class derives from `Exception`",
         _ => "",
     }
 }
@@ -288,6 +371,7 @@ pub fn builtin_signature(func: Builtin) -> (&'static [(&'static str, Ty)], Ty) {
         Builtin::Chr => (&[("X", Ty::Word)], Ty::Char),
         Builtin::Abs => (&[("X", Ty::Error)], Ty::Error),
         Builtin::ParamCount => (&[], Ty::Integer),
+        Builtin::ExceptObject => (&[], Ty::Class(super::types::EXCEPTION)),
         Builtin::ParamStr => (&[("I", Ty::Integer)], Ty::String),
         Builtin::IntToStr => (&[("X", Ty::Int64)], Ty::String),
         Builtin::UIntToStr => (&[("X", Ty::UInt64)], Ty::String),
@@ -301,8 +385,15 @@ pub fn builtin_signature(func: Builtin) -> (&'static [(&'static str, Ty)], Ty) {
         Builtin::Default => (&[("T", Ty::Error)], Ty::Error),
         Builtin::Low | Builtin::High => (&[("X", Ty::Error)], Ty::Error),
         Builtin::Assigned => (&[("X", Ty::Error)], Ty::Boolean),
+        Builtin::IsRefCountedObject => (&[("X", Ty::Error)], Ty::Boolean),
+        Builtin::IsSameInstance => (&[("X", Ty::Error), ("Y", Ty::Error)], Ty::Boolean),
+        Builtin::ObjectClassName => (&[("X", Ty::Error)], Ty::String),
+        Builtin::IsOverridden => (&[("Method", Ty::Error)], Ty::Boolean),
         Builtin::Succ | Builtin::Pred => (&[("X", Ty::Error)], Ty::Error),
         Builtin::Sqrt => (&[("X", Ty::Double)], Ty::Double),
+        Builtin::HashCombine => (&[("H", Ty::Int64), ("X", Ty::Int64)], Ty::Int64),
+        Builtin::SameInstance => (&[("Self", Ty::Error), ("Obj", Ty::Error)], Ty::Boolean),
+        Builtin::InstanceHash => (&[("Self", Ty::Error)], Ty::Int64),
         Builtin::Sqr => (&[("X", Ty::Error)], Ty::Error),
         Builtin::Pi => (&[], Ty::Double),
         Builtin::Trunc | Builtin::Round => (&[("X", Ty::Error)], Ty::Int64),
@@ -337,6 +428,14 @@ pub fn builtin_signature(func: Builtin) -> (&'static [(&'static str, Ty)], Ty) {
         ),
         Builtin::StringOfChar => (&[("Ch", Ty::Char), ("Count", Ty::Integer)], Ty::String),
         Builtin::TryStrToInt => (&[("S", Ty::String), ("Value", Ty::Integer)], Ty::Boolean),
+        Builtin::Supports => (
+            &[
+                ("Instance", Ty::Error),
+                ("IID", Ty::Error),
+                ("Intf", Ty::Error),
+            ],
+            Ty::Boolean,
+        ),
         // The last parameter is `TCaseMapping` / `TCaseFold` (in the type table only once used)
         Builtin::AnsiUpperCase | Builtin::AnsiLowerCase => {
             (&[("S", Ty::String), ("Mapping", Ty::Error)], Ty::String)
@@ -351,6 +450,8 @@ pub fn builtin_signature(func: Builtin) -> (&'static [(&'static str, Ty)], Ty) {
         ),
         // `Eof(Input)` / `Eoln(Input)`: the optional `Input` is removed before the call is lowered
         Builtin::Eof | Builtin::Eoln => (&[], Ty::Boolean),
+        // Made only by a helper member (`docs/spec/objects.md` 10.7), never called by name
+        Builtin::ToString => (&[("Self", Ty::Error)], Ty::String),
     }
 }
 
@@ -364,6 +465,7 @@ pub fn builtin_name(func: Builtin) -> &'static str {
         Builtin::Chr => "Chr",
         Builtin::Abs => "Abs",
         Builtin::ParamCount => "ParamCount",
+        Builtin::ExceptObject => "ExceptObject",
         Builtin::ParamStr => "ParamStr",
         Builtin::IntToStr | Builtin::UIntToStr => "IntToStr",
         Builtin::StrToInt => "StrToInt",
@@ -377,11 +479,18 @@ pub fn builtin_name(func: Builtin) -> &'static str {
         Builtin::Low => "Low",
         Builtin::High => "High",
         Builtin::Assigned => "Assigned",
+        Builtin::IsRefCountedObject => "IsRefCountedObject",
+        Builtin::IsSameInstance => "SameInstance",
+        Builtin::ObjectClassName => "ObjectClassName",
+        Builtin::IsOverridden => "IsOverridden",
         Builtin::Succ => "Succ",
         Builtin::Pred => "Pred",
         Builtin::Sqrt => "Sqrt",
+        Builtin::HashCombine => "HashCombine",
         Builtin::Sqr => "Sqr",
         Builtin::Pi => "Pi",
+        Builtin::SameInstance => "Equals",
+        Builtin::InstanceHash => "GetHashCode",
         Builtin::Trunc => "Trunc",
         Builtin::Round => "Round",
         Builtin::FloatToStr => "FloatToStr",
@@ -403,17 +512,20 @@ pub fn builtin_name(func: Builtin) -> &'static str {
         Builtin::StringOfChar => "StringOfChar",
         Builtin::QuotedStr => "QuotedStr",
         Builtin::TryStrToInt => "TryStrToInt",
+        Builtin::Supports => "Supports",
         Builtin::AnsiUpperCase => "AnsiUpperCase",
         Builtin::AnsiLowerCase => "AnsiLowerCase",
         Builtin::AnsiSameText => "AnsiSameText",
         Builtin::AnsiCompareText => "AnsiCompareText",
         Builtin::Eof => "Eof",
         Builtin::Eoln => "Eoln",
+        Builtin::ToString => "ToString",
     }
 }
 
 pub fn proc_name(p: BuiltinProc) -> &'static str {
     match p {
+        BuiltinProc::FreeAndNil => "FreeAndNil",
         BuiltinProc::Write => "Write",
         BuiltinProc::WriteLn => "WriteLn",
         BuiltinProc::ReadLn => "ReadLn",
@@ -431,6 +543,11 @@ pub fn proc_name(p: BuiltinProc) -> &'static str {
         BuiltinProc::Exclude => "Exclude",
         BuiltinProc::Insert => "Insert",
         BuiltinProc::Delete => "Delete",
+        BuiltinProc::Exchange => "Exchange",
+        BuiltinProc::ArrayMoveRange => "ArrayMoveRange",
+        BuiltinProc::FreeIfClass => "FreeIfClass",
+        BuiltinProc::CheckDefaultOrder => "CheckDefaultOrder",
+        BuiltinProc::CheckClassType => "CheckClassType",
     }
 }
 

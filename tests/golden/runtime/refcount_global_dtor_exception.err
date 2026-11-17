@@ -1,0 +1,2 @@
+error: uncaught exception Exception: from the destructor of a global
+  at RefcountGlobalDtorException.TBad.Destroy (refcount_global_dtor_exception.pas:21)

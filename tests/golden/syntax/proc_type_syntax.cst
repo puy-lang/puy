@@ -1,0 +1,211 @@
+SOURCE_FILE@0..632
+  PROGRAM@0..632
+    PROGRAM_HEADER@0..23
+      PROGRAM_KW@0..7 "program"
+      WHITESPACE@7..8 " "
+      IDENT@8..22 "ProcTypeSyntax"
+      SEMICOLON@22..23 ";"
+    NEWLINE@23..24 "\n"
+    NEWLINE@24..25 "\n"
+    LINE_COMMENT@25..113 "// The syntax of procedural types (objects.md 9.1, grammar.md 2.2): `PROC_TYPE` with the"
+    NEWLINE@113..114 "\n"
+    LINE_COMMENT@114..208 "// parameters, the return type, `of object` and a calling convention after `;`, and `REF_TYPE`"
+    NEWLINE@208..209 "\n"
+    LINE_COMMENT@209..278 "// around a `PROC_TYPE`, in a `type` section, a variable and a field."
+    NEWLINE@278..279 "\n"
+    NEWLINE@279..280 "\n"
+    TYPE_SECTION@280..586
+      TYPE_KW@280..284 "type"
+      NEWLINE@284..285 "\n"
+      WHITESPACE@285..287 "  "
+      TYPE_DECL@287..328
+        IDENT@287..292 "TFunc"
+        WHITESPACE@292..293 " "
+        EQ@293..294 "="
+        WHITESPACE@294..295 " "
+        PROC_TYPE@295..327
+          FUNCTION_KW@295..303 "function"
+          PARAM_LIST@303..318
+            L_PAREN@303..304 "("
+            PARAM_GROUP@304..317
+              IDENT_LIST@304..308
+                IDENT@304..305 "A"
+                COMMA@305..306 ","
+                WHITESPACE@306..307 " "
+                IDENT@307..308 "B"
+              COLON@308..309 ":"
+              WHITESPACE@309..310 " "
+              TYPE_REF@310..317
+                QUALIFIED_NAME@310..317
+                  IDENT@310..317 "Integer"
+            R_PAREN@317..318 ")"
+          COLON@318..319 ":"
+          WHITESPACE@319..320 " "
+          RETURN_TYPE@320..327
+            TYPE_REF@320..327
+              QUALIFIED_NAME@320..327
+                IDENT@320..327 "Integer"
+        SEMICOLON@327..328 ";"
+      NEWLINE@328..329 "\n"
+      WHITESPACE@329..331 "  "
+      TYPE_DECL@331..377
+        IDENT@331..337 "TEvent"
+        WHITESPACE@337..338 " "
+        EQ@338..339 "="
+        WHITESPACE@339..340 " "
+        PROC_TYPE@340..376
+          PROCEDURE_KW@340..349 "procedure"
+          PARAM_LIST@349..366
+            L_PAREN@349..350 "("
+            PARAM_GROUP@350..365
+              IDENT_LIST@350..356
+                IDENT@350..356 "Sender"
+              COLON@356..357 ":"
+              WHITESPACE@357..358 " "
+              TYPE_REF@358..365
+                QUALIFIED_NAME@358..365
+                  IDENT@358..365 "TObject"
+            R_PAREN@365..366 ")"
+          WHITESPACE@366..367 " "
+          OF_KW@367..369 "of"
+          WHITESPACE@369..370 " "
+          OBJECT_KW@370..376 "object"
+        SEMICOLON@376..377 ";"
+      NEWLINE@377..378 "\n"
+      WHITESPACE@378..380 "  "
+      TYPE_DECL@380..417
+        IDENT@380..387 "TGetter"
+        WHITESPACE@387..388 " "
+        EQ@388..389 "="
+        WHITESPACE@389..390 " "
+        PROC_TYPE@390..416
+          FUNCTION_KW@390..398 "function"
+          COLON@398..399 ":"
+          WHITESPACE@399..400 " "
+          RETURN_TYPE@400..406
+            TYPE_REF@400..406
+              STRING_KW@400..406 "string"
+          WHITESPACE@406..407 " "
+          OF_KW@407..409 "of"
+          WHITESPACE@409..410 " "
+          OBJECT_KW@410..416 "object"
+        SEMICOLON@416..417 ";"
+      NEWLINE@417..418 "\n"
+      WHITESPACE@418..420 "  "
+      TYPE_DECL@420..445
+        IDENT@420..425 "TCall"
+        WHITESPACE@425..426 " "
+        EQ@426..427 "="
+        WHITESPACE@427..428 " "
+        PROC_TYPE@428..444
+          PROCEDURE_KW@428..437 "procedure"
+          SEMICOLON@437..438 ";"
+          WHITESPACE@438..439 " "
+          ROUTINE_DIRECTIVE@439..444
+            CDECL_KW@439..444 "cdecl"
+        SEMICOLON@444..445 ";"
+      NEWLINE@445..446 "\n"
+      WHITESPACE@446..448 "  "
+      TYPE_DECL@448..495
+        IDENT@448..452 "TRun"
+        WHITESPACE@452..453 " "
+        EQ@453..454 "="
+        WHITESPACE@454..455 " "
+        REF_TYPE@455..494
+          REFERENCE_KW@455..464 "reference"
+          WHITESPACE@464..465 " "
+          TO_KW@465..467 "to"
+          WHITESPACE@467..468 " "
+          PROC_TYPE@468..494
+            PROCEDURE_KW@468..477 "procedure"
+            PARAM_LIST@477..494
+              L_PAREN@477..478 "("
+              PARAM_GROUP@478..493
+                CONST_KW@478..483 "const"
+                WHITESPACE@483..484 " "
+                IDENT_LIST@484..485
+                  IDENT@484..485 "S"
+                COLON@485..486 ":"
+                WHITESPACE@486..487 " "
+                TYPE_REF@487..493
+                  STRING_KW@487..493 "string"
+              R_PAREN@493..494 ")"
+        SEMICOLON@494..495 ";"
+      NEWLINE@495..496 "\n"
+      WHITESPACE@496..498 "  "
+      TYPE_DECL@498..537
+        IDENT@498..503 "TNext"
+        WHITESPACE@503..504 " "
+        EQ@504..505 "="
+        WHITESPACE@505..506 " "
+        REF_TYPE@506..536
+          REFERENCE_KW@506..515 "reference"
+          WHITESPACE@515..516 " "
+          TO_KW@516..518 "to"
+          WHITESPACE@518..519 " "
+          PROC_TYPE@519..536
+            FUNCTION_KW@519..527 "function"
+            COLON@527..528 ":"
+            WHITESPACE@528..529 " "
+            RETURN_TYPE@529..536
+              TYPE_REF@529..536
+                QUALIFIED_NAME@529..536
+                  IDENT@529..536 "Integer"
+        SEMICOLON@536..537 ";"
+      NEWLINE@537..538 "\n"
+      WHITESPACE@538..540 "  "
+      TYPE_DECL@540..586
+        IDENT@540..547 "THolder"
+        WHITESPACE@547..548 " "
+        EQ@548..549 "="
+        WHITESPACE@549..550 " "
+        RECORD_TYPE@550..585
+          RECORD_KW@550..556 "record"
+          NEWLINE@556..557 "\n"
+          WHITESPACE@557..561 "    "
+          FIELD_DECL@561..579
+            IDENT_LIST@561..567
+              IDENT@561..567 "OnDone"
+            COLON@567..568 ":"
+            WHITESPACE@568..569 " "
+            PROC_TYPE@569..578
+              PROCEDURE_KW@569..578 "procedure"
+            SEMICOLON@578..579 ";"
+          NEWLINE@579..580 "\n"
+          WHITESPACE@580..582 "  "
+          END_KW@582..585 "end"
+        SEMICOLON@585..586 ";"
+    NEWLINE@586..587 "\n"
+    NEWLINE@587..588 "\n"
+    VAR_SECTION@588..619
+      VAR_KW@588..591 "var"
+      NEWLINE@591..592 "\n"
+      WHITESPACE@592..594 "  "
+      VAR_DECL@594..619
+        IDENT_LIST@594..595
+          IDENT@594..595 "P"
+        COLON@595..596 ":"
+        WHITESPACE@596..597 " "
+        PROC_TYPE@597..618
+          PROCEDURE_KW@597..606 "procedure"
+          PARAM_LIST@606..618
+            L_PAREN@606..607 "("
+            PARAM_GROUP@607..617
+              IDENT_LIST@607..608
+                IDENT@607..608 "X"
+              COLON@608..609 ":"
+              WHITESPACE@609..610 " "
+              TYPE_REF@610..617
+                QUALIFIED_NAME@610..617
+                  IDENT@610..617 "Integer"
+            R_PAREN@617..618 ")"
+        SEMICOLON@618..619 ";"
+    NEWLINE@619..620 "\n"
+    NEWLINE@620..621 "\n"
+    COMPOUND_STMT@621..630
+      BEGIN_KW@621..626 "begin"
+      NEWLINE@626..627 "\n"
+      END_KW@627..630 "end"
+    DOT@630..631 "."
+    NEWLINE@631..632 "\n"
+    EOF@632..632 ""

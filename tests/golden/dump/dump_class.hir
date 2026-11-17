@@ -1,0 +1,57 @@
+program DumpClass
+.type TPoint = record
+  .field 0 X: Integer
+  .field 1 Y: Integer
+.type TBase = class(TObject)
+  .field 0 Name: string
+.type TChild = class(TBase)
+  .field 1 Count: Integer
+  .field 2 Pos: TPoint
+  .field 3 Next: TChild
+.global g0 C: TChild
+.global g1 O: TObject
+.routine <main>
+  assign @25 R+
+    global g0 C
+    create TChild builtin
+  assign @26 R+
+    objfield string Name #0
+      global g0 C: TChild
+    const string "a"
+  assign @27 R+
+    objfield Integer Count #1
+      global g0 C: TChild
+    binary Integer
+      objfield Integer Count #1
+        global g0 C: TChild
+      + Integer int:Integer
+        const Integer 1
+  assign @28 R+
+    field Integer Y #1
+      objfield TPoint Pos #2
+        global g0 C: TChild
+    const Integer 2
+  writeln @29
+    arg
+      objfield string Name #0
+        global g0 C: TChild
+    arg
+      field Integer Y #1
+        objfield TPoint Pos #2
+          global g0 C: TChild
+    arg
+      builtin Assigned Boolean
+        objfield TChild Next #3
+          global g0 C: TChild
+    arg
+      binary Boolean
+        global g0 C: TChild
+        <> Boolean ref
+          const TChild nil
+  assign @30 R+
+    global g1 O
+    create TObject builtin
+  free @31 destroy
+    global g1 O: TObject
+  free @32
+    global g0 C: TChild

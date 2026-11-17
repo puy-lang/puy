@@ -1,0 +1,148 @@
+; puy ir 1
+.global
+  g0 R: TRec
+.func f0 LendAliasWrite.<main> params=0
+  .reg v0 E: EAliasError exception
+  .reg t0: TRec temp
+  .reg t1: string temp
+  .reg t2: TRec temp
+  .reg t3: Exception exception
+  .reg t4: Integer lent
+  .reg t5: Int64 temp
+  .reg t6: - ref
+  .reg t7: string lent
+  .reg t8: Int64 temp
+  .reg t9: - ref
+  .reg t10: - ref
+  .reg t11: - ref
+  .reg t12: TRec temp
+  .reg t13: TRec temp
+  .reg t14: Boolean temp
+  .reg t15: string temp
+  .reg t16: string temp
+  .reg t17: string temp
+  .reg t18: Integer temp
+  .reg t19: TRec temp
+  .reg t20: string temp
+  .reg t21: string temp
+  .reg t22: Integer temp
+  .reg t23: TRec temp
+  .reg t24: string temp
+  .reg t25: string temp
+  .reg t26: TRec temp
+  .reg t27: string temp
+  .try bb1..bb1 except bb2..bb4 t3
+bb0:
+  .line 27
+  Release      t0
+  StoreGlobalRef t0, g0
+  .line 28
+  LoadConst    t1, "s"
+  LoadGlobal   t2, g0
+  Unique       t2, LendAliasWrite.TRec
+  StoreGlobal  t2, g0
+  FieldSetRef  t2, 2, t1
+  .line 29
+  Jmp          bb1
+bb1:
+  .line 30
+  LoadZero     t5
+  MakeGlobalRef t6, g0
+  LoadInt      t8, 2
+  MakeGlobalRef t9, g0
+  LoadGlobal   t12, g0
+  Unique       t12, LendAliasWrite.TRec
+  StoreGlobal  t12, g0
+  LoadGlobal   t13, g0
+  Unique       t13, LendAliasWrite.TRec
+  StoreGlobal  t13, g0
+  Lend         t4, t6, 1, t5
+  MakeRef      t10, t4
+  Lend         t7, t9, 1, t8
+  MakeRef      t11, t7
+  Call         -, f1(t10, t11)
+  Unlend
+  .line 29
+  Jmp          bb5
+bb2:
+  .line 32
+  Move         t14, t3
+  IsClass      t14, EAliasError
+  JmpIfFalse   t14, bb4, bb3
+bb3:
+  .line 32
+  Move         v0, t3
+  .line 33
+  ObjGetRef    t15, v0, 0
+  LoadConst    t16, "\n"
+  ConcatStr    t15, t15, t16
+  CallHost     -, h0(t15)
+  .line 29
+  Release      t3
+  Jmp          bb5
+bb4:
+  .line 29
+  Raise        t3
+bb5:
+  .line 35
+  LoadGlobal   t19, g0
+  FieldGet     t18, t19, 0
+  IntToStr     t17, t18
+  LoadConst    t20, " "
+  ConcatStr    t17, t17, t20
+  LoadGlobal   t23, g0
+  FieldGet     t22, t23, 1
+  IntToStr     t21, t22
+  ConcatStr    t17, t17, t21
+  LoadConst    t24, " "
+  ConcatStr    t17, t17, t24
+  LoadGlobal   t26, g0
+  FieldGetRef  t25, t26, 2
+  ConcatStr    t17, t17, t25
+  LoadConst    t27, "\n"
+  ConcatStr    t17, t17, t27
+  CallHost     -, h0(t17)
+  .line 36
+  RetVoid
+.finally t0, t1, t3, t15, t16, t17, t20, t21, t24, t25, t27
+.func f1 LendAliasWrite.Touch params=2
+  .reg v0 X: Integer var param
+  .reg v1 T: string var param
+  .reg t0: Integer temp
+  .reg t1: TRec temp
+  .reg t2: Integer temp
+  .reg t3: string temp
+  .reg t4: string temp
+  .reg t5: string temp
+  .reg t6: string temp
+  .reg t7: TRec temp
+  .reg t8: string temp
+bb0:
+  .line 19
+  LoadInt      t0, 1
+  LoadGlobal   t1, g0
+  Unique       t1, LendAliasWrite.TRec
+  StoreGlobal  t1, g0
+  FieldSet     t1, 1, t0
+  .line 20
+  LoadInt      t2, 5
+  StoreRef     v0, t2
+  .line 21
+  LoadRefRef   t3, v1
+  LoadConst    t4, "!"
+  LoadRef      t5, v1
+  AppendStr    t5, t3, t4
+  StoreRef     v1, t5
+  Release      t3
+  .line 22
+  LoadConst    t6, "g"
+  LoadGlobal   t7, g0
+  Unique       t7, LendAliasWrite.TRec
+  StoreGlobal  t7, g0
+  FieldSetRef  t7, 2, t6
+  .line 23
+  LoadConst    t8, "not reached\n"
+  CallHost     -, h0(t8)
+  .line 24
+  RetVoid
+.finally t3, t4, t6, t8

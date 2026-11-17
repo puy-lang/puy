@@ -1,0 +1,13 @@
+error[E3200]: type helpers for built-in types are not supported yet (planned for M5)
+   --> helper_builtin_hidden.pas:30:11
+    |
+ 30 |   WriteLn(S.Length);    // E3200
+    |           ^^^^^^^^
+
+error[E3200]: type helpers for built-in types are not supported yet (planned for M5)
+   --> helper_builtin_hidden.pas:31:11
+    |
+ 31 |   WriteLn(I.ToString);  // E3200
+    |           ^^^^^^^^^^
+
+error: aborting due to 2 errors

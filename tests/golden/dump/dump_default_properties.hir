@@ -1,0 +1,129 @@
+program DumpDefaultProperties
+.type TSeq = class(TRefObject) ref
+  .method f0 Get
+  .method f1 Put
+  .method f2 Count
+  .property Items[Integer]: Integer read=f0 write=f1 default
+  .property Items[TIndexRange]: Integer read=f2 write=- default
+.global g0 S: TSeq
+.routine f0 TSeq.Get(I: Integer): Integer
+  .var v0 Self: TSeq self
+  .var v1 I: Integer param
+  .var v2 Result: Integer result
+  assign @20 R+
+    var v2 Result
+    var v1 I: Integer
+.routine f1 TSeq.Put(I: Integer; V: Integer)
+  .var v0 Self: TSeq self
+  .var v1 I: Integer param
+  .var v2 V: Integer param
+.routine f2 TSeq.Count(const R: TIndexRange): Integer
+  .var v0 Self: TSeq self
+  .var v1 R: TIndexRange const param
+  .var v2 Result: Integer result
+  .var v3 F: Integer local
+  .var v4 L: Integer local
+  .var v5 -: TIndexRange hidden
+  .var v6 -: Integer hidden
+  .var v7 -: Integer hidden
+  .var v8 -: Integer hidden
+  .var v9 -: Integer hidden
+  block @31
+    assign @31 R-
+      var v5 -
+      var v1 R: TIndexRange
+    assign @31 R-
+      var v6 -
+      const Integer 0
+    assign @31 R-
+      var v7 -
+      const Integer 9
+    assign @31 R-
+      var v8 -
+      var v6 -: Integer
+    if @31
+      cond
+        field Boolean HasFirst #2
+          var v5 -: TIndexRange
+      then
+        if @31
+          cond
+            binary Boolean
+              field Integer First #0
+                var v5 -: TIndexRange
+              > Boolean int:Integer
+                var v6 -: Integer
+          then
+            assign @31 R-
+              var v8 -
+              field Integer First #0
+                var v5 -: TIndexRange
+    assign @31 R-
+      var v9 -
+      var v7 -: Integer
+    if @31
+      cond
+        field Boolean HasLast #3
+          var v5 -: TIndexRange
+      then
+        if @31
+          cond
+            binary Boolean
+              field Integer Last #1
+                var v5 -: TIndexRange
+              < Boolean int:Integer
+                var v7 -: Integer
+          then
+            assign @31 R-
+              var v9 -
+              field Integer Last #1
+                var v5 -: TIndexRange
+    if @31
+      cond
+        binary Boolean
+          var v9 -: Integer
+          < Boolean int:Integer
+            var v8 -: Integer
+      then
+        assign @31 R-
+          var v9 -
+          binary Integer
+            var v8 -: Integer
+            - Integer int:Integer
+              const Integer 1
+    assign @31 R-
+      var v3 F
+      var v8 -: Integer
+    assign @31 R-
+      var v4 L
+      var v9 -: Integer
+  assign @32 R+
+    var v2 Result
+    binary Integer
+      var v4 L: Integer
+      - Integer int:Integer
+        var v3 F: Integer
+      + Integer int:Integer
+        const Integer 1
+.routine <main>
+  assign @38 R+
+    global g0 S
+    create TSeq builtin
+  assign @39
+    property Items f1
+      global g0 S: TSeq
+      const Integer 1
+    method f0 TSeq.Get: Integer
+      global g0 S: TSeq
+      const Integer 2
+  writeln @40
+    arg
+      method f2 TSeq.Count: Integer
+        global g0 S: TSeq
+        range-index first
+          const Integer 3
+    arg
+      method f2 TSeq.Count: Integer
+        global g0 S: TSeq
+        range-index last
+          const Integer 4

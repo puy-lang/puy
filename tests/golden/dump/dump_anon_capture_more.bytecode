@@ -1,0 +1,164 @@
+; puyc format 0
+.const
+  0: str "box"
+  1: str "s"
+  2: str "\n"
+  3: str " "
+.type
+  64: class DumpAnonCaptureMore.TBox ref slots=1 refs=0 parent=ty20 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+.global
+  0: ref B
+  1: ref P
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpAnonCaptureMore file="dump_anon_capture_more.pas" init=- fini=- entry=0
+.func 0 DumpAnonCaptureMore.<main> params=0 regs=8
+  .line 44
+  0000  New          r0, ty64
+  0001  StoreGlobalRef r0, g0
+  .line 45
+  0002  LoadGlobal   r7, g0
+  0003  LoadConst    r1, k0
+  0004  ObjSetRef    r7, 0, r1
+  .line 46
+  0005  LoadGlobalRef r3, g0
+  0006  Move         r7, r3
+  0007  CallMethod   r7, f1
+  0008  MoveRef      r2, r7
+  0009  StoreGlobalRef r2, g1
+  .line 47
+  000a  LoadGlobalRef r4, g1
+  000b  CallClosure  r7, r4
+  .line 48
+  000c  LoadConst    r6, k1
+  000d  Move         r7, r6
+  000e  Call         r7, f3
+  000f  MoveRef      r5, r7
+  0010  StoreGlobalRef r5, g1
+  .line 49
+  0011  RetVoid
+.finally r0, r1, r2, r3, r4, r5, r6
+.func 1 DumpAnonCaptureMore.TBox.Show params=1 regs=6
+  .local r0 Self
+  .local r1 Result
+  .local r2 Self
+  .line 14
+  0000  NewCellRef   r2
+  0001  CellSetRef   r2, r0
+  .line 16
+  0002  LoadInt      r3, 2
+  0003  LoadInt      r4, 1
+  0004  Move         r5, r2
+  0005  MakeClosure  r1, r3
+  .line 17
+  0006  Ret          r1
+.finally r1, r2
+.func 2 DumpAnonCaptureMore.TBox.Show.<anon1> params=1 regs=6
+  .local r1 Self
+  .local r2 Self
+  .line 16
+  0000  CapGet       r2, r0, 0
+  0001  CellRef      r1, r2
+  0002  LoadRef      r5, r1
+  0003  ObjGetRef    r3, r5, 0
+  0004  LoadConst    r4, k2
+  0005  ConcatStr    r3, r3, r4
+  0006  CallHost     r3, h0
+  0007  RetVoid
+.finally r3, r4
+.func 3 DumpAnonCaptureMore.Make params=1 regs=14
+  .local r0 S
+  .local r1 Result
+  .local r2 O
+  .local r3 Total
+  .local r5 S
+  .local r6 O
+  .local r7 Total
+  .line 19
+  0000  NewCellRef   r5
+  0001  CellSetRef   r5, r0
+  0002  NewCellObj   r6
+  0003  CellRef      r2, r6
+  0004  NewCell      r7
+  0005  CellRef      r3, r7
+  0006  LoadInt      r9, -1
+  0007  LoadInt      r10, 1
+  0008  Move         r11, r7
+  0009  MakeClosure  r4, r9
+  .line 32
+  000a  New          r8, ty64
+  000b  LoadRef      r9, r2
+  000c  AddRefObj    r8
+  000d  StoreRef     r2, r8
+  000e  ReleaseObj   r9
+  .line 33
+  000f  LoadZero     r9
+  0010  StoreRef     r3, r9
+  .line 34
+  0011  Move         r9, r4
+  0012  Call         r9, f4
+  .line 35
+  0013  LoadInt      r9, 5
+  0014  LoadInt      r10, 3
+  0015  Move         r11, r5
+  0016  Move         r12, r6
+  0017  Move         r13, r7
+  0018  MakeClosure  r1, r9
+  .line 36
+  0019  CallClosure  r9, r1
+  .line 37
+  001a  Move         r9, r4
+  001b  LoadInt      r10, 4
+  001c  ClosureWith  r1, r9
+  .line 38
+  001d  Ret          r1
+.finally r1, r4, r5, r6, r7, r8:obj
+.func 4 DumpAnonCaptureMore.Make.Down params=1 regs=5
+  .local r1 Total
+  .local r2 Total
+  .line 24
+  0000  CapGet       r2, r0, 0
+  0001  CellRef      r1, r2
+  .line 26
+  0002  LoadRef      r3, r1
+  0003  AddIntI      r3, r3, 1
+  0004  NarrowOvf    r3, r3, 4
+  0005  StoreRef     r1, r3
+  .line 27
+  0006  LoadRef      r3, r1
+  0007  JmpIfGeIntI  r3, 2, -> 000a
+  .line 28
+  0008  Move         r3, r0
+  0009  Call         r3, f4
+  .line 29
+  000a  RetVoid
+.func 5 DumpAnonCaptureMore.Make.<anon1> params=1 regs=14
+  .local r1 S
+  .local r2 O
+  .local r3 Total
+  .local r4 S
+  .local r5 O
+  .local r6 Total
+  .line 35
+  0000  CapGet       r4, r0, 0
+  0001  CellRef      r1, r4
+  0002  CapGet       r5, r0, 1
+  0003  CellRef      r2, r5
+  0004  CapGet       r6, r0, 2
+  0005  CellRef      r3, r6
+  0006  LoadRefRef   r7, r1
+  0007  LoadConst    r8, k3
+  0008  ConcatStr    r7, r7, r8
+  0009  LoadRef      r13, r2
+  000a  ClassName    r9, r13
+  000b  ConcatStr    r7, r7, r9
+  000c  LoadConst    r10, k3
+  000d  ConcatStr    r7, r7, r10
+  000e  LoadRef      r13, r3
+  000f  IntToStr     r11, r13
+  0010  ConcatStr    r7, r7, r11
+  0011  LoadConst    r12, k2
+  0012  ConcatStr    r7, r7, r12
+  0013  CallHost     r7, h0
+  0014  RetVoid
+.finally r7, r8, r9, r10, r11, r12

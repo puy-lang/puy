@@ -1,0 +1,11 @@
+P(Int64) 1
+Q(TUserId) 1
+Q(Int64) 3
+Q(Int64) 2
+R(TUserId) 2
+R(TUserId) 3
+R(Integer) 4
+D(Double) 1.0
+Add(TTotal; TUserId) 100
+Add(TTotal; Int64) 103
+Add(TTotal; Int64) 105

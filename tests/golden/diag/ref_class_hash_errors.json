@@ -1,0 +1,194 @@
+[
+  {
+    "schema": "puy.diagnostics/1",
+    "diagnostics": [
+      {
+        "code": "E0765",
+        "severity": "error",
+        "name": null,
+        "message": "class `TOnlyEqual` declares operator `Equal` but does not override `GetHashCode`",
+        "primary": {
+          "file": "ref_class_hash_errors.pas",
+          "start": 570,
+          "end": 575,
+          "line": 12,
+          "column": 20,
+          "end_line": 12,
+          "end_column": 25,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "override `GetHashCode` so that equal objects return the same value"
+        ],
+        "fixes": [
+          {
+            "title": "override `GetHashCode`",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "ref_class_hash_errors.pas",
+                "start": 609,
+                "end": 609,
+                "line": 12,
+                "column": 59,
+                "end_line": 12,
+                "end_column": 59,
+                "original": "",
+                "replacement": "\n    function GetHashCode: Int64; override;"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E0765]: class `TOnlyEqual` declares operator `Equal` but does not override `GetHashCode`\n   --> ref_class_hash_errors.pas:12:20\n    |\n 12 |     class operator Equal(const A, B: TOnlyEqual): Boolean;\n    |                    ^^^^^\n    |\n    = note: override `GetHashCode` so that equal objects return the same value\n    = suggestion: override `GetHashCode`"
+      },
+      {
+        "code": "E0765",
+        "severity": "error",
+        "name": null,
+        "message": "`TWithEquals` declares operator `Equal`, so `Equals` is generated and cannot be overridden",
+        "primary": {
+          "file": "ref_class_hash_errors.pas",
+          "start": 741,
+          "end": 747,
+          "line": 18,
+          "column": 14,
+          "end_line": 18,
+          "end_column": 20,
+          "label": ""
+        },
+        "secondary": [
+          {
+            "file": "ref_class_hash_errors.pas",
+            "start": 687,
+            "end": 692,
+            "line": 17,
+            "column": 20,
+            "end_line": 17,
+            "end_column": 25,
+            "label": "operator `Equal` declared here"
+          }
+        ],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0765]: `TWithEquals` declares operator `Equal`, so `Equals` is generated and cannot be overridden\n   --> ref_class_hash_errors.pas:18:14\n    |\n 17 |     class operator Equal(const A, B: TWithEquals): Boolean;\n    |                    ----- operator `Equal` declared here\n 18 |     function Equals(Obj: TObject): Boolean; override;\n    |              ^^^^^^"
+      },
+      {
+        "code": "E0765",
+        "severity": "error",
+        "name": null,
+        "message": "`TEqualsNoHash` declares operator `Equal`, so `Equals` is generated and cannot be overridden",
+        "primary": {
+          "file": "ref_class_hash_errors.pas",
+          "start": 1026,
+          "end": 1032,
+          "line": 25,
+          "column": 14,
+          "end_line": 25,
+          "end_column": 20,
+          "label": ""
+        },
+        "secondary": [
+          {
+            "file": "ref_class_hash_errors.pas",
+            "start": 970,
+            "end": 975,
+            "line": 24,
+            "column": 20,
+            "end_line": 24,
+            "end_column": 25,
+            "label": "operator `Equal` declared here"
+          }
+        ],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0765]: `TEqualsNoHash` declares operator `Equal`, so `Equals` is generated and cannot be overridden\n   --> ref_class_hash_errors.pas:25:14\n    |\n 24 |     class operator Equal(const A, B: TEqualsNoHash): Boolean;\n    |                    ----- operator `Equal` declared here\n 25 |     function Equals(Obj: TObject): Boolean; override;\n    |              ^^^^^^"
+      },
+      {
+        "code": "E0765",
+        "severity": "error",
+        "name": null,
+        "message": "class `TSubKey` declares operator `Equal` but does not override `GetHashCode`",
+        "primary": {
+          "file": "ref_class_hash_errors.pas",
+          "start": 1340,
+          "end": 1345,
+          "line": 36,
+          "column": 20,
+          "end_line": 36,
+          "end_column": 25,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "override `GetHashCode` so that equal objects return the same value"
+        ],
+        "fixes": [
+          {
+            "title": "override `GetHashCode`",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "ref_class_hash_errors.pas",
+                "start": 1376,
+                "end": 1376,
+                "line": 36,
+                "column": 56,
+                "end_line": 36,
+                "end_column": 56,
+                "original": "",
+                "replacement": "\n    function GetHashCode: Int64; override;"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E0765]: class `TSubKey` declares operator `Equal` but does not override `GetHashCode`\n   --> ref_class_hash_errors.pas:36:20\n    |\n 36 |     class operator Equal(const A, B: TSubKey): Boolean;\n    |                    ^^^^^\n    |\n    = note: override `GetHashCode` so that equal objects return the same value\n    = suggestion: override `GetHashCode`"
+      },
+      {
+        "code": "E0744",
+        "severity": "error",
+        "name": null,
+        "message": "`GetHashCode` does not override a virtual method of `TRefObject`",
+        "primary": {
+          "file": "ref_class_hash_errors.pas",
+          "start": 1838,
+          "end": 1849,
+          "line": 53,
+          "column": 14,
+          "end_line": 53,
+          "end_column": 25,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "`GetHashCode` returns `Int64` in Puy"
+        ],
+        "fixes": [
+          {
+            "title": "change the return type to `Int64`",
+            "applicability": "safe",
+            "edits": [
+              {
+                "file": "ref_class_hash_errors.pas",
+                "start": 1851,
+                "end": 1858,
+                "line": 53,
+                "column": 27,
+                "end_line": 53,
+                "end_column": 34,
+                "original": "Integer",
+                "replacement": "Int64"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E0744]: `GetHashCode` does not override a virtual method of `TRefObject`\n   --> ref_class_hash_errors.pas:53:14\n    |\n 53 |     function GetHashCode: Integer; override;\n    |              ^^^^^^^^^^^\n    |\n    = note: `GetHashCode` returns `Int64` in Puy\n    = fix: change the return type to `Int64`"
+      }
+    ],
+    "summary": {
+      "errors": 5,
+      "warnings": 0,
+      "notes": 0
+    }
+  }
+]

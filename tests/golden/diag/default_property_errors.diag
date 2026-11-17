@@ -1,0 +1,69 @@
+error[E0701]: overloads of `Items` have the same parameters
+   --> default_property_errors.pas:26:14
+    |
+ 25 |     property Items[I: Integer]: Integer read GetI; default;
+    |              ----- declared here
+ 26 |     property Items[J: Integer]: Integer read GetJ; default;
+    |              ^^^^^ declared again here
+
+error[E0756]: default properties of `TFoo` must have the same name
+   --> default_property_errors.pas:27:14
+    |
+ 25 |     property Items[I: Integer]: Integer read GetI; default;
+    |              ----- the first default property
+ 26 |     property Items[J: Integer]: Integer read GetJ; default;
+ 27 |     property Other[const S: string]: Integer read GetS; default;
+    |              ^^^^^
+
+error[E0756]: a default property must have index parameters
+   --> default_property_errors.pas:28:42
+    |
+ 28 |     property NoIndex: Integer read GetX; default;
+    |                                          ^^^^^^^
+
+error[E0756]: a class property cannot be a default property
+   --> default_property_errors.pas:29:59
+    |
+ 29 |     class property Counts[I: Integer]: Integer read GetC; default;
+    |                                                           ^^^^^^^
+
+error[E0701]: `Plain` is already declared
+   --> default_property_errors.pas:30:14
+    |
+ 30 |     property Plain[I: Integer]: Integer read GetI;
+    |              ^^^^^ declared again here
+ 31 |     property Plain[const S: string]: Integer read GetS; default;
+    |              ----- declared here
+
+error[E0756]: default properties of `TFoo` must have the same name
+   --> default_property_errors.pas:32:14
+    |
+ 25 |     property Items[I: Integer]: Integer read GetI; default;
+    |              ----- the first default property
+...
+ 32 |     property Mixed[const S: string]: Integer read GetS; default;
+    |              ^^^^^
+
+error[E0701]: `Mixed` is already declared
+   --> default_property_errors.pas:33:14
+    |
+ 32 |     property Mixed[const S: string]: Integer read GetS; default;
+    |              ----- declared here
+ 33 |     property Mixed[I: Integer]: Integer read GetI;
+    |              ^^^^^ declared again here
+
+error[E0756]: a default property indexed by `TIndexRange` cannot return a manual class `TManual`
+   --> default_property_errors.pas:34:43
+    |
+ 34 |     property Items[const R: TIndexRange]: TManual read GetR; default;
+    |                                           ^^^^^^^
+    |
+    = note: the instance `X[L..H]` makes would leak; return a dynamic array or a reference counted class
+
+error[E0753]: `default` is not allowed in a helper
+   --> default_property_errors.pas:41:54
+    |
+ 41 |     property Digits[I: Integer]: Integer read Digit; default;
+    |                                                      ^^^^^^^
+
+error: aborting due to 9 errors

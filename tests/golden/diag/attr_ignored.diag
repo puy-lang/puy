@@ -1,0 +1,46 @@
+warning[W0010]: attribute `[Ref]` is ignored (ignored-hint-directive)
+   --> attr_ignored.pas:11:23
+    |
+ 11 | procedure Show(const [Ref] S: string; [Volatile] N: Integer);
+    |                       ^^^
+    |
+    = note: disable with `{$WARN ignored-hint-directive OFF}`
+    = fix: remove `[Ref]`
+
+warning[W0010]: attribute `[Volatile]` is ignored (ignored-hint-directive)
+   --> attr_ignored.pas:11:40
+    |
+ 11 | procedure Show(const [Ref] S: string; [Volatile] N: Integer);
+    |                                        ^^^^^^^^
+    |
+    = note: disable with `{$WARN ignored-hint-directive OFF}`
+    = fix: remove `[Volatile]`
+
+warning[W0010]: attribute `[Ref]` is ignored (ignored-hint-directive)
+   --> attr_ignored.pas:17:4
+    |
+ 17 |   [Ref, Mark] A: Integer;
+    |    ^^^
+    |
+    = note: disable with `{$WARN ignored-hint-directive OFF}`
+    = fix: remove `[Ref]`
+
+warning[W0010]: attribute `[Volatile]` is ignored (ignored-hint-directive)
+   --> attr_ignored.pas:18:10
+    |
+ 18 |   [Mark, Volatile, Mark] B: Integer;
+    |          ^^^^^^^^
+    |
+    = note: disable with `{$WARN ignored-hint-directive OFF}`
+    = fix: remove `[Volatile]`
+
+warning[W0010]: attribute `[Ref]` is ignored (ignored-hint-directive)
+   --> attr_ignored.pas:19:10
+    |
+ 19 |   [Mark, Ref] C: Integer;
+    |          ^^^
+    |
+    = note: disable with `{$WARN ignored-hint-directive OFF}`
+    = fix: remove `[Ref]`
+
+warning: 5 warnings emitted

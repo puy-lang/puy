@@ -1,0 +1,12 @@
+TForm: OK 1
+TForm: OK 2
+TMainForm first
+TForm: Cancel 1
+TMainForm first
+TForm: OK 2
+2 2
+item 3
+main form
+form
+FALSE TRUE
+OK: no handler

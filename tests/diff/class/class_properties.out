@@ -1,0 +1,18 @@
+SetCount 5
+5 10 15
+7 7
+one onetwo 6
+23
+SetCell 4 5 12
+5 105 105
+object
+value
+TChild.SetValue 42
+TBase.SetValue 84
+84
+TChild.SetValue 85
+TBase.SetValue 170
+Show 170 300 400
+object
+index
+100

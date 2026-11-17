@@ -1,0 +1,30 @@
+visit a
+destroy ref b
+EAccessViolation
+destroy ref a
+visit key a
+destroy ref a
+destroy ref b
+EAccessViolation
+visit x
+EAccessViolation
+destroy ref a
+destroy ref b
+list: EAccessViolation
+dictionary: EAccessViolation
+stack: EAccessViolation
+InsertRange: cannot own a reference counted object of class `TRef`, count 0
+destroy the list
+Create(Source): cannot own a reference counted object of class `TRef`
+free manual
+destroy refused
+free old value
+free k2
+AddOrSetValue: cannot free old value
+kept 1 new value
+free k1
+free new value
+views 2
+free a value
+Free: cannot free a value
+end

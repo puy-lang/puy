@@ -1,5 +1,5 @@
 // The `hir` dump of a unit shows `<init>` (the initial values, then the `initialization`
-// statements) and `<fini>` (docs/spec/semantics.md 9.1, docs/spec/units.md 5.1).
+// statements) and `<fini>` (docs/spec/semantics.md chapter 9, docs/spec/units.md 5.1).
 unit UnitSections;
 
 interface

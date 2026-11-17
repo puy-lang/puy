@@ -1,0 +1,9 @@
+value 300 is out of range for `TSmall` (0..255)
+value 1000 is out of range for `TSmall` (0..255)
+value 300 is out of range for Byte (0..255)
+value 18446744073709551615 is out of range for Int64 (-9223372036854775808..9223372036854775807)
+250
+value 256 is out of range for `TSmall` (0..255)
+value -1 is out of range for `TSmall` (0..255)
+value #-1 is out of range for `TLetter` (#0..#65535)
+255

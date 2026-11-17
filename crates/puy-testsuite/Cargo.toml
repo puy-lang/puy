@@ -22,3 +22,8 @@ serde_json = { workspace = true, features = ["preserve_order"] }
 [[bin]]
 name = "record-fpc"
 path = "src/bin/record_fpc.rs"
+
+# Checks the diff cases with dcc64 (native only; docs/design/testing.md 3.4)
+[[bin]]
+name = "check-dcc"
+path = "src/bin/check_dcc.rs"

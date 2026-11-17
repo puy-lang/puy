@@ -1,0 +1,78 @@
+program DumpGenericKinds
+.type IGetter<T> = interface(IInterface)
+  .method #0 Get: T
+.type TMap<T, R> = reference to function(const X: T): R
+.type TRow<T> = array of T
+.type TFour<T> = array[0..3] of T
+.type TStore<T>.TCell = record
+  .field 0 Value: T
+.type TStore<T> = class(TRefObject) ref
+  .field 0 Cell: TCell
+  .classvar g5 Count: Integer
+  .method - Get
+  .implements IInterface
+  .implements IGetter<T> #0=-
+.global g0 G: IGetter<string>
+.global g1 M: TMap<Integer, string>
+.global g2 R: TRow<Double>
+.global g3 F: TFour<Byte>
+.global g4 TStore<string>.Count: Integer
+.routine - TStore<T>.Get(): T
+  .var v0 Self: TStore<T> self
+  .var v1 Result: T result
+  inc @35 calc=Integer Q+R+
+    global g5 TStore<T>.Count
+  assign @36 R+
+    var v1 Result
+    field T Value #0
+      objfield TCell Cell #0
+        self TStore<T>
+.instance IGetter<string>
+.instance TMap<Integer, string>
+.instance TFour<Byte>
+.instance TStore<string>
+.routine f4 TStore<string>.Get(): string
+  .var v0 Self: TStore<string> self
+  .var v1 Result: string result
+  inc @35 calc=Integer Q+R+
+    global g4 TStore<string>.Count
+  assign @36 R+
+    var v1 Result
+    field string Value #0
+      objfield TStore<string>.TCell Cell #0
+        self TStore<string>
+.instance TStore<string>.TCell
+.routine <main>
+  assign @45 R+
+    global g0 G
+    create TStore<string> builtin
+  assign @46 R+
+    global g1 M
+    const TMap<Integer, string> nil
+  setlength @47
+    global g2 R
+    const Int64 1
+  assign @48 R+
+    index Byte
+      global g3 F
+      const Integer 0
+    const Byte 1
+  writeln @49
+    arg
+      binary Boolean
+        intfcall IGetter<string>.Get #0: string
+          global g0 G: IGetter<string>
+        = Boolean str
+          const string ""
+    arg
+      builtin Assigned Boolean
+        global g1 M: TMap<Integer, string>
+    arg
+      builtin Length Integer
+        global g2 R: TRow<Double>
+    arg
+      index Byte
+        global g3 F: TFour<Byte>
+        const Integer 0
+    arg
+      global g4 TStore<string>.Count: Integer

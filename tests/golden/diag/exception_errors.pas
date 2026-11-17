@@ -1,7 +1,8 @@
 program ExceptionErrors;
 
 // Diagnostics of exception classes and `raise` (docs/spec/exceptions.md 1-3, 5.1, 5.6, 8):
-// E0727 (inherits from itself), E0733, E3200 for the other `class` forms, E0732 (no `except`
+// E0723 (a parent declared later; M4-27), E0733, E0723 (a forward declaration without a body),
+// E3200 for members of an exception class (M3-35; a class with `TObject` as its parent is a class), E0732 (no `except`
 // block yet), E0702, E3004 (`raise ... at`), E0700 (no member), E0707 (read-only property),
 // E3019 (`Free` / `Destroy` / `FreeAndNil`), E0718, E0705, E0703, E0725, and E3200 for a parent
 // that is an M2b class.

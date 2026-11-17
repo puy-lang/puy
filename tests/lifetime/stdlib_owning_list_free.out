@@ -1,0 +1,44 @@
+-- removing
+free b
+free c
+free d
+free e
+free g
+count 2: a f
+free a
+free f
+-- replacing
+free b
+a b2
+free a
+free b2
+-- extracting
+extracted b
+free b
+extracted a
+free a
+count 1
+free c
+-- not owning
+owns FALSE, count 0
+free x
+-- a destructor raises
+free a
+free b
+free c
+free d
+Exception: c failed
+  suppressed Exception: a failed
+count 0
+free e
+free f
+Exception: e failed
+-- sorting
+owns TRUE
+free a
+free b
+free c
+free kept
+-- the same instance twice
+free twice
+EAccessViolation: access to a freed object

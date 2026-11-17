@@ -1,0 +1,55 @@
+error[E3021]: raising `TObject` is not supported in Puy
+   --> exception_class_errors.pas:25:11
+    |
+ 25 |     raise O;
+    |           ^
+    |
+    = note: raise an object whose class derives from `Exception`
+
+error[E3021]: raising `TPlain` is not supported in Puy
+   --> exception_class_errors.pas:27:11
+    |
+ 27 |     raise P;
+    |           ^
+    |
+    = note: raise an object whose class derives from `Exception`
+
+error[E3021]: raising `TCounted` is not supported in Puy
+   --> exception_class_errors.pas:29:11
+    |
+ 29 |     raise C;
+    |           ^
+    |
+    = note: raise an object whose class derives from `Exception`
+
+error[E0702]: type mismatch: expected `Exception`, found `string`
+   --> exception_class_errors.pas:31:11
+    |
+ 31 |     raise 'text';
+    |           ^^^^^^
+
+error[E0733]: `TObject` is not an exception class
+   --> exception_class_errors.pas:35:11
+    |
+ 35 |     on E: TObject do
+    |           ^^^^^^^
+    |
+    = note: every exception derives from `Exception`
+
+error[E0733]: `TPlain` is not an exception class
+   --> exception_class_errors.pas:37:11
+    |
+ 37 |     on E: TPlain do
+    |           ^^^^^^
+    |
+    = note: every exception derives from `Exception`
+
+error[E3004]: `ExceptAddr` is not supported in Puy
+   --> exception_class_errors.pas:40:8
+    |
+ 40 |   O := ExceptAddr;
+    |        ^^^^^^^^^^
+    |
+    = note: use a class, a dynamic array or a `var` parameter instead
+
+error: aborting due to 7 errors

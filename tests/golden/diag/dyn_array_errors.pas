@@ -28,7 +28,7 @@ procedure Bad(out A: array of Integer); // E3200: out open array
 begin
 end;
 
-procedure Args(const A: array of const); // E3200: array of const (M3)
+procedure Args(const A: array of const); // E3200: array of const (M5)
 begin
 end;
 
@@ -57,5 +57,5 @@ begin
   I := Ord(Assigned(I));                // E0702: Assigned of an Integer
   I := High(TInts);                     // E0702: High of a dynamic array type
   I := Copy(A, 1, 2, 3)[0];             // E0705
-  if nil = nil then;                    // E3200: nil without a dynamic array
+  if nil = nil then;                    // E0702: nil without a type
 end.

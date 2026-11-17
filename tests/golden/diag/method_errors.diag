@@ -1,0 +1,260 @@
+error[E0723]: method `TBase.NoBody` has no body
+   --> method_errors.pas:21:15
+    |
+ 21 |     procedure NoBody;
+    |               ^^^^^^
+
+error[E0744]: override of `Run` cannot reduce its visibility from `public` to `protected`
+   --> method_errors.pas:27:15
+    |
+ 17 |     procedure Run(X: Integer); virtual;
+    |               --- declared here
+...
+ 27 |     procedure Run(X: Integer); override;
+    |               ^^^
+
+error[E0744]: `Missing` does not override a virtual method of `TBase`
+   --> method_errors.pas:29:15
+    |
+ 29 |     procedure Missing; override;
+    |               ^^^^^^^
+
+error[E0744]: an overriding method cannot be `abstract`
+   --> method_errors.pas:30:38
+    |
+ 30 |     function Area: Double; override; abstract;
+    |                                      ^^^^^^^^
+
+error[E0745]: cannot override final method `TBase.Locked`
+   --> method_errors.pas:31:15
+    |
+ 19 |     procedure Locked; virtual; final;
+    |               ------ declared here
+...
+ 31 |     procedure Locked; override;
+    |               ^^^^^^
+
+warning[W0026]: `reintroduce` has no effect: no ancestor of `TChild` declares `Fresh` (unneeded-reintroduce)
+   --> method_errors.pas:33:22
+    |
+ 33 |     procedure Fresh; reintroduce;
+    |                      ^^^^^^^^^^^
+    |
+    = note: disable with `{$WARN unneeded-reintroduce OFF}`
+    = fix: remove `reintroduce`
+
+error[E0744]: `Run2` does not override a virtual method of `TBase`
+   --> method_errors.pas:34:15
+    |
+ 34 |     procedure Run2; virtual; override;
+    |               ^^^^
+
+error[E0744]: a method cannot be both `virtual` and `override`
+   --> method_errors.pas:34:30
+    |
+ 34 |     procedure Run2; virtual; override;
+    |                              ^^^^^^^^
+
+error[E0744]: `Both` does not override a virtual method of `TBase`
+   --> method_errors.pas:35:15
+    |
+ 35 |     procedure Both; override; reintroduce;
+    |               ^^^^
+
+error[E0744]: a method cannot be both `override` and `reintroduce`
+   --> method_errors.pas:35:31
+    |
+ 35 |     procedure Both; override; reintroduce;
+    |                               ^^^^^^^^^^^
+
+error[E0744]: `final` can only be applied to virtual methods
+   --> method_errors.pas:36:27
+    |
+ 36 |     procedure NotVirtual; final;
+    |                           ^^^^^
+
+error[E0744]: `static` can only be applied to class methods
+   --> method_errors.pas:37:25
+    |
+ 37 |     procedure NotClass; static;
+    |                         ^^^^^^
+
+error[E0744]: an abstract method must be `virtual`
+   --> method_errors.pas:38:29
+    |
+ 38 |     procedure OnlyAbstract; abstract;
+    |                             ^^^^^^^^
+
+error[E3009]: `message` is not supported in Puy
+   --> method_errors.pas:39:36
+    |
+ 39 |     procedure Msg(var M: Integer); message 1;
+    |                                    ^^^^^^^
+    |
+    = note: use events or channels instead
+
+error[E3010]: `dispid` is not supported in Puy
+   --> method_errors.pas:40:21
+    |
+ 40 |     procedure Disp; dispid 3;
+    |                     ^^^^^^
+    |
+    = note: Puy does not support COM
+
+warning[W0021]: method `Run` hides virtual method of `TBase` (hidden-virtual-method)
+   --> method_errors.pas:45:15
+    |
+ 45 |     procedure Run(X: Integer);
+    |               ^^^
+    |
+    = note: disable with `{$WARN hidden-virtual-method OFF}`
+    = suggestion: add `override`
+    = suggestion: add `reintroduce`
+
+warning[W0021]: method `Area` hides virtual method of `TBase` (hidden-virtual-method)
+   --> method_errors.pas:46:14
+    |
+ 46 |     function Area: Double; virtual;
+    |              ^^^^
+    |
+    = note: disable with `{$WARN hidden-virtual-method OFF}`
+    = suggestion: add `override`
+    = suggestion: add `reintroduce`
+
+error[E0745]: cannot inherit from sealed class `TClosed`
+   --> method_errors.pas:52:23
+    |
+ 49 |   TClosed = class sealed
+    |   ------- declared here
+...
+ 52 |   TFromClosed = class(TClosed)
+    |                       ^^^^^^^
+
+error[E0745]: a class cannot be both `sealed` and `abstract`
+   --> method_errors.pas:55:24
+    |
+ 55 |   TBoth = class sealed abstract
+    |                        ^^^^^^^^
+
+error[E0707]: cannot assign to `Self`
+   --> method_errors.pas:64:3
+    |
+ 64 |   Self := nil;
+    |   ^^^^ Self
+
+error[E0744]: abstract method `TBase.Area` cannot have a body
+   --> method_errors.pas:67:10
+    |
+ 18 |     function Area: Double; virtual; abstract;
+    |              ---- declared here
+...
+ 67 | function TBase.Area: Double;
+    |          ^^^^^^^^^^
+
+error[E0723]: body of `TBase.Twice` does not match its declaration
+   --> method_errors.pas:80:10
+    |
+ 22 |     function Twice(X: Integer): Integer;
+    |              ----- declared here
+...
+ 80 | function TBase.Twice(X: Integer; Y: Integer): Integer;
+    |          ^^^^^^^^^^^
+
+error[E0700]: `TBase` has no method `Nothing`
+   --> method_errors.pas:90:17
+    |
+ 90 | procedure TBase.Nothing;
+    |                 ^^^^^^^
+
+warning[W0001]: unused variable `I` (unused-variable)
+    --> method_errors.pas:104:3
+     |
+ 104 |   I: Integer;
+     |   ^ declared here
+     |
+     = note: remove `I` and its assignments if the value is not needed
+     = note: disable with `{$WARN unused-variable OFF}`
+
+error[E0744]: cannot call abstract method `TBase.Area`
+    --> method_errors.pas:106:13
+     |
+  18 |     function Area: Double; virtual; abstract;
+     |              ---- declared here
+...
+ 106 |   inherited Area;
+     |             ^^^^
+
+error[E0700]: `TBase` has no method `Unknown`
+    --> method_errors.pas:107:13
+     |
+ 107 |   inherited Unknown;
+     |             ^^^^^^^
+
+error[E0704]: `inherited` without a method name is only allowed as a statement
+    --> method_errors.pas:108:8
+     |
+ 108 |   I := inherited;
+     |        ^^^^^^^^^
+
+error[E0744]: cannot call abstract method `TBase.Area`
+    --> method_errors.pas:117:23
+     |
+  18 |     function Area: Double; virtual; abstract;
+     |              ---- declared here
+...
+ 117 |   Result := inherited Area;
+     |                       ^^^^
+
+error[E0742]: cannot create an instance of abstract class `TBase`
+    --> method_errors.pas:124:8
+     |
+  18 |     function Area: Double; virtual; abstract;
+     |              ---- abstract method declared here
+...
+ 124 |   B := TBase.Create;
+     |        ^^^^^^^^^^^^
+
+error[E0743]: `Hidden` is private to `TBase`
+    --> method_errors.pas:125:5
+     |
+  15 |     procedure Hidden;
+     |               ------ declared here
+...
+ 125 |   B.Hidden;
+     |     ^^^^^^
+
+error[E0700]: `TBase` has no member `Absent`
+    --> method_errors.pas:126:5
+     |
+ 126 |   B.Absent;
+     |     ^^^^^^
+
+error[E0700]: `TObject` has no member `InstanceSize`
+    --> method_errors.pas:127:5
+     |
+ 127 |   B.InstanceSize;
+     |     ^^^^^^^^^^^^
+
+error[E0700]: `inherited` is only allowed in a method
+    --> method_errors.pas:128:3
+     |
+ 128 |   inherited;
+     |   ^^^^^^^^^
+
+error[E3009]: `Dispatch` is not supported in Puy
+    --> method_errors.pas:129:5
+     |
+ 129 |   B.Dispatch(N);
+     |     ^^^^^^^^
+     |
+     = note: use events or channels instead
+
+error[E3009]: `DefaultHandler` is not supported in Puy
+    --> method_errors.pas:130:5
+     |
+ 130 |   B.DefaultHandler(N);
+     |     ^^^^^^^^^^^^^^
+     |
+     = note: use events or channels instead
+
+error: aborting due to 31 errors; 4 warnings emitted

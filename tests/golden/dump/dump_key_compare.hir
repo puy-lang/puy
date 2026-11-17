@@ -1,0 +1,82 @@
+program DumpKeyCompare
+.type TVersion = record
+  .field 0 Major: Integer
+  .method f0 LessThan operator
+.global g0 V: TVersion
+.routine f0 TVersion.LessThan(const A: TVersion; const B: TVersion): Boolean
+  .var v0 A: TVersion const param
+  .var v1 B: TVersion const param
+  .var v2 Result: Boolean result
+  assign @16 R+
+    var v2 Result
+    binary Boolean
+      field Integer Major #0
+        var v0 A: TVersion
+      < Boolean int:Integer
+        field Integer Major #0
+          var v1 B: TVersion
+.routine - Order<T>(const A: T; const B: T): Integer
+  .var v0 A: T const param
+  .var v1 B: T const param
+  .var v2 Result: Integer result
+  assign @21 R+
+    var v2 Result
+    call KeyCompare<T>: Integer
+      var v0 A: T
+      var v1 B: T
+.instance Order<Integer>
+.routine f2 Order<Integer>(const A: Integer; const B: Integer): Integer
+  .var v0 A: Integer const param
+  .var v1 B: Integer const param
+  .var v2 Result: Integer result
+  assign @21 R+
+    var v2 Result
+    call KeyCompare<Integer>: Integer
+      var v0 A: Integer
+      var v1 B: Integer
+.generated <cmp:DumpKeyCompare.TVersion>
+.routine f3 <cmp:DumpKeyCompare.TVersion>(const A: TVersion; const B: TVersion): Integer
+  .var v0 A: TVersion const param
+  .var v1 B: TVersion const param
+  .var v2 Result: Integer result
+  if @9
+    cond
+      operator f0 TVersion.LessThan: Boolean
+        var v0 A: TVersion
+        var v1 B: TVersion
+    then
+      assign @9 R-
+        var v2 Result
+        const Integer -1
+    cond
+      operator f0 TVersion.LessThan: Boolean
+        var v1 B: TVersion
+        var v0 A: TVersion
+    then
+      assign @9 R-
+        var v2 Result
+        const Integer 1
+    else
+      assign @9 R-
+        var v2 Result
+        const Integer 0
+.routine <main>
+  assign @27 R+
+    field Integer Major #0
+      global g0 V
+    const Integer 1
+  writeln @28
+    arg
+      call KeyCompare<TVersion> via f3: Integer
+        global g0 V: TVersion
+        global g0 V: TVersion
+  writeln @29
+    arg
+      call KeyCompare<Double>: Integer
+        const Double 1.5
+        const Double 2.5
+  writeln @30
+    arg
+      call f2 Order<Integer>: Integer
+        const Integer 1
+        const Integer 2

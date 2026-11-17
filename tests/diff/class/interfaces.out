@@ -1,0 +1,11 @@
+square 3: 9
+square 6: 36
+SetSize 5
+size 5 name square 5
+square 2: 24
+TRUE TRUE TRUE TRUE
+FALSE TRUE
+log: hello
+ILogger.Run -> LogRun
+IRunner.Run -> Run
+TRUE FALSE

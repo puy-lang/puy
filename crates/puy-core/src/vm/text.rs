@@ -2,6 +2,8 @@
 
 use std::cmp::Ordering;
 
+use super::heap::{OutOfMemory, try_extend, try_push, try_reserve};
+
 /// The range of `units` without the leading (`left`) or trailing (`right`) characters whose
 /// code unit is at most `' '` (`Trim`, `TrimLeft`, `TrimRight`).
 pub fn trimmed(units: &[u16], left: bool, right: bool) -> (usize, usize) {
@@ -27,9 +29,10 @@ fn upper_ascii(u: u16) -> u16 {
 
 /// `CompareText`: the code point order (§5.11) after folding ASCII letters to uppercase.
 pub fn compare_text(a: &[u16], b: &[u16]) -> Ordering {
-    let fa: Vec<u16> = a.iter().map(|u| upper_ascii(*u)).collect();
-    let fb: Vec<u16> = b.iter().map(|u| upper_ascii(*u)).collect();
-    crate::sema::compare_strings(&fa, &fb)
+    crate::sema::compare_units(
+        a.iter().map(|u| upper_ascii(*u)),
+        b.iter().map(|u| upper_ascii(*u)),
+    )
 }
 
 /// `SameText`: equal after folding ASCII letters.
@@ -41,9 +44,11 @@ pub fn same_text(a: &[u16], b: &[u16]) -> bool {
 }
 
 /// `QuotedStr`: in `'`, with each `'` doubled.
-pub fn quoted(units: &[u16]) -> Vec<u16> {
+pub fn quoted(units: &[u16]) -> Result<Vec<u16>, OutOfMemory> {
     let quote = u16::from(b'\'');
-    let mut out = Vec::with_capacity(units.len() + 2);
+    let doubled = units.iter().filter(|u| **u == quote).count();
+    let mut out = Vec::new();
+    try_reserve(&mut out, units.len() + doubled + 2)?;
     out.push(quote);
     for &u in units {
         out.push(u);
@@ -52,7 +57,7 @@ pub fn quoted(units: &[u16]) -> Vec<u16> {
         }
     }
     out.push(quote);
-    out
+    Ok(out)
 }
 
 /// `StrToBool`: `True` / `False` in any case, or an integer in the `StrToInt` syntax of any size
@@ -71,13 +76,19 @@ pub fn parse_bool(units: &[u16]) -> Option<bool> {
 /// `StringReplace`: replaces the first (or with `all`, every) occurrence of `old` in `s` by
 /// `new`. With `ignore_case`, characters match by their lowercase forms (§5.11: the Unicode case
 /// mapping table, no language rules). An empty `old` replaces nothing.
-pub fn replace(s: &[u16], old: &[u16], new: &[u16], all: bool, ignore_case: bool) -> Vec<u16> {
+pub fn replace(
+    s: &[u16],
+    old: &[u16],
+    new: &[u16],
+    all: bool,
+    ignore_case: bool,
+) -> Result<Vec<u16>, OutOfMemory> {
     if old.is_empty() {
-        return s.to_vec();
+        return super::heap::try_join(&[s]);
     }
     // The characters of `s` with the code unit offset each starts at (folded when ignoring case;
     // a lone surrogate matches only itself)
-    let key = |units: &[u16]| -> Vec<(usize, u32)> {
+    let key = |units: &[u16]| -> Result<Vec<(usize, u32)>, OutOfMemory> {
         let mut out = Vec::new();
         let mut i = 0;
         for c in chars(units) {
@@ -86,14 +97,18 @@ pub fn replace(s: &[u16], old: &[u16], new: &[u16], all: bool, ignore_case: bool
                 Ok(c) if !ignore_case => c as u32,
                 _ => fold(c, false),
             };
-            out.push((i, code));
+            try_push(&mut out, (i, code))?;
             i += len;
         }
-        out
+        Ok(out)
     };
-    let hay = key(s);
-    let needle: Vec<u32> = key(old).into_iter().map(|(_, c)| c).collect();
-    let mut out = Vec::with_capacity(s.len());
+    let hay = key(s)?;
+    let needle_key = key(old)?;
+    let mut needle: Vec<u32> = Vec::new();
+    try_reserve(&mut needle, needle_key.len())?;
+    needle.extend(needle_key.iter().map(|(_, c)| *c));
+    let mut out = Vec::new();
+    try_reserve(&mut out, s.len())?;
     let mut copied = 0; // code units of `s` already in `out`
     let mut k = 0; // the character of `hay` to try next
     while k + needle.len() <= hay.len() {
@@ -104,8 +119,8 @@ pub fn replace(s: &[u16], old: &[u16], new: &[u16], all: bool, ignore_case: bool
         {
             let start = hay[k].0;
             let end = hay.get(k + needle.len()).map_or(s.len(), |(i, _)| *i);
-            out.extend_from_slice(&s[copied..start]);
-            out.extend_from_slice(new);
+            try_extend(&mut out, &s[copied..start])?;
+            try_extend(&mut out, new)?;
             copied = end;
             k += needle.len();
             if !all {
@@ -115,8 +130,8 @@ pub fn replace(s: &[u16], old: &[u16], new: &[u16], all: bool, ignore_case: bool
             k += 1;
         }
     }
-    out.extend_from_slice(&s[copied..]);
-    out
+    try_extend(&mut out, &s[copied..])?;
+    Ok(out)
 }
 
 /// The characters of `units` (a lone surrogate as itself).
@@ -155,8 +170,9 @@ fn map_case(c: char, upper: bool, full: bool, out: &mut Vec<char>) {
 
 /// `AnsiUpperCase` / `AnsiLowerCase`: each character mapped by [`map_case`] (lone surrogates
 /// unchanged).
-pub fn convert_case(units: &[u16], upper: bool, full: bool) -> Vec<u16> {
-    let mut out = Vec::with_capacity(units.len());
+pub fn convert_case(units: &[u16], upper: bool, full: bool) -> Result<Vec<u16>, OutOfMemory> {
+    let mut out = Vec::new();
+    try_reserve(&mut out, units.len())?;
     let mut mapped = Vec::new();
     let mut buf = [0u16; 2];
     for c in chars(units) {
@@ -165,13 +181,13 @@ pub fn convert_case(units: &[u16], upper: bool, full: bool) -> Vec<u16> {
                 mapped.clear();
                 map_case(c, upper, full, &mut mapped);
                 for m in &mapped {
-                    out.extend_from_slice(m.encode_utf16(&mut buf));
+                    try_extend(&mut out, m.encode_utf16(&mut buf))?;
                 }
             }
-            Err(u) => out.push(u),
+            Err(u) => try_push(&mut out, u)?,
         }
     }
-    out
+    Ok(out)
 }
 
 /// The form a character is compared by when ignoring case: its single-character lowercase (or

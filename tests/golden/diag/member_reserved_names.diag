@@ -1,0 +1,31 @@
+error[E0701]: `Self` is a reserved name
+  --> member_reserved_names.pas:9:5
+   |
+ 9 |     Self: Integer;
+   |     ^^^^
+
+error[E0701]: `Result` is a reserved name
+   --> member_reserved_names.pas:11:15
+    |
+ 11 |     procedure Result;
+    |               ^^^^^^
+
+error[E0701]: `Exit` is a reserved name
+   --> member_reserved_names.pas:12:14
+    |
+ 12 |     property Exit: Integer read FValue;
+    |              ^^^^
+
+error[E0701]: `True` is a reserved name
+   --> member_reserved_names.pas:14:15
+    |
+ 14 |     class var True: Integer;
+    |               ^^^^
+
+error[E0701]: `Break` is a reserved name
+   --> member_reserved_names.pas:18:5
+    |
+ 18 |     Break: Integer;
+    |     ^^^^^
+
+error: aborting due to 5 errors

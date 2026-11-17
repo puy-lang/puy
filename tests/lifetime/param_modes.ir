@@ -40,12 +40,15 @@ bb0:
   .reg v0 S: string var param
   .reg t0: string temp
   .reg t1: string temp
+  .reg t2: string temp
 bb0:
   .line 24
   LoadRefRef   t0, v0
   LoadConst    t1, "!"
-  ConcatStr    t0, t0, t1
-  StoreRefRef  v0, t0
+  LoadRef      t2, v0
+  AppendStr    t2, t0, t1
+  StoreRef     v0, t2
+  Release      t0
   .line 25
   RetVoid
 .finally t0, t1
@@ -101,6 +104,7 @@ bb0:
   LoadGlobalRef t2, g0
   Move         t1, t2
   Call         -, f1(t1)
+  Release      t2
   .line 39
   LoadGlobalRef t3, g0
   LoadConst    t4, "\n"
@@ -116,6 +120,7 @@ bb0:
   Move         t6, t8
   MakeRef      t7, v0
   Call         -, f4(t6, t7)
+  Release      t8
   .line 43
   MakeRef      t9, v0
   ClearRef     t9

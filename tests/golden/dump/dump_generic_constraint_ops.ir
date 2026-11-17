@@ -1,0 +1,154 @@
+; puy ir 1
+.global
+  g0 P: TPair<TNode>
+.func f0 DumpGenericConstraintOps.<main> params=0
+  .reg t0: TPair<TNode> temp
+  .reg t1: TPair<TNode> temp
+  .reg t2: TNode temp
+  .reg t3: TPair<TNode> temp
+  .reg t4: TPair<TNode> temp
+  .reg t5: TNode temp
+  .reg t6: string temp
+  .reg t7: Boolean temp
+  .reg t8: TNode temp
+  .reg t9: TNode temp
+  .reg t10: TNode temp
+  .reg t11: TPair<TNode> temp
+  .reg t12: TNode temp
+  .reg t13: TPair<TNode> temp
+  .reg t14: string temp
+  .reg t15: string temp
+  .reg t16: Boolean temp
+  .reg t17: TPair<TNode> temp
+  .reg t18: string temp
+  .reg t19: string temp
+  .reg t20: Boolean temp
+  .reg t21: TPair<TNode> temp
+  .reg t22: string temp
+  .reg t23: TPair<TNode> temp
+bb0:
+  .line 51
+  LoadZero     t0
+  New          t0, DumpGenericConstraintOps.TPair<DumpGenericConstraintOps.TNode>
+  StoreGlobal  t0, g0
+  .line 52
+  LoadGlobal   t1, g0
+  LoadGlobal   t3, g0
+  CallMethod   t3, f4(t3)
+  MoveRef      t2, t3
+  ObjSetRef    t1, 0, t2
+  .line 53
+  LoadGlobal   t4, g0
+  New          t5, DumpGenericConstraintOps.TNode
+  ObjSetRef    t4, 1, t5
+  .line 54
+  LoadGlobal   t11, g0
+  ObjGetRef    t10, t11, 0
+  Move         t8, t10
+  LoadGlobal   t13, g0
+  ObjGetRef    t12, t13, 1
+  Move         t9, t12
+  Call         t7, f1(t8, t9)
+  BoolToStr    t6, t7
+  LoadConst    t14, " "
+  ConcatStr    t6, t6, t14
+  LoadGlobal   t17, g0
+  CallMethod   t16, f5(t17)
+  BoolToStr    t15, t16
+  ConcatStr    t6, t6, t15
+  LoadConst    t18, " "
+  ConcatStr    t6, t6, t18
+  LoadGlobal   t21, g0
+  CallMethod   t20, f6(t21)
+  BoolToStr    t19, t20
+  ConcatStr    t6, t6, t19
+  LoadConst    t22, "\n"
+  ConcatStr    t6, t6, t22
+  CallHost     -, h0(t6)
+  .line 55
+  LoadGlobal   t23, g0
+  Free         t23
+  .line 56
+  RetVoid
+.finally t2, t5, t6, t10, t12, t14, t15, t18, t19, t22
+.func f1 DumpGenericConstraintOps.TNode.Equal params=2
+  .reg v0 A: TNode const param
+  .reg v1 B: TNode const param
+  .reg v2 Result: Boolean result
+bb0:
+  .line 25
+  LoadInt      v2, 1
+  .line 26
+  Ret          v2
+.finally
+.func f2 DumpGenericConstraintOps.TNode.GetHashCode params=1
+  .reg v0 Self: TNode self
+  .reg v1 Result: Int64 result
+bb0:
+  .line 30
+  LoadZero     v1
+  .line 31
+  Ret          v1
+.finally
+.func f3 DumpGenericConstraintOps.TNode.Equals params=2
+  .reg v0 Self: TNode self
+  .reg v1 Obj: TObject param
+  .reg v2 Result: Boolean result
+  .reg t0: Boolean temp
+  .reg t1: TNode temp
+  .reg t2: TNode temp
+  .reg t3: TNode temp
+bb0:
+  .line 12
+  Move         t0, v1
+  IsClass      t0, DumpGenericConstraintOps.TNode
+  Move         v2, t0
+  JmpIfFalse   v2, bb2, bb1
+bb1:
+  .line 12
+  Move         t1, v0
+  AssignObj    t3, v1
+  AsClass      t3, DumpGenericConstraintOps.TNode
+  Move         t2, t3
+  Call         v2, f1(t1, t2)
+  Jmp          bb2
+bb2:
+  .line 12
+  Ret          v2
+.finally t3
+.func f4 DumpGenericConstraintOps.TPair<DumpGenericConstraintOps.TNode>.Make params=1
+  .reg v0 Self: TPair<TNode> self
+  .reg v1 Result: TNode result
+bb0:
+  .line 45
+  New          v1, DumpGenericConstraintOps.TNode
+  .line 46
+  Ret          v1
+.finally v1
+.func f5 DumpGenericConstraintOps.TPair<DumpGenericConstraintOps.TNode>.Same params=1
+  .reg v0 Self: TPair<TNode> self
+  .reg v1 Result: Boolean result
+  .reg t0: TNode temp
+  .reg t1: TNode temp
+bb0:
+  .line 35
+  ObjGetRef    t0, v0, 0
+  ObjGetRef    t1, v0, 1
+  EqInt        v1, t0, t1
+  .line 36
+  Ret          v1
+.finally t0, t1
+.func f6 DumpGenericConstraintOps.TPair<DumpGenericConstraintOps.TNode>.HasA params=1
+  .reg v0 Self: TPair<TNode> self
+  .reg v1 Result: Boolean result
+  .reg t0: TNode temp
+  .reg t1: TNode temp
+bb0:
+  .line 40
+  ObjGetRef    t0, v0, 0
+  Release      t1
+  EqInt        v1, t0, t1
+  NotBool      v1, v1
+  .line 41
+  Ret          v1
+.finally t0, t1

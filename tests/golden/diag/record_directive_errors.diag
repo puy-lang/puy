@@ -1,0 +1,43 @@
+error[E0744]: a record cannot be `abstract` or `sealed`
+  --> record_directive_errors.pas:9:15
+   |
+ 9 |   TA = record abstract
+   |               ^^^^^^^^
+
+error[E0744]: records cannot have virtual methods
+   --> record_directive_errors.pas:15:19
+    |
+ 15 |     procedure P1; dynamic;
+    |                   ^^^^^^^
+
+error[E0744]: records cannot have virtual methods
+   --> record_directive_errors.pas:16:19
+    |
+ 16 |     procedure P2; abstract;
+    |                   ^^^^^^^^
+
+error[E0744]: records cannot have virtual methods
+   --> record_directive_errors.pas:17:19
+    |
+ 17 |     procedure P3; reintroduce;
+    |                   ^^^^^^^^^^^
+
+error[E0744]: records cannot have virtual methods
+   --> record_directive_errors.pas:18:19
+    |
+ 18 |     procedure P4; final;
+    |                   ^^^^^
+
+error[E0700]: `inherited` is only allowed in a method of a class
+   --> record_directive_errors.pas:40:3
+    |
+ 40 |   inherited;
+    |   ^^^^^^^^^
+
+error[E0700]: `TB` has no member `Missing`
+   --> record_directive_errors.pas:44:6
+    |
+ 44 |   TB.Missing;
+    |      ^^^^^^^
+
+error: aborting due to 7 errors

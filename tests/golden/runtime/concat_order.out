@@ -1,0 +1,6 @@
+a|a+ a+
+outer/touched
+cap/anon
+old/new new
+300 150 x1x2x3x4x5x6 x8x9x0
+EOutOfMemory, operands ran: TRUE, 25000

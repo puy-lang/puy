@@ -1,0 +1,176 @@
+; puy ir 1
+.global
+.func f0 DumpRecordMethods.<main> params=0
+  .reg t0: TPoint temp
+  .reg t1: TPoint temp
+  .reg t2: TPoint temp
+  .reg t3: - ref
+  .reg t4: Integer temp
+  .reg t5: Integer temp
+bb0:
+  .line 53
+  Release      t2
+  MakeRef      t3, t2
+  LoadInt      t4, 5
+  LoadInt      t5, 6
+  Call         -, f1(t3, t4, t5)
+  MoveRef      t1, t2
+  Move         t0, t1
+  Call         -, f5(t0)
+  .line 54
+  RetVoid
+.finally t1, t2
+.func f1 DumpRecordMethods.TPoint.Create params=3
+  .reg v0 Self: TPoint var self
+  .reg v1 AX: Integer param
+  .reg v2 AY: Integer param
+  .reg t0: TPoint temp
+  .reg t1: TPoint temp
+bb0:
+  .line 19
+  LoadRef      t0, v0
+  Unique       t0, DumpRecordMethods.TPoint
+  StoreRef     v0, t0
+  FieldSet     t0, 0, v1
+  .line 20
+  LoadRef      t1, v0
+  Unique       t1, DumpRecordMethods.TPoint
+  StoreRef     v0, t1
+  FieldSet     t1, 1, v2
+  .line 21
+  RetVoid
+.finally
+.func f2 DumpRecordMethods.TPoint.Offset params=2
+  .reg v0 Self: TPoint var self
+  .reg v1 DX: Integer param
+  .reg t0: Integer temp
+  .reg t1: TPoint temp
+  .reg t2: TPoint temp
+bb0:
+  .line 25
+  LoadRef      t1, v0
+  FieldGet     t0, t1, 0
+  AddInt       t0, t0, v1
+  NarrowOvf    t0, t0, 4
+  LoadRef      t2, v0
+  Unique       t2, DumpRecordMethods.TPoint
+  StoreRef     v0, t2
+  FieldSet     t2, 0, t0
+  .line 26
+  RetVoid
+.finally
+.func f3 DumpRecordMethods.TPoint.Sum params=1
+  .reg v0 Self: TPoint var self
+  .reg v1 Result: Integer result
+  .reg t0: TPoint temp
+  .reg t1: Integer temp
+  .reg t2: TPoint temp
+bb0:
+  .line 30
+  LoadRef      t0, v0
+  FieldGet     v1, t0, 0
+  LoadRef      t2, v0
+  FieldGet     t1, t2, 1
+  AddInt       v1, v1, t1
+  NarrowOvf    v1, v1, 4
+  .line 31
+  Ret          v1
+.finally
+.func f4 DumpRecordMethods.Make params=0
+  .reg v0 Result: TPoint result
+  .reg t0: TPoint temp
+  .reg t1: - ref
+  .reg t2: Integer temp
+  .reg t3: Integer temp
+bb0:
+  .line 35
+  Release      t0
+  MakeRef      t1, t0
+  LoadInt      t2, 1
+  LoadInt      t3, 2
+  Call         -, f1(t1, t2, t3)
+  MoveRef      v0, t0
+  .line 36
+  Ret          v0
+.finally v0, t0
+.func f5 DumpRecordMethods.Run params=1
+  .reg v0 C: TPoint const param
+  .reg v1 V: TPoint local
+  .reg v2 A: array of TPoint local
+  .reg t0: Int64 temp
+  .reg t1: array of TPoint temp
+  .reg t2: Int64 temp
+  .reg t3: - ref
+  .reg t4: Integer temp
+  .reg t5: TPoint lent
+  .reg t6: Int64 temp
+  .reg t7: - ref
+  .reg t8: - ref
+  .reg t9: Integer temp
+  .reg t10: Int64 temp
+  .reg t11: TPoint temp
+  .reg t12: - ref
+  .reg t13: Integer temp
+  .reg t14: TPoint temp
+  .reg t15: - ref
+  .reg t16: Integer temp
+  .reg t17: TPoint temp
+  .reg t18: string temp
+  .reg t19: Integer temp
+  .reg t20: - ref
+  .reg t21: string temp
+  .reg t22: string temp
+  .reg t23: Integer temp
+  .reg t24: Int64 temp
+  .reg t25: TPoint temp
+  .reg t26: string temp
+bb0:
+  .line 43
+  AssignRef    v1, v0
+  .line 44
+  LoadInt      t0, 1
+  Move         t1, v2
+  Move         t2, t0
+  SetLen       t1, array of DumpRecordMethods.TPoint, t2
+  Move         v2, t1
+  .line 45
+  MakeRef      t3, v1
+  LoadInt      t4, 1
+  Call         -, f2(t3, t4)
+  .line 46
+  LoadZero     t10
+  Move         t6, t10
+  MakeRef      t7, v2
+  LoadInt      t9, 2
+  Lend         t5, t7, 1, t6
+  MakeRef      t8, t5
+  Call         -, f2(t8, t9)
+  Unlend
+  .line 47
+  AssignRef    t11, v0
+  MakeRef      t12, t11
+  LoadInt      t13, 3
+  Call         -, f2(t12, t13)
+  .line 48
+  Call         t17, f4()
+  MoveRef      t14, t17
+  MakeRef      t15, t14
+  LoadInt      t16, 4
+  Call         -, f2(t15, t16)
+  .line 49
+  MakeRef      t20, v1
+  Call         t19, f3(t20)
+  IntToStr     t18, t19
+  LoadConst    t21, " "
+  ConcatStr    t18, t18, t21
+  LoadZero     t24
+  DynGet       t25, v2, t24
+  FieldGet     t23, t25, 0
+  IntToStr     t22, t23
+  ConcatStr    t18, t18, t22
+  LoadConst    t26, "\n"
+  ConcatStr    t18, t18, t26
+  CallHost     -, h0(t18)
+  .line 50
+  RetVoid
+.finally v1, v2, t11, t14, t18, t21, t22, t26

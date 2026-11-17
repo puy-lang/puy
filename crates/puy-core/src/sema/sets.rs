@@ -21,15 +21,16 @@ fn err_expr(span: TextRange) -> Expr {
 impl<'a, 's> Sema<'a, 's> {
     /// The base type of a set's base type (`docs/spec/types.md` 8.2): `Integer` for `set of 0..9`.
     fn set_root(&self, set: Ty) -> Ty {
-        self.types
-            .base(self.types.set_base(set).unwrap_or(Ty::Error))
+        // A distinct type as its root (`docs/spec/types.md` 1.3)
+        let base = self.types.set_base(set).unwrap_or(Ty::Error);
+        self.types.base(self.types.root(base))
     }
 
     /// Whether an ordinal of type `t` can be an element of `set` (assignment compatible with the
     /// base type's base).
     pub(super) fn set_accepts(&self, set: Ty, t: Ty) -> bool {
         let root = self.set_root(set);
-        let t = self.types.base(t);
+        let t = self.types.base(self.types.root(t));
         if root.is_integer() {
             t.is_integer()
         } else {
@@ -137,6 +138,12 @@ impl<'a, 's> Sema<'a, 's> {
                     failed = true;
                     continue;
                 }
+                if let Ty::Param(p) = x.ty {
+                    // `docs/spec/generics.md` 3.3
+                    self.param_misuse(p, super::generics::ParamOp::SetElement, x.span);
+                    failed = true;
+                    continue;
+                }
                 if !self.set_accepts(set, x.ty) {
                     let msg = format!(
                         "type mismatch: expected `{}`, found `{}`",
@@ -173,7 +180,7 @@ impl<'a, 's> Sema<'a, 's> {
                     fits = false;
                 }
                 let mut x = x;
-                x.ty = self.types.base(x.ty);
+                x.ty = self.types.base(self.types.root(x.ty));
                 parts.push(x);
             }
             if failed || parts.len() != bounds.len() {
@@ -443,6 +450,11 @@ impl<'a, 's> Sema<'a, 's> {
         if e.ty.is_error() {
             return None;
         }
+        if let Ty::Param(p) = e.ty {
+            // `docs/spec/generics.md` 3.3
+            self.param_misuse(p, super::generics::ParamOp::SetElement, e.span);
+            return None;
+        }
         if !self.set_accepts(ty, e.ty) {
             let msg = format!(
                 "type mismatch: expected `{}`, found `{}` (argument 2, parameter `X`)",
@@ -466,7 +478,7 @@ impl<'a, 's> Sema<'a, 's> {
                 .is_some_and(|(slo, shi)| lo <= slo && shi <= hi);
         let check = self.checks_at(span.start()).range && !fits;
         let mut e = e;
-        e.ty = self.types.base(e.ty);
+        e.ty = self.types.base(self.types.root(e.ty));
         Some(StmtKind::SetElem {
             target: place,
             elem: e,

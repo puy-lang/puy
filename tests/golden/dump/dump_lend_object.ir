@@ -1,0 +1,107 @@
+; puy ir 1
+.global
+  g0 O: TNode
+.func f0 DumpLendObject.<main> params=0
+  .reg t0: TNode temp
+  .reg t1: Integer lent
+  .reg t2: Int64 temp
+  .reg t3: TNode temp
+  .reg t4: - ref
+  .reg t5: TNode temp
+  .reg t6: Integer lent
+  .reg t7: Int64 temp
+  .reg t8: Int64 temp
+  .reg t9: TNode temp
+  .reg t10: - ref
+  .reg t11: TNode temp
+  .reg t12: TPoint temp
+  .reg t13: string temp
+  .reg t14: Integer temp
+  .reg t15: TNode temp
+  .reg t16: string temp
+  .reg t17: string temp
+  .reg t18: Integer temp
+  .reg t19: TNode temp
+  .reg t20: TPoint temp
+  .reg t21: string temp
+  .reg t22: TNode temp
+  .reg t23: TNode temp
+  .reg t24: TNode temp
+  .reg t25: TNode temp
+  .reg t26: TNode temp
+  .reg t27: TNode temp
+  .reg t28: TNode temp
+  .reg t29: TNode temp
+bb0:
+  .line 31
+  LoadZero     t0
+  New          t0, DumpLendObject.TNode
+  StoreGlobal  t0, g0
+  .line 32
+  LoadGlobal   t5, g0
+  LoadZero     t2
+  Move         t3, t5
+  Lend         t1, t3, 1, t2
+  MakeRef      t4, t1
+  Call         -, f1(t4)
+  Unlend
+  .line 33
+  LoadGlobal   t11, g0
+  LoadInt      t7, 1
+  Move         t9, t11
+  LoadInt      t8, 1
+  ObjGet       t12, t9, 1
+  Unique       t12, DumpLendObject.TPoint
+  ObjSet       t9, 1, t12
+  Lend         t6, t9, 2, t7, t8
+  MakeRef      t10, t6
+  Call         -, f1(t10)
+  Unlend
+  .line 34
+  LoadGlobal   t15, g0
+  ObjGet       t14, t15, 0
+  IntToStr     t13, t14
+  LoadConst    t16, " "
+  ConcatStr    t13, t13, t16
+  LoadGlobal   t19, g0
+  ObjGet       t20, t19, 1
+  FieldGet     t18, t20, 1
+  IntToStr     t17, t18
+  ConcatStr    t13, t13, t17
+  LoadConst    t21, "\n"
+  ConcatStr    t13, t13, t21
+  CallHost     -, h0(t13)
+  .line 35
+  LoadGlobal   t22, g0
+  LoadZero     t23
+  New          t23, DumpLendObject.TNode
+  ObjSet       t22, 2, t23
+  .line 36
+  LoadZero     t25
+  LoadGlobal   t26, g0
+  ObjGet       t24, t26, 2
+  ObjSet       t26, 2, t25
+  Free         t24
+  .line 37
+  LoadZero     t28
+  LoadGlobal   t29, g0
+  Move         t27, t29
+  StoreGlobal  t28, g0
+  Free         t27
+  .line 38
+  RetVoid
+.finally t13, t16, t17, t21
+.func f1 DumpLendObject.Bump params=1
+  .reg v0 N: Integer var param
+  .reg t0: Integer temp
+  .reg t1: Integer temp
+bb0:
+  .line 25
+  LoadRef      t0, v0
+  LoadInt      t1, 1
+  AddInt       t0, t0, t1
+  NarrowOvf    t0, t0, 4
+  StoreRef     v0, t0
+  .line 26
+  RetVoid
+.finally

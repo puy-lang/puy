@@ -1,4 +1,4 @@
-; puyc format 2
+; puyc format 0
 .const
   0: str "gamma"
   1: str "init Gamma "

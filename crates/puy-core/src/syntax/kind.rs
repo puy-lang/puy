@@ -230,7 +230,8 @@ pub enum SyntaxKind {
     GENERIC_TYPE_REF,
     /// `raise [Expr]` (`docs/spec/grammar.md` 2.2).
     RAISE_STMT,
-    /// `class(Parent) [end]`: an exception class (`docs/spec/grammar.md` 2.2).
+    /// `class [modifiers] ["(" parents ")"] [ClassBody "end"]`: a class type (`docs/spec/objects.md`
+    /// chapter 1; an exception class is the form without a body).
     CLASS_TYPE,
     /// `try StmtList (except … | finally …) end` (`docs/spec/grammar.md` 2.2).
     TRY_STMT,
@@ -278,6 +279,73 @@ pub enum SyntaxKind {
     FINAL_SECTION,
     /// A routine heading without a body in the `interface` section.
     ROUTINE_HEADER_DECL,
+    /// `"(" TypeRef {"," TypeRef} ")"` after `class` (`docs/spec/objects.md` chapter 1).
+    CLASS_PARENTS,
+    /// `class of TypeRef`: a class reference type.
+    CLASS_REF_TYPE,
+    /// The members and visibility sections of a class, up to its `end`.
+    CLASS_BODY,
+    /// `["strict"] ("private" | "protected") | "public" | "published"`.
+    VISIBILITY,
+    /// `["class"] "var" FieldDecl {FieldDecl}` inside a class body.
+    CLASS_VAR_SECTION,
+    /// A method heading inside a class body: `ROUTINE_HEADER`, `;` and the directives.
+    METHOD_DECL,
+    /// A directive after a method heading (`virtual`, `override`, `overload`, …).
+    METHOD_DIRECTIVE,
+    /// `["class"] "property" IDENT [PropertyParams] [":" TypeRef] {PropertySpec} ";" ["default" ";"]`.
+    PROPERTY_DECL,
+    /// `"[" ParamGroup {";" ParamGroup} "]"` of an indexed property.
+    PROPERTY_PARAMS,
+    /// One specifier of a property (`read X`, `index 2`, `default`, …).
+    PROPERTY_SPEC,
+    /// `[A, B(…)]`: a list of attributes (`docs/spec/attributes.md` 1.3).
+    ATTRIBUTE_LIST,
+    /// One attribute: a `QUALIFIED_NAME` and, if written, an `ARG_LIST`.
+    ATTRIBUTE,
+    /// `interface ["(" TypeRef ")"] [GuidSpec] [InterfaceBody "end"]`: an interface type
+    /// (`docs/spec/objects.md` 7.1).
+    INTERFACE_TYPE,
+    /// `"[" Expr "]"`: the GUID of an interface.
+    GUID_SPEC,
+    /// The members of an interface, up to its `end` (method headings and properties; anything
+    /// else a class body has is read the same way and reported by the semantic analysis).
+    INTERFACE_BODY,
+    /// `("procedure" | "function") QualifiedName "=" IDENT ";"`: a method resolution clause in a
+    /// class body (`procedure IFoo.Run = DoRun;`).
+    METHOD_RESOLUTION,
+    /// `("procedure" [ParamList] | "function" [ParamList] ":" TypeRef) ["of" "object"]
+    /// {";" CallingConv}`: a procedural type or a method reference type
+    /// (`docs/spec/objects.md` 9.1).
+    PROC_TYPE,
+    /// `"reference" "to" PROC_TYPE`: an anonymous method type (`docs/spec/objects.md` 9.1).
+    REF_TYPE,
+    /// `("procedure" [ParamList] | "function" [ParamList] ":" TypeRef) RoutineBody`: an
+    /// anonymous method (`docs/spec/objects.md` 9.1).
+    ANON_ROUTINE,
+    /// `("class" | "record") "helper" ["(" TypeRef ")"] "for" TypeRef [HelperBody] "end"`: a
+    /// class helper or record helper (`docs/spec/objects.md` 10.1). The parent helper is a
+    /// `CLASS_PARENTS`, the members a `CLASS_BODY`.
+    HELPER_TYPE,
+    /// `("deprecated" | "experimental") [STRING_LIT] | "platform" | "library"` after a type,
+    /// constant, variable, field or property declaration, or after `class` / `interface` and
+    /// their parents (`docs/spec/attributes.md` 6.1).
+    HINT_DIRECTIVE,
+    /// `"<" (TYPE_REF | GENERIC_TYPE_REF) {"," (TYPE_REF | GENERIC_TYPE_REF)} ">"`: the type
+    /// arguments written after a name in an expression, the last child of a `NAME_REF` /
+    /// `FIELD_EXPR` (`docs/spec/grammar.md` 1.5).
+    TYPE_ARGS,
+    /// `"<" TYPE_PARAM_GROUP {";" TYPE_PARAM_GROUP} ">"`: the type parameters of a generic type,
+    /// routine or method, after the name in a `TYPE_DECL` or in the `QUALIFIED_NAME` of a
+    /// `ROUTINE_HEADER` (`docs/spec/generics.md` 1.5).
+    TYPE_PARAMS,
+    /// `IDENT_LIST [":" CONSTRAINT {"," CONSTRAINT}]` (`docs/spec/generics.md` 1.5).
+    TYPE_PARAM_GROUP,
+    /// `"class"`, `"record"`, `"constructor"` or a `TYPE_REF` / `GENERIC_TYPE_REF`
+    /// (`docs/spec/generics.md` 1.5).
+    CONSTRAINT,
+    /// `"type" TYPE_REF`: a distinct type after `=` in a `TYPE_DECL` (`docs/spec/types.md` 1.3).
+    DISTINCT_TYPE,
     /// Node wrapping tokens skipped by error recovery.
     ERROR_NODE,
     #[doc(hidden)]
@@ -626,6 +694,32 @@ kind_names![
     INIT_SECTION,
     FINAL_SECTION,
     ROUTINE_HEADER_DECL,
+    CLASS_PARENTS,
+    CLASS_REF_TYPE,
+    CLASS_BODY,
+    VISIBILITY,
+    CLASS_VAR_SECTION,
+    METHOD_DECL,
+    METHOD_DIRECTIVE,
+    PROPERTY_DECL,
+    PROPERTY_PARAMS,
+    PROPERTY_SPEC,
+    ATTRIBUTE_LIST,
+    ATTRIBUTE,
+    INTERFACE_TYPE,
+    GUID_SPEC,
+    INTERFACE_BODY,
+    METHOD_RESOLUTION,
+    PROC_TYPE,
+    REF_TYPE,
+    ANON_ROUTINE,
+    HELPER_TYPE,
+    HINT_DIRECTIVE,
+    TYPE_ARGS,
+    TYPE_PARAMS,
+    TYPE_PARAM_GROUP,
+    CONSTRAINT,
+    DISTINCT_TYPE,
     ERROR_NODE,
 ];
 

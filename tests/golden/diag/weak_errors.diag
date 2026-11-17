@@ -1,0 +1,111 @@
+error[E0748]: `[weak]` can only be applied to a reference counted class or an interface
+   --> weak_errors.pas:17:6
+    |
+ 17 |     [weak] Shape: TShape;
+    |      ^^^^
+    |
+    = note: references to a manually managed class are not counted, so `[weak]` is not needed
+
+error[E0748]: `[weak]` can only be applied to a reference counted class or an interface
+   --> weak_errors.pas:18:6
+    |
+ 18 |     [weak] Any: TObject;
+    |      ^^^^
+    |
+    = note: `[weak]` needs a reference counted class type; declare the variable with that class type instead of `TObject`
+
+error[E0748]: `[weak]` can only be applied to a reference counted class or an interface
+   --> weak_errors.pas:19:6
+    |
+ 19 |     [weak] Name: string;
+    |      ^^^^
+    |
+    = note: `[weak]` in Puy can only be applied to reference counted classes and interfaces
+
+error[E0748]: `[weak]` can only be applied to a reference counted class or an interface
+   --> weak_errors.pas:20:6
+    |
+ 20 |     [weak] Items: TArray<TNode>;
+    |      ^^^^
+    |
+    = note: `[weak]` in Puy can only be applied to reference counted classes and interfaces
+
+error[E0705]: wrong number of arguments: expected 0, found 1
+   --> weak_errors.pas:21:10
+    |
+ 21 |     [weak(1)] Parent: TNode;
+    |          ^^^
+
+error[E3200]: `[Test]` is not supported yet (planned for M5)
+   --> weak_errors.pas:23:6
+    |
+ 23 |     [Test] Count: Integer;
+    |      ^^^^
+
+warning[W0025]: unknown attribute `System.Weak` (unknown-attribute)
+   --> weak_errors.pas:24:6
+    |
+ 24 |     [System.Weak] Prev: TNode;
+    |      ^^^^^^^^^^^
+    |
+    = note: an attribute is a class that inherits from `TCustomAttribute`
+    = note: this attribute is ignored
+    = note: disable with `{$WARN unknown-attribute OFF}`
+
+error[E0748]: `[weak]` is not allowed here
+   --> weak_errors.pas:25:6
+    |
+ 25 |     [weak] procedure Run;
+    |      ^^^^
+
+error[E0748]: `[weak]` is not allowed here
+   --> weak_errors.pas:26:6
+    |
+ 26 |     [weak] property First: TNode read Next;
+    |      ^^^^
+
+error[E0748]: `[weak]` is not allowed here
+   --> weak_errors.pas:28:4
+    |
+ 28 |   [weak] TNodes = TArray<TNode>;
+    |    ^^^^
+
+error[E0748]: `[weak]` is not allowed here
+   --> weak_errors.pas:34:17
+    |
+ 34 | procedure Show([weak] N: TNode);
+    |                 ^^^^
+
+error[E0748]: `[weak]` can only be applied to a reference counted class or an interface
+   --> weak_errors.pas:51:4
+    |
+ 51 |   [weak] I: Integer;
+    |    ^^^^
+    |
+    = note: `[weak]` in Puy can only be applied to reference counted classes and interfaces
+
+error[E0706]: a `[weak]` reference cannot be passed to a `var` parameter
+   --> weak_errors.pas:56:10
+    |
+ 56 |   Change(G);
+    |          ^
+    |
+    = note: copy it to a variable without `[weak]`, pass that variable, and assign it back
+
+error[E0706]: a `[weak]` reference cannot be passed to an `out` parameter
+   --> weak_errors.pas:57:8
+    |
+ 57 |   Make(N.Next);
+    |        ^^^^^^
+    |
+    = note: copy it to a variable without `[weak]`, pass that variable, and assign it back
+
+error[E0706]: a `[weak]` reference cannot be passed to a `var` parameter
+   --> weak_errors.pas:58:14
+    |
+ 58 |   FreeAndNil(G);
+    |              ^
+    |
+    = note: copy it to a variable without `[weak]`, pass that variable, and assign it back
+
+error: aborting due to 14 errors; 1 warning emitted

@@ -1,42 +1,42 @@
 program DumpExceptions
-.type EAppError = class(Exception)
-.type EConfigError = class(EAppError)
+.type EAppError = class(Exception) ref
+.type EConfigError = class(EAppError) ref
 .global g0 C: EConvertError
 .routine f0 Fail(const Why: string)
   .var v0 Why: string const param
   .var v1 E: EAppError local
   assign @15 R+
     var v1 E
-    new EConfigError
+    create EConfigError builtin
       var v0 Why: string
   assign @16 R+
-    member string Message
+    objfield string FMessage #0
       var v1 E: EAppError
     binary string
-      member string Message
+      objfield string FMessage #0
         var v1 E: EAppError
       + string str
         const string "!"
   writeln @17
     arg
-      member string ClassName
+      builtin ClassName string
         var v1 E: EAppError
     arg
       const string ": "
     arg
-      member string Message
+      objfield string FMessage #0
         var v1 E: EAppError
   raise @18
     var v1 E: EAppError
 .routine <main>
   assign @24 R+
     global g0 C
-    new EConvertError
+    create EConvertError builtin
       const string "x"
   writeln @25
     arg
       binary Boolean
-        member string Value
+        objfield string FValue #2
           global g0 C: EConvertError
         = Boolean str
           const string ""

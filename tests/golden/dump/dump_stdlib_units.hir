@@ -1,0 +1,29 @@
+program DumpStdlibUnits uses=System.SysUtils,System.Generics.Collections
+.global g0 P: TPair<string, Integer>
+.instance TPair<string, Integer>
+.routine f629 TPair<string, Integer>.Create(const AKey: string; const AValue: Integer)
+  .var v0 Self: TPair<string, Integer> var self
+  .var v1 AKey: string const param
+  .var v2 AValue: Integer const param
+  assign @13 R+
+    field string Key #0
+      var v0 Self
+    var v1 AKey: string
+  assign @13 R+
+    field Integer Value #1
+      var v0 Self
+    var v2 AValue: Integer
+.routine <main>
+  assign @10 R+
+    global g0 P
+    create TPair<string, Integer> f629
+      const string "a"
+      const Integer 1
+  writeln @11
+    arg
+      field string Key #0
+        global g0 P: TPair<string, Integer>
+    arg
+      builtin IntToStr string
+        field Int64 Value #1
+          global g0 P: TPair<string, Integer>

@@ -1,0 +1,25 @@
+error[E2000]: variable `F` may be read before it is assigned
+   --> proc_flow.pas:16:11
+    |
+ 13 |   F: TFn;
+    |   - declared here
+...
+ 16 |   WriteLn(F(1));
+    |           ^ read here
+    |
+    = note: Puy requires every local variable to be assigned before it is read
+    = fix: add an initial value: `var F: TFn = nil;`
+
+error[E2000]: variable `E` may be read before it is assigned
+   --> proc_flow.pas:17:3
+    |
+ 14 |   E: TEvent;
+    |   - declared here
+...
+ 17 |   E;
+    |   ^ read here
+    |
+    = note: Puy requires every local variable to be assigned before it is read
+    = fix: add an initial value: `var E: TEvent = nil;`
+
+error: aborting due to 2 errors

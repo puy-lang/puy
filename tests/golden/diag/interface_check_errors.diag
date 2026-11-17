@@ -1,0 +1,119 @@
+error[E0750]: `TOpen` is not an interface
+   --> interface_check_errors.pas:43:23
+    |
+ 43 |   WriteLn(Supports(P, TOpen));
+    |                       ^^^^^
+
+error[E0750]: `N` is not an interface
+   --> interface_check_errors.pas:44:23
+    |
+ 44 |   WriteLn(Supports(P, N));
+    |                       ^
+
+error[E0750]: `TPoint` is not an interface
+   --> interface_check_errors.pas:45:23
+    |
+ 45 |   WriteLn(Supports(P, TPoint));
+    |                       ^^^^^^
+
+error[E0702]: type mismatch: expected `IFoo`, found `TObject` (argument 3, parameter `Intf`)
+   --> interface_check_errors.pas:47:29
+    |
+ 47 |   WriteLn(Supports(F, IFoo, O));
+    |                             ^
+    |
+    = note: the variable must be of the interface or one of its ancestors
+
+error[E0702]: type mismatch: expected `IFoo`, found `IBar` (argument 3, parameter `Intf`)
+   --> interface_check_errors.pas:48:29
+    |
+ 48 |   WriteLn(Supports(F, IFoo, B));
+    |                             ^
+    |
+    = note: the variable must be of the interface or one of its ancestors
+
+error[E0702]: `TSealed` can never be `IFoo`
+   --> interface_check_errors.pas:51:11
+    |
+ 51 |   WriteLn(S is IFoo);
+    |           ^^^^^^^^^
+
+error[E0702]: `TSealed` can never be `IFoo`
+   --> interface_check_errors.pas:52:8
+    |
+ 52 |   F := S as IFoo;
+    |        ^^^^^^^^^
+
+error[E0702]: `TSealed` can never be `IFoo`
+   --> interface_check_errors.pas:53:8
+    |
+ 53 |   F := IFoo(S);
+    |        ^^^^^^^
+
+error[E0702]: `TSealed` can never be `IFoo`
+   --> interface_check_errors.pas:54:11
+    |
+ 54 |   WriteLn(Supports(S, IFoo, F));
+    |           ^^^^^^^^^^^^^^^^^^^^
+
+error[E0702]: `IFoo` can never be `TSealed`
+   --> interface_check_errors.pas:55:11
+    |
+ 55 |   WriteLn(F is TSealed);
+    |           ^^^^^^^^^^^^
+
+error[E0702]: `IFoo` can never be `TSealed`
+   --> interface_check_errors.pas:56:8
+    |
+ 56 |   S := F as TSealed;
+    |        ^^^^^^^^^^^^
+
+error[E0702]: `IFoo` can never be `TSealed`
+   --> interface_check_errors.pas:57:8
+    |
+ 57 |   S := TSealed(F);
+    |        ^^^^^^^^^^
+
+error[E0702]: type mismatch: expected an instance of a class, an interface or a class reference, found `Integer` (argument 1, parameter `Instance`)
+   --> interface_check_errors.pas:59:20
+    |
+ 59 |   WriteLn(Supports(N, IFoo));
+    |                    ^
+
+error[E0702]: type mismatch: expected an instance of a class or an interface, found `TOpenClass` (argument 1, parameter `Instance`)
+   --> interface_check_errors.pas:60:20
+    |
+ 60 |   WriteLn(Supports(K, IFoo, F));
+    |                    ^
+
+error[E0705]: wrong number of arguments: expected 2 to 3, found 1
+   --> interface_check_errors.pas:62:11
+    |
+ 62 |   WriteLn(Supports(F));
+    |           ^^^^^^^^^^^
+
+error[E0705]: wrong number of arguments: expected 2 to 3, found 4
+   --> interface_check_errors.pas:63:11
+    |
+ 63 |   WriteLn(Supports(F, IFoo, F, F));
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0702]: type mismatch: expected an instance of a class or an interface, found `Integer`
+   --> interface_check_errors.pas:65:11
+    |
+ 65 |   WriteLn(N is IFoo);
+    |           ^
+
+error[E0702]: type mismatch: expected a class or an interface, found `TPoint`
+   --> interface_check_errors.pas:66:16
+    |
+ 66 |   WriteLn(P is TPoint);
+    |                ^^^^^^
+
+error[E0702]: type mismatch: expected a class or an interface, found a value of type `IFoo`
+   --> interface_check_errors.pas:67:16
+    |
+ 67 |   WriteLn(P is F);
+    |                ^
+
+error: aborting due to 19 errors

@@ -1,0 +1,37 @@
+error[E0755]: `Initialize` is not an operator name
+   --> operator_more_errors.pas:10:20
+    |
+ 10 |     class operator Initialize(out A: TRef);
+    |                    ^^^^^^^^^^
+    |
+    = note: the operator names are `Add`, `Subtract`, `Multiply`, `Divide`, `IntDivide`, `Modulus`, `LeftShift`, `RightShift`, `LogicalAnd`, `BitwiseAnd`, `LogicalOr`, `BitwiseOr`, `LogicalXor`, `BitwiseXor`, `Equal`, `NotEqual`, `LessThan`, `LessThanOrEqual`, `GreaterThan`, `GreaterThanOrEqual`, `In`, `Negative`, `Positive`, `LogicalNot`, `Inc`, `Dec`, `Trunc`, `Round`, `Implicit`, `Explicit`
+
+error[E3014]: `class operator Finalize` is not supported in Puy
+   --> operator_more_errors.pas:15:20
+    |
+ 15 |     class operator Finalize(var A: TV);
+    |                    ^^^^^^^^
+    |
+    = note: use a class derived from `TRefObject` instead
+
+error[E3014]: `class operator Assign` is not supported in Puy
+   --> operator_more_errors.pas:16:20
+    |
+ 16 |     class operator Assign(var A: TV; const B: TV);
+    |                    ^^^^^^
+    |
+    = note: use a class derived from `TRefObject` instead
+
+error[E0755]: `Explicit` from `TV` to `TV` is already a built-in conversion
+   --> operator_more_errors.pas:17:20
+    |
+ 17 |     class operator Explicit(const A: TV): TV;
+    |                    ^^^^^^^^
+
+error[E0755]: operator `Add` must have a parameter or result of type `TV`
+   --> operator_more_errors.pas:18:20
+    |
+ 18 |     class operator Add(A, B: Integer): TV;
+    |                    ^^^
+
+error: aborting due to 5 errors

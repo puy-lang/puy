@@ -70,6 +70,27 @@ pub fn int_is_nonzero(units: &[u16]) -> Option<bool> {
     Some(digits.iter().any(|&u| u != u16::from(b'0')))
 }
 
+/// The decimal digits of an integer, with `-` in front of a negative one, written into `buf`
+/// from its end (`IntToStr`, `UIntToStr`): the part of `buf` that holds them. 21 bytes hold
+/// `-9223372036854775808` and `18446744073709551615`.
+pub fn decimal(negative: bool, magnitude: u64, buf: &mut [u8; 21]) -> &[u8] {
+    let mut i = buf.len();
+    let mut m = magnitude;
+    loop {
+        i -= 1;
+        buf[i] = b'0' + (m % 10) as u8;
+        m /= 10;
+        if m == 0 {
+            break;
+        }
+    }
+    if negative {
+        i -= 1;
+        buf[i] = b'-';
+    }
+    &buf[i..]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

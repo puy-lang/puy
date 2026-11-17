@@ -1,0 +1,8 @@
+EInvalidOperation: `doOwnsKeys` needs a class type for the keys, but `string` is not a class
+assigned FALSE
+EInvalidOperation: `doOwnsKeys` needs a class type for the keys, but `Integer` is not a class
+EInvalidOperation: `doOwnsValues` needs a class type for the values, but `Double` is not a class
+owns values TRUE
+owns both TRUE
+generic class 0
+EInvalidOperation: `doOwnsKeys` needs a class type for the keys, but `Integer` is not a class

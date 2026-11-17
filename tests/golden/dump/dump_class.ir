@@ -1,0 +1,98 @@
+; puy ir 1
+.global
+  g0 C: TChild
+  g1 O: TObject
+.func f0 DumpClass.<main> params=0
+  .reg t0: TChild temp
+  .reg t1: TChild temp
+  .reg t2: string temp
+  .reg t3: TChild temp
+  .reg t4: Integer temp
+  .reg t5: TChild temp
+  .reg t6: Integer temp
+  .reg t7: TChild temp
+  .reg t8: Integer temp
+  .reg t9: TPoint temp
+  .reg t10: string temp
+  .reg t11: TChild temp
+  .reg t12: string temp
+  .reg t13: Integer temp
+  .reg t14: TChild temp
+  .reg t15: TPoint temp
+  .reg t16: string temp
+  .reg t17: Boolean temp
+  .reg t18: TChild temp
+  .reg t19: TChild temp
+  .reg t20: Int64 temp
+  .reg t21: string temp
+  .reg t22: Boolean temp
+  .reg t23: TChild temp
+  .reg t24: TChild temp
+  .reg t25: string temp
+  .reg t26: TObject temp
+  .reg t27: Int64 temp
+  .reg t28: TObject temp
+  .reg t29: TChild temp
+bb0:
+  .line 25
+  LoadZero     t0
+  New          t0, DumpClass.TChild
+  StoreGlobal  t0, g0
+  .line 26
+  LoadGlobal   t1, g0
+  LoadConst    t2, "a"
+  ObjSetRef    t1, 0, t2
+  .line 27
+  LoadGlobal   t3, g0
+  LoadGlobal   t5, g0
+  ObjGet       t4, t5, 1
+  LoadInt      t6, 1
+  AddInt       t4, t4, t6
+  NarrowOvf    t4, t4, 4
+  ObjSet       t3, 1, t4
+  .line 28
+  LoadGlobal   t7, g0
+  LoadInt      t8, 2
+  ObjGet       t9, t7, 2
+  Unique       t9, DumpClass.TPoint
+  ObjSet       t7, 2, t9
+  FieldSet     t9, 1, t8
+  .line 29
+  LoadGlobal   t11, g0
+  ObjGetRef    t10, t11, 0
+  LoadGlobal   t14, g0
+  ObjGet       t15, t14, 2
+  FieldGet     t13, t15, 1
+  IntToStr     t12, t13
+  ConcatStr    t10, t10, t12
+  LoadGlobal   t19, g0
+  ObjGet       t18, t19, 3
+  LoadZero     t20
+  EqInt        t17, t18, t20
+  NotBool      t17, t17
+  BoolToStr    t16, t17
+  ConcatStr    t10, t10, t16
+  LoadGlobal   t23, g0
+  LoadZero     t24
+  EqInt        t22, t23, t24
+  NotBool      t22, t22
+  BoolToStr    t21, t22
+  ConcatStr    t10, t10, t21
+  LoadConst    t25, "\n"
+  ConcatStr    t10, t10, t25
+  CallHost     -, h0(t10)
+  .line 30
+  New          t26, TObject
+  LoadGlobal   t27, g1
+  AddRefObj    t26
+  StoreGlobal  t26, g1
+  ReleaseObj   t27
+  .line 31
+  LoadGlobal   t28, g1
+  Destroy      t28
+  .line 32
+  LoadGlobal   t29, g0
+  Free         t29
+  .line 33
+  RetVoid
+.finally t2, t10, t12, t16, t21, t25, t26:obj

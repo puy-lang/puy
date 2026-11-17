@@ -1,0 +1,138 @@
+; puyc format 0
+.const
+  0: str "\n"
+.global
+  0: ref P
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpNestedRef file="dump_nested_ref.pas" init=- fini=- entry=0
+.func 0 DumpNestedRef.<main> params=0 regs=3
+  .line 43
+  0000  LoadInt      r2, 2
+  0001  Call         r2, f1
+  0002  MoveRef      r0, r2
+  0003  StoreGlobalRef r0, g0
+  .line 44
+  0004  LoadGlobalRef r1, g0
+  0005  CallClosure  r2, r1
+  .line 45
+  0006  RetVoid
+.finally r0, r1
+.func 1 DumpNestedRef.Make params=1 regs=17
+  .local r0 Start
+  .local r1 Result
+  .local r2 Count
+  .local r6 Start
+  .local r7 Count
+  .local r8 
+  .local r9 
+  .line 9
+  0000  NewCell      r6
+  0001  CellSet      r6, r0
+  0002  CellRef      r0, r6
+  0003  NewCell      r7
+  0004  CellRef      r2, r7
+  0005  NewCellRef   r8
+  0006  CellRef      r3, r8
+  0007  NewCellRef   r9
+  0008  CellRef      r4, r9
+  0009  LoadInt      r12, -1
+  000a  LoadInt      r13, 1
+  000b  Move         r14, r7
+  000c  MakeClosure  r10, r12
+  000d  StoreRefRef  r3, r10
+  000e  LoadInt      r12, -1
+  000f  LoadInt      r13, 3
+  0010  Move         r14, r7
+  0011  Move         r15, r6
+  0012  Move         r16, r8
+  0013  MakeClosure  r11, r12
+  0014  StoreRefRef  r4, r11
+  0015  LoadInt      r12, -1
+  0016  LoadInt      r13, 1
+  0017  Move         r14, r9
+  0018  MakeClosure  r5, r12
+  .line 36
+  0019  LoadZero     r12
+  001a  StoreRef     r2, r12
+  .line 37
+  001b  Move         r12, r5
+  001c  LoadInt      r13, 5
+  001d  ClosureWith  r1, r12
+  .line 38
+  001e  Ret          r1
+.finally r1, r5, r6, r7, r8, r9, r10, r11
+.func 2 DumpNestedRef.Make.Show params=1 regs=6
+  .local r1 Count
+  .local r2 Count
+  .line 13
+  0000  CapGet       r2, r0, 0
+  0001  CellRef      r1, r2
+  .line 15
+  0002  LoadRef      r5, r1
+  0003  IntToStr     r3, r5
+  0004  LoadConst    r4, k0
+  0005  ConcatStr    r3, r3, r4
+  0006  CallHost     r3, h0
+  .line 16
+  0007  RetVoid
+.finally r3, r4
+.func 3 DumpNestedRef.Make.Step params=2 regs=11
+  .local r1 K
+  .local r3 Count
+  .local r4 Start
+  .local r5 
+  .local r6 Count
+  .local r7 Start
+  .local r8 
+  .line 18
+  0000  CapGet       r6, r0, 0
+  0001  CellRef      r3, r6
+  0002  CapGet       r7, r0, 1
+  0003  CellRef      r4, r7
+  0004  CapGet       r8, r0, 2
+  0005  CellRef      r5, r8
+  0006  AssignRef    r2, r0
+  .line 24
+  0007  LoadRef      r9, r3
+  0008  LoadRef      r10, r4
+  0009  AddInt       r9, r9, r10
+  000a  NarrowOvf    r9, r9, 4
+  000b  StoreRef     r3, r9
+  .line 25
+  000c  LoadRef      r9, r5
+  000d  Call         r9, f2
+  .line 26
+  000e  JmpIfLeIntI  r1, 0, -> 0011
+  .line 27
+  000f  OuterRef     r9, 0, 0
+  0010  Call         r9, f4
+  .line 28
+  0011  RetVoid
+.finally r2
+.func 4 DumpNestedRef.Make.Step.Again params=1 regs=6 outer=3
+  .local r1 K
+  .local r2 
+  .line 19
+  0000  OuterRef     r1, 1, 1
+  0001  OuterRef     r2, 2, 1
+  .line 21
+  0002  LoadRef      r4, r1
+  0003  AddIntI      r4, r4, -1
+  0004  NarrowOvf    r4, r4, 4
+  0005  LoadRef      r3, r2
+  0006  Call         r3, f3
+  .line 22
+  0007  RetVoid
+.func 5 DumpNestedRef.Make.Run params=1 regs=5
+  .local r1 
+  .local r2 
+  .line 30
+  0000  CapGet       r2, r0, 0
+  0001  CellRef      r1, r2
+  .line 32
+  0002  LoadInt      r4, 1
+  0003  LoadRef      r3, r1
+  0004  Call         r3, f3
+  .line 33
+  0005  RetVoid

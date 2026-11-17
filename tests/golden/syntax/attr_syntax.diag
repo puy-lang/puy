@@ -1,0 +1,15 @@
+error[E0402]: expected a statement
+   --> attr_syntax.pas:22:1
+    |
+ 22 | [1, 2];
+    | ^^^^^^
+
+error[E0729]: cannot infer the type of an array constructor
+   --> attr_syntax.pas:22:1
+    |
+ 22 | [1, 2];
+    | ^^^^^^
+    |
+    = note: give the array a type, as in `var A: TArray<Integer> := [1, 2]`
+
+error: aborting due to 2 errors

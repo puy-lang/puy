@@ -1,14 +1,8 @@
-error[E3200]: `deprecated` is not supported yet (planned for M2)
-  --> unsupported_m2.pas:4:39
-   |
- 4 | procedure Over(X: Integer); overload; deprecated;
-   |                                       ^^^^^^^^^^
-
-error[E3200]: `I.ToString` is not supported yet (planned for M3)
+error[E3200]: type helpers for built-in types are not supported yet (planned for M5)
    --> unsupported_m2.pas:14:8
     |
- 14 |   Z := I.ToString;
-    |        ^^^^^^^^^^
+ 14 |   Z := I.ToHexString;
+    |        ^^^^^^^^^^^^^
 
 error[E0732]: `raise` without an exception is only allowed in an `except` block
    --> unsupported_m2.pas:16:3
@@ -16,4 +10,4 @@ error[E0732]: `raise` without an exception is only allowed in an `except` block
  16 |   raise;
     |   ^^^^^
 
-error: aborting due to 3 errors
+error: aborting due to 2 errors

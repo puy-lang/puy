@@ -18,7 +18,7 @@ bb0:
   Call         -, f1(t1)
   .line 67
   LoadGlobal   t3, g0
-  ExcGet       t2, t3, 0
+  ObjGetRef    t2, t3, 0
   LoadConst    t4, "\n"
   ConcatStr    t2, t2, t4
   CallHost     -, h0(t2)
@@ -36,12 +36,12 @@ bb0:
   .reg t0: Integer temp
   .reg t1: Exception exception
   .reg t2: EStep temp
-  .reg t3: Integer temp
-  .reg t4: Integer temp
+  .reg t3: string temp
+  .reg t4: Boolean temp
   .reg t5: Integer temp
   .reg t6: Integer temp
   .reg t7: Integer temp
-  .reg t8: Exception temp
+  .reg t8: Integer temp
   .try bb3..bb4 except bb5..bb20 t1
 bb0:
   .line 18
@@ -56,23 +56,24 @@ bb2:
   Jmp          bb3
 bb3:
   .line 20
-  LoadConst    t2, "step"
-  NewExc       t2, ExceptRelease.EStep
+  LoadConst    t3, "step"
+  New          t2, ExceptRelease.EStep
+  ObjSetRef    t2, 0, t3
   Raise        t2
 bb4:
   .line 19
   Jmp          bb21
 bb5:
   .line 22
-  ExcClass     t3, t1
-  ClassIs      t3, ExceptRelease.EStep
-  JmpIfFalse   t3, bb20, bb6
+  Move         t4, t1
+  IsClass      t4, ExceptRelease.EStep
+  JmpIfFalse   t4, bb20, bb6
 bb6:
   .line 22
   Move         v2, t1
   .line 24
-  LoadInt      t4, 1
-  JmpIfNeInt   v1, t4, bb9, bb7
+  LoadInt      t5, 1
+  JmpIfNeInt   v1, t5, bb9, bb7
 bb7:
   .line 25
   Release      t1
@@ -85,12 +86,12 @@ bb9:
   Jmp          bb10
 bb10:
   .line 26
-  LoadInt      t5, 2
-  JmpIfNeInt   v1, t5, bb14, bb11
+  LoadInt      t6, 2
+  JmpIfNeInt   v1, t6, bb14, bb11
 bb11:
   .line 26
-  LoadZero     t6
-  JmpIfNeInt   v0, t6, bb14, bb12
+  LoadZero     t7
+  JmpIfNeInt   v0, t7, bb14, bb12
 bb12:
   .line 27
   Release      t1
@@ -103,8 +104,8 @@ bb14:
   Jmp          bb15
 bb15:
   .line 28
-  LoadInt      t7, 3
-  JmpIfNeInt   v1, t7, bb18, bb16
+  LoadInt      t8, 3
+  JmpIfNeInt   v1, t8, bb18, bb16
 bb16:
   .line 29
   Release      t1
@@ -117,8 +118,7 @@ bb18:
   Jmp          bb19
 bb19:
   .line 30
-  AssignRef    t8, v2
-  StoreGlobalRef t8, g0
+  StoreGlobalRef v2, g0
   .line 19
   Release      t1
   Jmp          bb21
@@ -138,19 +138,21 @@ bb23:
 bb24:
   .line 33
   RetVoid
-.finally t1, t2, t8
+.finally t1, t2, t3
 .func f2 ExceptRelease.Replace params=0
   .reg v0 E: EStep exception
   .reg v1 E: EStep exception
   .reg t0: Exception exception
   .reg t1: Exception exception
   .reg t2: EStep temp
-  .reg t3: Integer temp
-  .reg t4: EStep temp
-  .reg t5: string temp
-  .reg t6: Integer temp
+  .reg t3: string temp
+  .reg t4: Boolean temp
+  .reg t5: EStep temp
+  .reg t6: string temp
   .reg t7: string temp
-  .reg t8: string temp
+  .reg t8: Boolean temp
+  .reg t9: string temp
+  .reg t10: string temp
   .try bb1..bb2 except bb3..bb6 t1
   .try bb0..bb7 except bb8..bb10 t0
 bb0:
@@ -158,26 +160,28 @@ bb0:
   Jmp          bb1
 bb1:
   .line 39
-  LoadConst    t2, "first"
-  NewExc       t2, ExceptRelease.EStep
+  LoadConst    t3, "first"
+  New          t2, ExceptRelease.EStep
+  ObjSetRef    t2, 0, t3
   Raise        t2
 bb2:
   .line 38
   Jmp          bb7
 bb3:
   .line 41
-  ExcClass     t3, t1
-  ClassIs      t3, ExceptRelease.EStep
-  JmpIfFalse   t3, bb6, bb4
+  Move         t4, t1
+  IsClass      t4, ExceptRelease.EStep
+  JmpIfFalse   t4, bb6, bb4
 bb4:
   .line 41
   Move         v0, t1
   .line 42
-  LoadConst    t4, "second "
-  ExcGet       t5, v0, 0
-  ConcatStr    t4, t4, t5
-  NewExc       t4, ExceptRelease.EStep
-  Raise        t4
+  LoadConst    t6, "second "
+  ObjGetRef    t7, v0, 0
+  ConcatStr    t6, t6, t7
+  New          t5, ExceptRelease.EStep
+  ObjSetRef    t5, 0, t6
+  Raise        t5
 bb5:
   .line 38
   Release      t1
@@ -190,17 +194,17 @@ bb7:
   Jmp          bb11
 bb8:
   .line 45
-  ExcClass     t6, t0
-  ClassIs      t6, ExceptRelease.EStep
-  JmpIfFalse   t6, bb10, bb9
+  Move         t8, t0
+  IsClass      t8, ExceptRelease.EStep
+  JmpIfFalse   t8, bb10, bb9
 bb9:
   .line 45
   Move         v1, t0
   .line 46
-  ExcGet       t7, v1, 0
-  LoadConst    t8, "\n"
-  ConcatStr    t7, t7, t8
-  CallHost     -, h0(t7)
+  ObjGetRef    t9, v1, 0
+  LoadConst    t10, "\n"
+  ConcatStr    t9, t9, t10
+  CallHost     -, h0(t9)
   .line 37
   Release      t0
   Jmp          bb11
@@ -210,16 +214,17 @@ bb10:
 bb11:
   .line 48
   RetVoid
-.finally t0, t1, t2, t4, t5, t7, t8
+.finally t0, t1, t2, t3, t5, t6, t7, t9, t10
 .func f3 ExceptRelease.Again params=0
   .reg v0 E: Exception exception
   .reg t0: Exception exception
   .reg t1: Exception exception
   .reg t2: EStep temp
-  .reg t3: Exception temp
-  .reg t4: Integer temp
-  .reg t5: string temp
+  .reg t3: string temp
+  .reg t4: Exception temp
+  .reg t5: Boolean temp
   .reg t6: string temp
+  .reg t7: string temp
   .try bb1..bb2 except bb3..bb4 t1
   .try bb0..bb5 except bb6..bb8 t0
 bb0:
@@ -227,16 +232,17 @@ bb0:
   Jmp          bb1
 bb1:
   .line 54
-  LoadConst    t2, "again"
-  NewExc       t2, ExceptRelease.EStep
+  LoadConst    t3, "again"
+  New          t2, ExceptRelease.EStep
+  ObjSetRef    t2, 0, t3
   Raise        t2
 bb2:
   .line 53
   Jmp          bb5
 bb3:
   .line 56
-  AssignRef    t3, t1
-  Raise        t3
+  AssignRef    t4, t1
+  Raise        t4
 bb4:
   .line 53
   Release      t1
@@ -246,17 +252,17 @@ bb5:
   Jmp          bb9
 bb6:
   .line 59
-  ExcClass     t4, t0
-  ClassIs      t4, Exception
-  JmpIfFalse   t4, bb8, bb7
+  Move         t5, t0
+  IsClass      t5, Exception
+  JmpIfFalse   t5, bb8, bb7
 bb7:
   .line 59
   Move         v0, t0
   .line 60
-  ExcGet       t5, v0, 0
-  LoadConst    t6, "\n"
-  ConcatStr    t5, t5, t6
-  CallHost     -, h0(t5)
+  ObjGetRef    t6, v0, 0
+  LoadConst    t7, "\n"
+  ConcatStr    t6, t6, t7
+  CallHost     -, h0(t6)
   .line 52
   Release      t0
   Jmp          bb9
@@ -266,4 +272,4 @@ bb8:
 bb9:
   .line 62
   RetVoid
-.finally t0, t1, t2, t3, t5, t6
+.finally t0, t1, t2, t3, t4, t6, t7

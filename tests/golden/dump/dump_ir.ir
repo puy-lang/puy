@@ -54,9 +54,9 @@ bb0:
   .line 26
   LoadInt      t1, 2
   LoadInt      t2, 120
-  LoadGlobalRef t3, g1
+  LoadGlobal   t3, g1
   StrSetIndex  t3, t1, t2
-  StoreGlobalRef t3, g1
+  StoreGlobal  t3, g1
   .line 27
   LoadInt      t5, 3
   Call         t4, f1(t5)
@@ -67,6 +67,7 @@ bb0:
   LoadGlobalRef t9, g1
   Move         t8, t9
   Call         -, f2(t6, t7, t8)
+  Release      t9
   .line 29
   LoadGlobal   t10, g2
   LoadInt      t11, 5
@@ -205,7 +206,7 @@ bb25:
   CallHost     -, h0(t33)
   .line 48
   RetVoid
-.finally t0, t3, t9, t14, t15, t17, t18, t30, t32, t33, t34, t35, t37, t38, t40
+.finally t0, t9, t14, t15, t17, t18, t30, t32, t33, t34, t35, t37, t38, t40
 .func f1 DumpIr.Twice params=1
   .reg v0 X: Integer param
   .reg v1 Result: Integer result

@@ -1,0 +1,3 @@
+error: uncaught exception EInvalidOperation: cannot free a reference counted object of class `TCounted`; assign `nil` instead
+  at GenericOwnedFreeRefCounted.TOwnedList<TObject>.Destroy (generic_owned_free_ref_counted.pas:42)
+  at GenericOwnedFreeRefCounted.<main> (generic_owned_free_ref_counted.pas:53)

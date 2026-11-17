@@ -1,0 +1,6 @@
+overflow: Z = 7
+call: Z = 8
+and: B = FALSE
+finally: Z = 4000000, Result = 1
+caught
+1

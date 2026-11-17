@@ -1,0 +1,259 @@
+SOURCE_FILE@0..686
+  PROGRAM@0..686
+    PROGRAM_HEADER@0..28
+      PROGRAM_KW@0..7 "program"
+      WHITESPACE@7..8 " "
+      IDENT@8..27 "GenericExprTypeArgs"
+      SEMICOLON@27..28 ";"
+    NEWLINE@28..29 "\n"
+    NEWLINE@29..30 "\n"
+    LINE_COMMENT@30..126 "// In an expression, `IDENT <` starts type arguments when the tokens up to the matching `>` have"
+    NEWLINE@126..127 "\n"
+    LINE_COMMENT@127..217 "// the form of `TypeArgs` and the token after it cannot start a comparison's right operand"
+    NEWLINE@217..218 "\n"
+    LINE_COMMENT@218..311 "// (generics.md 1.4): TYPE_ARGS is the last child of NAME_REF / FIELD_EXPR. The names are not"
+    NEWLINE@311..312 "\n"
+    LINE_COMMENT@312..392 "// declared here, so the analysis reports them (E0700, E0761 for `A < B > (C)`)."
+    NEWLINE@392..393 "\n"
+    NEWLINE@393..394 "\n"
+    VAR_SECTION@394..462
+      VAR_KW@394..397 "var"
+      NEWLINE@397..398 "\n"
+      WHITESPACE@398..400 "  "
+      VAR_DECL@400..420
+        IDENT_LIST@400..410
+          IDENT@400..401 "A"
+          COMMA@401..402 ","
+          WHITESPACE@402..403 " "
+          IDENT@403..404 "B"
+          COMMA@404..405 ","
+          WHITESPACE@405..406 " "
+          IDENT@406..407 "C"
+          COMMA@407..408 ","
+          WHITESPACE@408..409 " "
+          IDENT@409..410 "X"
+        COLON@410..411 ":"
+        WHITESPACE@411..412 " "
+        TYPE_REF@412..419
+          QUALIFIED_NAME@412..419
+            IDENT@412..419 "Integer"
+        SEMICOLON@419..420 ";"
+      NEWLINE@420..421 "\n"
+      WHITESPACE@421..423 "  "
+      VAR_DECL@423..434
+        IDENT_LIST@423..424
+          IDENT@423..424 "F"
+        COLON@424..425 ":"
+        WHITESPACE@425..426 " "
+        TYPE_REF@426..433
+          QUALIFIED_NAME@426..433
+            IDENT@426..433 "Boolean"
+        SEMICOLON@433..434 ";"
+      NEWLINE@434..435 "\n"
+      WHITESPACE@435..437 "  "
+      VAR_DECL@437..448
+        IDENT_LIST@437..438
+          IDENT@437..438 "O"
+        COLON@438..439 ":"
+        WHITESPACE@439..440 " "
+        TYPE_REF@440..447
+          QUALIFIED_NAME@440..447
+            IDENT@440..447 "TObject"
+        SEMICOLON@447..448 ";"
+      NEWLINE@448..449 "\n"
+      WHITESPACE@449..451 "  "
+      VAR_DECL@451..462
+        IDENT_LIST@451..452
+          IDENT@451..452 "P"
+        COLON@452..453 ":"
+        WHITESPACE@453..454 " "
+        TYPE_REF@454..461
+          QUALIFIED_NAME@454..461
+            IDENT@454..461 "TObject"
+        SEMICOLON@461..462 ";"
+    NEWLINE@462..463 "\n"
+    COMPOUND_STMT@463..684
+      BEGIN_KW@463..468 "begin"
+      NEWLINE@468..469 "\n"
+      WHITESPACE@469..471 "  "
+      ASSIGN_STMT@471..497
+        NAME_REF@471..472
+          IDENT@471..472 "O"
+        WHITESPACE@472..473 " "
+        ASSIGN@473..475 ":="
+        WHITESPACE@475..476 " "
+        FIELD_EXPR@476..497
+          NAME_REF@476..490
+            IDENT@476..481 "TList"
+            TYPE_ARGS@481..490
+              LT@481..482 "<"
+              TYPE_REF@482..489
+                QUALIFIED_NAME@482..489
+                  IDENT@482..489 "Integer"
+              GT@489..490 ">"
+          DOT@490..491 "."
+          IDENT@491..497 "Create"
+      SEMICOLON@497..498 ";"
+      NEWLINE@498..499 "\n"
+      WHITESPACE@499..501 "  "
+      ASSIGN_STMT@501..524
+        NAME_REF@501..502
+          IDENT@501..502 "X"
+        WHITESPACE@502..503 " "
+        ASSIGN@503..505 ":="
+        WHITESPACE@505..506 " "
+        CALL_EXPR@506..524
+          NAME_REF@506..518
+            IDENT@506..509 "Max"
+            TYPE_ARGS@509..518
+              LT@509..510 "<"
+              TYPE_REF@510..517
+                QUALIFIED_NAME@510..517
+                  IDENT@510..517 "Integer"
+              GT@517..518 ">"
+          ARG_LIST@518..524
+            L_PAREN@518..519 "("
+            ARG@519..520
+              LITERAL@519..520
+                INT_LIT@519..520 "1"
+            COMMA@520..521 ","
+            WHITESPACE@521..522 " "
+            ARG@522..523
+              LITERAL@522..523
+                INT_LIT@522..523 "2"
+            R_PAREN@523..524 ")"
+      SEMICOLON@524..525 ";"
+      NEWLINE@525..526 "\n"
+      WHITESPACE@526..528 "  "
+      ASSIGN_STMT@528..556
+        NAME_REF@528..529
+          IDENT@528..529 "X"
+        WHITESPACE@529..530 " "
+        ASSIGN@530..532 ":="
+        WHITESPACE@532..533 " "
+        CALL_EXPR@533..556
+          FIELD_EXPR@533..550
+            NAME_REF@533..538
+              IDENT@533..538 "TUtil"
+            DOT@538..539 "."
+            IDENT@539..542 "Max"
+            TYPE_ARGS@542..550
+              LT@542..543 "<"
+              TYPE_REF@543..549
+                QUALIFIED_NAME@543..549
+                  IDENT@543..549 "Double"
+              GT@549..550 ">"
+          ARG_LIST@550..556
+            L_PAREN@550..551 "("
+            ARG@551..552
+              NAME_REF@551..552
+                IDENT@551..552 "A"
+            COMMA@552..553 ","
+            WHITESPACE@553..554 " "
+            ARG@554..555
+              NAME_REF@554..555
+                IDENT@554..555 "B"
+            R_PAREN@555..556 ")"
+      SEMICOLON@556..557 ";"
+      NEWLINE@557..558 "\n"
+      WHITESPACE@558..560 "  "
+      ASSIGN_STMT@560..581
+        NAME_REF@560..561
+          IDENT@560..561 "P"
+        WHITESPACE@561..562 " "
+        ASSIGN@562..564 ":="
+        WHITESPACE@564..565 " "
+        NAME_REF@565..581
+          IDENT@565..573 "Identity"
+          TYPE_ARGS@573..581
+            LT@573..574 "<"
+            TYPE_REF@574..580
+              STRING_KW@574..580 "string"
+            GT@580..581 ">"
+      SEMICOLON@581..582 ";"
+      NEWLINE@582..583 "\n"
+      WHITESPACE@583..585 "  "
+      ASSIGN_STMT@585..607
+        NAME_REF@585..586
+          IDENT@585..586 "X"
+        WHITESPACE@586..587 " "
+        ASSIGN@587..589 ":="
+        WHITESPACE@589..590 " "
+        BINARY_EXPR@590..607
+          NAME_REF@590..603
+            IDENT@590..595 "Count"
+            TYPE_ARGS@595..603
+              LT@595..596 "<"
+              TYPE_REF@596..602
+                STRING_KW@596..602 "string"
+              GT@602..603 ">"
+          WHITESPACE@603..604 " "
+          STAR@604..605 "*"
+          WHITESPACE@605..606 " "
+          LITERAL@606..607
+            INT_LIT@606..607 "2"
+      SEMICOLON@607..608 ";"
+      NEWLINE@608..609 "\n"
+      WHITESPACE@609..611 "  "
+      ASSIGN_STMT@611..627
+        NAME_REF@611..612
+          IDENT@611..612 "F"
+        WHITESPACE@612..613 " "
+        ASSIGN@613..615 ":="
+        WHITESPACE@615..616 " "
+        CALL_EXPR@616..627
+          NAME_REF@616..623
+            IDENT@616..617 "A"
+            WHITESPACE@617..618 " "
+            TYPE_ARGS@618..623
+              LT@618..619 "<"
+              WHITESPACE@619..620 " "
+              TYPE_REF@620..621
+                QUALIFIED_NAME@620..621
+                  IDENT@620..621 "B"
+              WHITESPACE@621..622 " "
+              GT@622..623 ">"
+          WHITESPACE@623..624 " "
+          ARG_LIST@624..627
+            L_PAREN@624..625 "("
+            ARG@625..626
+              NAME_REF@625..626
+                IDENT@625..626 "C"
+            R_PAREN@626..627 ")"
+      SEMICOLON@627..628 ";"
+      NEWLINE@628..629 "\n"
+      WHITESPACE@629..631 "  "
+      ASSIGN_STMT@631..679
+        NAME_REF@631..632
+          IDENT@631..632 "O"
+        WHITESPACE@632..633 " "
+        ASSIGN@633..635 ":="
+        WHITESPACE@635..636 " "
+        FIELD_EXPR@636..679
+          NAME_REF@636..672
+            IDENT@636..641 "TDict"
+            TYPE_ARGS@641..672
+              LT@641..642 "<"
+              TYPE_REF@642..648
+                STRING_KW@642..648 "string"
+              COMMA@648..649 ","
+              WHITESPACE@649..650 " "
+              GENERIC_TYPE_REF@650..671
+                QUALIFIED_NAME@650..655
+                  IDENT@650..655 "TList"
+                LT@655..656 "<"
+                TYPE_REF@656..670
+                  QUALIFIED_NAME@656..670
+                    IDENT@656..662 "System"
+                    DOT@662..663 "."
+                    IDENT@663..670 "Integer"
+                GT@670..671 ">"
+              GT@671..672 ">"
+          DOT@672..673 "."
+          IDENT@673..679 "Create"
+      SEMICOLON@679..680 ";"
+      NEWLINE@680..681 "\n"
+      END_KW@681..684 "end"
+    DOT@684..685 "."
+    NEWLINE@685..686 "\n"
+    EOF@686..686 ""

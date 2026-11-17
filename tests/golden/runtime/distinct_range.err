@@ -1,0 +1,2 @@
+error: uncaught exception ERangeError: value 256 is out of range for `TTiny` (0..255)
+  at DistinctRange.<main> (distinct_range.pas:80)

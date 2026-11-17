@@ -1,0 +1,13 @@
+error[E0703]: operator `=` cannot be applied to `TIndexRange` and `TIndexRange`
+   --> default_property_more_errors.pas:20:8
+    |
+ 20 |   if R = S then                                    // E0703
+    |        ^
+
+error[E0702]: type mismatch: expected `string`, found `Integer`
+   --> default_property_more_errors.pas:28:13
+    |
+ 28 |   WriteLn(B[1]);                                   // E0702: `IA`'s is hidden
+    |             ^
+
+error: aborting due to 2 errors

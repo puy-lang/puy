@@ -6,7 +6,7 @@
 
 use std::io::{BufRead, IsTerminal, Read, Write};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use puy_core::bytecode::Module;
 use puy_core::source::{MAX_SOURCE_SIZE, SourceProvider, TOO_LARGE_MESSAGE};
@@ -110,6 +110,11 @@ unsafe impl std::alloc::GlobalAlloc for CountingAlloc {
         if !p.is_null() {
             let now = ALLOCATED.fetch_add(layout.size(), Ordering::Relaxed) + layout.size();
             PEAK.fetch_max(now, Ordering::Relaxed);
+        } else if !puy_host::alloc::in_fallible() {
+            // Rust would abort on this refusal (SIGABRT, not 101), so the wrapper ends the
+            // process itself (`docs/design/host-interface.md` 3.8). A refusal under the mark
+            // returns null to the VM, which raises `EOutOfMemory`
+            out_of_memory(layout.size());
         }
         p
     }
@@ -118,6 +123,86 @@ unsafe impl std::alloc::GlobalAlloc for CountingAlloc {
         ALLOCATED.fetch_sub(layout.size(), Ordering::Relaxed);
         unsafe { std::alloc::System.dealloc(ptr, layout) }
     }
+}
+
+/// Whether fatal diagnostics are written as JSON (`--format json`).
+static FATAL_JSON: AtomicBool = AtomicBool::new(false);
+/// Whether a program has started running (the F0003 message says which stage ran out).
+static RUNNING: AtomicBool = AtomicBool::new(false);
+
+/// Sets how [`write_fatal`] writes (the CLI calls it before compiling).
+pub fn set_fatal_json(json: bool) {
+    FATAL_JSON.store(json, Ordering::Relaxed);
+}
+
+/// Marks that a program has started running ([`run_module`] calls it): from here on F0003 says
+/// how large the refused allocation was instead of `while compiling`.
+pub fn set_running() {
+    RUNNING.store(true, Ordering::Relaxed);
+}
+
+/// Writes a fatal diagnostic without a source position (F0001 of the panic hook, F0003 of the
+/// allocator wrapper; `docs/spec/diagnostics.md` 4.9) as one line in the text or JSON form,
+/// without allocating.
+pub fn write_fatal(w: &mut impl std::fmt::Write, code: &str, message: &str) -> std::fmt::Result {
+    use puy_core::diagnostics::json::{write_json_escaped, write_json_string};
+    if !FATAL_JSON.load(Ordering::Relaxed) {
+        return writeln!(w, "fatal[{code}]: {message}");
+    }
+    write!(
+        w,
+        "{{\"schema\":\"puy.diagnostics/1\",\"diagnostics\":[{{\"code\":\"{code}\",\"severity\":\"fatal\",\"name\":null,\"message\":"
+    )?;
+    write_json_string(w, message)?;
+    write!(
+        w,
+        ",\"primary\":null,\"secondary\":[],\"notes\":[],\"fixes\":[],\"rendered\":\"fatal[{code}]: "
+    )?;
+    write_json_escaped(w, message)?;
+    w.write_str("\"}],\"summary\":{\"errors\":1,\"warnings\":0,\"notes\":0}}\n")
+}
+
+/// A fixed buffer on the stack (the allocator cannot allocate to report its own failure). Text
+/// past its end is cut.
+struct StackText {
+    buf: [u8; 512],
+    len: usize,
+}
+
+impl std::fmt::Write for StackText {
+    fn write_str(&mut self, s: &str) -> std::fmt::Result {
+        let n = s.len().min(self.buf.len() - self.len);
+        self.buf[self.len..self.len + n].copy_from_slice(&s.as_bytes()[..n]);
+        self.len += n;
+        Ok(())
+    }
+}
+
+/// F0003 for an allocation inside Rust that the system refused: written to standard error, then
+/// exit code 101 like the panic hook (`docs/spec/diagnostics.md` 4.9).
+fn out_of_memory(size: usize) -> ! {
+    let mut text = StackText {
+        buf: [0; 512],
+        len: 0,
+    };
+    let mut message = StackText {
+        buf: [0; 512],
+        len: 0,
+    };
+    let _ = if RUNNING.load(Ordering::Relaxed) {
+        std::fmt::Write::write_fmt(
+            &mut message,
+            format_args!("out of memory: allocation of {size} bytes failed"),
+        )
+    } else {
+        std::fmt::Write::write_str(&mut message, "out of memory while compiling")
+    };
+    let message = std::str::from_utf8(&message.buf[..message.len]).unwrap_or("out of memory");
+    let _ = write_fatal(&mut text, "F0003", message);
+    let mut err = std::io::stderr().lock();
+    let _ = err.write_all(&text.buf[..text.len]);
+    let _ = err.flush();
+    std::process::exit(101)
 }
 
 impl puy_host::MemoryStats for ProcessMemory {
@@ -238,6 +323,7 @@ pub fn run_module(
     args: Vec<String>,
 ) -> Result<RunResult, puy_core::vm::IsolateError> {
     let budget = config.budget_default;
+    set_running();
     let mut iso = Isolate::new(module, host, config)?;
     iso.start_main(args)?;
     let mut program = None;

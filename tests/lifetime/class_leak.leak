@@ -1,0 +1,5 @@
+warning: 5 heap blocks were not freed
+  ClassLeak.TNamed: 1
+  ClassLeak.TNode: 2
+  TObject: 1
+  string: 1

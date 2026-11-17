@@ -1,0 +1,38 @@
+; puy ir 1
+.global
+  g0 H: Int64
+  g1 X: Int64
+.func f0 DumpHashCombine.<main> params=0
+  .reg t0: Int64 temp
+  .reg t1: Int64 temp
+  .reg t2: Int64 temp
+  .reg t3: Int64 temp
+  .reg t4: string temp
+  .reg t5: Boolean temp
+  .reg t6: Int64 temp
+  .reg t7: Int64 temp
+  .reg t8: Int64 temp
+  .reg t9: string temp
+bb0:
+  .line 8
+  LoadInt      t0, 42
+  StoreGlobal  t0, g1
+  .line 9
+  LoadInt      t2, 7
+  LoadGlobal   t3, g1
+  HashMix      t1, t2, t3
+  StoreGlobal  t1, g0
+  .line 10
+  LoadGlobal   t6, g0
+  LoadGlobal   t7, g1
+  HashMix      t5, t6, t7
+  LoadGlobal   t8, g0
+  EqInt        t5, t5, t8
+  NotBool      t5, t5
+  BoolToStr    t4, t5
+  LoadConst    t9, "\n"
+  ConcatStr    t4, t4, t9
+  CallHost     -, h0(t4)
+  .line 11
+  RetVoid
+.finally t4, t9

@@ -1,0 +1,132 @@
+; puy ir 1
+.global
+  g0 TTextMore.Calls: Integer
+  g1 C: TCounter
+  g2 S: string
+  g3 I: Integer
+.func f0 DumpHelpers.<main> params=0
+  .reg t0: TCounter temp
+  .reg t1: class of TCounter temp
+  .reg t2: TCounter temp
+  .reg t3: TCounter temp
+  .reg t4: string temp
+  .reg t5: string temp
+  .reg t6: - ref
+  .reg t7: string temp
+  .reg t8: Integer temp
+  .reg t9: - ref
+  .reg t10: string temp
+  .reg t11: Integer temp
+  .reg t12: TCounter temp
+  .reg t13: string temp
+  .reg t14: Integer temp
+  .reg t15: string temp
+  .reg t16: string temp
+  .reg t17: Integer temp
+  .reg t18: string temp
+  .reg t19: Integer temp
+  .reg t20: string temp
+  .reg t21: TCounter temp
+bb0:
+  .line 55
+  LoadInt      t1, class DumpHelpers.TCounter
+  Call         t0, f2(t1)
+  StoreGlobal  t0, g1
+  .line 56
+  LoadGlobal   t2, g1
+  CallMethod   -, f1(t2)
+  .line 57
+  LoadGlobal   t3, g1
+  CallMethod   -, f1(t3)
+  .line 58
+  LoadConst    t4, "ab"
+  StoreGlobalRef t4, g2
+  .line 59
+  MakeGlobalRef t6, g2
+  Call         t6, f3(t6)
+  MoveRef      t5, t6
+  MakeGlobalRef t9, g2
+  Call         t8, f4(t9)
+  IntToStr     t7, t8
+  ConcatStr    t5, t5, t7
+  LoadGlobal   t12, g1
+  ObjGet       t11, t12, 0
+  IntToStr     t10, t11
+  ConcatStr    t5, t5, t10
+  LoadGlobal   t15, g2
+  StrLen       t14, t15
+  IntToStr     t13, t14
+  ConcatStr    t5, t5, t13
+  LoadConst    t16, "\n"
+  ConcatStr    t5, t5, t16
+  CallHost     -, h0(t5)
+  .line 60
+  LoadInt      t17, 3
+  StoreGlobal  t17, g3
+  .line 61
+  LoadGlobal   t19, g3
+  IntToStr     t18, t19
+  LoadConst    t20, "\n"
+  ConcatStr    t18, t18, t20
+  CallHost     -, h0(t18)
+  .line 62
+  LoadGlobal   t21, g1
+  Free         t21
+  .line 63
+  RetVoid
+.finally t4, t5, t7, t10, t13, t16, t18, t20
+.func f1 DumpHelpers.TCounterHelper.Bump params=1
+  .reg v0 Self: TCounter self
+  .reg t0: Integer temp
+  .reg t1: Integer temp
+bb0:
+  .line 31
+  ObjGet       t0, v0, 0
+  LoadInt      t1, 1
+  AddInt       t0, t0, t1
+  NarrowOvf    t0, t0, 4
+  ObjSet       v0, 0, t0
+  .line 32
+  RetVoid
+.finally
+.func f2 DumpHelpers.TCounterHelper.Make params=1
+  .reg v0 Self: class of TCounter self
+  .reg v1 Result: TCounter result
+bb0:
+  .line 36
+  LoadZero     v1
+  New          v1, DumpHelpers.TCounter
+  .line 37
+  Ret          v1
+.finally
+.func f3 DumpHelpers.TTextHelper.Twice params=1
+  .reg v0 Self: string var self
+  .reg v1 Result: string result
+  .reg t0: string temp
+bb0:
+  .line 41
+  LoadRefRef   v1, v0
+  LoadRefRef   t0, v0
+  ConcatStr    v1, v1, t0
+  .line 42
+  Ret          v1
+.finally v1, t0
+.func f4 DumpHelpers.TTextMore.Size params=1
+  .reg v0 Self: string var self
+  .reg v1 Result: Integer result
+  .reg t0: Integer temp
+  .reg t1: Integer temp
+  .reg t2: string temp
+bb0:
+  .line 46
+  LoadGlobal   t0, g0
+  LoadInt      t1, 1
+  AddInt       t0, t0, t1
+  NarrowOvf    t0, t0, 4
+  StoreGlobal  t0, g0
+  .line 47
+  LoadRef      t2, v0
+  StrLen       v1, t2
+  .line 48
+  Ret          v1
+.finally

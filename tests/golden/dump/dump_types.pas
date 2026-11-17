@@ -1,7 +1,8 @@
 program DumpTypes;
 
-// The dumps of records and static arrays (semantics.md 9.1, bytecode.md 5.1, 5.2): `.type`,
-// `field` / `index`, a constant shape, `Unique`, `FieldSet`, `ChkIndex` and a cell.
+// The dumps of records and static arrays (semantics.md chapter 9, bytecode.md 5.1, 5.2): `.type`,
+// `field` / `index`, a constant shape, `Unique`, `FieldSet`, `ChkIndex` and an element lent to a
+// `var` parameter (`Lend` / `Unlend`).
 
 type
   TPoint = record

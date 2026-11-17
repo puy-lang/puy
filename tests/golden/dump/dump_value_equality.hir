@@ -1,0 +1,308 @@
+program DumpValueEquality
+.type TInner = record
+  .field 0 S: string
+  .field 1 F: Single
+.type TPoint = record
+  .field 0 X: Integer
+  .field 1 Inner: TInner
+.type TDigits = array[0..2] of Byte
+.type TShape = class(TObject)
+  .field 0 Origin: TPoint
+  .field 1 Path: array of TPoint
+  .field 2 Digits: TDigits
+  .field 3 Owner: TObject
+  .method f0 Equals override 4
+  .method f1 GetHashCode override 5
+.routine f0 TShape.Equals(Obj: TObject): Boolean
+  .var v0 Self: TShape self
+  .var v1 Obj: TObject param
+  .var v2 Result: Boolean result
+  .var v3 O: TShape local
+  assign @22 R-
+    var v2 Result
+    binary Boolean
+      is TShape
+        var v1 Obj: TObject
+      and Boolean bool
+        binary Boolean
+          builtin ClassType TClass
+            var v1 Obj: TObject
+          = Boolean ref
+            builtin ClassType TClass
+              self TShape
+  if @22
+    cond
+      var v2 Result: Boolean
+    then
+      block @22
+        assign @22 R-
+          var v3 O
+          as TShape cast
+            var v1 Obj: TObject
+        assign @22 R-
+          var v2 Result
+          binary Boolean
+            call KeyEquals<TPoint> via f2: Boolean
+              objfield TPoint Origin #0
+                self TShape
+              objfield TPoint Origin #0
+                var v3 O: TShape
+            and Boolean bool
+              call KeyEquals<array of TPoint> via f3: Boolean
+                objfield array of TPoint Path #1
+                  self TShape
+                objfield array of TPoint Path #1
+                  var v3 O: TShape
+            and Boolean bool
+              call KeyEquals<TDigits> via f4: Boolean
+                objfield TDigits Digits #2
+                  self TShape
+                objfield TDigits Digits #2
+                  var v3 O: TShape
+            and Boolean bool
+              call KeyEquals<TObject>: Boolean
+                objfield TObject Owner #3
+                  self TShape
+                objfield TObject Owner #3
+                  var v3 O: TShape
+.routine f1 TShape.GetHashCode(): Int64
+  .var v0 Self: TShape self
+  .var v1 Result: Int64 result
+  assign @22 R-
+    var v1 Result
+    call KeyHash<Int64>: Int64
+      const Int64 4
+  assign @22 R-
+    var v1 Result
+    builtin HashCombine Int64
+      var v1 Result: Int64
+      call KeyHash<TPoint> via f6: Int64
+        objfield TPoint Origin #0
+          self TShape
+  assign @22 R-
+    var v1 Result
+    builtin HashCombine Int64
+      var v1 Result: Int64
+      call KeyHash<array of TPoint> via f7: Int64
+        objfield array of TPoint Path #1
+          self TShape
+  assign @22 R-
+    var v1 Result
+    builtin HashCombine Int64
+      var v1 Result: Int64
+      call KeyHash<TDigits> via f8: Int64
+        objfield TDigits Digits #2
+          self TShape
+  assign @22 R-
+    var v1 Result
+    builtin HashCombine Int64
+      var v1 Result: Int64
+      call KeyHash<TObject>: Int64
+        objfield TObject Owner #3
+          self TShape
+.generated <eq:DumpValueEquality.TPoint>
+.routine f2 <eq:DumpValueEquality.TPoint>(const A: TPoint; const B: TPoint): Boolean
+  .var v0 A: TPoint const param
+  .var v1 B: TPoint const param
+  .var v2 Result: Boolean result
+  assign @14 R-
+    var v2 Result
+    binary Boolean
+      call KeyEquals<Integer>: Boolean
+        field Integer X #0
+          var v0 A: TPoint
+        field Integer X #0
+          var v1 B: TPoint
+      and Boolean bool
+        call KeyEquals<TInner> via f5: Boolean
+          field TInner Inner #1
+            var v0 A: TPoint
+          field TInner Inner #1
+            var v1 B: TPoint
+.generated <eq:array of DumpValueEquality.TPoint>
+.routine f3 <eq:array of DumpValueEquality.TPoint>(const A: array of TPoint; const B: array of TPoint): Boolean
+  .var v0 A: array of TPoint const param
+  .var v1 B: array of TPoint const param
+  .var v2 Result: Boolean result
+  .var v3 I: Int64 local
+  assign @22 R-
+    var v2 Result
+    const Boolean False
+  if @22
+    cond
+      binary Boolean
+        builtin Length Int64
+          var v0 A: array of TPoint
+        = Boolean int:Int64
+          builtin Length Int64
+            var v1 B: array of TPoint
+    then
+      block @22
+        for @22 to Q-R-
+          var v3 I
+          from
+            const Int64 0
+          to
+            builtin High Int64
+              var v0 A: array of TPoint
+          body
+            if @22
+              cond
+                unary not Boolean bool
+                  call KeyEquals<TPoint> via f2: Boolean
+                    index TPoint
+                      var v0 A: array of TPoint
+                      var v3 I: Int64
+                    index TPoint
+                      var v1 B: array of TPoint
+                      var v3 I: Int64
+              then
+                exit @22
+        assign @22 R-
+          var v2 Result
+          const Boolean True
+.generated <eq:DumpValueEquality.TDigits>
+.routine f4 <eq:DumpValueEquality.TDigits>(const A: TDigits; const B: TDigits): Boolean
+  .var v0 A: TDigits const param
+  .var v1 B: TDigits const param
+  .var v2 Result: Boolean result
+  .var v3 I: Integer local
+  assign @22 R-
+    var v2 Result
+    const Boolean False
+  for @22 to Q-R-
+    var v3 I
+    from
+      const Integer 0
+    to
+      const Integer 2
+    body
+      if @22
+        cond
+          unary not Boolean bool
+            call KeyEquals<Byte>: Boolean
+              index Byte
+                var v0 A: TDigits
+                var v3 I: Integer
+              index Byte
+                var v1 B: TDigits
+                var v3 I: Integer
+        then
+          exit @22
+  assign @22 R-
+    var v2 Result
+    const Boolean True
+.generated <eq:DumpValueEquality.TInner>
+.routine f5 <eq:DumpValueEquality.TInner>(const A: TInner; const B: TInner): Boolean
+  .var v0 A: TInner const param
+  .var v1 B: TInner const param
+  .var v2 Result: Boolean result
+  assign @9 R-
+    var v2 Result
+    binary Boolean
+      call KeyEquals<string>: Boolean
+        field string S #0
+          var v0 A: TInner
+        field string S #0
+          var v1 B: TInner
+      and Boolean bool
+        call KeyEquals<Single>: Boolean
+          field Single F #1
+            var v0 A: TInner
+          field Single F #1
+            var v1 B: TInner
+.generated <hash:DumpValueEquality.TPoint>
+.routine f6 <hash:DumpValueEquality.TPoint>(const X: TPoint): Int64
+  .var v0 X: TPoint const param
+  .var v1 Result: Int64 result
+  assign @14 R-
+    var v1 Result
+    call KeyHash<Int64>: Int64
+      const Int64 2
+  assign @14 R-
+    var v1 Result
+    builtin HashCombine Int64
+      var v1 Result: Int64
+      call KeyHash<Integer>: Int64
+        field Integer X #0
+          var v0 X: TPoint
+  assign @14 R-
+    var v1 Result
+    builtin HashCombine Int64
+      var v1 Result: Int64
+      call KeyHash<TInner> via f9: Int64
+        field TInner Inner #1
+          var v0 X: TPoint
+.generated <hash:array of DumpValueEquality.TPoint>
+.routine f7 <hash:array of DumpValueEquality.TPoint>(const X: array of TPoint): Int64
+  .var v0 X: array of TPoint const param
+  .var v1 Result: Int64 result
+  .var v2 I: Int64 local
+  assign @22 R-
+    var v1 Result
+    call KeyHash<Int64>: Int64
+      builtin Length Int64
+        var v0 X: array of TPoint
+  for @22 to Q-R-
+    var v2 I
+    from
+      const Int64 0
+    to
+      builtin High Int64
+        var v0 X: array of TPoint
+    body
+      assign @22 R-
+        var v1 Result
+        builtin HashCombine Int64
+          var v1 Result: Int64
+          call KeyHash<TPoint> via f6: Int64
+            index TPoint
+              var v0 X: array of TPoint
+              var v2 I: Int64
+.generated <hash:DumpValueEquality.TDigits>
+.routine f8 <hash:DumpValueEquality.TDigits>(const X: TDigits): Int64
+  .var v0 X: TDigits const param
+  .var v1 Result: Int64 result
+  .var v2 I: Integer local
+  assign @22 R-
+    var v1 Result
+    call KeyHash<Int64>: Int64
+      const Int64 3
+  for @22 to Q-R-
+    var v2 I
+    from
+      const Integer 0
+    to
+      const Integer 2
+    body
+      assign @22 R-
+        var v1 Result
+        builtin HashCombine Int64
+          var v1 Result: Int64
+          call KeyHash<Byte>: Int64
+            index Byte
+              var v0 X: TDigits
+              var v2 I: Integer
+.generated <hash:DumpValueEquality.TInner>
+.routine f9 <hash:DumpValueEquality.TInner>(const X: TInner): Int64
+  .var v0 X: TInner const param
+  .var v1 Result: Int64 result
+  assign @9 R-
+    var v1 Result
+    call KeyHash<Int64>: Int64
+      const Int64 2
+  assign @9 R-
+    var v1 Result
+    builtin HashCombine Int64
+      var v1 Result: Int64
+      call KeyHash<string>: Int64
+        field string S #0
+          var v0 X: TInner
+  assign @9 R-
+    var v1 Result
+    builtin HashCombine Int64
+      var v1 Result: Int64
+      call KeyHash<Single>: Int64
+        field Single F #1
+          var v0 X: TInner
+.routine <main>

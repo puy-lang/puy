@@ -1,0 +1,9 @@
+0.0 = -0.0: TRUE TRUE TRUE
+NaN = NaN: FALSE TRUE TRUE
+NaN and 0.0: FALSE
+INF and -INF: FALSE TRUE
+Single: TRUE TRUE TRUE FALSE
+literals: TRUE TRUE
+representations: TRUE TRUE TRUE
+empty: TRUE
+case: FALSE

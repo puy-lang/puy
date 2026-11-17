@@ -1,0 +1,49 @@
+error[E0703]: operator `+` cannot be applied to `TShape` and `TShape`
+   --> class_value_errors.pas:40:13
+    |
+ 40 |   WriteLn(A + B);
+    |             ^
+
+error[E0703]: operator `<` cannot be applied to `TShape` and `TShape`
+   --> class_value_errors.pas:41:13
+    |
+ 41 |   WriteLn(A < B);
+    |             ^
+
+error[E0702]: type mismatch: expected `IFoo`, found `TShapeClass`
+   --> class_value_errors.pas:42:8
+    |
+ 42 |   I := IFoo(K);
+    |        ^^^^^^^
+
+error[E0702]: type mismatch: expected `TShapeClass`, found `IFoo`
+   --> class_value_errors.pas:43:8
+    |
+ 43 |   K := TShapeClass(I);
+    |        ^^^^^^^^^^^^^^
+
+error[E0702]: type mismatch: expected a class type, found `IFoo` (argument 1, parameter `Obj`)
+   --> class_value_errors.pas:44:14
+    |
+ 44 |   FreeAndNil(I);
+    |              ^
+    |
+    = note: `FreeAndNil` takes a variable of a class type
+
+error[E0702]: type mismatch: expected a class type, found `TShapeClass` (argument 1, parameter `Obj`)
+   --> class_value_errors.pas:45:14
+    |
+ 45 |   FreeAndNil(K);
+    |              ^
+    |
+    = note: `FreeAndNil` takes a variable of a class type
+
+error[E0702]: type mismatch: expected `TShape`, found `TCircle` (argument 1, parameter `S`)
+   --> class_value_errors.pas:46:9
+    |
+ 46 |   Reset(C);
+    |         ^
+    |
+    = note: a `var` parameter needs a variable of exactly the same type
+
+error: aborting due to 7 errors

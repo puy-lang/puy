@@ -1,0 +1,58 @@
+error[E3401]: `deprecated` must be written on the full declaration of `TFwd`
+   --> hint_errors.pas:9:16
+    |
+  9 |   TFwd = class deprecated;
+    |                ^^^^^^^^^^
+ 10 |   IFwd = interface experimental 'soon';
+ 11 |   TFwd = class
+    |   ---- declared here
+
+error[E3401]: `experimental` must be written on the full declaration of `IFwd`
+   --> hint_errors.pas:10:20
+    |
+ 10 |   IFwd = interface experimental 'soon';
+    |                    ^^^^^^^^^^^^
+...
+ 15 |   IFwd = interface
+    |   ---- declared here
+
+error[E0401]: unexpected `deprecated`
+   --> hint_errors.pas:17:31
+    |
+ 17 |   TTwice = Integer deprecated deprecated 'again';
+    |                               ^^^^^^^^^^
+
+error[E3401]: `experimental` must be written on the declaration of `Later`
+   --> hint_errors.pas:21:30
+    |
+ 19 | procedure Later; forward; deprecated;
+    |           ----- declared here
+ 20 |
+ 21 | procedure Later; deprecated; experimental;
+    |                              ^^^^^^^^^^^^
+
+error[E3401]: `deprecated` must be written on the declaration of `Plain`
+   --> hint_errors.pas:27:18
+    |
+ 25 | procedure Plain; forward;
+    |           ----- declared here
+ 26 |
+ 27 | procedure Plain; deprecated;
+    |                  ^^^^^^^^^^
+
+error[E3401]: `experimental` must be written on the declaration of `TFwd.Go`
+   --> hint_errors.pas:35:20
+    |
+ 13 |     procedure Go;
+    |               -- declared here
+...
+ 35 | procedure TFwd.Go; experimental;
+    |                    ^^^^^^^^^^^^
+
+error[E0401]: unexpected `deprecated`
+   --> hint_errors.pas:39:42
+    |
+ 39 | procedure Dup; deprecated; experimental; deprecated 'x';
+    |                                          ^^^^^^^^^^
+
+error: aborting due to 7 errors

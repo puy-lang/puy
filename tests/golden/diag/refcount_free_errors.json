@@ -1,0 +1,300 @@
+[
+  {
+    "schema": "puy.diagnostics/1",
+    "diagnostics": [
+      {
+        "code": "E3019",
+        "severity": "error",
+        "name": null,
+        "message": "`Free` is not supported in Puy",
+        "primary": {
+          "file": "refcount_free_errors.pas",
+          "start": 463,
+          "end": 467,
+          "line": 21,
+          "column": 3,
+          "end_line": 21,
+          "end_column": 7,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "assign `nil` instead; reference counted objects are freed automatically"
+        ],
+        "fixes": [],
+        "rendered": "error[E3019]: `Free` is not supported in Puy\n   --> refcount_free_errors.pas:21:3\n    |\n 21 |   Free;\n    |   ^^^^\n    |\n    = note: assign `nil` instead; reference counted objects are freed automatically"
+      },
+      {
+        "code": "E3019",
+        "severity": "error",
+        "name": null,
+        "message": "`Destroy` is not supported in Puy",
+        "primary": {
+          "file": "refcount_free_errors.pas",
+          "start": 471,
+          "end": 478,
+          "line": 22,
+          "column": 3,
+          "end_line": 22,
+          "end_column": 10,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "assign `nil` instead; reference counted objects are freed automatically"
+        ],
+        "fixes": [],
+        "rendered": "error[E3019]: `Destroy` is not supported in Puy\n   --> refcount_free_errors.pas:22:3\n    |\n 22 |   Destroy;\n    |   ^^^^^^^\n    |\n    = note: assign `nil` instead; reference counted objects are freed automatically"
+      },
+      {
+        "code": "E3019",
+        "severity": "error",
+        "name": null,
+        "message": "`Free` is not supported in Puy",
+        "primary": {
+          "file": "refcount_free_errors.pas",
+          "start": 537,
+          "end": 541,
+          "line": 27,
+          "column": 8,
+          "end_line": 27,
+          "end_column": 12,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "assign `nil` instead; reference counted objects are freed automatically"
+        ],
+        "fixes": [],
+        "rendered": "error[E3019]: `Free` is not supported in Puy\n   --> refcount_free_errors.pas:27:8\n    |\n 27 |   Item.Free;\n    |        ^^^^\n    |\n    = note: assign `nil` instead; reference counted objects are freed automatically"
+      },
+      {
+        "code": "E3019",
+        "severity": "error",
+        "name": null,
+        "message": "`Free` is not supported in Puy",
+        "primary": {
+          "file": "refcount_free_errors.pas",
+          "start": 596,
+          "end": 600,
+          "line": 34,
+          "column": 5,
+          "end_line": 34,
+          "end_column": 9,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "assign `nil` instead; reference counted objects are freed automatically"
+        ],
+        "fixes": [
+          {
+            "title": "replace with `X := nil`",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "refcount_free_errors.pas",
+                "start": 594,
+                "end": 600,
+                "line": 34,
+                "column": 3,
+                "end_line": 34,
+                "end_column": 9,
+                "original": "X.Free",
+                "replacement": "X := nil"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E3019]: `Free` is not supported in Puy\n   --> refcount_free_errors.pas:34:5\n    |\n 34 |   X.Free;\n    |     ^^^^\n    |\n    = note: assign `nil` instead; reference counted objects are freed automatically\n    = suggestion: replace with `X := nil`"
+      },
+      {
+        "code": "E3019",
+        "severity": "error",
+        "name": null,
+        "message": "`Destroy` is not supported in Puy",
+        "primary": {
+          "file": "refcount_free_errors.pas",
+          "start": 606,
+          "end": 613,
+          "line": 35,
+          "column": 5,
+          "end_line": 35,
+          "end_column": 12,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "assign `nil` instead; reference counted objects are freed automatically"
+        ],
+        "fixes": [
+          {
+            "title": "replace with `X := nil`",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "refcount_free_errors.pas",
+                "start": 604,
+                "end": 613,
+                "line": 35,
+                "column": 3,
+                "end_line": 35,
+                "end_column": 12,
+                "original": "X.Destroy",
+                "replacement": "X := nil"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E3019]: `Destroy` is not supported in Puy\n   --> refcount_free_errors.pas:35:5\n    |\n 35 |   X.Destroy;\n    |     ^^^^^^^\n    |\n    = note: assign `nil` instead; reference counted objects are freed automatically\n    = suggestion: replace with `X := nil`"
+      },
+      {
+        "code": "E3019",
+        "severity": "error",
+        "name": null,
+        "message": "`Free` is not supported in Puy",
+        "primary": {
+          "file": "refcount_free_errors.pas",
+          "start": 624,
+          "end": 628,
+          "line": 36,
+          "column": 10,
+          "end_line": 36,
+          "end_column": 14,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "assign `nil` instead; reference counted objects are freed automatically"
+        ],
+        "fixes": [
+          {
+            "title": "replace with `X.Next := nil`",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "refcount_free_errors.pas",
+                "start": 617,
+                "end": 628,
+                "line": 36,
+                "column": 3,
+                "end_line": 36,
+                "end_column": 14,
+                "original": "X.Next.Free",
+                "replacement": "X.Next := nil"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E3019]: `Free` is not supported in Puy\n   --> refcount_free_errors.pas:36:10\n    |\n 36 |   X.Next.Free;\n    |          ^^^^\n    |\n    = note: assign `nil` instead; reference counted objects are freed automatically\n    = suggestion: replace with `X.Next := nil`"
+      },
+      {
+        "code": "E3019",
+        "severity": "error",
+        "name": null,
+        "message": "`Free` is not supported in Puy",
+        "primary": {
+          "file": "refcount_free_errors.pas",
+          "start": 634,
+          "end": 638,
+          "line": 37,
+          "column": 5,
+          "end_line": 37,
+          "end_column": 9,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "assign `nil` instead; reference counted objects are freed automatically"
+        ],
+        "fixes": [
+          {
+            "title": "replace with `G := nil`",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "refcount_free_errors.pas",
+                "start": 632,
+                "end": 638,
+                "line": 37,
+                "column": 3,
+                "end_line": 37,
+                "end_column": 9,
+                "original": "G.Free",
+                "replacement": "G := nil"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E3019]: `Free` is not supported in Puy\n   --> refcount_free_errors.pas:37:5\n    |\n 37 |   G.Free;\n    |     ^^^^\n    |\n    = note: assign `nil` instead; reference counted objects are freed automatically\n    = suggestion: replace with `G := nil`"
+      },
+      {
+        "code": "E3019",
+        "severity": "error",
+        "name": null,
+        "message": "`FreeAndNil` is not supported in Puy",
+        "primary": {
+          "file": "refcount_free_errors.pas",
+          "start": 642,
+          "end": 652,
+          "line": 38,
+          "column": 3,
+          "end_line": 38,
+          "end_column": 13,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "assign `nil` instead; reference counted objects are freed automatically"
+        ],
+        "fixes": [
+          {
+            "title": "replace with `X := nil`",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "refcount_free_errors.pas",
+                "start": 642,
+                "end": 655,
+                "line": 38,
+                "column": 3,
+                "end_line": 38,
+                "end_column": 16,
+                "original": "FreeAndNil(X)",
+                "replacement": "X := nil"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E3019]: `FreeAndNil` is not supported in Puy\n   --> refcount_free_errors.pas:38:3\n    |\n 38 |   FreeAndNil(X);\n    |   ^^^^^^^^^^\n    |\n    = note: assign `nil` instead; reference counted objects are freed automatically\n    = suggestion: replace with `X := nil`"
+      },
+      {
+        "code": "E3019",
+        "severity": "error",
+        "name": null,
+        "message": "`Free` is not supported in Puy",
+        "primary": {
+          "file": "refcount_free_errors.pas",
+          "start": 672,
+          "end": 676,
+          "line": 39,
+          "column": 16,
+          "end_line": 39,
+          "end_column": 20,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "assign `nil` instead; reference counted objects are freed automatically"
+        ],
+        "fixes": [],
+        "rendered": "error[E3019]: `Free` is not supported in Puy\n   --> refcount_free_errors.pas:39:16\n    |\n 39 |   TItem.Create.Free;\n    |                ^^^^\n    |\n    = note: assign `nil` instead; reference counted objects are freed automatically"
+      }
+    ],
+    "summary": {
+      "errors": 9,
+      "warnings": 0,
+      "notes": 0
+    }
+  }
+]

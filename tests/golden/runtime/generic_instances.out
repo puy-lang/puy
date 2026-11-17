@@ -1,0 +1,13 @@
+5 25 25 7
+25
+1 4 9 16 25 
+25 16 9 4 1 
+0 TStack<Integer>
+cb 1 stack of 1
+[] TStack<string>
+one=1
+0 0.0
+2 2.5
+[] 0
+two one 1
+2 1

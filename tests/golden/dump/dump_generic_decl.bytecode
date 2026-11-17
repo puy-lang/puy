@@ -1,0 +1,14 @@
+; puyc format 0
+.const
+  0: str "declared\n"
+.global
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpGenericDecl file="dump_generic_decl.pas" init=- fini=- entry=0
+.func 0 DumpGenericDecl.<main> params=0 regs=1
+  .line 63
+  0000  LoadConst    r0, k0
+  0001  CallHost     r0, h0
+  .line 64
+  0002  RetVoid
+.finally r0

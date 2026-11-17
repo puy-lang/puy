@@ -1,0 +1,71 @@
+program DumpNestedRef
+.global g0 P: TProc
+.routine f0 Make(Start: Integer): TProc
+  .var v0 Start: Integer param cell
+  .var v1 Result: TProc result
+  .var v2 Count: Integer local cell
+  .var v3 -: TProc hidden cell
+  .var v4 -: TProc hidden cell
+  .var v5 -: TProc hidden
+  .group v3 [v2]
+  .group v4 [v2, v0, v3]
+  .group v5 [v4]
+  assign @36 R+
+    var v2 Count
+    const Integer 0
+  assign @37 R+
+    var v1 Result
+    nested-ref f4 Make.Run block v5
+.routine f1 Make.Show() closure
+  .var v0 Count: Integer outer v2 up=1
+  .capture #0 Count: Integer from v2
+  writeln @15
+    arg
+      var v0 Count: Integer
+.routine f2 Make.Step(K: Integer) closure
+  .var v0 K: Integer param
+  .var v1 -: TProc hidden
+  .var v2 Count: Integer outer v2 up=1
+  .var v3 Start: Integer outer v0 up=1
+  .var v4 -: TProc outer v3 up=1
+  .capture #0 Count: Integer from v2
+  .capture #1 Start: Integer from v0
+  .capture #2 -: TProc from v3
+  .own-block v1
+  inc @24 calc=Integer Q+R+
+    var v2 Count
+    var v3 Start: Integer
+  expr @25
+    call f1 block v4 Make.Show: -
+  if @26
+    cond
+      binary Boolean
+        var v0 K: Integer
+        > Boolean int:Integer
+          const Integer 0
+    then
+      expr @27
+        call f3 Make.Step.Again: -
+.routine f3 Make.Step.Again()
+  .var v0 K: Integer outer v0 up=1
+  .var v1 -: TProc outer v1 up=1
+  expr @21
+    call f2 block v1 Make.Step: -
+      binary Integer
+        var v0 K: Integer
+        - Integer int:Integer
+          const Integer 1
+.routine f4 Make.Run() closure
+  .var v0 -: TProc outer v4 up=1
+  .capture #0 -: TProc from v4
+  expr @32
+    call f2 block v0 Make.Step: -
+      const Integer 1
+.routine <main>
+  assign @43 R+
+    global g0 P
+    call f0 Make: TProc
+      const Integer 2
+  expr @44
+    call-closure: -
+      global g0 P: TProc

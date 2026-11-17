@@ -41,7 +41,7 @@ fn function(out: &mut String, index: usize, f: &Function, types: &TypeTable) {
         let kind = match t.kind {
             TempKind::Value => "temp",
             TempKind::Ref => "ref",
-            TempKind::Cell => "cell",
+            TempKind::Lent => "lent",
             TempKind::State => "state",
             TempKind::Exception => "exception",
         };
@@ -70,8 +70,21 @@ fn function(out: &mut String, index: usize, f: &Function, types: &TypeTable) {
         };
         for inst in &block.insts {
             set_line(out, inst.line);
+            // An intrinsic shows by its own name, without its number (`bytecode.md` 2.19)
+            let (name, ops) = match &inst.kind {
+                InstKind::Plain(ops) if inst.op == op::INTRINSIC => {
+                    let (last, rest) = ops.split_last().expect("an intrinsic has its number");
+                    let Operand::Imm(id) = last else {
+                        unreachable!("the last operand of `Intrinsic` is its number")
+                    };
+                    let info = op::intr::info(*id as u32).expect("a known intrinsic");
+                    (info.name, rest)
+                }
+                InstKind::Plain(ops) => (op_name(inst.op), &ops[..]),
+                InstKind::Call { .. } => (op_name(inst.op), &[][..]),
+            };
             let operands = match &inst.kind {
-                InstKind::Plain(ops) => ops
+                InstKind::Plain(_) => ops
                     .iter()
                     .map(|o| operand(o, types))
                     .collect::<Vec<_>>()
@@ -84,7 +97,7 @@ fn function(out: &mut String, index: usize, f: &Function, types: &TypeTable) {
                     format!("{dst}, {}({})", operand(callee, types), args.join(", "))
                 }
             };
-            instruction(out, inst.op, &operands);
+            named(out, name, &operands);
         }
         set_line(out, block.term_line);
         match &block.term {
@@ -103,6 +116,32 @@ fn function(out: &mut String, index: usize, f: &Function, types: &TypeTable) {
                 let _ = write!(text, ", bb{then}, bb{other}");
                 instruction(out, *op, &text);
             }
+            Term::BranchImm {
+                op,
+                a,
+                imm,
+                then,
+                other,
+            } => instruction(
+                out,
+                *op,
+                &format!("{}, {imm}, bb{then}, bb{other}", reg(*a)),
+            ),
+            Term::ForLoop {
+                counter,
+                limit,
+                delta,
+                top,
+                exit,
+            } => instruction(
+                out,
+                if *delta > 0 {
+                    op::FOR_LOOP_UP
+                } else {
+                    op::FOR_LOOP_DOWN
+                },
+                &format!("{}, {}, bb{top}, bb{exit}", reg(*counter), reg(*limit)),
+            ),
             Term::Ret(r) => instruction(out, op::RET, &reg(*r)),
             Term::RetVoid => instruction(out, op::RET_VOID, ""),
             Term::Halt(r) => instruction(out, op::HALT, &reg(*r)),
@@ -127,16 +166,34 @@ fn function(out: &mut String, index: usize, f: &Function, types: &TypeTable) {
     if f.finally.is_empty() {
         out.push_str(".finally\n");
     } else {
-        let regs: Vec<String> = f.finally.iter().map(|r| reg(*r)).collect();
+        // A register counted by its contents (`TObject`) is marked (`docs/spec/objects.md` 15.2)
+        let regs: Vec<String> = f
+            .finally
+            .iter()
+            .map(|r| {
+                let obj = f
+                    .reg_type(*r)
+                    .is_some_and(|t| types.slot_kind(t) == crate::bytecode::SLOT_OBJ);
+                format!("{}{}", reg(*r), if obj { ":obj" } else { "" })
+            })
+            .collect();
         let _ = writeln!(out, ".finally {}", regs.join(", "));
     }
 }
 
 /// One instruction line: the name padded to 12 columns, then the operands (5).
 fn instruction(out: &mut String, opc: u8, operands: &str) {
-    let name = op::info(opc)
+    named(out, op_name(opc), operands);
+}
+
+fn op_name(opc: u8) -> &'static str {
+    op::info(opc)
         .expect("IR instructions use bytecode opcodes")
-        .name;
+        .name
+}
+
+/// One instruction line with the name given.
+fn named(out: &mut String, name: &str, operands: &str) {
     if operands.is_empty() {
         let _ = writeln!(out, "  {name}");
     } else {
@@ -155,9 +212,11 @@ fn reg(r: Reg) -> String {
 fn operand(o: &Operand, types: &TypeTable) -> String {
     match o {
         Operand::Type(t) => types.full_name(*t),
+        Operand::ClassRef(t) => format!("class {}", types.full_name(*t)),
         Operand::Agg(t, c) => format!("{} {}", types.full_name(*t), const_value_text(c, *t, types)),
         Operand::Reg(r) => reg(*r),
         Operand::Imm(v) | Operand::Int(v) => v.to_string(),
+        Operand::FuncValue { func, add } => (i64::from(*func) + add).to_string(),
         Operand::Float(b) => crate::numfmt::f64_to_str(f64::from_bits(*b)),
         Operand::Str(units) => debug_units(units),
         Operand::U8(s) => format!(
@@ -167,5 +226,7 @@ fn operand(o: &Operand, types: &TypeTable) -> String {
         Operand::Global(g) => format!("g{g}"),
         Operand::Func(f) => format!("f{f}"),
         Operand::Host(h) => format!("h{h}"),
+        Operand::Virtual { index, name } => format!("{name}[{index}]"),
+        Operand::Intf { method, name, .. } => format!("{name}[{method}]"),
     }
 }

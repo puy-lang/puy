@@ -1,0 +1,7 @@
+EInvalidOperation: `TList<Integer>` was modified during enumeration
+  list: 5 3 9 1 7 100 (count 6)
+EInvalidOperation: `TList<Integer>` was modified during enumeration
+  list: (count 0)
+BinarySearch with a comparer that changes the list:
+  TRUE at 3
+  list: 50 3 5 7 9 60 60 60 60 (count 9)

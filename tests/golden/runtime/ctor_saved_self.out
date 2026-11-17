@@ -1,0 +1,5 @@
+TItem.Destroy -1
+caught: negative value
+FALSE
+TRUE
+EAccessViolation: access to a freed object

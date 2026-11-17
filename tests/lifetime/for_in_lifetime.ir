@@ -20,7 +20,7 @@
   .reg t12: TNames temp
   .reg t13: Int64 temp
 bb0:
-  .line 20
+  .line 21
   LoadConst    t1, "a"
   LoadConst    t2, "b"
   LoadInt      t3, 2
@@ -31,33 +31,37 @@ bb0:
   DynSetRef    t3, t4, t2
   MoveRef      t0, t3
   StoreGlobalRef t0, g0
-  .line 21
+  Release      t0
+  .line 22
   LoadGlobalRef v1, g0
   ArrLen       t5, v1
   LoadZero     v2
   Jmp          bb1
 bb1:
-  .line 21
+  .line 22
   JmpIfLeInt   t5, v2, bb4, bb2
 bb2:
-  .line 21
+  .line 22
   DynGetRef    v0, v1, v2
-  .line 23
+  .line 24
   Release      t6
   StoreGlobalRef t6, g0
-  .line 24
+  Release      t6
+  .line 25
   AssignRef    t7, v0
   LoadConst    t8, "\n"
   ConcatStr    t7, t7, t8
   CallHost     -, h0(t7)
-  .line 21
+  .line 22
   Jmp          bb3
 bb3:
-  .line 21
+  .line 22
   AddIntI      v2, v2, 1
   Jmp          bb1
 bb4:
-  .line 26
+  .line 22
+  Release      v1
+  .line 27
   LoadConst    t11, "c"
   LoadInt      t12, 1
   NewArr       t12, ForInLifetime.TNames
@@ -66,7 +70,8 @@ bb4:
   MoveRef      t10, t12
   Move         t9, t10
   Call         -, f1(t9)
-  .line 27
+  Release      t10
+  .line 28
   RetVoid
 .finally v0, v1, t0, t1, t2, t6, t7, t8, t10, t11
 .func f1 ForInLifetime.Show params=1
@@ -78,29 +83,31 @@ bb4:
   .reg t1: string temp
   .reg t2: string temp
 bb0:
-  .line 12
+  .line 13
   AssignRef    v2, v0
   ArrLen       t0, v2
   LoadZero     v3
   Jmp          bb1
 bb1:
-  .line 12
+  .line 13
   JmpIfLeInt   t0, v3, bb4, bb2
 bb2:
-  .line 12
-  DynGetRef    v1, v2, v3
   .line 13
+  DynGetRef    v1, v2, v3
+  .line 14
   AssignRef    t1, v1
   LoadConst    t2, "\n"
   ConcatStr    t1, t1, t2
   CallHost     -, h0(t1)
-  .line 12
+  .line 13
   Jmp          bb3
 bb3:
-  .line 12
+  .line 13
   AddIntI      v3, v3, 1
   Jmp          bb1
 bb4:
-  .line 14
+  .line 13
+  Release      v2
+  .line 15
   RetVoid
 .finally v1, v2, t1, t2

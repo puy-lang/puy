@@ -1,0 +1,63 @@
+warning[W0024]: anonymous method captures `Self` and is stored in a field reachable from `Self` (self-capture-cycle)
+   --> nested_value_errors.pas:24:14
+    |
+ 21 |     WriteLn(Caption);
+    |             ------- `Self` captured here
+...
+ 24 |   OnClick := Click;
+    |              ^^^^^
+    |   ------- stored here
+    |
+    = note: move the body to a method and store a reference to that method (a method reference does not count `Self`)
+    = note: or copy `Self` to a `[weak]` local variable and use that in the anonymous method
+    = note: disable with `{$WARN self-capture-cycle OFF}`
+
+warning[W0024]: anonymous method captures `Self` and is stored in a field reachable from `Self` (self-capture-cycle)
+   --> nested_value_errors.pas:45:14
+    |
+ 30 |     WriteLn(Caption);
+    |             ------- `Self` captured here
+...
+ 45 |   OnClick := Click;
+    |              ^^^^^
+    |   ------- stored here
+    |
+    = note: move the body to a method and store a reference to that method (a method reference does not count `Self`)
+    = note: or copy `Self` to a `[weak]` local variable and use that in the anonymous method
+    = note: disable with `{$WARN self-capture-cycle OFF}`
+
+error[E0751]: cannot capture `N`
+   --> nested_value_errors.pas:54:9
+    |
+ 48 | procedure ByRef(var N: Integer);
+    |                     - declared here
+...
+ 54 |     Inc(N);
+    |         ^
+    |
+    = note: copy the parameter to a local variable and capture that
+
+error[E0751]: cannot capture `Result`
+   --> nested_value_errors.pas:68:15
+    |
+ 62 | function Total: Integer;
+    |          ----- declared here
+...
+ 68 |     Result := Result + 1;
+    |               ^^^^^^
+    |
+    = note: assign the value to a local variable, and that to `Result` at the end
+
+error[E2000]: variable `N` may be read before it is assigned
+   --> nested_value_errors.pas:91:8
+    |
+ 82 |   N: Integer;
+    |   - declared here
+...
+ 91 |   P := Show;
+    |        ^^^^ captured here
+    |
+    = note: Puy requires every local variable to be assigned before it is read
+    = fix: add an initial value: `var N: Integer = 0;`
+
+error: aborting due to 3 errors; 2 warnings emitted

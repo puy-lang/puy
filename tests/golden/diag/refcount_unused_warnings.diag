@@ -1,0 +1,10 @@
+warning[W0001]: unused variable `P` (unused-variable)
+   --> refcount_unused_warnings.pas:19:3
+    |
+ 19 |   P: TPlain;
+    |   ^ declared here
+    |
+    = note: remove `P` and its assignments if the value is not needed
+    = note: disable with `{$WARN unused-variable OFF}`
+
+warning: 1 warning emitted

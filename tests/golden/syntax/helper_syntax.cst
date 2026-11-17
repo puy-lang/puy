@@ -1,0 +1,306 @@
+SOURCE_FILE@0..936
+  PROGRAM@0..936
+    PROGRAM_HEADER@0..21
+      PROGRAM_KW@0..7 "program"
+      WHITESPACE@7..8 " "
+      IDENT@8..20 "HelperSyntax"
+      SEMICOLON@20..21 ";"
+    NEWLINE@21..22 "\n"
+    NEWLINE@22..23 "\n"
+    LINE_COMMENT@23..118 "// The syntax of helpers (objects.md 10.1): `class helper` and `record helper` with a parent in"
+    NEWLINE@118..119 "\n"
+    LINE_COMMENT@119..214 "// parentheses, the type after `for` and a class body. After `record`, `helper` followed by `,`"
+    NEWLINE@214..215 "\n"
+    LINE_COMMENT@215..312 "// or `:` is a field. A helper has no forward declaration (E0400 expects `end`), and like a class"
+    NEWLINE@312..313 "\n"
+    LINE_COMMENT@313..396 "// it is declared only in a `type` section (E0404 elsewhere, skipped to its `end`)."
+    NEWLINE@396..397 "\n"
+    NEWLINE@397..398 "\n"
+    TYPE_SECTION@398..778
+      TYPE_KW@398..402 "type"
+      NEWLINE@402..403 "\n"
+      WHITESPACE@403..405 "  "
+      TYPE_DECL@405..424
+        IDENT@405..409 "TFoo"
+        WHITESPACE@409..410 " "
+        EQ@410..411 "="
+        WHITESPACE@411..412 " "
+        CLASS_TYPE@412..423
+          CLASS_KW@412..417 "class"
+          NEWLINE@417..418 "\n"
+          WHITESPACE@418..420 "  "
+          CLASS_BODY@420..420
+          END_KW@420..423 "end"
+        SEMICOLON@423..424 ";"
+      NEWLINE@424..425 "\n"
+      WHITESPACE@425..427 "  "
+      TYPE_DECL@427..487
+        IDENT@427..437 "TFooHelper"
+        WHITESPACE@437..438 " "
+        EQ@438..439 "="
+        WHITESPACE@439..440 " "
+        HELPER_TYPE@440..486
+          CLASS_KW@440..445 "class"
+          WHITESPACE@445..446 " "
+          HELPER_KW@446..452 "helper"
+          WHITESPACE@452..453 " "
+          FOR_KW@453..456 "for"
+          WHITESPACE@456..457 " "
+          TYPE_REF@457..461
+            QUALIFIED_NAME@457..461
+              IDENT@457..461 "TFoo"
+          NEWLINE@461..462 "\n"
+          WHITESPACE@462..466 "    "
+          CLASS_BODY@466..480
+            METHOD_DECL@466..480
+              ROUTINE_HEADER@466..479
+                PROCEDURE_KW@466..475 "procedure"
+                WHITESPACE@475..476 " "
+                QUALIFIED_NAME@476..479
+                  IDENT@476..479 "Run"
+              SEMICOLON@479..480 ";"
+          NEWLINE@480..481 "\n"
+          WHITESPACE@481..483 "  "
+          END_KW@483..486 "end"
+        SEMICOLON@486..487 ";"
+      NEWLINE@487..488 "\n"
+      WHITESPACE@488..490 "  "
+      TYPE_DECL@490..538
+        IDENT@490..495 "TMore"
+        WHITESPACE@495..496 " "
+        EQ@496..497 "="
+        WHITESPACE@497..498 " "
+        HELPER_TYPE@498..537
+          CLASS_KW@498..503 "class"
+          WHITESPACE@503..504 " "
+          HELPER_KW@504..510 "helper"
+          CLASS_PARENTS@510..522
+            L_PAREN@510..511 "("
+            TYPE_REF@511..521
+              QUALIFIED_NAME@511..521
+                IDENT@511..521 "TFooHelper"
+            R_PAREN@521..522 ")"
+          WHITESPACE@522..523 " "
+          FOR_KW@523..526 "for"
+          WHITESPACE@526..527 " "
+          TYPE_REF@527..531
+            QUALIFIED_NAME@527..531
+              IDENT@527..531 "TFoo"
+          NEWLINE@531..532 "\n"
+          WHITESPACE@532..534 "  "
+          CLASS_BODY@534..534
+          END_KW@534..537 "end"
+        SEMICOLON@537..538 ";"
+      NEWLINE@538..539 "\n"
+      WHITESPACE@539..541 "  "
+      TYPE_DECL@541..694
+        IDENT@541..546 "TText"
+        WHITESPACE@546..547 " "
+        EQ@547..548 "="
+        WHITESPACE@548..549 " "
+        HELPER_TYPE@549..693
+          RECORD_KW@549..555 "record"
+          WHITESPACE@555..556 " "
+          HELPER_KW@556..562 "helper"
+          WHITESPACE@562..563 " "
+          FOR_KW@563..566 "for"
+          WHITESPACE@566..567 " "
+          TYPE_REF@567..573
+            STRING_KW@567..573 "string"
+          NEWLINE@573..574 "\n"
+          WHITESPACE@574..576 "  "
+          CLASS_BODY@576..687
+            VISIBILITY@576..583
+              PRIVATE_KW@576..583 "private"
+            NEWLINE@583..584 "\n"
+            WHITESPACE@584..588 "    "
+            CLASS_VAR_SECTION@588..613
+              CLASS_KW@588..593 "class"
+              WHITESPACE@593..594 " "
+              VAR_KW@594..597 "var"
+              WHITESPACE@597..598 " "
+              FIELD_DECL@598..613
+                IDENT_LIST@598..603
+                  IDENT@598..603 "Count"
+                COLON@603..604 ":"
+                WHITESPACE@604..605 " "
+                TYPE_REF@605..612
+                  QUALIFIED_NAME@605..612
+                    IDENT@605..612 "Integer"
+                SEMICOLON@612..613 ";"
+            NEWLINE@613..614 "\n"
+            WHITESPACE@614..616 "  "
+            VISIBILITY@616..622
+              PUBLIC_KW@616..622 "public"
+            NEWLINE@622..623 "\n"
+            WHITESPACE@623..627 "    "
+            METHOD_DECL@627..650
+              ROUTINE_HEADER@627..649
+                FUNCTION_KW@627..635 "function"
+                WHITESPACE@635..636 " "
+                QUALIFIED_NAME@636..640
+                  IDENT@636..640 "Size"
+                COLON@640..641 ":"
+                WHITESPACE@641..642 " "
+                RETURN_TYPE@642..649
+                  TYPE_REF@642..649
+                    QUALIFIED_NAME@642..649
+                      IDENT@642..649 "Integer"
+              SEMICOLON@649..650 ";"
+            NEWLINE@650..651 "\n"
+            WHITESPACE@651..655 "    "
+            PROPERTY_DECL@655..687
+              PROPERTY_KW@655..663 "property"
+              WHITESPACE@663..664 " "
+              IDENT@664..667 "Len"
+              COLON@667..668 ":"
+              WHITESPACE@668..669 " "
+              RETURN_TYPE@669..676
+                TYPE_REF@669..676
+                  QUALIFIED_NAME@669..676
+                    IDENT@669..676 "Integer"
+              WHITESPACE@676..677 " "
+              PROPERTY_SPEC@677..686
+                READ_KW@677..681 "read"
+                WHITESPACE@681..682 " "
+                QUALIFIED_NAME@682..686
+                  IDENT@682..686 "Size"
+              SEMICOLON@686..687 ";"
+          NEWLINE@687..688 "\n"
+          WHITESPACE@688..690 "  "
+          END_KW@690..693 "end"
+        SEMICOLON@693..694 ";"
+      NEWLINE@694..695 "\n"
+      WHITESPACE@695..697 "  "
+      TYPE_DECL@697..746
+        IDENT@697..702 "TPair"
+        WHITESPACE@702..703 " "
+        EQ@703..704 "="
+        WHITESPACE@704..705 " "
+        RECORD_TYPE@705..745
+          RECORD_KW@705..711 "record"
+          NEWLINE@711..712 "\n"
+          WHITESPACE@712..716 "    "
+          FIELD_DECL@716..739
+            IDENT_LIST@716..729
+              IDENT@716..722 "helper"
+              COMMA@722..723 ","
+              WHITESPACE@723..724 " "
+              IDENT@724..729 "other"
+            COLON@729..730 ":"
+            WHITESPACE@730..731 " "
+            TYPE_REF@731..738
+              QUALIFIED_NAME@731..738
+                IDENT@731..738 "Integer"
+            SEMICOLON@738..739 ";"
+          NEWLINE@739..740 "\n"
+          WHITESPACE@740..742 "  "
+          END_KW@742..745 "end"
+        SEMICOLON@745..746 ";"
+      NEWLINE@746..747 "\n"
+      WHITESPACE@747..749 "  "
+      TYPE_DECL@749..778
+        IDENT@749..753 "TBad"
+        WHITESPACE@753..754 " "
+        EQ@754..755 "="
+        WHITESPACE@755..756 " "
+        HELPER_TYPE@756..777
+          CLASS_KW@756..761 "class"
+          WHITESPACE@761..762 " "
+          HELPER_KW@762..768 "helper"
+          WHITESPACE@768..769 " "
+          FOR_KW@769..772 "for"
+          WHITESPACE@772..773 " "
+          TYPE_REF@773..777
+            QUALIFIED_NAME@773..777
+              IDENT@773..777 "TFoo"
+        SEMICOLON@777..778 ";"
+    NEWLINE@778..779 "\n"
+    NEWLINE@779..780 "\n"
+    VAR_SECTION@780..828
+      VAR_KW@780..783 "var"
+      NEWLINE@783..784 "\n"
+      WHITESPACE@784..786 "  "
+      VAR_DECL@786..828
+        IDENT_LIST@786..787
+          IDENT@786..787 "V"
+        COLON@787..788 ":"
+        WHITESPACE@788..789 " "
+        ERROR@789..827
+          CLASS_KW@789..794 "class"
+          WHITESPACE@794..795 " "
+          IDENT@795..801 "helper"
+          WHITESPACE@801..802 " "
+          FOR_KW@802..805 "for"
+          WHITESPACE@805..806 " "
+          IDENT@806..810 "TFoo"
+          WHITESPACE@810..811 " "
+          PROCEDURE_KW@811..820 "procedure"
+          WHITESPACE@820..821 " "
+          IDENT@821..822 "X"
+          SEMICOLON@822..823 ";"
+          WHITESPACE@823..824 " "
+          END_KW@824..827 "end"
+        SEMICOLON@827..828 ";"
+    NEWLINE@828..829 "\n"
+    NEWLINE@829..830 "\n"
+    ROUTINE_DECL@830..866
+      ROUTINE_HEADER@830..854
+        PROCEDURE_KW@830..839 "procedure"
+        WHITESPACE@839..840 " "
+        QUALIFIED_NAME@840..854
+          IDENT@840..850 "TFooHelper"
+          DOT@850..851 "."
+          IDENT@851..854 "Run"
+      SEMICOLON@854..855 ";"
+      NEWLINE@855..856 "\n"
+      ROUTINE_BODY@856..865
+        COMPOUND_STMT@856..865
+          BEGIN_KW@856..861 "begin"
+          NEWLINE@861..862 "\n"
+          END_KW@862..865 "end"
+      SEMICOLON@865..866 ";"
+    NEWLINE@866..867 "\n"
+    NEWLINE@867..868 "\n"
+    ROUTINE_DECL@868..923
+      ROUTINE_HEADER@868..896
+        FUNCTION_KW@868..876 "function"
+        WHITESPACE@876..877 " "
+        QUALIFIED_NAME@877..887
+          IDENT@877..882 "TText"
+          DOT@882..883 "."
+          IDENT@883..887 "Size"
+        COLON@887..888 ":"
+        WHITESPACE@888..889 " "
+        RETURN_TYPE@889..896
+          TYPE_REF@889..896
+            QUALIFIED_NAME@889..896
+              IDENT@889..896 "Integer"
+      SEMICOLON@896..897 ";"
+      NEWLINE@897..898 "\n"
+      ROUTINE_BODY@898..922
+        COMPOUND_STMT@898..922
+          BEGIN_KW@898..903 "begin"
+          NEWLINE@903..904 "\n"
+          WHITESPACE@904..906 "  "
+          ASSIGN_STMT@906..917
+            NAME_REF@906..912
+              IDENT@906..912 "Result"
+            WHITESPACE@912..913 " "
+            ASSIGN@913..915 ":="
+            WHITESPACE@915..916 " "
+            LITERAL@916..917
+              INT_LIT@916..917 "0"
+          SEMICOLON@917..918 ";"
+          NEWLINE@918..919 "\n"
+          END_KW@919..922 "end"
+      SEMICOLON@922..923 ";"
+    NEWLINE@923..924 "\n"
+    NEWLINE@924..925 "\n"
+    COMPOUND_STMT@925..934
+      BEGIN_KW@925..930 "begin"
+      NEWLINE@930..931 "\n"
+      END_KW@931..934 "end"
+    DOT@934..935 "."
+    NEWLINE@935..936 "\n"
+    EOF@936..936 ""

@@ -3,12 +3,16 @@ error[E0730]: cannot iterate over a value of type `Integer`
     |
  24 |   for I in 10 do
     |            ^^
+    |
+    = note: `for..in` iterates over arrays, strings, sets and values with a `GetEnumerator` function; it returns an enumerator with a `MoveNext` function returning `Boolean` and a `Current` property
 
 error[E0730]: cannot iterate over a value of type `TPoint`
    --> for_in_errors.pas:26:12
     |
  26 |   for I in P do
     |            ^
+    |
+    = note: `for..in` iterates over arrays, strings, sets and values with a `GetEnumerator` function; it returns an enumerator with a `MoveNext` function returning `Boolean` and a `Current` property
 
 error[E0702]: type mismatch: expected `string`, found `Integer`
    --> for_in_errors.pas:28:12

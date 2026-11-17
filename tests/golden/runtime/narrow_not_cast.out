@@ -1,0 +1,4 @@
+-256 -1 -2
+0
+ERangeError: value 300 is out of range for Byte (0..255)
+44

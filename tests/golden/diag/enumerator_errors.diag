@@ -1,0 +1,80 @@
+error[E0730]: cannot iterate over a value of type `TNone`
+   --> enumerator_errors.pas:74:16
+    |
+ 74 |   for var Y in N do
+    |                ^
+    |
+    = note: `for..in` iterates over arrays, strings, sets and values with a `GetEnumerator` function; it returns an enumerator with a `MoveNext` function returning `Boolean` and a `Current` property
+
+error[E0730]: `GetEnumerator` of `TProcColl` must be a function without parameters returning a class, record or interface
+   --> enumerator_errors.pas:77:16
+    |
+ 29 |     procedure GetEnumerator;
+    |               ------------- declared here
+...
+ 77 |   for var Y in P do
+    |                ^
+
+error[E0730]: `GetEnumerator` of `TIntColl` must be a function without parameters returning a class, record or interface
+   --> enumerator_errors.pas:80:16
+    |
+ 32 |     function GetEnumerator: Integer;
+    |              ------------- declared here
+...
+ 80 |   for var Y in I do
+    |                ^
+
+error[E0730]: `GetEnumerator` of `TParamColl` must be a function without parameters returning a class, record or interface
+   --> enumerator_errors.pas:83:16
+    |
+ 35 |     function GetEnumerator(N: Integer): TEnum;
+    |              ------------- declared here
+...
+ 83 |   for var Y in A do
+    |                ^
+
+error[E0730]: `GetEnumerator` of `TClassColl` must be a function without parameters returning a class, record or interface
+   --> enumerator_errors.pas:86:16
+    |
+ 38 |     class function GetEnumerator: TEnum;
+    |                    ------------- declared here
+...
+ 86 |   for var Y in K do
+    |                ^
+
+error[E0730]: enumerator `TNoMove` has no `MoveNext` function returning `Boolean`
+   --> enumerator_errors.pas:89:16
+    |
+ 89 |   for var Y in M do
+    |                ^
+
+error[E0730]: enumerator `TNoCurrent` has no readable `Current` property
+   --> enumerator_errors.pas:92:16
+    |
+ 92 |   for var Y in C do
+    |                ^
+
+error[E0702]: type mismatch: expected `Integer`, found `string`
+   --> enumerator_errors.pas:95:12
+    |
+ 95 |   for X in G do
+    |            ^
+
+error[E0707]: cannot assign to `S`
+   --> enumerator_errors.pas:99:5
+    |
+ 98 |   for var S in G do
+    |           - declared here
+ 99 |     S := 'x';
+    |     ^ the loop variable
+
+error[E0743]: `GetEnumerator` is private to `THidden`
+    --> enumerator_errors.pas:100:16
+     |
+  51 |     function GetEnumerator: TEnum;
+     |              ------------- declared here
+...
+ 100 |   for var S in H do
+     |                ^
+
+error: aborting due to 10 errors

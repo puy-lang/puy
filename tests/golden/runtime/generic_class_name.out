@@ -1,0 +1,9 @@
+TBox<Integer>
+TBox<GenericClassName.TFoo>
+TBox<GenericClassName.TBox<string>>
+TItem
+TSub
+TBox<GenericClassName.TFoo> TBox<GenericClassName.TFoo> TRUE
+EInvalidCast: invalid class typecast: `TBox<GenericClassName.TFoo>` is not `TSub`
+EInvalidCast: invalid interface cast: `TRefBox<GenericClassName.TFoo>` does not implement `IGetter<GenericClassName.TFoo>`
+EBoxError<GenericClassName.TFoo>: boom

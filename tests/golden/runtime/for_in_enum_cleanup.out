@@ -1,0 +1,13 @@
+break
+  destroyed at 2
+  after the loop
+continue
+  1
+  destroyed at 4
+exit
+  destroyed at 2
+raise
+  destroyed at 2
+  from the body at 2
+nil enumerator: access to a nil reference
+nil collection: access to a nil reference

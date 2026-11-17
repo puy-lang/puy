@@ -1,0 +1,9 @@
+destroy a
+after release: TRUE
+read: b
+kept by the read: TRUE
+destroy b
+peers: y x
+destroy y
+destroy x
+end

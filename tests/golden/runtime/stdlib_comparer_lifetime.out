@@ -1,0 +1,9 @@
+compare 0
+A cleared
+compare 0
+comparer destroyed
+B replaced
+TRUE 3
+equality comparer destroyed
+run end
+end

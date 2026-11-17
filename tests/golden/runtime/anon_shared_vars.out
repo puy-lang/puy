@@ -1,0 +1,12 @@
+X = 1, S = a
+X = 2, S = a
+outside: 10 ab
+X = 10, S = ab
+1 2 101 3 102
+I = 1
+I = 2
+I = 3
+FALSE
+TRUE TRUE
+called
+FALSE

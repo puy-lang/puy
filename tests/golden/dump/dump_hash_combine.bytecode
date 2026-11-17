@@ -1,0 +1,32 @@
+; puyc format 0
+.const
+  0: str "\n"
+.global
+  0: int H
+  1: int X
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpHashCombine file="dump_hash_combine.pas" init=- fini=- entry=0
+.func 0 DumpHashCombine.<main> params=0 regs=5
+  .line 8
+  0000  LoadInt      r2, 42
+  0001  StoreGlobal  r2, g1
+  .line 9
+  0002  LoadInt      r3, 7
+  0003  LoadGlobal   r4, g1
+  0004  HashMix      r2, r3, r4
+  0005  StoreGlobal  r2, g0
+  .line 10
+  0006  Move         r3, r2
+  0007  LoadGlobal   r4, g1
+  0008  HashMix      r2, r3, r4
+  0009  LoadGlobal   r3, g0
+  000a  EqInt        r2, r2, r3
+  000b  NotBool      r2, r2
+  000c  BoolToStr    r0, r2
+  000d  LoadConst    r1, k0
+  000e  ConcatStr    r0, r0, r1
+  000f  CallHost     r0, h0
+  .line 11
+  0010  RetVoid
+.finally r0, r1

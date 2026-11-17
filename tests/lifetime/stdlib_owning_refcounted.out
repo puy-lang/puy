@@ -1,0 +1,29 @@
+EInvalidOperation: cannot own a reference counted object of class `TRef`
+EInvalidOperation: cannot own a reference counted object of class `TRef`
+EInvalidOperation: cannot own a reference counted object of class `TRef`
+free b
+EInvalidOperation: cannot own a reference counted object of class `TRef`
+count 1, first TItem
+EInvalidOperation: cannot own a reference counted object of class `TRef`
+count 1
+free a
+EInvalidOperation: cannot own a reference counted object of class `TRef`
+-- stack and queue
+EInvalidOperation: cannot own a reference counted object of class `TRef`
+EInvalidOperation: cannot own a reference counted object of class `TRef`
+still b
+free b
+EInvalidOperation: cannot own a reference counted object of class `TRef`
+count 0
+EInvalidOperation: cannot own a reference counted object of class `TRef`
+count 0
+-- not owning
+EInvalidOperation: cannot own a reference counted object of class `TRef`
+owns FALSE, count 2
+owns TRUE
+free c
+-- a refused temporary
+EInvalidOperation: cannot own a reference counted object of class `TRef`
+destroy temp
+end
+destroy r

@@ -1,0 +1,43 @@
+program DumpCtorDtor
+.type TNamed = class(TObject)
+  .field 0 Name: string
+  .method f0 Create constructor
+  .method f1 Destroy destructor 0
+  .method f2 AfterConstruction override 1
+.global g0 N: TNamed
+.routine f0 TNamed.Create(const AName: string)
+  .var v0 Self: TNamed self
+  .var v1 AName: string const param
+  expr @20
+    inherited builtin TObject.Create: -
+      self TNamed
+  assign @21 R+
+    objfield string Name #0
+      self TNamed
+    var v1 AName: string
+.routine f1 TNamed.Destroy()
+  .var v0 Self: TNamed self
+  writeln @26
+    arg
+      const string "bye "
+    arg
+      objfield string Name #0
+        self TNamed
+  expr @27
+    inherited builtin TObject.Destroy: -
+      self TNamed
+.routine f2 TNamed.AfterConstruction()
+  .var v0 Self: TNamed self
+  writeln @32
+    arg
+      const string "hello "
+    arg
+      objfield string Name #0
+        self TNamed
+.routine <main>
+  assign @38 R+
+    global g0 N
+    create TNamed f0
+      const string "dump"
+  free @39
+    global g0 N: TNamed

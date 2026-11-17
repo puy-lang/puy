@@ -1,0 +1,31 @@
+error[E0761]: `System.Integer` is not generic
+  --> generic_system_qualified_errors.pas:9:6
+   |
+ 9 |   A: System.Integer<Byte>;
+   |      ^^^^^^^^^^^^^^^^^^^^
+
+error[E0700]: undeclared identifier `System.TFoo`
+   --> generic_system_qualified_errors.pas:10:6
+    |
+ 10 |   B: System.TFoo<Byte>;
+    |      ^^^^^^^^^^^
+
+error[E0761]: `TProc` expects 1 or 2 or 3 or 4 type arguments, found 5
+   --> generic_system_qualified_errors.pas:11:18
+    |
+ 11 |   C: System.TProc<Byte, Byte, Byte, Byte, Byte>;
+    |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0761]: `TArray` expects 1 type argument, found 2
+   --> generic_system_qualified_errors.pas:12:19
+    |
+ 12 |   D: System.TArray<Byte, Byte>;
+    |                   ^^^^^^^^^^^^
+
+error[E0761]: `TArray` expects 1 type argument, found 2
+   --> generic_system_qualified_errors.pas:15:29
+    |
+ 15 |   E := Default(System.TArray<Byte, Byte>);
+    |                             ^^^^^^^^^^^^
+
+error: aborting due to 5 errors

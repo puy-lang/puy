@@ -1,6 +1,6 @@
 program DumpForIn;
 
-// The `hir` dump of `for..in` (semantics.md 9.1): the hidden variables for the collection and
+// The `hir` dump of `for..in` (semantics.md chapter 9): the hidden variables for the collection and
 // the position, a `for var` loop variable with a written type, and a global loop variable.
 
 type

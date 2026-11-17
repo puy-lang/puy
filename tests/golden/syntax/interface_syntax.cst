@@ -1,0 +1,281 @@
+SOURCE_FILE@0..817
+  PROGRAM@0..817
+    PROGRAM_HEADER@0..24
+      PROGRAM_KW@0..7 "program"
+      WHITESPACE@7..8 " "
+      IDENT@8..23 "InterfaceSyntax"
+      SEMICOLON@23..24 ";"
+    NEWLINE@24..25 "\n"
+    NEWLINE@25..26 "\n"
+    LINE_COMMENT@26..121 "// The syntax of interfaces (objects.md 7.1, grammar.md 2.2): `INTERFACE_TYPE` with the parent,"
+    NEWLINE@121..122 "\n"
+    LINE_COMMENT@122..212 "// the `GUID_SPEC` and the `INTERFACE_BODY` of method headings and properties, the forward"
+    NEWLINE@212..213 "\n"
+    LINE_COMMENT@213..300 "// declaration and the form without members, and a `METHOD_RESOLUTION` in a class body."
+    NEWLINE@300..301 "\n"
+    NEWLINE@301..302 "\n"
+    TYPE_SECTION@302..698
+      TYPE_KW@302..306 "type"
+      NEWLINE@306..307 "\n"
+      WHITESPACE@307..309 "  "
+      TYPE_DECL@309..326
+        IDENT@309..313 "IFwd"
+        WHITESPACE@313..314 " "
+        EQ@314..315 "="
+        WHITESPACE@315..316 " "
+        INTERFACE_TYPE@316..325
+          INTERFACE_KW@316..325 "interface"
+        SEMICOLON@325..326 ";"
+      NEWLINE@326..327 "\n"
+      NEWLINE@327..328 "\n"
+      WHITESPACE@328..330 "  "
+      TYPE_DECL@330..521
+        IDENT@330..334 "IFwd"
+        WHITESPACE@334..335 " "
+        EQ@335..336 "="
+        WHITESPACE@336..337 " "
+        INTERFACE_TYPE@337..520
+          INTERFACE_KW@337..346 "interface"
+          L_PAREN@346..347 "("
+          TYPE_REF@347..357
+            QUALIFIED_NAME@347..357
+              IDENT@347..357 "IInterface"
+          R_PAREN@357..358 ")"
+          NEWLINE@358..359 "\n"
+          WHITESPACE@359..363 "    "
+          GUID_SPEC@363..405
+            L_BRACK@363..364 "["
+            LITERAL@364..404
+              STRING_LIT@364..404 "'{6B29FC40-CA47-1067-B31D-00DD010662DA}'"
+            R_BRACK@404..405 "]"
+          NEWLINE@405..406 "\n"
+          WHITESPACE@406..410 "    "
+          INTERFACE_BODY@410..514
+            METHOD_DECL@410..433
+              ROUTINE_HEADER@410..432
+                FUNCTION_KW@410..418 "function"
+                WHITESPACE@418..419 " "
+                QUALIFIED_NAME@419..423
+                  IDENT@419..423 "Area"
+                COLON@423..424 ":"
+                WHITESPACE@424..425 " "
+                RETURN_TYPE@425..432
+                  TYPE_REF@425..432
+                    QUALIFIED_NAME@425..432
+                      IDENT@425..432 "Integer"
+              SEMICOLON@432..433 ";"
+            NEWLINE@433..434 "\n"
+            WHITESPACE@434..438 "    "
+            METHOD_DECL@438..476
+              ROUTINE_HEADER@438..465
+                PROCEDURE_KW@438..447 "procedure"
+                WHITESPACE@447..448 " "
+                QUALIFIED_NAME@448..453
+                  IDENT@448..453 "Scale"
+                PARAM_LIST@453..465
+                  L_PAREN@453..454 "("
+                  PARAM_GROUP@454..464
+                    IDENT_LIST@454..455
+                      IDENT@454..455 "F"
+                    COLON@455..456 ":"
+                    WHITESPACE@456..457 " "
+                    TYPE_REF@457..464
+                      QUALIFIED_NAME@457..464
+                        IDENT@457..464 "Integer"
+                  R_PAREN@464..465 ")"
+              SEMICOLON@465..466 ";"
+              WHITESPACE@466..467 " "
+              METHOD_DIRECTIVE@467..475
+                OVERLOAD_KW@467..475 "overload"
+              SEMICOLON@475..476 ";"
+            NEWLINE@476..477 "\n"
+            WHITESPACE@477..481 "    "
+            PROPERTY_DECL@481..514
+              PROPERTY_KW@481..489 "property"
+              WHITESPACE@489..490 " "
+              IDENT@490..494 "Size"
+              COLON@494..495 ":"
+              WHITESPACE@495..496 " "
+              RETURN_TYPE@496..503
+                TYPE_REF@496..503
+                  QUALIFIED_NAME@496..503
+                    IDENT@496..503 "Integer"
+              WHITESPACE@503..504 " "
+              PROPERTY_SPEC@504..513
+                READ_KW@504..508 "read"
+                WHITESPACE@508..509 " "
+                QUALIFIED_NAME@509..513
+                  IDENT@509..513 "Area"
+              SEMICOLON@513..514 ";"
+          NEWLINE@514..515 "\n"
+          WHITESPACE@515..517 "  "
+          END_KW@517..520 "end"
+        SEMICOLON@520..521 ";"
+      NEWLINE@521..522 "\n"
+      NEWLINE@522..523 "\n"
+      WHITESPACE@523..525 "  "
+      TYPE_DECL@525..550
+        IDENT@525..531 "IEmpty"
+        WHITESPACE@531..532 " "
+        EQ@532..533 "="
+        WHITESPACE@533..534 " "
+        INTERFACE_TYPE@534..549
+          INTERFACE_KW@534..543 "interface"
+          L_PAREN@543..544 "("
+          TYPE_REF@544..548
+            QUALIFIED_NAME@544..548
+              IDENT@544..548 "IFwd"
+          R_PAREN@548..549 ")"
+        SEMICOLON@549..550 ";"
+      NEWLINE@550..551 "\n"
+      NEWLINE@551..552 "\n"
+      WHITESPACE@552..554 "  "
+      TYPE_DECL@554..698
+        IDENT@554..559 "TImpl"
+        WHITESPACE@559..560 " "
+        EQ@560..561 "="
+        WHITESPACE@561..562 " "
+        CLASS_TYPE@562..697
+          CLASS_KW@562..567 "class"
+          CLASS_PARENTS@567..585
+            L_PAREN@567..568 "("
+            TYPE_REF@568..578
+              QUALIFIED_NAME@568..578
+                IDENT@568..578 "TRefObject"
+            COMMA@578..579 ","
+            WHITESPACE@579..580 " "
+            TYPE_REF@580..584
+              QUALIFIED_NAME@580..584
+                IDENT@580..584 "IFwd"
+            R_PAREN@584..585 ")"
+          NEWLINE@585..586 "\n"
+          WHITESPACE@586..590 "    "
+          CLASS_BODY@590..691
+            METHOD_RESOLUTION@590..618
+              FUNCTION_KW@590..598 "function"
+              WHITESPACE@598..599 " "
+              QUALIFIED_NAME@599..608
+                IDENT@599..603 "IFwd"
+                DOT@603..604 "."
+                IDENT@604..608 "Area"
+              WHITESPACE@608..609 " "
+              EQ@609..610 "="
+              WHITESPACE@610..611 " "
+              IDENT@611..617 "DoArea"
+              SEMICOLON@617..618 ";"
+            NEWLINE@618..619 "\n"
+            WHITESPACE@619..623 "    "
+            METHOD_DECL@623..648
+              ROUTINE_HEADER@623..647
+                FUNCTION_KW@623..631 "function"
+                WHITESPACE@631..632 " "
+                QUALIFIED_NAME@632..638
+                  IDENT@632..638 "DoArea"
+                COLON@638..639 ":"
+                WHITESPACE@639..640 " "
+                RETURN_TYPE@640..647
+                  TYPE_REF@640..647
+                    QUALIFIED_NAME@640..647
+                      IDENT@640..647 "Integer"
+              SEMICOLON@647..648 ";"
+            NEWLINE@648..649 "\n"
+            WHITESPACE@649..653 "    "
+            METHOD_DECL@653..691
+              ROUTINE_HEADER@653..680
+                PROCEDURE_KW@653..662 "procedure"
+                WHITESPACE@662..663 " "
+                QUALIFIED_NAME@663..668
+                  IDENT@663..668 "Scale"
+                PARAM_LIST@668..680
+                  L_PAREN@668..669 "("
+                  PARAM_GROUP@669..679
+                    IDENT_LIST@669..670
+                      IDENT@669..670 "F"
+                    COLON@670..671 ":"
+                    WHITESPACE@671..672 " "
+                    TYPE_REF@672..679
+                      QUALIFIED_NAME@672..679
+                        IDENT@672..679 "Integer"
+                  R_PAREN@679..680 ")"
+              SEMICOLON@680..681 ";"
+              WHITESPACE@681..682 " "
+              METHOD_DIRECTIVE@682..690
+                OVERLOAD_KW@682..690 "overload"
+              SEMICOLON@690..691 ";"
+          NEWLINE@691..692 "\n"
+          WHITESPACE@692..694 "  "
+          END_KW@694..697 "end"
+        SEMICOLON@697..698 ";"
+    NEWLINE@698..699 "\n"
+    NEWLINE@699..700 "\n"
+    ROUTINE_DECL@700..757
+      ROUTINE_HEADER@700..730
+        FUNCTION_KW@700..708 "function"
+        WHITESPACE@708..709 " "
+        QUALIFIED_NAME@709..721
+          IDENT@709..714 "TImpl"
+          DOT@714..715 "."
+          IDENT@715..721 "DoArea"
+        COLON@721..722 ":"
+        WHITESPACE@722..723 " "
+        RETURN_TYPE@723..730
+          TYPE_REF@723..730
+            QUALIFIED_NAME@723..730
+              IDENT@723..730 "Integer"
+      SEMICOLON@730..731 ";"
+      NEWLINE@731..732 "\n"
+      ROUTINE_BODY@732..756
+        COMPOUND_STMT@732..756
+          BEGIN_KW@732..737 "begin"
+          NEWLINE@737..738 "\n"
+          WHITESPACE@738..740 "  "
+          ASSIGN_STMT@740..751
+            NAME_REF@740..746
+              IDENT@740..746 "Result"
+            WHITESPACE@746..747 " "
+            ASSIGN@747..749 ":="
+            WHITESPACE@749..750 " "
+            LITERAL@750..751
+              INT_LIT@750..751 "0"
+          SEMICOLON@751..752 ";"
+          NEWLINE@752..753 "\n"
+          END_KW@753..756 "end"
+      SEMICOLON@756..757 ";"
+    NEWLINE@757..758 "\n"
+    NEWLINE@758..759 "\n"
+    ROUTINE_DECL@759..804
+      ROUTINE_HEADER@759..792
+        PROCEDURE_KW@759..768 "procedure"
+        WHITESPACE@768..769 " "
+        QUALIFIED_NAME@769..780
+          IDENT@769..774 "TImpl"
+          DOT@774..775 "."
+          IDENT@775..780 "Scale"
+        PARAM_LIST@780..792
+          L_PAREN@780..781 "("
+          PARAM_GROUP@781..791
+            IDENT_LIST@781..782
+              IDENT@781..782 "F"
+            COLON@782..783 ":"
+            WHITESPACE@783..784 " "
+            TYPE_REF@784..791
+              QUALIFIED_NAME@784..791
+                IDENT@784..791 "Integer"
+          R_PAREN@791..792 ")"
+      SEMICOLON@792..793 ";"
+      NEWLINE@793..794 "\n"
+      ROUTINE_BODY@794..803
+        COMPOUND_STMT@794..803
+          BEGIN_KW@794..799 "begin"
+          NEWLINE@799..800 "\n"
+          END_KW@800..803 "end"
+      SEMICOLON@803..804 ";"
+    NEWLINE@804..805 "\n"
+    NEWLINE@805..806 "\n"
+    COMPOUND_STMT@806..815
+      BEGIN_KW@806..811 "begin"
+      NEWLINE@811..812 "\n"
+      END_KW@812..815 "end"
+    DOT@815..816 "."
+    NEWLINE@816..817 "\n"
+    EOF@817..817 ""

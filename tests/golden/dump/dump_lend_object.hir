@@ -1,0 +1,51 @@
+program DumpLendObject uses=System.SysUtils
+.type TPoint = record
+  .field 0 X: Integer
+  .field 1 Y: Integer
+.type TNode = class(TObject)
+  .field 0 Count: Integer
+  .field 1 Pos: TPoint
+  .field 2 Next: TNode
+.global g0 O: TNode
+.routine f0 Bump(var N: Integer)
+  .var v0 N: Integer var param
+  assign @25 R+
+    var v0 N
+    binary Integer
+      var v0 N: Integer
+      + Integer int:Integer
+        const Integer 1
+.routine <main>
+  assign @31 R+
+    global g0 O
+    create TNode builtin
+  expr @32
+    call f0 Bump: -
+      ref
+        objfield Integer Count #0
+          global g0 O: TNode
+  expr @33
+    call f0 Bump: -
+      ref
+        field Integer Y #1
+          objfield TPoint Pos #1
+            global g0 O: TNode
+  writeln @34
+    arg
+      objfield Integer Count #0
+        global g0 O: TNode
+    arg
+      const Char #32
+    arg
+      field Integer Y #1
+        objfield TPoint Pos #1
+          global g0 O: TNode
+  assign @35 R+
+    objfield TNode Next #2
+      global g0 O: TNode
+    create TNode builtin
+  free @36 and-nil
+    objfield TNode Next #2
+      global g0 O: TNode
+  free @37 and-nil
+    global g0 O

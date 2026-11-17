@@ -1,0 +1,28 @@
+Int64 + 1 EIntOverflow
+9223372036854775807
+Int64 - 1 EIntOverflow
+-9223372036854775808
+Int64 * 2 EIntOverflow
+4611686018427387904
+Int64 * -1 EIntOverflow
+-9223372036854775808
+Int64 div -1 EIntOverflow
+-9223372036854775808
+Int64 + 127 ok
+9223372036854775807
+Integer + 1 EIntOverflow
+2147483647
+Integer - 127 EIntOverflow
+-2147483522
+Integer * 100 EIntOverflow
+30000000
+-128 * Integer EIntOverflow
+20000000
+Cardinal - 1 EIntOverflow
+0
+Cardinal * 2 EIntOverflow
+3000000000
+Byte + 1 ERangeError
+255
+SmallInt * 2 ERangeError
+20000

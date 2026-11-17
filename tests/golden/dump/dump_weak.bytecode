@@ -1,0 +1,64 @@
+; puyc format 0
+.const
+  0: str "\n"
+.type
+  64: class DumpWeak.TNode ref slots=2 refs=1 parent=ty20 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+  65: record DumpWeak.TLink slots=1
+.global
+  0: int TNode.Last
+  1: int Current
+  2: ref N
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpWeak file="dump_weak.pas" init=- fini=- entry=0
+.func 0 DumpWeak.<main> params=0 regs=3
+  .line 41
+  0000  New          r0, ty64
+  0001  StoreGlobalRef r0, g2
+  .line 42
+  0002  LoadGlobalRef r1, g2
+  0003  Move         r2, r1
+  0004  Call         r2, f1
+  .line 43
+  0005  RetVoid
+.finally r0, r1
+.func 1 DumpWeak.Link params=1 regs=13
+  .local r0 N
+  .local r1 L
+  .local r2 W
+  .line 28
+  0000  Release      r1
+  .line 29
+  0001  ObjGet       r11, r0, 1
+  0002  ObjSet       r0, 0, r11
+  .line 30
+  0003  Unique       r1, ty65
+  0004  FieldSet     r1, 0, r0
+  .line 31
+  0005  StoreGlobal  r0, g0
+  .line 32
+  0006  StoreGlobal  r0, g1
+  .line 33
+  0007  Move         r11, r0
+  0008  LoadWeak     r3, r11
+  0009  Move         r2, r3
+  .line 34
+  000a  LoadWeak     r5, r2
+  000b  ObjGet       r11, r5, 0
+  000c  LoadWeak     r4, r11
+  000d  FieldGet     r11, r1, 0
+  000e  LoadWeak     r6, r11
+  000f  JmpIfEqInt   r4, r6, -> 0019
+  .line 35
+  0010  LoadGlobal   r12, g0
+  0011  LoadWeak     r8, r12
+  0012  Release      r9
+  0013  EqInt        r11, r8, r9
+  0014  NotBool      r11, r11
+  0015  BoolToStr    r7, r11
+  0016  LoadConst    r10, k0
+  0017  ConcatStr    r7, r7, r10
+  0018  CallHost     r7, h0
+  .line 36
+  0019  RetVoid
+.finally r1, r3, r4, r5, r6, r7, r8, r9, r10

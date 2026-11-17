@@ -1,0 +1,46 @@
+warning[W0011]: `TOldBase` is deprecated (deprecated)
+   --> hint_use_kinds.pas:12:16
+    |
+  8 |   TOldBase = class(TRefObject)
+    |   -------- declared here
+...
+ 12 |   TKid = class(TOldBase, IOld)
+    |                ^^^^^^^^
+    |
+    = note: disable with `{$WARN deprecated OFF}`
+
+warning[W0012]: `IOld` is experimental (experimental)
+   --> hint_use_kinds.pas:12:26
+    |
+ 10 |   IOld = interface
+    |   ---- declared here
+ 11 |   end experimental;
+ 12 |   TKid = class(TOldBase, IOld)
+    |                          ^^^^
+    |
+    = note: an experimental declaration may change or be removed without being deprecated first
+    = note: disable with `{$WARN experimental OFF}`
+
+warning[W0011]: `OldAttribute` is deprecated: use New (deprecated)
+   --> hint_use_kinds.pas:17:4
+    |
+ 15 |   OldAttribute = class(TCustomAttribute)
+    |   ------------ declared here
+ 16 |   end deprecated 'use New';
+ 17 |   [Old] TMarked = class(TRefObject)
+    |    ^^^
+    |
+    = note: disable with `{$WARN deprecated OFF}`
+
+warning[W0011]: `TBox.V` is deprecated (deprecated)
+   --> hint_use_kinds.pas:31:5
+    |
+ 24 |     property V: Integer read FV write FV deprecated;
+    |              - declared here
+...
+ 31 |   F.V := 1;
+    |     ^
+    |
+    = note: disable with `{$WARN deprecated OFF}`
+
+warning: 4 warnings emitted

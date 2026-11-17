@@ -1,0 +1,5 @@
+Integer: 2 1 TRUE
+string: 2 1
+record: 2 0 TRUE
+TProc: 2 0
+SameKey: TRUE FALSE TRUE TRUE FALSE

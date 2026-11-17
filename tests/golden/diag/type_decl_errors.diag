@@ -71,17 +71,11 @@ error[E0727]: type `TDyn` contains itself
  37 |   TDyn = array of TDyn;                    // E0727: an array of itself
     |   ^^^^
 
-error[E3200]: methods and visibility sections in records are not supported yet (planned for M3)
-   --> type_decl_errors.pas:39:5
+error[E0723]: method `TMethods.Run` has no body
+   --> type_decl_errors.pas:39:15
     |
- 39 |     procedure Run;                         // E3200 (M3)
-    |     ^^^^^^^^^
-
-error[E3200]: distinct types (`type X = type Y`) are not supported yet (planned for M4)
-   --> type_decl_errors.pas:41:15
-    |
- 41 |   TDistinct = type Integer;                // E3200 (M4)
-    |               ^^^^
+ 39 |     procedure Run;                         // E0723: no body
+    |               ^^^
 
 error[E0700]: undeclared identifier `TNowhere`
    --> type_decl_errors.pas:43:8
@@ -101,4 +95,4 @@ error[E0713]: constant expression required
  46 |   TBadBound = array[0..N] of Integer;      // E0713: N is a variable
     |                        ^
 
-error: aborting due to 13 errors; 1 warning emitted
+error: aborting due to 12 errors; 1 warning emitted

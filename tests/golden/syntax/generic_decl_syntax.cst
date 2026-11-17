@@ -1,0 +1,524 @@
+SOURCE_FILE@0..1224
+  PROGRAM@0..1224
+    PROGRAM_HEADER@0..26
+      PROGRAM_KW@0..7 "program"
+      WHITESPACE@7..8 " "
+      IDENT@8..25 "GenericDeclSyntax"
+      SEMICOLON@25..26 ";"
+    NEWLINE@26..27 "\n"
+    NEWLINE@27..28 "\n"
+    LINE_COMMENT@28..114 "// The CST of generic declarations (generics.md 1.1 to 1.3, 1.5): type parameters with"
+    NEWLINE@114..115 "\n"
+    LINE_COMMENT@115..197 "// constraints separated by `,` and groups separated by `;`, nested type arguments"
+    NEWLINE@197..198 "\n"
+    LINE_COMMENT@198..289 "// (`TList<TList<Integer>>`), a `>=` closing type arguments split into `>` and `=`, generic"
+    NEWLINE@289..290 "\n"
+    LINE_COMMENT@290..380 "// method headings and implementation headings. Only the CST is checked here; the semantic"
+    NEWLINE@380..381 "\n"
+    LINE_COMMENT@381..473 "// analysis reports the undeclared `TList` as E0700 and the empty bodies of the functions as"
+    NEWLINE@473..474 "\n"
+    LINE_COMMENT@474..483 "// E2001."
+    NEWLINE@483..484 "\n"
+    NEWLINE@484..485 "\n"
+    TYPE_SECTION@485..964
+      TYPE_KW@485..489 "type"
+      NEWLINE@489..490 "\n"
+      WHITESPACE@490..492 "  "
+      TYPE_DECL@492..549
+        IDENT@492..500 "IHasName"
+        WHITESPACE@500..501 " "
+        EQ@501..502 "="
+        WHITESPACE@502..503 " "
+        INTERFACE_TYPE@503..548
+          INTERFACE_KW@503..512 "interface"
+          NEWLINE@512..513 "\n"
+          WHITESPACE@513..517 "    "
+          INTERFACE_BODY@517..542
+            METHOD_DECL@517..542
+              ROUTINE_HEADER@517..541
+                FUNCTION_KW@517..525 "function"
+                WHITESPACE@525..526 " "
+                QUALIFIED_NAME@526..533
+                  IDENT@526..533 "GetName"
+                COLON@533..534 ":"
+                WHITESPACE@534..535 " "
+                RETURN_TYPE@535..541
+                  TYPE_REF@535..541
+                    STRING_KW@535..541 "string"
+              SEMICOLON@541..542 ";"
+          NEWLINE@542..543 "\n"
+          WHITESPACE@543..545 "  "
+          END_KW@545..548 "end"
+        SEMICOLON@548..549 ";"
+      NEWLINE@549..550 "\n"
+      WHITESPACE@550..552 "  "
+      TYPE_DECL@552..605
+        IDENT@552..557 "TPair"
+        TYPE_PARAMS@557..563
+          LT@557..558 "<"
+          TYPE_PARAM_GROUP@558..562
+            IDENT_LIST@558..562
+              IDENT@558..559 "K"
+              COMMA@559..560 ","
+              WHITESPACE@560..561 " "
+              IDENT@561..562 "V"
+          GT@562..563 ">"
+        WHITESPACE@563..564 " "
+        EQ@564..565 "="
+        WHITESPACE@565..566 " "
+        RECORD_TYPE@566..604
+          RECORD_KW@566..572 "record"
+          NEWLINE@572..573 "\n"
+          WHITESPACE@573..577 "    "
+          FIELD_DECL@577..584
+            IDENT_LIST@577..580
+              IDENT@577..580 "Key"
+            COLON@580..581 ":"
+            WHITESPACE@581..582 " "
+            TYPE_REF@582..583
+              QUALIFIED_NAME@582..583
+                IDENT@582..583 "K"
+            SEMICOLON@583..584 ";"
+          NEWLINE@584..585 "\n"
+          WHITESPACE@585..589 "    "
+          FIELD_DECL@589..598
+            IDENT_LIST@589..594
+              IDENT@589..594 "Value"
+            COLON@594..595 ":"
+            WHITESPACE@595..596 " "
+            TYPE_REF@596..597
+              QUALIFIED_NAME@596..597
+                IDENT@596..597 "V"
+            SEMICOLON@597..598 ";"
+          NEWLINE@598..599 "\n"
+          WHITESPACE@599..601 "  "
+          END_KW@601..604 "end"
+        SEMICOLON@604..605 ";"
+      NEWLINE@605..606 "\n"
+      WHITESPACE@606..608 "  "
+      TYPE_DECL@608..668
+        IDENT@608..614 "TOwned"
+        TYPE_PARAMS@614..653
+          LT@614..615 "<"
+          TYPE_PARAM_GROUP@615..616
+            IDENT_LIST@615..616
+              IDENT@615..616 "K"
+          SEMICOLON@616..617 ";"
+          WHITESPACE@617..618 " "
+          TYPE_PARAM_GROUP@618..639
+            IDENT_LIST@618..619
+              IDENT@618..619 "V"
+            COLON@619..620 ":"
+            WHITESPACE@620..621 " "
+            CONSTRAINT@621..626
+              CLASS_KW@621..626 "class"
+            COMMA@626..627 ","
+            WHITESPACE@627..628 " "
+            CONSTRAINT@628..639
+              CONSTRUCTOR_KW@628..639 "constructor"
+          SEMICOLON@639..640 ";"
+          WHITESPACE@640..641 " "
+          TYPE_PARAM_GROUP@641..652
+            IDENT_LIST@641..642
+              IDENT@641..642 "W"
+            COLON@642..643 ":"
+            WHITESPACE@643..644 " "
+            CONSTRAINT@644..652
+              TYPE_REF@644..652
+                QUALIFIED_NAME@644..652
+                  IDENT@644..652 "IHasName"
+          GT@652..653 ">"
+        WHITESPACE@653..654 " "
+        EQ@654..655 "="
+        WHITESPACE@655..656 " "
+        CLASS_TYPE@656..667
+          CLASS_KW@656..661 "class"
+          NEWLINE@661..662 "\n"
+          WHITESPACE@662..664 "  "
+          CLASS_BODY@664..664
+          END_KW@664..667 "end"
+        SEMICOLON@667..668 ";"
+      NEWLINE@668..669 "\n"
+      WHITESPACE@669..671 "  "
+      TYPE_DECL@671..819
+        IDENT@671..677 "TStack"
+        TYPE_PARAMS@677..680
+          LT@677..678 "<"
+          TYPE_PARAM_GROUP@678..679
+            IDENT_LIST@678..679
+              IDENT@678..679 "T"
+          GT@679..680 ">"
+        WHITESPACE@680..681 " "
+        EQ@681..682 "="
+        WHITESPACE@682..683 " "
+        CLASS_TYPE@683..818
+          CLASS_KW@683..688 "class"
+          NEWLINE@688..689 "\n"
+          WHITESPACE@689..691 "  "
+          CLASS_BODY@691..812
+            VISIBILITY@691..698
+              PRIVATE_KW@691..698 "private"
+            NEWLINE@698..699 "\n"
+            WHITESPACE@699..703 "    "
+            FIELD_DECL@703..721
+              IDENT_LIST@703..709
+                IDENT@703..709 "FItems"
+              COLON@709..710 ":"
+              WHITESPACE@710..711 " "
+              GENERIC_TYPE_REF@711..720
+                QUALIFIED_NAME@711..717
+                  IDENT@711..717 "TArray"
+                LT@717..718 "<"
+                TYPE_REF@718..719
+                  QUALIFIED_NAME@718..719
+                    IDENT@718..719 "T"
+                GT@719..720 ">"
+              SEMICOLON@720..721 ";"
+            NEWLINE@721..722 "\n"
+            WHITESPACE@722..724 "  "
+            VISIBILITY@724..730
+              PUBLIC_KW@724..730 "public"
+            NEWLINE@730..731 "\n"
+            WHITESPACE@731..735 "    "
+            METHOD_DECL@735..765
+              ROUTINE_HEADER@735..764
+                PROCEDURE_KW@735..744 "procedure"
+                WHITESPACE@744..745 " "
+                QUALIFIED_NAME@745..749
+                  IDENT@745..749 "Push"
+                PARAM_LIST@749..764
+                  L_PAREN@749..750 "("
+                  PARAM_GROUP@750..763
+                    CONST_KW@750..755 "const"
+                    WHITESPACE@755..756 " "
+                    IDENT_LIST@756..760
+                      IDENT@756..760 "Item"
+                    COLON@760..761 ":"
+                    WHITESPACE@761..762 " "
+                    TYPE_REF@762..763
+                      QUALIFIED_NAME@762..763
+                        IDENT@762..763 "T"
+                  R_PAREN@763..764 ")"
+              SEMICOLON@764..765 ";"
+            NEWLINE@765..766 "\n"
+            WHITESPACE@766..770 "    "
+            METHOD_DECL@770..812
+              ROUTINE_HEADER@770..811
+                FUNCTION_KW@770..778 "function"
+                WHITESPACE@778..779 " "
+                QUALIFIED_NAME@779..785
+                  IDENT@779..782 "Map"
+                  TYPE_PARAMS@782..785
+                    LT@782..783 "<"
+                    TYPE_PARAM_GROUP@783..784
+                      IDENT_LIST@783..784
+                        IDENT@783..784 "U"
+                    GT@784..785 ">"
+                PARAM_LIST@785..800
+                  L_PAREN@785..786 "("
+                  PARAM_GROUP@786..799
+                    CONST_KW@786..791 "const"
+                    WHITESPACE@791..792 " "
+                    IDENT_LIST@792..796
+                      IDENT@792..796 "Item"
+                    COLON@796..797 ":"
+                    WHITESPACE@797..798 " "
+                    TYPE_REF@798..799
+                      QUALIFIED_NAME@798..799
+                        IDENT@798..799 "T"
+                  R_PAREN@799..800 ")"
+                COLON@800..801 ":"
+                WHITESPACE@801..802 " "
+                RETURN_TYPE@802..811
+                  GENERIC_TYPE_REF@802..811
+                    QUALIFIED_NAME@802..808
+                      IDENT@802..808 "TArray"
+                    LT@808..809 "<"
+                    TYPE_REF@809..810
+                      QUALIFIED_NAME@809..810
+                        IDENT@809..810 "U"
+                    GT@810..811 ">"
+              SEMICOLON@811..812 ";"
+          NEWLINE@812..813 "\n"
+          WHITESPACE@813..815 "  "
+          END_KW@815..818 "end"
+        SEMICOLON@818..819 ";"
+      NEWLINE@819..820 "\n"
+      WHITESPACE@820..822 "  "
+      TYPE_DECL@822..902
+        IDENT@822..828 "TOuter"
+        TYPE_PARAMS@828..831
+          LT@828..829 "<"
+          TYPE_PARAM_GROUP@829..830
+            IDENT_LIST@829..830
+              IDENT@829..830 "T"
+          GT@830..831 ">"
+        WHITESPACE@831..832 " "
+        EQ@832..833 "="
+        WHITESPACE@833..834 " "
+        CLASS_TYPE@834..901
+          CLASS_KW@834..839 "class"
+          NEWLINE@839..840 "\n"
+          WHITESPACE@840..842 "  "
+          CLASS_BODY@842..895
+            TYPE_SECTION@842..895
+              TYPE_KW@842..846 "type"
+              NEWLINE@846..847 "\n"
+              WHITESPACE@847..851 "    "
+              TYPE_DECL@851..895
+                IDENT@851..857 "TInner"
+                WHITESPACE@857..858 " "
+                EQ@858..859 "="
+                WHITESPACE@859..860 " "
+                CLASS_TYPE@860..894
+                  CLASS_KW@860..865 "class"
+                  NEWLINE@865..866 "\n"
+                  WHITESPACE@866..872 "      "
+                  CLASS_BODY@872..886
+                    METHOD_DECL@872..886
+                      ROUTINE_HEADER@872..885
+                        PROCEDURE_KW@872..881 "procedure"
+                        WHITESPACE@881..882 " "
+                        QUALIFIED_NAME@882..885
+                          IDENT@882..885 "Run"
+                      SEMICOLON@885..886 ";"
+                  NEWLINE@886..887 "\n"
+                  WHITESPACE@887..891 "    "
+                  END_KW@891..894 "end"
+                SEMICOLON@894..895 ";"
+          NEWLINE@895..896 "\n"
+          WHITESPACE@896..898 "  "
+          END_KW@898..901 "end"
+        SEMICOLON@901..902 ";"
+      NEWLINE@902..903 "\n"
+      WHITESPACE@903..905 "  "
+      TYPE_DECL@905..964
+        IDENT@905..912 "TNested"
+        TYPE_PARAMS@912..915
+          LT@912..913 "<"
+          TYPE_PARAM_GROUP@913..914
+            IDENT_LIST@913..914
+              IDENT@913..914 "T"
+          GT@914..915 ">"
+        EQ@915..916 "="
+        WHITESPACE@916..917 " "
+        RECORD_TYPE@917..963
+          RECORD_KW@917..923 "record"
+          NEWLINE@923..924 "\n"
+          WHITESPACE@924..928 "    "
+          FIELD_DECL@928..957
+            IDENT_LIST@928..933
+              IDENT@928..933 "Items"
+            COLON@933..934 ":"
+            WHITESPACE@934..935 " "
+            GENERIC_TYPE_REF@935..956
+              QUALIFIED_NAME@935..940
+                IDENT@935..940 "TList"
+              LT@940..941 "<"
+              GENERIC_TYPE_REF@941..955
+                QUALIFIED_NAME@941..946
+                  IDENT@941..946 "TList"
+                LT@946..947 "<"
+                TYPE_REF@947..954
+                  QUALIFIED_NAME@947..954
+                    IDENT@947..954 "Integer"
+                GT@954..955 ">"
+              GT@955..956 ">"
+            SEMICOLON@956..957 ";"
+          NEWLINE@957..958 "\n"
+          WHITESPACE@958..960 "  "
+          END_KW@960..963 "end"
+        SEMICOLON@963..964 ";"
+    NEWLINE@964..965 "\n"
+    NEWLINE@965..966 "\n"
+    CONST_SECTION@966..1002
+      CONST_KW@966..971 "const"
+      NEWLINE@971..972 "\n"
+      WHITESPACE@972..974 "  "
+      CONST_DECL@974..1002
+        IDENT@974..979 "Empty"
+        COLON@979..980 ":"
+        WHITESPACE@980..981 " "
+        GENERIC_TYPE_REF@981..996
+          QUALIFIED_NAME@981..987
+            IDENT@981..987 "TArray"
+          LT@987..988 "<"
+          TYPE_REF@988..995
+            QUALIFIED_NAME@988..995
+              IDENT@988..995 "Integer"
+          GT@995..996 ">"
+        EQ@996..997 "="
+        WHITESPACE@997..998 " "
+        NIL_EXPR@998..1001
+          NIL_KW@998..1001 "nil"
+        SEMICOLON@1001..1002 ";"
+    NEWLINE@1002..1003 "\n"
+    NEWLINE@1003..1004 "\n"
+    ROUTINE_DECL@1004..1055
+      ROUTINE_HEADER@1004..1043
+        PROCEDURE_KW@1004..1013 "procedure"
+        WHITESPACE@1013..1014 " "
+        QUALIFIED_NAME@1014..1028
+          IDENT@1014..1020 "TStack"
+          TYPE_PARAMS@1020..1023
+            LT@1020..1021 "<"
+            TYPE_PARAM_GROUP@1021..1022
+              IDENT_LIST@1021..1022
+                IDENT@1021..1022 "T"
+            GT@1022..1023 ">"
+          DOT@1023..1024 "."
+          IDENT@1024..1028 "Push"
+        PARAM_LIST@1028..1043
+          L_PAREN@1028..1029 "("
+          PARAM_GROUP@1029..1042
+            CONST_KW@1029..1034 "const"
+            WHITESPACE@1034..1035 " "
+            IDENT_LIST@1035..1039
+              IDENT@1035..1039 "Item"
+            COLON@1039..1040 ":"
+            WHITESPACE@1040..1041 " "
+            TYPE_REF@1041..1042
+              QUALIFIED_NAME@1041..1042
+                IDENT@1041..1042 "T"
+          R_PAREN@1042..1043 ")"
+      SEMICOLON@1043..1044 ";"
+      NEWLINE@1044..1045 "\n"
+      ROUTINE_BODY@1045..1054
+        COMPOUND_STMT@1045..1054
+          BEGIN_KW@1045..1050 "begin"
+          NEWLINE@1050..1051 "\n"
+          END_KW@1051..1054 "end"
+      SEMICOLON@1054..1055 ";"
+    NEWLINE@1055..1056 "\n"
+    NEWLINE@1056..1057 "\n"
+    ROUTINE_DECL@1057..1120
+      ROUTINE_HEADER@1057..1108
+        FUNCTION_KW@1057..1065 "function"
+        WHITESPACE@1065..1066 " "
+        QUALIFIED_NAME@1066..1082
+          IDENT@1066..1072 "TStack"
+          TYPE_PARAMS@1072..1075
+            LT@1072..1073 "<"
+            TYPE_PARAM_GROUP@1073..1074
+              IDENT_LIST@1073..1074
+                IDENT@1073..1074 "T"
+            GT@1074..1075 ">"
+          DOT@1075..1076 "."
+          IDENT@1076..1079 "Map"
+          TYPE_PARAMS@1079..1082
+            LT@1079..1080 "<"
+            TYPE_PARAM_GROUP@1080..1081
+              IDENT_LIST@1080..1081
+                IDENT@1080..1081 "U"
+            GT@1081..1082 ">"
+        PARAM_LIST@1082..1097
+          L_PAREN@1082..1083 "("
+          PARAM_GROUP@1083..1096
+            CONST_KW@1083..1088 "const"
+            WHITESPACE@1088..1089 " "
+            IDENT_LIST@1089..1093
+              IDENT@1089..1093 "Item"
+            COLON@1093..1094 ":"
+            WHITESPACE@1094..1095 " "
+            TYPE_REF@1095..1096
+              QUALIFIED_NAME@1095..1096
+                IDENT@1095..1096 "T"
+          R_PAREN@1096..1097 ")"
+        COLON@1097..1098 ":"
+        WHITESPACE@1098..1099 " "
+        RETURN_TYPE@1099..1108
+          GENERIC_TYPE_REF@1099..1108
+            QUALIFIED_NAME@1099..1105
+              IDENT@1099..1105 "TArray"
+            LT@1105..1106 "<"
+            TYPE_REF@1106..1107
+              QUALIFIED_NAME@1106..1107
+                IDENT@1106..1107 "U"
+            GT@1107..1108 ">"
+      SEMICOLON@1108..1109 ";"
+      NEWLINE@1109..1110 "\n"
+      ROUTINE_BODY@1110..1119
+        COMPOUND_STMT@1110..1119
+          BEGIN_KW@1110..1115 "begin"
+          NEWLINE@1115..1116 "\n"
+          END_KW@1116..1119 "end"
+      SEMICOLON@1119..1120 ";"
+    NEWLINE@1120..1121 "\n"
+    NEWLINE@1121..1122 "\n"
+    ROUTINE_DECL@1122..1164
+      ROUTINE_HEADER@1122..1152
+        PROCEDURE_KW@1122..1131 "procedure"
+        WHITESPACE@1131..1132 " "
+        QUALIFIED_NAME@1132..1152
+          IDENT@1132..1138 "TOuter"
+          TYPE_PARAMS@1138..1141
+            LT@1138..1139 "<"
+            TYPE_PARAM_GROUP@1139..1140
+              IDENT_LIST@1139..1140
+                IDENT@1139..1140 "T"
+            GT@1140..1141 ">"
+          DOT@1141..1142 "."
+          IDENT@1142..1148 "TInner"
+          DOT@1148..1149 "."
+          IDENT@1149..1152 "Run"
+      SEMICOLON@1152..1153 ";"
+      NEWLINE@1153..1154 "\n"
+      ROUTINE_BODY@1154..1163
+        COMPOUND_STMT@1154..1163
+          BEGIN_KW@1154..1159 "begin"
+          NEWLINE@1159..1160 "\n"
+          END_KW@1160..1163 "end"
+      SEMICOLON@1163..1164 ";"
+    NEWLINE@1164..1165 "\n"
+    NEWLINE@1165..1166 "\n"
+    ROUTINE_DECL@1166..1211
+      ROUTINE_HEADER@1166..1199
+        FUNCTION_KW@1166..1174 "function"
+        WHITESPACE@1174..1175 " "
+        QUALIFIED_NAME@1175..1181
+          IDENT@1175..1178 "Max"
+          TYPE_PARAMS@1178..1181
+            LT@1178..1179 "<"
+            TYPE_PARAM_GROUP@1179..1180
+              IDENT_LIST@1179..1180
+                IDENT@1179..1180 "T"
+            GT@1180..1181 ">"
+        PARAM_LIST@1181..1196
+          L_PAREN@1181..1182 "("
+          PARAM_GROUP@1182..1195
+            CONST_KW@1182..1187 "const"
+            WHITESPACE@1187..1188 " "
+            IDENT_LIST@1188..1192
+              IDENT@1188..1189 "A"
+              COMMA@1189..1190 ","
+              WHITESPACE@1190..1191 " "
+              IDENT@1191..1192 "B"
+            COLON@1192..1193 ":"
+            WHITESPACE@1193..1194 " "
+            TYPE_REF@1194..1195
+              QUALIFIED_NAME@1194..1195
+                IDENT@1194..1195 "T"
+          R_PAREN@1195..1196 ")"
+        COLON@1196..1197 ":"
+        WHITESPACE@1197..1198 " "
+        RETURN_TYPE@1198..1199
+          TYPE_REF@1198..1199
+            QUALIFIED_NAME@1198..1199
+              IDENT@1198..1199 "T"
+      SEMICOLON@1199..1200 ";"
+      NEWLINE@1200..1201 "\n"
+      ROUTINE_BODY@1201..1210
+        COMPOUND_STMT@1201..1210
+          BEGIN_KW@1201..1206 "begin"
+          NEWLINE@1206..1207 "\n"
+          END_KW@1207..1210 "end"
+      SEMICOLON@1210..1211 ";"
+    NEWLINE@1211..1212 "\n"
+    NEWLINE@1212..1213 "\n"
+    COMPOUND_STMT@1213..1222
+      BEGIN_KW@1213..1218 "begin"
+      NEWLINE@1218..1219 "\n"
+      END_KW@1219..1222 "end"
+    DOT@1222..1223 "."
+    NEWLINE@1223..1224 "\n"
+    EOF@1224..1224 ""

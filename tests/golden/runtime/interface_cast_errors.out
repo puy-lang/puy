@@ -1,0 +1,11 @@
+EInvalidCast: invalid interface cast: `TOther` does not implement `IBar`
+EInvalidCast: invalid interface cast: `TOther` does not implement `IBar`
+EInvalidCast: invalid interface cast: `TOther` does not implement `IBar`
+EInvalidCast: invalid interface cast: `TOther` does not implement `IBar`
+EInvalidCast: invalid class typecast: `TOther` is not `TFoo`
+EInvalidCast: invalid class typecast: `TOther` is not `TFoo`
+EInvalidCast: invalid interface cast: `TObject` does not implement `IFoo`
+EAccessViolation: access to a freed object
+EAccessViolation: access to a freed object
+EAccessViolation: access to a freed object
+FALSE

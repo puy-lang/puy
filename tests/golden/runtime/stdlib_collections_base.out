@@ -1,0 +1,7 @@
+one 1
+2 one
+TRUE
+1 2 3 
+7 
+EKeyNotFound: no such key
+EListError: list

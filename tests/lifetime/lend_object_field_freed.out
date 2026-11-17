@@ -1,0 +1,4 @@
+field: access to a freed object
+live kept
+record field: access to a freed object
+live kept kept

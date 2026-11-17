@@ -1,0 +1,10 @@
+destroy c
+deleted, assigned: FALSE
+list destroyed with 2
+destroy a
+destroy big b
+destroy b
+list destroyed with 2
+destroy in objects
+destroy big held
+destroy held

@@ -1,0 +1,108 @@
+error[E0760]: `TRefFoo` is a reference counted class and cannot be used for `K` of `TObjectDictionary<K, V>`
+    --> stdlib_owning_dictionary_errors.pas:30:24
+     |
+  30 |   C: TObjectDictionary<TRefFoo, TRefFoo>;
+     |                        ^^^^^^^
+    ::: <stdlib>/System.Generics.Collections.pas:579:21
+ 579 |   TObjectDictionary<K: NotRefCounted; V: NotRefCounted> = class(TDictionary<K, V>)
+     |                     - type parameter declared here
+     |
+     = note: reference counted objects are freed when the last reference goes away, so they do not need an owning container
+     = suggestion: use `TDictionary`
+
+error[E0760]: `TRefFoo` is a reference counted class and cannot be used for `V` of `TObjectDictionary<K, V>`
+    --> stdlib_owning_dictionary_errors.pas:30:33
+     |
+  30 |   C: TObjectDictionary<TRefFoo, TRefFoo>;
+     |                                 ^^^^^^^
+    ::: <stdlib>/System.Generics.Collections.pas:579:39
+ 579 |   TObjectDictionary<K: NotRefCounted; V: NotRefCounted> = class(TDictionary<K, V>)
+     |                                       - type parameter declared here
+     |
+     = note: reference counted objects are freed when the last reference goes away, so they do not need an owning container
+
+error[E0768]: `doOwnsKeys` needs a class type for the keys of `TObjectDictionary<string, TFoo>`, but `string` is not a class
+   --> stdlib_owning_dictionary_errors.pas:38:47
+    |
+ 38 |   A := TObjectDictionary<string, TFoo>.Create([TDictionaryOwnership.doOwnsKeys]);
+    |                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |                          ------ type argument written here
+    |
+    = note: only class instances can be freed by the dictionary
+    = suggestion: remove `doOwnsKeys`
+
+error[E0768]: `doOwnsKeys` needs a class type for the keys of `TObjectDictionary<string, TFoo>`, but `string` is not a class
+   --> stdlib_owning_dictionary_errors.pas:39:47
+    |
+ 39 |   A := TObjectDictionary<string, TFoo>.Create([TDictionaryOwnership.doOwnsValues,
+    |                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |                          ------ type argument written here
+ 40 |     TDictionaryOwnership.doOwnsKeys]);
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: only class instances can be freed by the dictionary
+    = suggestion: remove `doOwnsKeys`
+
+error[E0768]: `doOwnsKeys` needs a class type for the keys of `TObjectDictionary<string, TFoo>`, but `string` is not a class
+   --> stdlib_owning_dictionary_errors.pas:41:47
+    |
+ 41 |   A := TObjectDictionary<string, TFoo>.Create(OwnKeys, 16);
+    |                                               ^^^^^^^
+    |                          ------ type argument written here
+    |
+    = note: only class instances can be freed by the dictionary
+
+error[E0768]: `doOwnsKeys` needs a class type for the keys of `TObjectDictionary<Integer, string>`, but `Integer` is not a class
+   --> stdlib_owning_dictionary_errors.pas:42:50
+    |
+ 42 |   B := TObjectDictionary<Integer, string>.Create([TDictionaryOwnership.doOwnsKeys,
+    |                                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |                          ------- type argument written here
+ 43 |     TDictionaryOwnership.doOwnsValues]);
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: only class instances can be freed by the dictionary
+    = suggestion: remove `doOwnsKeys`
+
+error[E0768]: `doOwnsValues` needs a class type for the values of `TObjectDictionary<Integer, string>`, but `string` is not a class
+   --> stdlib_owning_dictionary_errors.pas:42:50
+    |
+ 42 |   B := TObjectDictionary<Integer, string>.Create([TDictionaryOwnership.doOwnsKeys,
+    |                                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |                                   ------ type argument written here
+ 43 |     TDictionaryOwnership.doOwnsValues]);
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: only class instances can be freed by the dictionary
+    = suggestion: remove `doOwnsValues`
+
+error[E0768]: `doOwnsValues` needs a class type for the values of `TObjectDictionary<string, string>`, but `string` is not a class
+   --> stdlib_owning_dictionary_errors.pas:44:22
+    |
+ 44 |   P := TPlain.Create([TDictionaryOwnership.doOwnsValues]);
+    |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: only class instances can be freed by the dictionary
+    = suggestion: remove `doOwnsValues`
+
+error[E0768]: `doOwnsKeys` needs a class type for the keys of `TObjectDictionary<Integer, TFoo>`, but `Integer` is not a class
+   --> stdlib_owning_dictionary_errors.pas:47:22
+    |
+ 47 |   I := TByInt.Create([TDictionaryOwnership.doOwnsKeys], TEqualityComparer<Integer>.Default);
+    |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: only class instances can be freed by the dictionary
+    = suggestion: remove `doOwnsKeys`
+
+error[E0768]: `doOwnsValues` needs a class type for the values of `TObjectDictionary<TFoo, string>`, but `string` is not a class
+   --> stdlib_owning_dictionary_errors.pas:48:47
+    |
+ 48 |   R := TObjectDictionary<TFoo, string>.Create([TDictionaryOwnership.doOwnsKeys..
+    |                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |                                ------ type argument written here
+ 49 |     TDictionaryOwnership.doOwnsValues]);
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: only class instances can be freed by the dictionary
+
+error: aborting due to 10 errors

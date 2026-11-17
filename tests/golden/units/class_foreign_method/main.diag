@@ -1,0 +1,7 @@
+error[E0700]: `TShape` is not a class of this unit
+  --> main.pas:7:11
+   |
+ 7 | procedure TShape.Extra;
+   |           ^^^^^^
+
+error: aborting due to 1 error

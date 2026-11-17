@@ -1,0 +1,111 @@
+program DumpMethods
+.type TShape = class(TObject) abstract
+  .method - Area virtual 6
+  .method f1 Twice virtual 7
+  .method f2 Show
+.type TSquare = class(TShape)
+  .field 0 Side: Integer
+  .method f3 Area override 6
+  .method f4 Twice override 7
+.type TBox = class(TSquare) sealed
+  .method f5 Area override 6
+  .method f6 ToString override 3
+.global g0 S: TShape
+.global g1 Q: TSquare
+.global g2 B: TBox
+.routine f1 TShape.Twice(): Integer
+  .var v0 Self: TShape self
+  .var v1 Result: Integer result
+  assign @28 R+
+    var v1 Result
+    binary Integer
+      const Integer 2
+      * Integer int:Integer
+        virtual 6 TShape.Area: Integer
+          self TShape
+.routine f2 TShape.Show()
+  .var v0 Self: TShape self
+  writeln @33
+    arg
+      virtual 7 TShape.Twice: Integer
+        self TShape
+    arg
+      const Char #32
+    arg
+      virtual 3 TObject.ToString: string
+        self TShape
+    arg
+      const Char #32
+    arg
+      builtin ClassName string
+        self TShape
+.routine f3 TSquare.Area(): Integer
+  .var v0 Self: TSquare self
+  .var v1 Result: Integer result
+  assign @38 R+
+    var v1 Result
+    binary Integer
+      objfield Integer Side #0
+        self TSquare
+      * Integer int:Integer
+        objfield Integer Side #0
+          self TSquare
+.routine f4 TSquare.Twice(): Integer
+  .var v0 Self: TSquare self
+  .var v1 Result: Integer result
+  assign @43 R+
+    var v1 Result
+    binary Integer
+      inherited f1 TShape.Twice: Integer
+        self TSquare
+      + Integer int:Integer
+        const Integer 1
+.routine f5 TBox.Area(): Integer
+  .var v0 Self: TBox self
+  .var v1 Result: Integer result
+  assign @48 R+
+    var v1 Result
+    binary Integer
+      const Integer 6
+      * Integer int:Integer
+        inherited f3 TSquare.Area: Integer
+          self TBox
+.routine f6 TBox.ToString(): string
+  .var v0 Self: TBox self
+  .var v1 Result: string result
+  assign @53 R+
+    var v1 Result
+    const string "box"
+.routine <main>
+  assign @61 R+
+    global g2 B
+    create TBox builtin
+  assign @62 R+
+    objfield Integer Side #0
+      global g2 B: TBox
+    const Integer 1
+  assign @63 R+
+    global g0 S
+    global g2 B: TShape
+  assign @64 R+
+    global g1 Q
+    global g2 B: TSquare
+  expr @65
+    method f2 TShape.Show: -
+      global g0 S: TShape
+  writeln @66
+    arg
+      method f5 TBox.Area: Integer
+        global g2 B: TBox
+    arg
+      const Char #32
+    arg
+      method f4 TSquare.Twice: Integer
+        global g1 Q: TSquare
+    arg
+      const Char #32
+    arg
+      virtual 6 TShape.Area: Integer
+        global g0 S: TShape
+  free @67
+    global g2 B: TBox

@@ -1,0 +1,100 @@
+error[E0747]: a destructor must be declared as `destructor Destroy; override;`
+   --> ctor_dtor_errors.pas:18:16
+    |
+ 18 |     destructor Done; override;
+    |                ^^^^
+
+error[E0747]: a destructor must be declared as `destructor Destroy; override;`
+   --> ctor_dtor_errors.pas:19:16
+    |
+ 19 |     destructor Destroy(Force: Boolean); override;
+    |                ^^^^^^^
+
+error[E0747]: a destructor must be declared as `destructor Destroy; override;`
+   --> ctor_dtor_errors.pas:24:16
+    |
+ 24 |     destructor Destroy; virtual;
+    |                ^^^^^^^
+
+error[E0747]: a destructor must be declared as `destructor Destroy; override;`
+   --> ctor_dtor_errors.pas:28:16
+    |
+ 28 |     destructor Destroy;
+    |                ^^^^^^^
+
+error[E0723]: method `TGood.Create` has no body
+   --> ctor_dtor_errors.pas:32:17
+    |
+ 32 |     constructor Create;
+    |                 ^^^^^^
+
+error[E0747]: a constructor must be called on a class
+   --> ctor_dtor_errors.pas:48:3
+    |
+ 48 |   Create(0);
+    |   ^^^^^^
+    |
+    = note: call the constructor on the class, as in `TItem.Create`
+    = note: inside a constructor, use `inherited Create` to run the parent constructor
+
+error[E0711]: `Exit` with a value is not allowed in a constructor
+   --> ctor_dtor_errors.pas:53:3
+    |
+ 51 | constructor TItem.CreateVirtual;
+    |             ------------------- declared here
+ 52 | begin
+ 53 |   Exit(1);
+    |   ^^^^
+
+error[E0747]: a constructor must be called on a class
+   --> ctor_dtor_errors.pas:66:8
+    |
+ 66 |   Self.Create(1);
+    |        ^^^^^^
+    |
+    = note: call the constructor on the class, as in `TItem.Create`
+    = note: inside a constructor, use `inherited Create` to run the parent constructor
+
+error[E0723]: body of `TGood.Create` does not match its declaration
+   --> ctor_dtor_errors.pas:77:11
+    |
+ 32 |     constructor Create;
+    |                 ------ declared here
+...
+ 77 | procedure TGood.Create;
+    |           ^^^^^^^^^^^^
+
+error[E0711]: `Exit` with a value is not allowed in a destructor
+   --> ctor_dtor_errors.pas:83:3
+    |
+ 81 | destructor TGood.Destroy;
+    |            ------------- declared here
+ 82 | begin
+ 83 |   Exit(1);
+    |   ^^^^
+
+error[E0747]: a constructor must be declared in a class
+   --> ctor_dtor_errors.pas:90:13
+    |
+ 90 | constructor Orphan;
+    |             ^^^^^^
+
+error[E0747]: a constructor must be called on a class
+   --> ctor_dtor_errors.pas:98:5
+    |
+ 98 |   X.Create(2);
+    |     ^^^^^^
+    |
+    = note: call the constructor on the class, as in `TItem.Create`
+    = note: inside a constructor, use `inherited Create` to run the parent constructor
+
+error[E0743]: `Create` is private to `TSecret`
+    --> ctor_dtor_errors.pas:100:3
+     |
+  38 |     constructor Create(AValue: Integer);
+     |                 ------ declared here
+...
+ 100 |   TSecret.Create(3);
+     |   ^^^^^^^^^^^^^^^^^
+
+error: aborting due to 13 errors

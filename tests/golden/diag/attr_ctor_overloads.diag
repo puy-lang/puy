@@ -1,0 +1,26 @@
+error[E0734]: ambiguous call to overloaded `PairAttribute.Create`
+   --> attr_ctor_overloads.pas:28:4
+    |
+ 11 |     constructor Create(A: Integer; B: Double); overload;
+    |                 ------ candidate
+ 12 |     constructor Create(A: Double; B: Integer); overload;
+    |                 ------ candidate
+...
+ 28 |   [Pair(1, 1)] TA = class
+    |    ^^^^^^^^^^
+
+error[E0708]: `Integer` is a type and cannot be used as a value
+   --> attr_ctor_overloads.pas:30:9
+    |
+ 30 |   [Pair(Integer)] TB = class
+    |         ^^^^^^^
+
+error[E3019]: `Free` is not supported in Puy
+   --> attr_ctor_overloads.pas:38:24
+    |
+ 38 |   MarkAttribute.Create.Free;
+    |                        ^^^^
+    |
+    = note: assign `nil` instead; reference counted objects are freed automatically
+
+error: aborting due to 3 errors

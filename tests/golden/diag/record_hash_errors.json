@@ -1,0 +1,154 @@
+[
+  {
+    "schema": "puy.diagnostics/1",
+    "diagnostics": [
+      {
+        "code": "E0765",
+        "severity": "error",
+        "name": null,
+        "message": "record `TOnlyEqual` declares operator `Equal` but not `GetHashCode`",
+        "primary": {
+          "file": "record_hash_errors.pas",
+          "start": 547,
+          "end": 552,
+          "line": 12,
+          "column": 20,
+          "end_line": 12,
+          "end_column": 25,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "declare `function GetHashCode: Int64;` that returns the same value for equal records, for example `HashCombine(KeyHash(A), KeyHash(B))`"
+        ],
+        "fixes": [
+          {
+            "title": "declare `function GetHashCode: Int64;`",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "record_hash_errors.pas",
+                "start": 586,
+                "end": 586,
+                "line": 12,
+                "column": 59,
+                "end_line": 12,
+                "end_column": 59,
+                "original": "",
+                "replacement": "\n    function GetHashCode: Int64;"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E0765]: record `TOnlyEqual` declares operator `Equal` but not `GetHashCode`\n   --> record_hash_errors.pas:12:20\n    |\n 12 |     class operator Equal(const A, B: TOnlyEqual): Boolean;\n    |                    ^^^^^\n    |\n    = note: declare `function GetHashCode: Int64;` that returns the same value for equal records, for example `HashCombine(KeyHash(A), KeyHash(B))`\n    = suggestion: declare `function GetHashCode: Int64;`"
+      },
+      {
+        "code": "E0765",
+        "severity": "error",
+        "name": null,
+        "message": "record `TOnlyHash` declares `GetHashCode` but not operator `Equal`",
+        "primary": {
+          "file": "record_hash_errors.pas",
+          "start": 646,
+          "end": 657,
+          "line": 17,
+          "column": 14,
+          "end_line": 17,
+          "end_column": 25,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0765]: record `TOnlyHash` declares `GetHashCode` but not operator `Equal`\n   --> record_hash_errors.pas:17:14\n    |\n 17 |     function GetHashCode: Int64;\n    |              ^^^^^^^^^^^"
+      },
+      {
+        "code": "E0765",
+        "severity": "error",
+        "name": null,
+        "message": "`GetHashCode` of a record must be declared as `function GetHashCode: Int64`",
+        "primary": {
+          "file": "record_hash_errors.pas",
+          "start": 783,
+          "end": 794,
+          "line": 23,
+          "column": 14,
+          "end_line": 23,
+          "end_column": 25,
+          "label": ""
+        },
+        "secondary": [
+          {
+            "file": "record_hash_errors.pas",
+            "start": 734,
+            "end": 739,
+            "line": 22,
+            "column": 20,
+            "end_line": 22,
+            "end_column": 25,
+            "label": "operator `Equal` declared here"
+          }
+        ],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0765]: `GetHashCode` of a record must be declared as `function GetHashCode: Int64`\n   --> record_hash_errors.pas:23:14\n    |\n 22 |     class operator Equal(A, B: TIntegerHash): Boolean;\n    |                    ----- operator `Equal` declared here\n 23 |     function GetHashCode: Integer;\n    |              ^^^^^^^^^^^"
+      },
+      {
+        "code": "E0765",
+        "severity": "error",
+        "name": null,
+        "message": "`GetHashCode` of a record must be declared as `function GetHashCode: Int64`",
+        "primary": {
+          "file": "record_hash_errors.pas",
+          "start": 932,
+          "end": 943,
+          "line": 29,
+          "column": 20,
+          "end_line": 29,
+          "end_column": 31,
+          "label": ""
+        },
+        "secondary": [
+          {
+            "file": "record_hash_errors.pas",
+            "start": 872,
+            "end": 877,
+            "line": 28,
+            "column": 20,
+            "end_line": 28,
+            "end_column": 25,
+            "label": "operator `Equal` declared here"
+          }
+        ],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0765]: `GetHashCode` of a record must be declared as `function GetHashCode: Int64`\n   --> record_hash_errors.pas:29:20\n    |\n 28 |     class operator Equal(const A, B: TStaticHash): Boolean;\n    |                    ----- operator `Equal` declared here\n 29 |     class function GetHashCode: Int64; static;\n    |                    ^^^^^^^^^^^"
+      },
+      {
+        "code": "E0700",
+        "severity": "error",
+        "name": null,
+        "message": "undeclared identifier `TNoSuchType`",
+        "primary": {
+          "file": "record_hash_errors.pas",
+          "start": 1180,
+          "end": 1191,
+          "line": 36,
+          "column": 27,
+          "end_line": 36,
+          "end_column": 38,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0700]: undeclared identifier `TNoSuchType`\n   --> record_hash_errors.pas:36:27\n    |\n 36 |     function GetHashCode: TNoSuchType;\n    |                           ^^^^^^^^^^^"
+      }
+    ],
+    "summary": {
+      "errors": 5,
+      "warnings": 0,
+      "notes": 0
+    }
+  }
+]

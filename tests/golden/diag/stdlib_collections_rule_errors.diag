@@ -1,0 +1,53 @@
+error[E0707]: cannot assign to `P[0].X`
+   --> stdlib_collections_rule_errors.pas:30:3
+    |
+ 30 |   P[0].X := 1;
+    |   ^^^^^^ part of a property
+    |
+    = note: read the property into a variable, change it, and assign it back
+
+error[E0707]: cannot assign to `L[0..1]`
+    --> stdlib_collections_rule_errors.pas:32:3
+     |
+  32 |   L[0..1] := [1, 2];
+     |   ^^^^^^^ a read-only property
+    ::: <stdlib>/System.Generics.Collections.pas:145:14
+ 145 |     property Items[const Range: TIndexRange]: TArray<T> read GetRange; default;
+     |              ----- declared here
+
+error[E0734]: ambiguous call to overloaded `TObjectDictionary<TFoo, TFoo>.Create`
+    --> stdlib_collections_rule_errors.pas:33:8
+     |
+  33 |   D := TObjectDictionary<TFoo, TFoo>.Create([]);
+     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ::: <stdlib>/System.Generics.Collections.pas:587:17
+ 434 |     constructor Create(const Values: array of TPair<K, V>); overload;
+     |                 ------ candidate
+...
+ 587 |     constructor Create(Ownerships: TDictionaryOwnerships); overload;
+     |                 ------ candidate
+
+error[E0768]: `doOwnsKeys` needs a class type for the keys of `TObjectDictionary<string, TFoo>`, but `string` is not a class
+   --> stdlib_collections_rule_errors.pas:34:23
+    |
+ 34 |   O := TOwning.Create([TDictionaryOwnership.doOwnsKeys]);
+    |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: only class instances can be freed by the dictionary
+    = suggestion: remove `doOwnsKeys`
+
+error[E0700]: `TList<Integer>` has no member `OnNotify`
+   --> stdlib_collections_rule_errors.pas:35:5
+    |
+ 35 |   L.OnNotify := nil;
+    |     ^^^^^^^^
+
+error[E0700]: undeclared identifier `EListError`
+   --> stdlib_collections_rule_errors.pas:39:11
+    |
+ 39 |     on E: EListError do
+    |           ^^^^^^^^^^
+    |
+    = fix: add `uses System.SysUtils`
+
+error: aborting due to 6 errors

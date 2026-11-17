@@ -1,0 +1,85 @@
+; puyc format 0
+.const
+  0: str "\n"
+.type
+  64: class DumpClassCast.TShape slots=0 parent=ty19 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+  65: class DumpClassCast.TCircle slots=1 parent=ty64 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+.global
+  0: int X
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpClassCast file="dump_class_cast.pas" init=- fini=- entry=0
+.func 0 DumpClassCast.<main> params=0 regs=2
+  .line 37
+  0000  LoadZero     r0
+  0001  New          r0, ty65
+  0002  StoreGlobal  r0, g0
+  .line 38
+  0003  LoadInt      r1, 66
+  0004  Call         r0, f1
+  .line 39
+  0005  LoadGlobal   r0, g0
+  0006  Free         r0
+  .line 40
+  0007  RetVoid
+.func 1 DumpClassCast.Check params=2 regs=16
+  .local r0 S
+  .local r1 K
+  .local r2 C
+  .local r3 CK
+  .local r4 B
+  .line 24
+  0000  Move         r13, r0
+  0001  IsClass      r13, ty65
+  0002  Move         r4, r13
+  .line 25
+  0003  AsClass      r0, ty65
+  0004  Move         r2, r0
+  .line 26
+  0005  AsClass      r0, ty65
+  0006  Move         r2, r0
+  .line 27
+  0007  Move         r13, r1
+  0008  LoadInt      r14, 65
+  0009  AsClassRef   r13, r14
+  000a  Move         r3, r13
+  .line 28
+  000b  AsClass      r0, ty65
+  000c  ObjGet       r13, r0, 0
+  000d  IntToStr     r5, r13
+  000e  AsClass      r0, ty65
+  000f  ObjGet       r14, r0, 0
+  0010  IntToStr     r6, r14
+  0011  ConcatStr    r5, r5, r6
+  0012  Move         r15, r0
+  0013  IsClass      r15, ty65
+  0014  BoolToStr    r7, r15
+  0015  ConcatStr    r5, r5, r7
+  0016  LoadConst    r8, k0
+  0017  ConcatStr    r5, r5, r8
+  0018  CallHost     r5, h0
+  .line 29
+  0019  Move         r13, r4
+  001a  JmpIfFalse   r13, -> 001e
+  001b  LoadZero     r14
+  001c  EqInt        r13, r2, r14
+  001d  NotBool      r13, r13
+  001e  Move         r4, r13
+  .line 30
+  001f  Move         r0, r2
+  .line 31
+  0020  BoolToStr    r9, r4
+  0021  LoadZero     r14
+  0022  EqInt        r13, r0, r14
+  0023  BoolToStr    r10, r13
+  0024  ConcatStr    r9, r9, r10
+  0025  LoadZero     r15
+  0026  EqInt        r14, r3, r15
+  0027  BoolToStr    r11, r14
+  0028  ConcatStr    r9, r9, r11
+  0029  LoadConst    r12, k0
+  002a  ConcatStr    r9, r9, r12
+  002b  CallHost     r9, h0
+  .line 32
+  002c  RetVoid
+.finally r5, r6, r7, r8, r9, r10, r11, r12

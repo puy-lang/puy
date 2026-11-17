@@ -1,0 +1,55 @@
+error[E0400]: expected `>`, found `=`
+  --> generics_recovery.pas:8:13
+   |
+ 8 |   TMissing<T = class
+   |             ^
+   |              - found here
+   |
+   = fix: insert `>`
+
+error[E0400]: expected a type parameter name
+   --> generics_recovery.pas:10:11
+    |
+ 10 |   TNoName<1> = class
+    |           ^
+    |           - found here
+
+error[E0400]: expected a constraint
+   --> generics_recovery.pas:12:20
+    |
+ 12 |   TBadConstraint<T: 42; U: class, 'x'> = class
+    |                    ^
+    |                     -- found here
+
+error[E0400]: expected a constraint
+   --> generics_recovery.pas:12:34
+    |
+ 12 |   TBadConstraint<T: 42; U: class, 'x'> = class
+    |                                  ^
+    |                                   --- found here
+
+error[E0400]: expected `>`, found `(`
+   --> generics_recovery.pas:15:20
+    |
+ 15 | procedure Heading<T(X: Integer);
+    |                    ^
+    |                    - found here
+    |
+    = fix: insert `>`
+
+error[E0700]: undeclared identifier `TList`
+   --> generics_recovery.pas:20:6
+    |
+ 20 |   V: TList<Integer;
+    |      ^^^^^
+
+error[E0400]: expected `>`, found `;`
+   --> generics_recovery.pas:20:19
+    |
+ 20 |   V: TList<Integer;
+    |                   ^
+    |                   - found here
+    |
+    = fix: insert `>`
+
+error: aborting due to 7 errors

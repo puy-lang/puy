@@ -1,0 +1,22 @@
+add b: TRUE
+add a: TRUE
+add b again: FALSE
+add c: TRUE
+after adding (3): b a c
+contains a: TRUE, contains z: FALSE
+remove z: FALSE
+remove b: TRUE
+remove b again: FALSE
+contains b: FALSE
+after removing (2): a c
+b added again (3): a c b
+remove from empty: FALSE
+cleared (0):
+from an array (3): q p r
+from a list (3): y x z
+ToArray: 3 qpr
+as TEnumerable: y x z
+capacity 4
+capacity 8
+capacity 5 after TrimExcess
+capacity 10 (5): q p r s t

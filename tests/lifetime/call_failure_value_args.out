@@ -1,0 +1,21 @@
+caught EAccessViolation: access to a nil reference
+caught EAbstractError: abstract method `TShape.SetName` called
+caught EAbstractError: abstract method `TShape.Make` called
+caught EAbstractError: abstract method called through interface `INamed`
+caught EAccessViolation: access to a nil reference
+caught EAccessViolation: access to a nil reference
+caught EAccessViolation: access to a nil reference
+show abcd
+caught EAccessViolation: access to a freed object
+end
+destroy nil virtual
+destroy nil virtual obj
+destroy abstract virtual
+destroy abstract virtual obj
+destroy abstract class
+destroy abstract intf
+destroy abstract intf obj
+destroy nil intf
+destroy nil intf obj
+destroy nil class
+destroy nil method

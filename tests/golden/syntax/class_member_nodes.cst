@@ -1,0 +1,279 @@
+SOURCE_FILE@0..761
+  PROGRAM@0..761
+    PROGRAM_HEADER@0..25
+      PROGRAM_KW@0..7 "program"
+      WHITESPACE@7..8 " "
+      IDENT@8..24 "ClassMemberNodes"
+      SEMICOLON@24..25 ";"
+    NEWLINE@25..26 "\n"
+    NEWLINE@26..27 "\n"
+    LINE_COMMENT@27..122 "// The CST of the class members not in class_syntax (objects.md chapter 1, grammar.md 2.2): the"
+    NEWLINE@122..123 "\n"
+    LINE_COMMENT@123..217 "// modifiers `sealed` / `abstract`, a `class var` section, a class method, an indexed property"
+    NEWLINE@217..218 "\n"
+    LINE_COMMENT@218..303 "// (`PROPERTY_PARAMS`) and a field with an attribute (`ATTRIBUTE_LIST`, `ATTRIBUTE`)."
+    NEWLINE@303..304 "\n"
+    NEWLINE@304..305 "\n"
+    TYPE_SECTION@305..606
+      TYPE_KW@305..309 "type"
+      NEWLINE@309..310 "\n"
+      WHITESPACE@310..312 "  "
+      TYPE_DECL@312..344
+        IDENT@312..317 "TNode"
+        WHITESPACE@317..318 " "
+        EQ@318..319 "="
+        WHITESPACE@319..320 " "
+        CLASS_TYPE@320..343
+          CLASS_KW@320..325 "class"
+          CLASS_PARENTS@325..337
+            L_PAREN@325..326 "("
+            TYPE_REF@326..336
+              QUALIFIED_NAME@326..336
+                IDENT@326..336 "TRefObject"
+            R_PAREN@336..337 ")"
+          NEWLINE@337..338 "\n"
+          WHITESPACE@338..340 "  "
+          CLASS_BODY@340..340
+          END_KW@340..343 "end"
+        SEMICOLON@343..344 ";"
+      NEWLINE@344..345 "\n"
+      NEWLINE@345..346 "\n"
+      WHITESPACE@346..348 "  "
+      TYPE_DECL@348..377
+        IDENT@348..353 "TBase"
+        WHITESPACE@353..354 " "
+        EQ@354..355 "="
+        WHITESPACE@355..356 " "
+        CLASS_TYPE@356..376
+          CLASS_KW@356..361 "class"
+          WHITESPACE@361..362 " "
+          ABSTRACT_KW@362..370 "abstract"
+          NEWLINE@370..371 "\n"
+          WHITESPACE@371..373 "  "
+          CLASS_BODY@373..373
+          END_KW@373..376 "end"
+        SEMICOLON@376..377 ";"
+      NEWLINE@377..378 "\n"
+      NEWLINE@378..379 "\n"
+      WHITESPACE@379..381 "  "
+      TYPE_DECL@381..606
+        IDENT@381..386 "TList"
+        WHITESPACE@386..387 " "
+        EQ@387..388 "="
+        WHITESPACE@388..389 " "
+        CLASS_TYPE@389..605
+          CLASS_KW@389..394 "class"
+          WHITESPACE@394..395 " "
+          SEALED_KW@395..401 "sealed"
+          CLASS_PARENTS@401..408
+            L_PAREN@401..402 "("
+            TYPE_REF@402..407
+              QUALIFIED_NAME@402..407
+                IDENT@402..407 "TBase"
+            R_PAREN@407..408 ")"
+          NEWLINE@408..409 "\n"
+          WHITESPACE@409..411 "  "
+          CLASS_BODY@411..599
+            CLASS_VAR_SECTION@411..440
+              CLASS_KW@411..416 "class"
+              WHITESPACE@416..417 " "
+              VAR_KW@417..420 "var"
+              NEWLINE@420..421 "\n"
+              WHITESPACE@421..425 "    "
+              FIELD_DECL@425..440
+                IDENT_LIST@425..430
+                  IDENT@425..430 "Count"
+                COLON@430..431 ":"
+                WHITESPACE@431..432 " "
+                TYPE_REF@432..439
+                  QUALIFIED_NAME@432..439
+                    IDENT@432..439 "Integer"
+                SEMICOLON@439..440 ";"
+            NEWLINE@440..441 "\n"
+            WHITESPACE@441..443 "  "
+            VISIBILITY@443..449
+              PUBLIC_KW@443..449 "public"
+            NEWLINE@449..450 "\n"
+            WHITESPACE@450..454 "    "
+            FIELD_DECL@454..475
+              ATTRIBUTE_LIST@454..460
+                L_BRACK@454..455 "["
+                ATTRIBUTE@455..459
+                  QUALIFIED_NAME@455..459
+                    IDENT@455..459 "weak"
+                R_BRACK@459..460 "]"
+              WHITESPACE@460..461 " "
+              IDENT_LIST@461..467
+                IDENT@461..467 "Parent"
+              COLON@467..468 ":"
+              WHITESPACE@468..469 " "
+              TYPE_REF@469..474
+                QUALIFIED_NAME@469..474
+                  IDENT@469..474 "TNode"
+              SEMICOLON@474..475 ";"
+            NEWLINE@475..476 "\n"
+            WHITESPACE@476..480 "    "
+            METHOD_DECL@480..502
+              ROUTINE_HEADER@480..501
+                CLASS_KW@480..485 "class"
+                WHITESPACE@485..486 " "
+                PROCEDURE_KW@486..495 "procedure"
+                WHITESPACE@495..496 " "
+                QUALIFIED_NAME@496..501
+                  IDENT@496..501 "Reset"
+              SEMICOLON@501..502 ";"
+            NEWLINE@502..503 "\n"
+            WHITESPACE@503..507 "    "
+            METHOD_DECL@507..545
+              ROUTINE_HEADER@507..544
+                FUNCTION_KW@507..515 "function"
+                WHITESPACE@515..516 " "
+                QUALIFIED_NAME@516..523
+                  IDENT@516..523 "GetItem"
+                PARAM_LIST@523..535
+                  L_PAREN@523..524 "("
+                  PARAM_GROUP@524..534
+                    IDENT_LIST@524..525
+                      IDENT@524..525 "I"
+                    COLON@525..526 ":"
+                    WHITESPACE@526..527 " "
+                    TYPE_REF@527..534
+                      QUALIFIED_NAME@527..534
+                        IDENT@527..534 "Integer"
+                  R_PAREN@534..535 ")"
+                COLON@535..536 ":"
+                WHITESPACE@536..537 " "
+                RETURN_TYPE@537..544
+                  TYPE_REF@537..544
+                    QUALIFIED_NAME@537..544
+                      IDENT@537..544 "Integer"
+              SEMICOLON@544..545 ";"
+            NEWLINE@545..546 "\n"
+            WHITESPACE@546..550 "    "
+            PROPERTY_DECL@550..599
+              PROPERTY_KW@550..558 "property"
+              WHITESPACE@558..559 " "
+              IDENT@559..564 "Items"
+              PROPERTY_PARAMS@564..576
+                L_BRACK@564..565 "["
+                PARAM_GROUP@565..575
+                  IDENT_LIST@565..566
+                    IDENT@565..566 "I"
+                  COLON@566..567 ":"
+                  WHITESPACE@567..568 " "
+                  TYPE_REF@568..575
+                    QUALIFIED_NAME@568..575
+                      IDENT@568..575 "Integer"
+                R_BRACK@575..576 "]"
+              COLON@576..577 ":"
+              WHITESPACE@577..578 " "
+              RETURN_TYPE@578..585
+                TYPE_REF@578..585
+                  QUALIFIED_NAME@578..585
+                    IDENT@578..585 "Integer"
+              WHITESPACE@585..586 " "
+              PROPERTY_SPEC@586..598
+                READ_KW@586..590 "read"
+                WHITESPACE@590..591 " "
+                QUALIFIED_NAME@591..598
+                  IDENT@591..598 "GetItem"
+              SEMICOLON@598..599 ";"
+          NEWLINE@599..600 "\n"
+          WHITESPACE@600..602 "  "
+          END_KW@602..605 "end"
+        SEMICOLON@605..606 ";"
+    NEWLINE@606..607 "\n"
+    NEWLINE@607..608 "\n"
+    ROUTINE_DECL@608..661
+      ROUTINE_HEADER@608..635
+        CLASS_KW@608..613 "class"
+        WHITESPACE@613..614 " "
+        PROCEDURE_KW@614..623 "procedure"
+        WHITESPACE@623..624 " "
+        QUALIFIED_NAME@624..635
+          IDENT@624..629 "TList"
+          DOT@629..630 "."
+          IDENT@630..635 "Reset"
+      SEMICOLON@635..636 ";"
+      NEWLINE@636..637 "\n"
+      ROUTINE_BODY@637..660
+        COMPOUND_STMT@637..660
+          BEGIN_KW@637..642 "begin"
+          NEWLINE@642..643 "\n"
+          WHITESPACE@643..645 "  "
+          ASSIGN_STMT@645..655
+            NAME_REF@645..650
+              IDENT@645..650 "Count"
+            WHITESPACE@650..651 " "
+            ASSIGN@651..653 ":="
+            WHITESPACE@653..654 " "
+            LITERAL@654..655
+              INT_LIT@654..655 "0"
+          SEMICOLON@655..656 ";"
+          NEWLINE@656..657 "\n"
+          END_KW@657..660 "end"
+      SEMICOLON@660..661 ";"
+    NEWLINE@661..662 "\n"
+    NEWLINE@662..663 "\n"
+    ROUTINE_DECL@663..733
+      ROUTINE_HEADER@663..706
+        FUNCTION_KW@663..671 "function"
+        WHITESPACE@671..672 " "
+        QUALIFIED_NAME@672..685
+          IDENT@672..677 "TList"
+          DOT@677..678 "."
+          IDENT@678..685 "GetItem"
+        PARAM_LIST@685..697
+          L_PAREN@685..686 "("
+          PARAM_GROUP@686..696
+            IDENT_LIST@686..687
+              IDENT@686..687 "I"
+            COLON@687..688 ":"
+            WHITESPACE@688..689 " "
+            TYPE_REF@689..696
+              QUALIFIED_NAME@689..696
+                IDENT@689..696 "Integer"
+          R_PAREN@696..697 ")"
+        COLON@697..698 ":"
+        WHITESPACE@698..699 " "
+        RETURN_TYPE@699..706
+          TYPE_REF@699..706
+            QUALIFIED_NAME@699..706
+              IDENT@699..706 "Integer"
+      SEMICOLON@706..707 ";"
+      NEWLINE@707..708 "\n"
+      ROUTINE_BODY@708..732
+        COMPOUND_STMT@708..732
+          BEGIN_KW@708..713 "begin"
+          NEWLINE@713..714 "\n"
+          WHITESPACE@714..716 "  "
+          ASSIGN_STMT@716..727
+            NAME_REF@716..722
+              IDENT@716..722 "Result"
+            WHITESPACE@722..723 " "
+            ASSIGN@723..725 ":="
+            WHITESPACE@725..726 " "
+            NAME_REF@726..727
+              IDENT@726..727 "I"
+          SEMICOLON@727..728 ";"
+          NEWLINE@728..729 "\n"
+          END_KW@729..732 "end"
+      SEMICOLON@732..733 ";"
+    NEWLINE@733..734 "\n"
+    NEWLINE@734..735 "\n"
+    COMPOUND_STMT@735..759
+      BEGIN_KW@735..740 "begin"
+      NEWLINE@740..741 "\n"
+      WHITESPACE@741..743 "  "
+      EXPR_STMT@743..754
+        FIELD_EXPR@743..754
+          NAME_REF@743..748
+            IDENT@743..748 "TList"
+          DOT@748..749 "."
+          IDENT@749..754 "Reset"
+      SEMICOLON@754..755 ";"
+      NEWLINE@755..756 "\n"
+      END_KW@756..759 "end"
+    DOT@759..760 "."
+    NEWLINE@760..761 "\n"
+    EOF@761..761 ""

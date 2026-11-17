@@ -1,0 +1,3 @@
+error: uncaught exception EInvalidOperation: cannot free a reference counted object of class `TCounted`; assign `nil` instead
+  at RefcountFreeTObject.Run (refcount_free_tobject.pas:33)
+  at RefcountFreeTObject.<main> (refcount_free_tobject.pas:37)

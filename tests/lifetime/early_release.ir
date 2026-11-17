@@ -1,0 +1,84 @@
+; puy ir 1
+.global
+  g0 A: array of Integer
+  g1 E: TArray<Exception>
+  g2 S: string
+.func f0 EarlyRelease.<main> params=0
+  .reg t0: Int64 temp
+  .reg t1: array of Integer temp
+  .reg t2: array of Integer temp
+  .reg t3: Int64 temp
+  .reg t4: string temp
+  .reg t5: - temp
+bb0:
+  .line 25
+  LoadInt      t0, 2
+  LoadGlobal   t1, g0
+  Move         t2, t1
+  Move         t3, t0
+  SetLen       t2, array of Integer, t3
+  Move         t1, t2
+  StoreGlobal  t1, g0
+  .line 26
+  LoadConst    t4, "x"
+  StoreGlobalRef t4, g2
+  .line 27
+  Call         -, f1()
+  .line 28
+  RetVoid
+.finally t4
+.func f1 EarlyRelease.Run params=0
+  .reg t0: string temp
+  .reg t1: Integer temp
+  .reg t2: array of Integer temp
+  .reg t3: string temp
+  .reg t4: string temp
+  .reg t5: Integer temp
+  .reg t6: TArray<Exception> temp
+  .reg t7: string temp
+  .reg t8: string temp
+  .reg t9: string temp
+  .reg t10: Integer temp
+  .reg t11: array of Integer temp
+  .reg t12: Integer temp
+  .reg t13: string temp
+  .reg t14: string temp
+bb0:
+  .line 17
+  LoadGlobal   t2, g0
+  ArrLen       t1, t2
+  IntToStr     t0, t1
+  LoadConst    t3, " "
+  ConcatStr    t0, t0, t3
+  LoadGlobal   t6, g1
+  ArrLen       t5, t6
+  IntToStr     t4, t5
+  ConcatStr    t0, t0, t4
+  LoadConst    t7, " "
+  ConcatStr    t0, t0, t7
+  LoadGlobalRef t8, g2
+  ConcatStr    t0, t0, t8
+  LoadConst    t9, "\n"
+  ConcatStr    t0, t0, t9
+  CallHost     -, h0(t0)
+  .line 18
+  LoadGlobal   t11, g0
+  ArrLen       t10, t11
+  LoadInt      t12, 2
+  JmpIfNeInt   t10, t12, bb2, bb1
+bb1:
+  .line 19
+  LoadConst    t13, "two\n"
+  CallHost     -, h0(t13)
+  .line 18
+  Jmp          bb3
+bb2:
+  .line 21
+  LoadConst    t14, "other\n"
+  CallHost     -, h0(t14)
+  .line 18
+  Jmp          bb3
+bb3:
+  .line 22
+  RetVoid
+.finally t0, t3, t4, t7, t8, t9, t13, t14

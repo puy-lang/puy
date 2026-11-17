@@ -1,0 +1,5 @@
+assign: a value containing a location passed to a var parameter of a call in progress cannot be copied
+value parameter: a value containing a location passed to a var parameter of a call in progress cannot be copied
+static array: a value containing a location passed to a var parameter of a call in progress cannot be copied
+7 new 0 zero
+7 new

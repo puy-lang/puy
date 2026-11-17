@@ -1,0 +1,79 @@
+; puyc format 0
+.const
+  0: str "\n"
+.type
+  64: class DumpClassRefs.TShape abstract slots=0 parent=ty19 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4,f1,abstract:TShape.Area,f2
+.global
+  0: int TShape.Count
+  1: int C
+  2: int S
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpClassRefs file="dump_class_refs.pas" init=- fini=- entry=0
+.func 0 DumpClassRefs.<main> params=0 regs=11
+  .try 0005..000a finally 000a..000c r0
+  .line 37
+  0000  LoadInt      r6, 65
+  0001  StoreGlobal  r6, g1
+  .line 38
+  0002  Move         r7, r6
+  0003  LoadZero     r8
+  0004  NewOf        r8, r7
+  0005  Move         r9, r8
+  0006  CallVirtual  r9, 6
+  0007  Move         r10, r8
+  0008  CallVirtual  r10, 1
+  0009  LoadZero     r0
+  000a  JmpIfNeIntI  r0, 1, -> 000c
+  000b  DestroyFailed r8
+  000c  EndFinally   r0, 0
+  000d  Move         r6, r8
+  000e  StoreGlobal  r6, g2
+  .line 39
+  000f  LoadGlobal   r6, g1
+  0010  CallVirtualClass r6, 8
+  0011  MoveRef      r2, r6
+  0012  LoadGlobal   r7, g2
+  0013  ClassType    r6, r7
+  0014  CallVirtualClass r6, 8
+  0015  MoveRef      r3, r6
+  0016  ConcatStr    r2, r2, r3
+  0017  LoadGlobal   r7, g0
+  0018  Call         r7, f3
+  0019  Move         r6, r7
+  001a  IntToStr     r4, r6
+  001b  ConcatStr    r2, r2, r4
+  001c  LoadConst    r5, k0
+  001d  ConcatStr    r2, r2, r5
+  001e  CallHost     r2, h0
+  .line 40
+  001f  LoadGlobal   r6, g2
+  0020  Free         r6
+  .line 41
+  0021  RetVoid
+.finally r1, r2, r3, r4, r5
+.func 1 DumpClassRefs.TShape.Create params=1 regs=2
+  .local r0 Self
+  .line 20
+  0000  LoadGlobal   r1, g0
+  0001  AddIntI      r1, r1, 1
+  0002  NarrowOvf    r1, r1, 4
+  0003  StoreGlobal  r1, g0
+  .line 21
+  0004  RetVoid
+.func 2 DumpClassRefs.TShape.Name params=1 regs=2
+  .local r0 Self
+  .local r1 Result
+  .line 25
+  0000  ClassRefName r1, r0
+  .line 26
+  0001  Ret          r1
+.finally r1
+.func 3 DumpClassRefs.TShape.Twice params=1 regs=3
+  .local r0 N
+  .local r1 Result
+  .line 30
+  0000  MulIntI      r1, r0, 2
+  0001  NarrowOvf    r1, r1, 4
+  .line 31
+  0002  Ret          r1

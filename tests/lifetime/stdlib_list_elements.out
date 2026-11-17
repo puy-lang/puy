@@ -1,0 +1,29 @@
+Delete(0)
+  destroy f
+L[0] := g
+  destroy a
+L[1] := L[1]
+Extract
+  kept b
+Count := 2
+  destroy d
+  destroy e
+Exchange, Move, Reverse
+Clear
+  destroy c
+  destroy g
+Kept := nil
+Free
+  destroy h
+end of Items
+  destroy b
+string xyz xy
+list freed, plain still there: p
+  free plain p
+FreedDuringEnumeration
+  visit i
+  destroy j
+  freed
+  EAccessViolation
+end of FreedDuringEnumeration
+  destroy i

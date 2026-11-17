@@ -1,0 +1,17 @@
+error[E2502]: `EListError` is declared in several units; qualify it
+   --> main.pas:10:9
+    |
+ 10 |   raise EListError.Create('x');
+    |         ^^^^^^^^^^
+   ::: src/Errors.pas:6:3
+  6 |   EListError = class(Exception);
+    |   ---------- declared here
+   ::: <stdlib>/System.SysUtils.pas:12:3
+ 12 |   EListError = class(Exception);
+    |   ---------- declared here
+    |
+    = note: Puy does not let a later unit in `uses` hide an earlier one
+    = suggestion: replace with `Errors.EListError`
+    = suggestion: replace with `System.SysUtils.EListError`
+
+error: aborting due to 1 error

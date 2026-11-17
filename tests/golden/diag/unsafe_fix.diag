@@ -1,0 +1,125 @@
+error[E3018]: `[unsafe]` is not supported in Puy
+   --> unsafe_fix.pas:15:6
+    |
+ 15 |     [unsafe] Parent: TNode;
+    |      ^^^^^^
+    |
+    = note: use `[weak]` instead
+    = fix: use `[weak]`
+
+error[E3018]: `[unsafe]` is not supported in Puy
+   --> unsafe_fix.pas:16:6
+    |
+ 16 |     [unsafe] Shape: TShape;
+    |      ^^^^^^
+    |
+    = note: references to a manually managed class are not counted, so `[unsafe]` is not needed
+    = suggestion: remove `[unsafe]`
+
+error[E3018]: `[unsafe]` is not supported in Puy
+   --> unsafe_fix.pas:17:6
+    |
+ 17 |     [unsafe, weak] Items: TArray<TNode>;
+    |      ^^^^^^
+    |
+    = note: `[weak]` in Puy can only be applied to reference counted classes and interfaces
+    = suggestion: remove `[unsafe]`
+
+error[E0748]: `[weak]` can only be applied to a reference counted class or an interface
+   --> unsafe_fix.pas:17:14
+    |
+ 17 |     [unsafe, weak] Items: TArray<TNode>;
+    |              ^^^^
+    |
+    = note: `[weak]` in Puy can only be applied to reference counted classes and interfaces
+
+error[E0748]: `[weak]` can only be applied to a reference counted class or an interface
+   --> unsafe_fix.pas:18:6
+    |
+ 18 |     [weak, unsafe] Text: string;
+    |      ^^^^
+    |
+    = note: `[weak]` in Puy can only be applied to reference counted classes and interfaces
+
+error[E3018]: `[unsafe]` is not supported in Puy
+   --> unsafe_fix.pas:18:12
+    |
+ 18 |     [weak, unsafe] Text: string;
+    |            ^^^^^^
+    |
+    = note: `[weak]` in Puy can only be applied to reference counted classes and interfaces
+    = suggestion: remove `[unsafe]`
+
+error[E3018]: `[unsafe]` is not supported in Puy
+   --> unsafe_fix.pas:19:6
+    |
+ 19 |     [unsafe] procedure Run;
+    |      ^^^^^^
+    |
+    = note: `[weak]` and `[unsafe]` can only be applied to fields and variables
+    = suggestion: remove `[unsafe]`
+
+error[E3018]: `[unsafe]` is not supported in Puy
+   --> unsafe_fix.pas:20:6
+    |
+ 20 |     [unsafe] property Up: TNode read Parent;
+    |      ^^^^^^
+    |
+    = note: `[weak]` and `[unsafe]` can only be applied to fields and variables
+    = suggestion: remove `[unsafe]`
+
+error[E3018]: `[unsafe]` is not supported in Puy
+   --> unsafe_fix.pas:22:4
+    |
+ 22 |   [unsafe] TNodes = TArray<TNode>;
+    |    ^^^^^^
+    |
+    = note: `[weak]` and `[unsafe]` can only be applied to fields and variables
+    = suggestion: remove `[unsafe]`
+
+error[E3018]: `[unsafe]` is not supported in Puy
+   --> unsafe_fix.pas:24:6
+    |
+ 24 |     [unsafe] Name: string;
+    |      ^^^^^^
+    |
+    = note: `[weak]` in Puy can only be applied to reference counted classes and interfaces
+    = suggestion: remove `[unsafe]`
+
+error[E3018]: `[unsafe]` is not supported in Puy
+   --> unsafe_fix.pas:31:23
+    |
+ 31 | procedure Show(const [unsafe] N: TNode);
+    |                       ^^^^^^
+    |
+    = note: `[weak]` and `[unsafe]` cannot be applied to parameters; use a `const` parameter to avoid counting
+    = suggestion: remove `[unsafe]`
+
+error[E3018]: `[unsafe]` is not supported in Puy
+   --> unsafe_fix.pas:37:4
+    |
+ 37 |   [unsafe] Root: TNode;
+    |    ^^^^^^
+    |
+    = note: use `[weak]` instead
+    = fix: use `[weak]`
+
+error[E3018]: `[unsafe]` is not supported in Puy
+   --> unsafe_fix.pas:38:4
+    |
+ 38 |   [unsafe] Any: TObject;
+    |    ^^^^^^
+    |
+    = note: `[weak]` in Puy can only be applied to reference counted classes and interfaces
+    = suggestion: remove `[unsafe]`
+
+error[E3018]: `[unsafe]` is not supported in Puy
+   --> unsafe_fix.pas:40:8
+    |
+ 40 |   var [unsafe] Last: TNode := nil;
+    |        ^^^^^^
+    |
+    = note: use `[weak]` instead
+    = fix: use `[weak]`
+
+error: aborting due to 14 errors

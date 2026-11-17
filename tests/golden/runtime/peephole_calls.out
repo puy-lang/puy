@@ -1,0 +1,15 @@
+nested: 2
+nested loop: 3
+nested index: 1 0 1005
+var arg: 6
+var index: 1 0 105
+results: 86 8 7
+index: 6
+branch: 12 calls 15
+for: 720000 22.5
+repeat: 1800 720000
+while first: 3000005 5000000
+try: 7600
+empty: 0
+argument: 6000
+finally: 277928

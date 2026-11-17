@@ -8,6 +8,7 @@
 
 mod dump;
 pub mod lower;
+pub mod opt;
 
 pub use dump::dump_ir;
 
@@ -35,9 +36,10 @@ pub enum TempKind {
     Value,
     /// A reference slot made for a `var` / `out` argument (`ref`).
     Ref,
-    /// A cell: the reference of a field or element passed to a `var` / `out` parameter (`cell`;
-    /// `docs/design/lifetime.md` 3.7). It owns its heap block until the routine ends.
-    Cell,
+    /// The value of a field or element lent to a call (`lent`; `Lend`, `docs/design/lifetime.md`
+    /// 3.7). It is not released with the frame even when managed: `Unlend` and the unwinding give
+    /// it back.
+    Lent,
     /// The state register of a `try..finally` (`state`; `docs/spec/exceptions.md` 6.3). An integer
     /// with a register of its own; the [`TempKind::Exception`] temporary created right after it
     /// gets the next register.
@@ -58,8 +60,8 @@ pub struct Temp {
     /// temporary the register after the named variables and the owning temporaries plus this depth,
     /// so these temporaries are reused like a stack (the M1 rule). Call arguments and frames live here,
     /// at the top of the frame, so that a call only overwrites them. A managed value in such a
-    /// temporary is owned by nobody: it is borrowed (a `const` argument) or handed to the callee
-    /// (a value argument; `docs/design/lifetime.md` 3.3).
+    /// temporary is owned by nobody: it is borrowed (a value or `const` argument;
+    /// `docs/design/lifetime.md` 3.3).
     ///
     /// `None`: a register of its own that holds one reference of a managed value and is released at
     /// the end of the routine (one register per expression position; `docs/design/lifetime.md` 3.4).
@@ -75,6 +77,9 @@ pub struct VarReg {
     pub ty: Ty,
     pub kind: VarKind,
     pub is_for_var: bool,
+    /// Used by a nested routine or captured by an anonymous method: code the routine calls may
+    /// read or write it (`docs/spec/semantics.md` 4.9, `docs/spec/objects.md` 9.6).
+    pub shared: bool,
 }
 
 /// An operand of a plain instruction.
@@ -93,9 +98,33 @@ pub enum Operand {
     U8(String),
     Global(u32),
     Func(u32),
+    /// A function index plus `add` as an integer value (`LoadInt` / `LoadConst`; a routine value
+    /// or a closure's function, `docs/spec/objects.md` 14.9). Codegen notes where it is, to
+    /// renumber it when instantiations are shared (`docs/spec/generics.md` 7).
+    FuncValue {
+        func: u32,
+        add: i64,
+    },
     Host(u32),
+    /// The entry `index` of the receiver's class's virtual method table (`CallVirtual`); `name`
+    /// is the full name of the method the static type names (for the dump).
+    Virtual {
+        index: u32,
+        name: String,
+    },
+    /// An interface call target (`CallIntf`; `docs/spec/objects.md` 14.7): the interface and the
+    /// method number (codegen puts them in the interface call target section); `name` is the
+    /// method's full name (for the dump).
+    Intf {
+        intf: Ty,
+        method: u32,
+        name: String,
+    },
     /// A record or static array type (`Unique`; codegen puts it in the type section).
     Type(Ty),
+    /// A class as the value of a class reference (`LoadInt`; `docs/spec/objects.md` 14.1): its
+    /// type index + 1.
+    ClassRef(Ty),
     /// A record or static array constant (codegen puts it and its elements in the constant pool).
     Agg(Ty, Const),
 }
@@ -105,7 +134,8 @@ pub enum InstKind {
     /// Operands in the order of the bytecode instruction's fields. A consecutive register range
     /// (`StrCopy`, `StrPos`, `StrToIntDef`) lists each register of the range.
     Plain(Vec<Operand>),
-    /// `Call` / `CallHost`. `callee` is `Operand::Func` or `Operand::Host`.
+    /// `Call` / `CallHost` / `CallMethod` / `CallVirtual`. `callee` is `Operand::Func`,
+    /// `Operand::Host` or `Operand::Virtual`.
     Call {
         dst: Option<Reg>,
         callee: Operand,
@@ -121,6 +151,80 @@ pub struct Inst {
     pub op: u8,
     pub kind: InstKind,
     pub line: u32,
+}
+
+/// Calls `$each` with a reference to every register operand of the instruction kind `$kind`
+/// (`&InstKind` or `&mut InstKind`; the one walk for [`Inst::each_reg`] and
+/// [`Inst::each_reg_mut`]).
+macro_rules! inst_kind_regs {
+    ($kind:expr, $each:expr) => {
+        match $kind {
+            InstKind::Plain(ops) => {
+                for o in ops {
+                    if let Operand::Reg(r) = o {
+                        $each(r);
+                    }
+                }
+            }
+            InstKind::Call {
+                dst,
+                callee,
+                args,
+                frame,
+            } => {
+                if let Some(d) = dst {
+                    $each(d);
+                }
+                if let Operand::Reg(r) = callee {
+                    $each(r);
+                }
+                for a in args {
+                    $each(a);
+                }
+                $each(frame);
+            }
+        }
+    };
+}
+
+/// Calls `$each` with a reference to every register the terminator `$term` reads (`&Term` or
+/// `&mut Term`; the one walk for [`Term::each_reg`] and [`Term::each_reg_mut`]).
+macro_rules! term_regs {
+    ($term:expr, $each:expr) => {
+        match $term {
+            Term::Jmp(_) | Term::RetVoid => {}
+            Term::Branch { a, b, .. } => {
+                $each(a);
+                if let Some(b) = b {
+                    $each(b);
+                }
+            }
+            Term::BranchImm { a, .. } => $each(a),
+            Term::ForLoop { counter, limit, .. } => {
+                $each(counter);
+                $each(limit);
+            }
+            Term::Ret(r) | Term::Halt(r) | Term::Raise(r) => $each(r),
+            Term::RaiseOuter(a, b) => {
+                $each(a);
+                $each(b);
+            }
+            Term::EndFinally { state, .. } => $each(state),
+        }
+    };
+}
+
+impl Inst {
+    /// Calls `each` with every register operand.
+    pub fn each_reg(&self, mut each: impl FnMut(Reg)) {
+        let mut each = |r: &Reg| each(*r);
+        inst_kind_regs!(&self.kind, each);
+    }
+
+    /// Calls `each` with every register operand, which it may change.
+    pub fn each_reg_mut(&mut self, mut each: impl FnMut(&mut Reg)) {
+        inst_kind_regs!(&mut self.kind, each);
+    }
 }
 
 /// Index of a block in `Function::blocks` (`bbN`; the order codegen lays the blocks out in).
@@ -139,6 +243,25 @@ pub enum Term {
         then: BlockId,
         other: BlockId,
     },
+    /// A compare-and-branch with an immediate (`JmpIfEqIntI` and the others; made by
+    /// [`opt`] from a constant loaded into a temporary).
+    BranchImm {
+        op: u8,
+        a: Reg,
+        imm: i64,
+        then: BlockId,
+        other: BlockId,
+    },
+    /// The end of a `for` loop's iteration (`ForLoopUp` / `ForLoopDown`; made by [`opt`] from
+    /// `JmpIfEqInt counter, limit` and a block of `AddIntI counter, counter, delta` jumping back):
+    /// unless `counter` equals `limit`, it steps by `delta` and goes to `top`, else to `exit`.
+    ForLoop {
+        counter: Reg,
+        limit: Reg,
+        delta: i64,
+        top: BlockId,
+        exit: BlockId,
+    },
     Ret(Reg),
     RetVoid,
     Halt(Reg),
@@ -154,6 +277,19 @@ pub enum Term {
         next: BlockId,
         targets: Vec<BlockId>,
     },
+}
+
+impl Term {
+    /// Calls `each` with every register the terminator reads.
+    pub fn each_reg(&self, mut each: impl FnMut(Reg)) {
+        let mut each = |r: &Reg| each(*r);
+        term_regs!(self, each);
+    }
+
+    /// Calls `each` with every register the terminator reads, which it may change.
+    pub fn each_reg_mut(&mut self, mut each: impl FnMut(&mut Reg)) {
+        term_regs!(self, each);
+    }
 }
 
 /// An entry of the handler table (`docs/spec/exceptions.md` 6.3), with inclusive block ranges in
@@ -184,6 +320,9 @@ pub struct Function {
     pub name: String,
     /// The unit it belongs to (index into `Module::units`).
     pub file: u32,
+    /// For a routine of an instantiation, where it comes from: codegen shares the functions of
+    /// the same generic routine that come out the same (`docs/spec/generics.md` 7).
+    pub origin: Option<crate::sema::hir::GenericOrigin>,
     /// Short name (for diagnostics).
     pub short_name: String,
     /// Position of the name in the heading (for diagnostics).
@@ -205,6 +344,23 @@ pub struct Function {
     pub finally: Vec<Reg>,
     /// The handler table, inner entries first.
     pub tries: Vec<TryEntry>,
+}
+
+impl Function {
+    /// The type of a register's value (`None` for the static link, reference slots and the
+    /// destination of a procedure call).
+    pub fn reg_type(&self, r: Reg) -> Option<Ty> {
+        match r {
+            // A cell's register holds the cell, a heap reference (`docs/spec/objects.md` 14.9)
+            Reg::Var(v) => self
+                .vars
+                .get(v as usize)
+                .filter(|v| !matches!(v.kind, VarKind::Cell { .. }))
+                .map(|v| v.ty),
+            Reg::Temp(t) => self.temps.get(t as usize).and_then(|t| t.ty),
+            Reg::Link => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -230,6 +386,9 @@ pub struct Module {
     pub units: Vec<UnitEntry>,
     /// Index of `<main>` in `funcs`.
     pub entry: u32,
+    /// The function index of each HIR routine (the entries of the virtual method tables;
+    /// `docs/spec/objects.md` 14.1). An abstract method has none (its entry is unused).
+    pub func_index: Vec<u32>,
 }
 
 /// A unit of the module.

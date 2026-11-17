@@ -1,0 +1,84 @@
+error[E0753]: `virtual` is not allowed in a helper
+   --> generic_helper_method_errors.pas:19:24
+    |
+ 19 |     procedure Spin<T>; virtual;
+    |                        ^^^^^^^
+
+error[E0753]: `constructor` is not allowed in a helper
+   --> generic_helper_method_errors.pas:20:5
+    |
+ 20 |     constructor Make<T>;
+    |     ^^^^^^^^^^^
+
+error[E0755]: operators can only be declared in records and reference counted classes
+   --> generic_helper_method_errors.pas:21:5
+    |
+ 21 |     class operator Add<T>(const A, B: TBox): TBox;
+    |     ^^^^^^^^^^^^^^
+
+error[E0744]: a class method of a record must be `static`
+   --> generic_helper_method_errors.pas:34:20
+    |
+ 34 |     class function Pair<T>(const A, B: T): TArray<T>;
+    |                    ^^^^^^^
+
+error[E0757]: type parameters of `TBoxHelper.Pick` must be written as in its declaration: `<T>`
+   --> generic_helper_method_errors.pas:37:25
+    |
+ 37 | function TBoxHelper.Pick<U>(const A, B: U): U;
+    |                         ^^^
+    |
+    = fix: write `<T>`
+
+error[E0757]: type parameters of `TBoxHelper.Keep` must be written as in its declaration: `<T>`
+   --> generic_helper_method_errors.pas:42:21
+    |
+ 42 | function TBoxHelper.Keep(const A: T): T;
+    |                     ^^^^
+    |
+    = fix: write `<T>`
+
+error[E0757]: constraints are written only in the first declaration of `TBoxHelper.Same`
+   --> generic_helper_method_errors.pas:47:27
+    |
+ 47 | function TBoxHelper.Same<T: class>(const A, B: T): Boolean;
+    |                           ^^^^^^^
+    |
+    = fix: remove the constraints
+
+error[E0763]: conflicting types `Integer` and `Char` for the type argument `T` of `TBoxHelper.Pick`
+   --> generic_helper_method_errors.pas:71:11
+    |
+ 71 |   WriteLn(B.Pick(1, 'a'));
+    |           ^^^^^^^^^^^^^^
+    |
+    = note: write the type arguments, as in `TBoxHelper.Pick<T>(…)`
+
+error[E0759]: `Integer` does not satisfy the constraint `class` of `T` in `TBoxHelper.Same`
+   --> generic_helper_method_errors.pas:72:11
+    |
+ 18 |     function Same<T: class>(const A, B: T): Boolean;
+    |                   - type parameter declared here
+...
+ 72 |   WriteLn(B.Same(1, 2));
+    |           ^^^^^^^^^^^^
+    |
+    = note: the type arguments were inferred from the arguments as `TBoxHelper.Same<Integer>`
+
+error[E0754]: `Twin` is ambiguous: it is declared in helpers `TBoxHelper` and `TOtherBoxHelper`
+   --> generic_helper_method_errors.pas:73:13
+    |
+ 22 |     function Twin<T>(const A: T): T;
+    |              ------- candidate
+...
+ 26 |     function Twin<T>(const A: T): T;
+    |              ------- candidate
+...
+ 73 |   WriteLn(B.Twin(1));
+    |             ^^^^
+    |
+    = note: name the helper to call, as in `TBoxHelper.Twin(X)`
+    = suggestion: call `TBoxHelper.Twin`
+    = suggestion: call `TOtherBoxHelper.Twin`
+
+error: aborting due to 10 errors

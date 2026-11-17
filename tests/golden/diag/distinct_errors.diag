@@ -1,0 +1,198 @@
+error[E0769]: cannot declare a distinct type of `TColor`
+   --> distinct_errors.pas:22:17
+    |
+ 22 |   TPaint = type TColor;           // E0769: an enumeration
+    |                 ^^^^^^
+    |
+    = note: a distinct type can be declared for integer, floating-point, `Currency`, `Char`, `Boolean`, `string` and `UTF8String` types
+    = suggestion: remove `type` to declare an alias
+
+error[E0769]: cannot declare a distinct type of `TDigit`
+   --> distinct_errors.pas:23:22
+    |
+ 23 |   TSmallDigit = type TDigit;      // E0769: a subrange
+    |                      ^^^^^^
+    |
+    = note: a distinct type can be declared for integer, floating-point, `Currency`, `Char`, `Boolean`, `string` and `UTF8String` types
+    = suggestion: remove `type` to declare an alias
+
+error[E0769]: cannot declare a distinct type of `TPoint`
+   --> distinct_errors.pas:24:18
+    |
+ 24 |   TPoint2 = type TPoint;          // E0769: a record
+    |                  ^^^^^^
+    |
+    = note: a distinct type can be declared for integer, floating-point, `Currency`, `Char`, `Boolean`, `string` and `UTF8String` types
+    = suggestion: remove `type` to declare an alias
+
+error[E0769]: cannot declare a distinct type of `TFoo`
+   --> distinct_errors.pas:25:16
+    |
+ 25 |   TFoo2 = type TFoo;              // E0769: a class
+    |                ^^^^
+    |
+    = note: a distinct type can be declared for integer, floating-point, `Currency`, `Char`, `Boolean`, `string` and `UTF8String` types
+    = suggestion: remove `type` to declare an alias
+
+error[E0769]: cannot declare a distinct type of `TClass`
+   --> distinct_errors.pas:26:18
+    |
+ 26 |   TFooRef = type TClass;          // E0769: a class reference
+    |                  ^^^^^^
+    |
+    = note: a distinct type can be declared for integer, floating-point, `Currency`, `Char`, `Boolean`, `string` and `UTF8String` types
+    = suggestion: remove `type` to declare an alias
+
+error[E0769]: cannot declare a distinct type of `IFoo`
+   --> distinct_errors.pas:27:16
+    |
+ 27 |   IFoo2 = type IFoo;              // E0769: an interface
+    |                ^^^^
+    |
+    = note: a distinct type can be declared for integer, floating-point, `Currency`, `Char`, `Boolean`, `string` and `UTF8String` types
+    = suggestion: remove `type` to declare an alias
+
+error[E0769]: cannot declare a distinct type of `TProc1`
+   --> distinct_errors.pas:28:17
+    |
+ 28 |   TProc2 = type TProc1;           // E0769: a procedural type
+    |                 ^^^^^^
+    |
+    = note: a distinct type can be declared for integer, floating-point, `Currency`, `Char`, `Boolean`, `string` and `UTF8String` types
+    = suggestion: remove `type` to declare an alias
+
+error[E0769]: cannot declare a distinct type of `TInts`
+   --> distinct_errors.pas:29:17
+    |
+ 29 |   TInts2 = type TInts;            // E0769: a dynamic array
+    |                 ^^^^^
+    |
+    = note: a distinct type can be declared for integer, floating-point, `Currency`, `Char`, `Boolean`, `string` and `UTF8String` types
+    = suggestion: remove `type` to declare an alias
+
+error[E0769]: cannot declare a distinct type of `TArray<string>`
+   --> distinct_errors.pas:30:16
+    |
+ 30 |   TStrs = type TArray<string>;    // E0769: a dynamic array
+    |                ^^^^^^^^^^^^^^
+    |
+    = note: a distinct type can be declared for integer, floating-point, `Currency`, `Char`, `Boolean`, `string` and `UTF8String` types
+    = suggestion: remove `type` to declare an alias
+
+error[E0700]: undeclared identifier `TSysCharSet`
+   --> distinct_errors.pas:31:16
+    |
+ 31 |   TSet2 = type TSysCharSet;       // E0700: no such type
+    |                ^^^^^^^^^^^
+
+error[E0708]: `K` is not a type
+   --> distinct_errors.pas:32:19
+    |
+ 32 |   TNotType = type K;              // E0708: not a type
+    |                   ^
+
+error[E0727]: type `TA` contains itself
+   --> distinct_errors.pas:34:3
+    |
+ 34 |   TA = type TB;                   // E0727: a cycle
+    |   ^^
+
+error[E0769]: cannot declare a distinct type of `T`
+   --> distinct_errors.pas:74:15
+    |
+ 74 |   TOwn = type T;                  // E0769: a type parameter
+    |               ^
+    |
+    = note: a distinct type can be declared for integer, floating-point, `Currency`, `Char`, `Boolean`, `string` and `UTF8String` types
+    = suggestion: remove `type` to declare an alias
+
+error[E0714]: constant value 300 is out of range for `TSmall` (0..255)
+   --> distinct_errors.pas:80:17
+    |
+ 80 |   Big: TSmall = 300;              // E0714
+    |                 ^^^
+
+error[E0714]: constant value 2147483648 is out of range for `TInt` (-2147483648..2147483647)
+   --> distinct_errors.pas:81:9
+    |
+ 81 |   Neg = -TInt(-2147483648);       // E0714: `-` keeps `TInt`
+    |         ^
+
+error[E0702]: type mismatch: expected `Int64`, found `TUserId` (argument 1, parameter `N`)
+   --> distinct_errors.pas:89:8
+    |
+ 89 |   Bump(Id);                       // E0702: `var` takes the same type
+    |        ^^
+    |
+    = note: a `var` parameter needs a variable of exactly the same type
+
+error[E0702]: type mismatch: expected `THtml`, found `Integer`
+   --> distinct_errors.pas:90:19
+    |
+ 90 |   var H: THtml := 5;              // E0702: expected `THtml`
+    |                   ^
+
+warning[W0001]: unused variable `I` (unused-variable)
+   --> distinct_errors.pas:91:7
+    |
+ 91 |   var I: Integer := H;            // E0702: found `THtml`
+    |       ^ declared here
+    |
+    = note: disable with `{$WARN unused-variable OFF}`
+    = suggestion: remove `I`
+
+error[E0702]: type mismatch: expected `Integer`, found `THtml`
+   --> distinct_errors.pas:91:21
+    |
+ 91 |   var I: Integer := H;            // E0702: found `THtml`
+    |                     ^
+
+error[E0702]: type mismatch: expected `TUserId`, found `Double`
+   --> distinct_errors.pas:92:9
+    |
+ 92 |   Id := 1.5;                      // E0702: expected `TUserId`
+    |         ^^^
+    |
+    = note: convert a floating-point value to an integer with `Trunc` or `Round`
+
+error[E0734]: ambiguous call to overloaded `Show`
+   --> distinct_errors.pas:93:3
+    |
+ 64 | procedure Show(Id: TUserId); overload;
+    |           ---- candidate
+...
+ 68 | procedure Show(Id: TOrderId); overload;
+    |           ---- candidate
+...
+ 93 |   Show(N);                        // E0734: both at stage 0.5
+    |   ^^^^^^^
+
+warning[W0002]: value assigned to `T` is never read (unused-value)
+   --> distinct_errors.pas:95:3
+    |
+ 95 |   T := T + N;                     // E0734: both at stage 0.5
+    |   ^
+    |
+    = note: remove the assignment if the value is not needed
+    = note: disable with `{$WARN unused-value OFF}`
+
+error[E0734]: ambiguous call to overloaded operator `+`
+   --> distinct_errors.pas:95:10
+    |
+ 45 |     class operator Add(const A: TTotal; B: TUserId): TTotal;
+    |                    --- candidate
+ 46 |     class operator Add(const A: TTotal; B: TOrderId): TTotal;
+    |                    --- candidate
+...
+ 95 |   T := T + N;                     // E0734: both at stage 0.5
+    |          ^
+
+error[E0763]: conflicting types `TUserId` and `Int64` for the type argument `T` of `Pick`
+   --> distinct_errors.pas:96:11
+    |
+ 96 |   WriteLn(Pick(Id, N));           // E0763
+    |           ^^^^^^^^^^^
+    |
+    = note: write the type arguments, as in `Pick<T>(…)`
+
+error: aborting due to 22 errors; 2 warnings emitted

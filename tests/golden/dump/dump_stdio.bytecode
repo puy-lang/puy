@@ -1,4 +1,4 @@
-; puyc format 2
+; puyc format 0
 .const
   0: str "e\n"
   1: str "\n"
@@ -25,13 +25,13 @@
   0008  ReadLnEnd
   .line 15
   0009  ReadWord     r2
-  000a  StrToFloatIO r13, r2, 0
+  000a  StrToF64IO   r13, r2
   000b  StoreGlobal  r13, g3
   000c  ReadWord     r3
   000d  StrToIntIO   r14, r3, 4
   000e  StoreGlobal  r14, g0
   000f  ReadWord     r4
-  0010  StrToFloatIO r15, r4, 2
+  0010  StrToCurrIO  r15, r4
   0011  StoreGlobal  r15, g4
   .line 16
   0012  ReadLnBegin
@@ -60,14 +60,12 @@
   0025  InEof        r13
   0026  JmpIfTrue    r13, -> 0029
   0027  InEoln       r13
-  0028  JmpIfFalse   r13, -> 002e
+  0028  JmpIfFalse   r13, -> 002d
   .line 22
   0029  LoadGlobalRef r11, g2
   002a  LoadConst    r12, k1
   002b  ConcatStr    r11, r11, r12
   002c  CallHost     r11, h1
-  .line 21
-  002d  Jmp          -> 002e
   .line 23
-  002e  RetVoid
+  002d  RetVoid
 .finally r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12

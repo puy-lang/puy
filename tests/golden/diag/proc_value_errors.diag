@@ -1,0 +1,159 @@
+error[E0752]: `inherited Run` cannot be used as a procedural value
+   --> proc_value_errors.pas:61:18
+    |
+ 61 |   E := inherited Run;
+    |                  ^^^
+
+error[E0752]: a nested routine can only be assigned to a `reference to` type
+   --> proc_value_errors.pas:88:8
+    |
+ 88 |   A := Inner;
+    |        ^^^^^
+
+error[E0752]: `WriteLn` cannot be used as a procedural value
+    --> proc_value_errors.pas:105:8
+     |
+ 105 |   A := WriteLn;
+     |        ^^^^^^^
+
+error[E0752]: `WriteLn` cannot be used as a procedural value
+    --> proc_value_errors.pas:106:8
+     |
+ 106 |   R := WriteLn;
+     |        ^^^^^^^
+     |
+     = note: wrap it in an anonymous method, as in `procedure(…) begin …(…) end`
+
+error[E0752]: `Free` cannot be used as a procedural value
+    --> proc_value_errors.pas:107:10
+     |
+ 107 |   E := C.Free;
+     |          ^^^^
+
+error[E0752]: `ClassName` cannot be used as a procedural value
+    --> proc_value_errors.pas:108:10
+     |
+ 108 |   E := C.ClassName;
+     |          ^^^^^^^^^
+
+error[E0752]: `TChild.Make` cannot be used as a procedural value
+    --> proc_value_errors.pas:109:15
+     |
+ 109 |   A := TChild.Make;
+     |               ^^^^
+
+error[E0752]: `Reset` cannot be used as a procedural value
+    --> proc_value_errors.pas:110:10
+     |
+ 110 |   E := P.Reset;
+     |          ^^^^^
+
+error[E0752]: `Run` cannot be used as a procedural value
+    --> proc_value_errors.pas:111:10
+     |
+ 111 |   E := I.Run;
+     |          ^^^
+
+error[E0702]: type mismatch: expected `TStrFn`, found `function(Integer): Integer`
+    --> proc_value_errors.pas:112:8
+     |
+ 112 |   S := Square;
+     |        ^^^^^^
+
+error[E0702]: type mismatch: expected `TEvent`, found `procedure`
+    --> proc_value_errors.pas:113:8
+     |
+ 113 |   E := Hello;
+     |        ^^^^^
+
+error[E0702]: type mismatch: expected `TAction`, found `procedure of object`
+    --> proc_value_errors.pas:114:8
+     |
+ 114 |   A := C.Run;
+     |        ^^^^^
+
+error[E0702]: type mismatch: expected `TEvent`, found `TRun`
+    --> proc_value_errors.pas:115:8
+     |
+ 115 |   E := R;
+     |        ^
+
+error[E0702]: type mismatch: expected `TAction`, found `TRun`
+    --> proc_value_errors.pas:116:8
+     |
+ 116 |   A := R;
+     |        ^
+
+error[E0702]: type mismatch: expected `TEvent`, found `TAction`
+    --> proc_value_errors.pas:117:8
+     |
+ 117 |   E := A;
+     |        ^
+
+error[E0703]: operator `=` cannot be applied to `TAction` and `TEvent`
+    --> proc_value_errors.pas:118:8
+     |
+ 118 |   if A = E then
+     |        ^
+
+error[E0703]: operator `=` cannot be applied to `TIntFn` and `TStrFn`
+    --> proc_value_errors.pas:120:8
+     |
+ 120 |   if F = S then
+     |        ^
+
+error[E0703]: operator `<` cannot be applied to `TIntFn` and `TIntFn`
+    --> proc_value_errors.pas:122:8
+     |
+ 122 |   if F < F then
+     |        ^
+
+error[E0705]: wrong number of arguments: expected 1, found 0
+    --> proc_value_errors.pas:124:8
+     |
+ 124 |   N := F;
+     |        ^
+
+error[E0705]: wrong number of arguments: expected 1, found 2
+    --> proc_value_errors.pas:125:8
+     |
+ 125 |   N := F(1, 2);
+     |        ^^^^^^^
+
+error[E0725]: procedure `A` has no value
+    --> proc_value_errors.pas:126:8
+     |
+ 126 |   N := A;
+     |        ^
+
+error[E0700]: `TRun` has no member `Invoke`
+    --> proc_value_errors.pas:127:5
+     |
+ 127 |   R.Invoke;
+     |     ^^^^^^
+     |
+     = note: call the value as `R()`
+
+error[E0718]: cannot write a value of type `TAction`
+    --> proc_value_errors.pas:128:11
+     |
+ 128 |   WriteLn(A, F);
+     |           ^
+
+error[E0718]: cannot write a value of type `TIntFn`
+    --> proc_value_errors.pas:128:14
+     |
+ 128 |   WriteLn(A, F);
+     |              ^
+
+warning[W0023]: method reference to a temporary instance of `TPlain` (temporary-method-reference)
+    --> proc_value_errors.pas:129:8
+     |
+ 129 |   E := TPlain.Create.Go;
+     |        ^^^^^^^^^^^^^
+     |
+     = note: nothing can free the instance, so it leaks
+     = note: store the instance in a variable or a field, and make the method reference from it
+     = note: disable with `{$WARN temporary-method-reference OFF}`
+
+error: aborting due to 24 errors; 1 warning emitted

@@ -1,0 +1,102 @@
+program DumpOperators
+.type TVec = record
+  .field 0 X: Integer
+  .method f0 Add operator
+  .method f1 Implicit operator
+  .method f2 explicit operator
+.type TNode = class(TRefObject) ref
+  .method f3 Equal operator
+  .method f4 GetHashCode override 5
+  .method f5 Equals override 4
+.global g0 V: TVec
+.global g1 N: TNode
+.routine f0 TVec.Add(const A: TVec; const B: TVec): TVec
+  .var v0 A: TVec const param
+  .var v1 B: TVec const param
+  .var v2 Result: TVec result
+  assign @23 R+
+    var v2 Result
+    builtin Default TVec
+  assign @24 R+
+    field Integer X #0
+      var v2 Result
+    binary Integer
+      field Integer X #0
+        var v0 A: TVec
+      + Integer int:Integer
+        field Integer X #0
+          var v1 B: TVec
+.routine f1 TVec.Implicit(N: Integer): TVec
+  .var v0 N: Integer param
+  .var v1 Result: TVec result
+  assign @29 R+
+    var v1 Result
+    builtin Default TVec
+  assign @30 R+
+    field Integer X #0
+      var v1 Result
+    var v0 N: Integer
+.routine f2 TVec.explicit(const A: TVec): Integer
+  .var v0 A: TVec const param
+  .var v1 Result: Integer result
+  assign @35 R+
+    var v1 Result
+    field Integer X #0
+      var v0 A: TVec
+.routine f3 TNode.Equal(const A: TNode; const B: TNode): Boolean
+  .var v0 A: TNode const param
+  .var v1 B: TNode const param
+  .var v2 Result: Boolean result
+  assign @40 R+
+    var v2 Result
+    const Boolean True
+.routine f4 TNode.GetHashCode(): Int64
+  .var v0 Self: TNode self
+  .var v1 Result: Int64 result
+  assign @45 R+
+    var v1 Result
+    const Int64 0
+.routine f5 TNode.Equals(Obj: TObject): Boolean
+  .var v0 Self: TNode self
+  .var v1 Obj: TObject param
+  .var v2 Result: Boolean result
+  assign @17 R-
+    var v2 Result
+    binary Boolean
+      is TNode
+        var v1 Obj: TObject
+      and Boolean bool
+        operator f3 TNode.Equal: Boolean
+          self TNode
+          as TNode cast
+            var v1 Obj: TObject
+.routine <main>
+  assign @52 R+
+    global g0 V
+    convert-op f1 TVec.Implicit: TVec
+      const Integer 1
+  assign @53 R+
+    global g0 V
+    operator f0 TVec.Add: TVec
+      global g0 V: TVec
+      convert-op f1 TVec.Implicit: TVec
+        const Integer 2
+  writeln @54
+    arg
+      convert-op f2 TVec.explicit: Integer
+        global g0 V: TVec
+  assign @55 R+
+    global g1 N
+    create TNode builtin
+  writeln @56
+    arg
+      operator f3 TNode.Equal: Boolean
+        global g1 N: TNode
+        global g1 N: TNode
+    arg
+      const Char #32
+    arg
+      binary Boolean
+        global g1 N: TNode
+        = Boolean ref
+          const TNode nil

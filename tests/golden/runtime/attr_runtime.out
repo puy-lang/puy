@@ -1,0 +1,6 @@
+run 42
+user 42
+creating direct
+direct TableAttribute TRUE
+class TUser
+number 3

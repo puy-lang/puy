@@ -1,4 +1,4 @@
-; puyc format 2
+; puyc format 0
 .const
   0: str "Hello, "
   1: str "!"
@@ -19,6 +19,7 @@
 .host
   0: Console.Write params=1 ret=0
 .unit Greeting file="src/Greeting.pas" init=0 fini=- entry=-
+.unit System.SysUtils file="<stdlib>/System.SysUtils.pas" init=- fini=- entry=-
 .unit MyApp.Models.User file="src/MyApp/Models.User.pas" init=- fini=- entry=-
 .unit Main file="main.pas" init=- fini=- entry=4
 .func 0 Greeting.<init> params=0 regs=1
@@ -26,22 +27,24 @@
   0000  LoadInt      r0, 10
   0001  StoreGlobal  r0, g0
   0002  RetVoid
-.func 1 Greeting.Greet params=1 regs=4
+.func 1 Greeting.Greet params=1 regs=7
   .local r0 Name
   .local r1 Result
   .line 26
-  0000  LoadGlobal   r3, g1
-  0001  AddIntI      r3, r3, 1
-  0002  NarrowOvf    r3, r3, 4
-  0003  StoreGlobal  r3, g1
+  0000  LoadGlobal   r4, g1
+  0001  AddIntI      r4, r4, 1
+  0002  NarrowOvf    r4, r4, 4
+  0003  StoreGlobal  r4, g1
   .line 27
-  0004  LoadConst    r1, k0
-  0005  ConcatStr    r1, r1, r0
-  0006  LoadConst    r2, k1
-  0007  ConcatStr    r1, r1, r2
+  0004  LoadConst    r2, k0
+  0005  Move         r4, r2
+  0006  Move         r5, r0
+  0007  LoadConst    r3, k1
+  0008  Move         r6, r3
+  0009  ConcatStrN   r1, r4, 3
   .line 28
-  0008  Ret          r1
-.finally r1, r2
+  000a  Ret          r1
+.finally r1, r2, r3
 .func 2 Greeting.Origin params=0 regs=2
   .local r0 Result
   .line 32
@@ -57,23 +60,25 @@
   .line 35
   0007  Ret          r0
 .finally r0
-.func 3 MyApp.Models.User.Describe params=1 regs=6
+.func 3 MyApp.Models.User.Describe params=1 regs=11
   .local r0 Name
   .local r1 Result
   .line 13
-  0000  Move         r5, r0
-  0001  Call         r5, f1
-  0002  MoveRef      r1, r5
-  0003  LoadConst    r2, k2
-  0004  ConcatStr    r1, r1, r2
-  0005  LoadGlobal   r5, g0
-  0006  IntToStr     r3, r5
-  0007  ConcatStr    r1, r1, r3
-  0008  LoadConst    r4, k3
-  0009  ConcatStr    r1, r1, r4
+  0000  Move         r10, r0
+  0001  Call         r10, f1
+  0002  MoveRef      r2, r10
+  0003  Move         r6, r2
+  0004  LoadConst    r3, k2
+  0005  Move         r7, r3
+  0006  LoadGlobal   r10, g0
+  0007  IntToStr     r4, r10
+  0008  Move         r8, r4
+  0009  LoadConst    r5, k3
+  000a  Move         r9, r5
+  000b  ConcatStrN   r1, r6, 4
   .line 14
-  000a  Ret          r1
-.finally r1, r2, r3, r4
+  000c  Ret          r1
+.finally r1, r2, r3, r4, r5
 .func 4 Main.<main> params=0 regs=19
   .line 9
   0000  LoadConst    r1, k4
@@ -118,16 +123,14 @@
   0023  CallHost     r10, h0
   .line 14
   0024  LoadGlobal   r16, g0
-  0025  LoadInt      r17, 1
-  0026  AddInt       r16, r16, r17
-  0027  NarrowOvf    r16, r16, 4
-  0028  StoreGlobal  r16, g0
+  0025  AddIntI      r16, r16, 1
+  0026  NarrowOvf    r16, r16, 4
+  0027  StoreGlobal  r16, g0
   .line 15
-  0029  LoadGlobal   r16, g0
-  002a  IntToStr     r14, r16
-  002b  LoadConst    r15, k9
-  002c  ConcatStr    r14, r14, r15
-  002d  CallHost     r14, h0
+  0028  IntToStr     r14, r16
+  0029  LoadConst    r15, k9
+  002a  ConcatStr    r14, r14, r15
+  002b  CallHost     r14, h0
   .line 16
-  002e  RetVoid
+  002c  RetVoid
 .finally r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15

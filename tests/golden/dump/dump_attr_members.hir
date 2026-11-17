@@ -1,0 +1,67 @@
+program DumpAttrMembers
+.type MarkAttribute = class(TCustomAttribute) ref
+.type IThing = interface(IInterface)
+  .method #0 Run
+    .attr DumpAttrMembers.MarkAttribute builtin
+  .method #1 GetN: Integer
+    .attr DumpAttrMembers.MarkAttribute builtin
+  .property N: Integer read=#1 write=-
+    .attr DumpAttrMembers.MarkAttribute builtin
+.type IOther = interface(IThing) guid={01234567-89AB-CDEF-0123-456789ABCDEF}
+  .method #2 Go
+    .attr DumpAttrMembers.MarkAttribute builtin
+.type TV = record
+  .field 0 X: Integer
+  .method f3 Add operator
+    .attr DumpAttrMembers.MarkAttribute builtin
+.type TIntHelper = record helper for Integer
+  .method f4 Twice
+    .attr DumpAttrMembers.MarkAttribute builtin
+.global g0 A: TV
+.global g1 B: TV
+.routine f3 TV.Add(const A: TV; const B: TV): TV
+  .var v0 A: TV const param
+  .var v1 B: TV const param
+  .var v2 Result: TV result
+  assign @33 R+
+    var v2 Result
+    builtin Default TV
+  assign @34 R+
+    field Integer X #0
+      var v2 Result
+    binary Integer
+      field Integer X #0
+        var v0 A: TV
+      + Integer int:Integer
+        field Integer X #0
+          var v1 B: TV
+.routine f4 TIntHelper.Twice(): Integer
+  .var v0 Self: Integer var self
+  .var v1 Result: Integer result
+  assign @39 R+
+    var v1 Result
+    binary Integer
+      self Integer
+      * Integer int:Integer
+        const Integer 2
+.routine <main>
+  assign @45 R+
+    field Integer X #0
+      global g0 A
+    const Integer 1
+  assign @46 R+
+    field Integer X #0
+      global g1 B
+    const Integer 2
+  writeln @47
+    arg
+      field Integer X #0
+        operator f3 TV.Add: TV
+          global g0 A: TV
+          global g1 B: TV
+    arg
+      const Char #32
+    arg
+      helper-call f4 TIntHelper.Twice: Integer
+        temp
+          const Integer 3

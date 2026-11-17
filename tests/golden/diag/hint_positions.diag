@@ -1,0 +1,169 @@
+warning[W0010]: hint directive `platform` is ignored (ignored-hint-directive)
+   --> hint_positions.pas:14:16
+    |
+ 14 |     Y: Integer platform;
+    |                ^^^^^^^^
+    |
+    = note: disable with `{$WARN ignored-hint-directive OFF}`
+    = fix: remove `platform`
+
+warning[W0011]: `TVec.X` is deprecated (deprecated)
+   --> hint_positions.pas:16:31
+    |
+ 13 |     X: Integer deprecated;
+    |     - declared here
+...
+ 16 |     property PX: Integer read X experimental;
+    |                               ^
+    |
+    = note: disable with `{$WARN deprecated OFF}`
+
+warning[W0010]: hint directive `platform` is ignored (ignored-hint-directive)
+   --> hint_positions.pas:17:7
+    |
+ 17 |   end platform;
+    |       ^^^^^^^^
+    |
+    = note: disable with `{$WARN ignored-hint-directive OFF}`
+    = fix: remove `platform`
+
+warning[W0010]: hint directive `platform` is ignored (ignored-hint-directive)
+   --> hint_positions.pas:21:27
+    |
+ 21 |   EOld = class(Exception) platform deprecated '''
+    |                           ^^^^^^^^
+    |
+    = note: disable with `{$WARN ignored-hint-directive OFF}`
+    = fix: remove `platform`
+
+warning[W0010]: hint directive `library` is ignored (ignored-hint-directive)
+   --> hint_positions.pas:25:18
+    |
+ 25 |   TLib = Integer library;
+    |                  ^^^^^^^
+    |
+    = note: disable with `{$WARN ignored-hint-directive OFF}`
+    = fix: remove `library`
+
+warning[W0011]: `TOld` is deprecated: use Integer (deprecated)
+   --> hint_positions.pas:39:6
+    |
+ 19 |   TOld = Integer deprecated 'use Integer';
+    |   ---- declared here
+...
+ 39 |   A: TOld;
+    |      ^^^^
+    |
+    = note: disable with `{$WARN deprecated OFF}`
+
+warning[W0011]: `TBoth` is deprecated (deprecated)
+   --> hint_positions.pas:40:6
+    |
+ 20 |   TBoth = Integer deprecated experimental;
+    |   ----- declared here
+...
+ 40 |   B: TBoth;
+    |      ^^^^^
+    |
+    = note: disable with `{$WARN deprecated OFF}`
+
+warning[W0012]: `TBoth` is experimental (experimental)
+   --> hint_positions.pas:40:6
+    |
+ 20 |   TBoth = Integer deprecated experimental;
+    |   ----- declared here
+...
+ 40 |   B: TBoth;
+    |      ^^^^^
+    |
+    = note: an experimental declaration may change or be removed without being deprecated first
+    = note: disable with `{$WARN experimental OFF}`
+
+warning[W0011]: `EOld` is deprecated: use EError (deprecated)
+   --> hint_positions.pas:41:6
+    |
+ 21 |   EOld = class(Exception) platform deprecated '''
+    |   ---- declared here
+...
+ 41 |   E: EOld;
+    |      ^^^^
+    |
+    = note: disable with `{$WARN deprecated OFF}`
+
+warning[W0011]: `TVec.X` is deprecated (deprecated)
+   --> hint_positions.pas:45:10
+    |
+ 13 |     X: Integer deprecated;
+    |     - declared here
+...
+ 45 |   A := V.X + V.PX + TVec.Count + Limit + Count;
+    |          ^
+    |
+    = note: disable with `{$WARN deprecated OFF}`
+
+warning[W0012]: `TVec.PX` is experimental (experimental)
+   --> hint_positions.pas:45:16
+    |
+ 16 |     property PX: Integer read X experimental;
+    |              -- declared here
+...
+ 45 |   A := V.X + V.PX + TVec.Count + Limit + Count;
+    |                ^^
+    |
+    = note: an experimental declaration may change or be removed without being deprecated first
+    = note: disable with `{$WARN experimental OFF}`
+
+warning[W0012]: `TVec.Count` is experimental: may go (experimental)
+   --> hint_positions.pas:45:26
+    |
+ 15 |     class var Count: Integer experimental 'may go';
+    |               ----- declared here
+...
+ 45 |   A := V.X + V.PX + TVec.Count + Limit + Count;
+    |                          ^^^^^
+    |
+    = note: an experimental declaration may change or be removed without being deprecated first
+    = note: disable with `{$WARN experimental OFF}`
+
+warning[W0011]: `Limit` is deprecated (deprecated)
+   --> hint_positions.pas:45:34
+    |
+ 28 |   Limit = 10 deprecated;
+    |   ----- declared here
+...
+ 45 |   A := V.X + V.PX + TVec.Count + Limit + Count;
+    |                                  ^^^^^
+    |
+    = note: disable with `{$WARN deprecated OFF}`
+
+warning[W0012]: `Count` is experimental (experimental)
+   --> hint_positions.pas:45:42
+    |
+ 31 |   Count: Integer experimental;
+    |   ----- declared here
+...
+ 45 |   A := V.X + V.PX + TVec.Count + Limit + Count;
+    |                                          ^^^^^
+    |
+    = note: an experimental declaration may change or be removed without being deprecated first
+    = note: disable with `{$WARN experimental OFF}`
+
+warning[W0012]: `Each` is experimental (experimental)
+   --> hint_positions.pas:46:3
+    |
+ 33 | procedure Each(N: Integer); experimental;
+    |           ---- declared here
+...
+ 46 |   Each(A);
+    |   ^^^^
+    |
+    = note: an experimental declaration may change or be removed without being deprecated first
+    = note: disable with `{$WARN experimental OFF}`
+
+error[E0702]: type mismatch: expected `Integer`, found `string`
+   --> hint_positions.pas:50:8
+    |
+ 50 |   I := 'not an integer';
+    |        ^^^^^^^^^^^^^^^^
+
+error: aborting due to 1 error; 15 warnings emitted

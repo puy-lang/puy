@@ -1,0 +1,2 @@
+warning: 2 heap blocks were not freed
+  RefcountCycle.TPeer: 2

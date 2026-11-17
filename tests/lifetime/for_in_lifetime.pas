@@ -1,8 +1,9 @@
 program ForInLifetime;
 
 // Where the lifetime instructions go for `for..in` (types.md chapter 5): the collection is
-// read into a hidden register with `AssignRef` before the loop, so it lives until the routine
-// ends, and a managed element is read into the loop variable with a counted read.
+// read into a hidden register with `AssignRef` before the loop and let go of when the loop
+// ends (a dynamic array holding no object; lifetime.md 3.4), and a managed element is read
+// into the loop variable with a counted read.
 
 type
   TNames = array of string;

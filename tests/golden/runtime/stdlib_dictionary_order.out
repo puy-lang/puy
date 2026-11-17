@@ -1,0 +1,14 @@
+added: c=1 a=2 b=3
+c removed and added: a=2 b=3 c=4
+values written: a=5 b=6 c=4 d=7 e=8
+TryAdd: a=5 b=6 c=4 d=7 e=8 f=10
+extracted a=5
+not there zz=0
+after ExtractPair: b=6 c=4 d=7 e=8 f=10
+ToArray: b c d e f
+after squeezing: k10=10 k20=20 k30=30 k40=40 k50=50 k60=60 k70=70 k80=80 k90=90 k100=100 k101=101 k102=102 k103=103 k1=1
+count 14
+capacity after TrimExcess 14
+after TrimExcess: k10=10 k20=20 k30=30 k40=40 k50=50 k60=60 k70=70 k80=80 k90=90 k100=100 k101=101 k102=102 k103=103 k1=1
+capacity 40
+after Capacity: k10=10 k20=20 k30=30 k40=40 k50=50 k60=60 k70=70 k80=80 k90=90 k100=100 k101=101 k102=102 k103=103 k1=1

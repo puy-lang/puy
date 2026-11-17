@@ -1,0 +1,67 @@
+; puyc format 0
+.const
+  0: str " "
+  1: str "\n"
+.type
+  64: class DumpEqualsHash.TKey slots=0 parent=ty19 vmt=builtin0,builtin0,builtin0,builtin1,f1,f2
+  65: class DumpEqualsHash.TPlain slots=0 parent=ty19 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+.global
+  0: int K
+  1: int P
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpEqualsHash file="dump_equals_hash.pas" init=- fini=- entry=0
+.func 0 DumpEqualsHash.<main> params=0 regs=9
+  .line 32
+  0000  LoadZero     r5
+  0001  New          r5, ty64
+  0002  StoreGlobal  r5, g0
+  .line 33
+  0003  LoadZero     r5
+  0004  New          r5, ty65
+  0005  StoreGlobal  r5, g1
+  .line 34
+  0006  LoadGlobal   r6, g0
+  0007  LoadGlobal   r8, g1
+  0008  AssignObj    r1, r8
+  0009  Move         r7, r1
+  000a  CallVirtual  r6, 4
+  000b  Move         r5, r6
+  000c  BoolToStr    r0, r5
+  000d  LoadConst    r2, k0
+  000e  ConcatStr    r0, r0, r2
+  000f  LoadGlobal   r7, g0
+  0010  CallVirtual  r7, 5
+  0011  Move         r6, r7
+  0012  LoadGlobal   r8, g0
+  0013  CallVirtual  r8, 5
+  0014  EqInt        r6, r6, r8
+  0015  BoolToStr    r3, r6
+  0016  ConcatStr    r0, r0, r3
+  0017  LoadConst    r4, k1
+  0018  ConcatStr    r0, r0, r4
+  0019  CallHost     r0, h0
+  .line 35
+  001a  LoadGlobal   r5, g0
+  001b  Free         r5
+  .line 36
+  001c  LoadGlobal   r5, g1
+  001d  Free         r5
+  .line 37
+  001e  RetVoid
+.finally r0, r1:obj, r2, r3, r4
+.func 1 DumpEqualsHash.TKey.Equals params=2 regs=3
+  .local r0 Self
+  .local r1 Obj
+  .local r2 Result
+  .line 20
+  0000  EqInt        r2, r0, r1
+  .line 21
+  0001  Ret          r2
+.func 2 DumpEqualsHash.TKey.GetHashCode params=1 regs=2
+  .local r0 Self
+  .local r1 Result
+  .line 25
+  0000  HashInt      r1, r0
+  .line 26
+  0001  Ret          r1

@@ -41,8 +41,8 @@ bb3:
   Release      v2
   .line 18
   AssignRef    t1, v2
-  ConcatStr    t1, t1, v1
-  MoveRef      v2, t1
+  AppendStr    v2, t1, v1
+  Release      t1
   .line 19
   AssignRef    v2, v1
   Release      t2

@@ -1,0 +1,12 @@
+set 0 a
+set 2 c
+ac 2 -1 c
+c wide
+receiver
+index 1
+value b
+set 1 b
+b
+char x -1
+entry
+9 1

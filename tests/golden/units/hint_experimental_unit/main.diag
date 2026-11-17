@@ -1,0 +1,13 @@
+warning[W0012]: unit `U2` is experimental (experimental)
+  --> main.pas:5:6
+   |
+ 5 | uses U2;
+   |      ^^
+  ::: src/U2.pas:1:6
+ 1 | unit U2 experimental;
+   |      -- declared here
+   |
+   = note: an experimental declaration may change or be removed without being deprecated first
+   = note: disable with `{$WARN experimental OFF}`
+
+warning: 1 warning emitted

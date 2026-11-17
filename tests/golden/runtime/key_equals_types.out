@@ -1,0 +1,21 @@
+Integer: TRUE FALSE TRUE
+UInt64: TRUE FALSE TRUE
+Boolean: TRUE FALSE TRUE
+Char: TRUE FALSE TRUE
+enum: TRUE FALSE TRUE
+subrange: TRUE FALSE TRUE
+small set: TRUE FALSE TRUE
+big set: TRUE FALSE TRUE
+Currency: TRUE FALSE TRUE
+string: TRUE FALSE TRUE
+UTF8String: TRUE FALSE TRUE
+static array: TRUE FALSE TRUE
+static array changed: FALSE
+dynamic array: TRUE FALSE TRUE
+empty arrays: TRUE TRUE
+record: TRUE FALSE TRUE
+record changed: FALSE
+class: TRUE FALSE TRUE
+class nil: TRUE FALSE
+class reference: TRUE FALSE TRUE
+System: TRUE TRUE TRUE

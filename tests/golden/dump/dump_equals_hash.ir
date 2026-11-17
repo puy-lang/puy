@@ -1,0 +1,78 @@
+; puy ir 1
+.global
+  g0 K: TKey
+  g1 P: TPlain
+.func f0 DumpEqualsHash.<main> params=0
+  .reg t0: TKey temp
+  .reg t1: TPlain temp
+  .reg t2: string temp
+  .reg t3: Boolean temp
+  .reg t4: TKey temp
+  .reg t5: TObject temp
+  .reg t6: TObject temp
+  .reg t7: Int64 temp
+  .reg t8: string temp
+  .reg t9: string temp
+  .reg t10: Boolean temp
+  .reg t11: TKey temp
+  .reg t12: Int64 temp
+  .reg t13: TKey temp
+  .reg t14: string temp
+  .reg t15: TKey temp
+  .reg t16: TPlain temp
+bb0:
+  .line 32
+  LoadZero     t0
+  New          t0, DumpEqualsHash.TKey
+  StoreGlobal  t0, g0
+  .line 33
+  LoadZero     t1
+  New          t1, DumpEqualsHash.TPlain
+  StoreGlobal  t1, g1
+  .line 34
+  LoadGlobal   t4, g0
+  LoadGlobal   t7, g1
+  AssignObj    t6, t7
+  Move         t5, t6
+  CallVirtual  t3, DumpEqualsHash.TKey.Equals[4](t4, t5)
+  BoolToStr    t2, t3
+  LoadConst    t8, " "
+  ConcatStr    t2, t2, t8
+  LoadGlobal   t11, g0
+  CallVirtual  t10, DumpEqualsHash.TKey.GetHashCode[5](t11)
+  LoadGlobal   t13, g0
+  CallVirtual  t12, DumpEqualsHash.TKey.GetHashCode[5](t13)
+  EqInt        t10, t10, t12
+  BoolToStr    t9, t10
+  ConcatStr    t2, t2, t9
+  LoadConst    t14, "\n"
+  ConcatStr    t2, t2, t14
+  CallHost     -, h0(t2)
+  .line 35
+  LoadGlobal   t15, g0
+  Free         t15
+  .line 36
+  LoadGlobal   t16, g1
+  Free         t16
+  .line 37
+  RetVoid
+.finally t2, t6:obj, t8, t9, t14
+.func f1 DumpEqualsHash.TKey.Equals params=2
+  .reg v0 Self: TKey self
+  .reg v1 Obj: TObject param
+  .reg v2 Result: Boolean result
+bb0:
+  .line 20
+  EqInt        v2, v0, v1
+  .line 21
+  Ret          v2
+.finally
+.func f2 DumpEqualsHash.TKey.GetHashCode params=1
+  .reg v0 Self: TKey self
+  .reg v1 Result: Int64 result
+bb0:
+  .line 25
+  HashInt      v1, v0
+  .line 26
+  Ret          v1
+.finally

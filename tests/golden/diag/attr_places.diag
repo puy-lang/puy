@@ -1,0 +1,84 @@
+error[E3401]: attributes must be written on the full declaration of `TLater`
+   --> attr_places.pas:13:3
+    |
+ 13 |   [Mark] TLater = class;
+    |   ^^^^^^
+...
+ 23 |   TLater = class
+    |   ------ declared here
+
+error[E3401]: attributes are not allowed here
+   --> attr_places.pas:17:5
+    |
+ 17 |     [Mark] const Sides = 3;
+    |     ^^^^^^
+    |
+    = note: attributes can be written on types, fields, methods, properties, parameters, variables and top-level routines
+
+error[E3401]: attributes are not allowed here
+   --> attr_places.pas:21:18
+    |
+ 21 |   TColor = (Red, [Mark] Green);
+    |                  ^^^^^^
+    |
+    = note: attributes can be written on types, fields, methods, properties, parameters, variables and top-level routines
+
+error[E3401]: attributes are not allowed here
+   --> attr_places.pas:27:3
+    |
+ 27 |   [Mark] Limit = 10;
+    |   ^^^^^^
+    |
+    = note: attributes can be written on types, fields, methods, properties, parameters, variables and top-level routines
+
+error[E3401]: attributes are not allowed here
+   --> attr_places.pas:30:3
+    |
+ 30 |   [Mark] Greeting = 'hello';
+    |   ^^^^^^
+    |
+    = note: attributes can be written on types, fields, methods, properties, parameters, variables and top-level routines
+
+error[E3401]: attributes must be written on the declaration of `TShape.Draw`
+   --> attr_places.pas:32:1
+    |
+ 18 |     procedure Draw;
+    |               ---- declared here
+...
+ 32 | [Mark]
+    | ^^^^^^
+
+error[E3401]: attributes must be written on the declaration of `Later`
+   --> attr_places.pas:39:1
+    |
+ 37 | procedure Later(N: Integer); forward;
+    |           ----- declared here
+ 38 |
+ 39 | [Mark]
+    | ^^^^^^
+
+error[E3401]: attributes are not allowed here
+   --> attr_places.pas:44:3
+    |
+ 44 |   [Mark]
+    |   ^^^^^^
+    |
+    = note: attributes can be written on types, fields, methods, properties, parameters, variables and top-level routines
+
+error[E3401]: attributes are not allowed here
+   --> attr_places.pas:50:11
+    |
+ 50 |   for var [Mark] J := 1 to N do
+    |           ^^^^^^
+    |
+    = note: attributes can be written on types, fields, methods, properties, parameters, variables and top-level routines
+
+error[E3401]: attributes are not allowed here
+   --> attr_places.pas:56:1
+    |
+ 56 | [Mark] var Stray: Integer;
+    | ^^^^^^
+    |
+    = note: attributes can be written on types, fields, methods, properties, parameters, variables and top-level routines
+
+error: aborting due to 10 errors

@@ -1,0 +1,102 @@
+warning[W0011]: `TBase.Step` is deprecated: use Walk (deprecated)
+   --> hint_scopes.pas:49:13
+    |
+ 19 |     procedure Step; virtual; deprecated 'use Walk';
+    |               ---- declared here
+...
+ 49 |   inherited Step;
+    |             ^^^^
+    |
+    = note: disable with `{$WARN deprecated OFF}`
+
+warning[W0011]: `TBase.Step` is deprecated: use Walk (deprecated)
+   --> hint_scopes.pas:50:3
+    |
+ 19 |     procedure Step; virtual; deprecated 'use Walk';
+    |               ---- declared here
+...
+ 50 |   inherited;
+    |   ^^^^^^^^^
+    |
+    = note: disable with `{$WARN deprecated OFF}`
+
+warning[W0011]: `Old` is deprecated (deprecated)
+   --> hint_scopes.pas:66:3
+    |
+ 53 | procedure Old(N: Integer); deprecated;
+    |           --- declared here
+...
+ 66 |   Old(2);
+    |   ^^^
+    |
+    = note: disable with `{$WARN deprecated OFF}`
+
+warning[W0011]: `TOld` is deprecated (deprecated)
+   --> hint_scopes.pas:77:18
+    |
+ 12 |   TOld = class
+    |   ---- declared here
+...
+ 77 | procedure Use(O: TOld);
+    |                  ^^^^
+    |
+    = note: disable with `{$WARN deprecated OFF}`
+
+warning[W0011]: `TBase.Step` is deprecated: use Walk (deprecated)
+   --> hint_scopes.pas:87:5
+    |
+ 19 |     procedure Step; virtual; deprecated 'use Walk';
+    |               ---- declared here
+...
+ 87 |   B.Step;
+    |     ^^^^
+    |
+    = note: disable with `{$WARN deprecated OFF}`
+
+warning[W0011]: `Pick` is deprecated (deprecated)
+   --> hint_scopes.pas:90:3
+    |
+ 69 | procedure Pick(X: Integer); overload; deprecated;
+    |           ---- declared here
+...
+ 90 |   Pick(1);
+    |   ^^^^
+    |
+    = note: disable with `{$WARN deprecated OFF}`
+
+warning[W0011]: `Older` is deprecated (deprecated)
+   --> hint_scopes.pas:91:3
+    |
+ 59 | procedure Older; deprecated;
+    |           ----- declared here
+...
+ 91 |   Older;
+    |   ^^^^^
+    |
+    = note: disable with `{$WARN deprecated OFF}`
+
+warning[W0012]: `Trial` is experimental (experimental)
+   --> hint_scopes.pas:92:3
+    |
+ 64 | procedure Trial; experimental;
+    |           ----- declared here
+...
+ 92 |   Trial;
+    |   ^^^^^
+    |
+    = note: an experimental declaration may change or be removed without being deprecated first
+    = note: disable with `{$WARN experimental OFF}`
+
+warning[W0012]: `Trial` is experimental (experimental)
+   --> hint_scopes.pas:95:3
+    |
+ 64 | procedure Trial; experimental;
+    |           ----- declared here
+...
+ 95 |   Trial;
+    |   ^^^^^
+    |
+    = note: an experimental declaration may change or be removed without being deprecated first
+    = note: disable with `{$WARN experimental OFF}`
+
+warning: 9 warnings emitted

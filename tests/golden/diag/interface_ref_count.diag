@@ -1,0 +1,35 @@
+error[E3017]: `_AddRef` is not supported in Puy
+  --> interface_ref_count.pas:9:14
+   |
+ 9 |     function _AddRef: Integer;
+   |              ^^^^^^^
+   |
+   = note: remove the declaration; Puy manages reference counts itself
+   = fix: remove the declaration
+
+error[E3017]: `_Release` is not supported in Puy
+   --> interface_ref_count.pas:15:14
+    |
+ 15 |     function _Release: Integer;
+    |              ^^^^^^^^
+    |
+    = note: remove the declaration; Puy manages reference counts itself
+    = fix: remove the declaration
+
+error[E3017]: `_AddRef` is not supported in Puy
+   --> interface_ref_count.pas:32:5
+    |
+ 32 |   C._AddRef;
+    |     ^^^^^^^
+    |
+    = note: remove the declaration; Puy manages reference counts itself
+
+error[E3017]: `QueryInterface` is not supported in Puy
+   --> interface_ref_count.pas:33:5
+    |
+ 33 |   T.QueryInterface;
+    |     ^^^^^^^^^^^^^^
+    |
+    = note: remove the declaration; Puy manages reference counts itself
+
+error: aborting due to 4 errors

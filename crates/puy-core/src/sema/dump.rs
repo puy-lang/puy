@@ -4,7 +4,7 @@
 
 use super::hir::*;
 use super::types::{Const, Ty, TypeKind, TypeTable, bound_text};
-use crate::source::SourceFile;
+use crate::source::{SourceFile, TextRange};
 use crate::syntax::ast::ParamMode;
 use std::fmt::Write;
 
@@ -32,8 +32,12 @@ pub(crate) fn var_kind_text(kind: VarKind, is_for_var: bool) -> String {
         VarKind::Local => "local",
         VarKind::Hidden => "hidden",
         VarKind::Exception => "exception",
+        VarKind::SelfParam => "self",
+        VarKind::RecordSelf => "var self",
         // A variable of an enclosing routine (`docs/spec/semantics.md` 4.9)
         VarKind::Outer { up, var } => return format!("outer v{} up={up}", var.0),
+        VarKind::Cell { var, owned: true } => return format!("cell v{}", var.0),
+        VarKind::Cell { var, owned: false } => return format!("capture v{}", var.0),
     };
     text.into()
 }
@@ -55,12 +59,62 @@ impl<'a> Dumper<'a> {
         self.out.push('\n');
     }
 
-    /// A type name (`docs/spec/semantics.md` 9.1).
+    /// The attribute classes written on the declaration named at `decl`
+    /// (`docs/spec/attributes.md` 7): `.attr Hello.TableAttribute f0` with the arguments under it.
+    fn attr_lines(&mut self, decl: TextRange, depth: usize) {
+        let unit = self.program.units.len().saturating_sub(1) as u32;
+        let program = self.program;
+        for a in program
+            .attrs
+            .iter()
+            .filter(|a| a.unit == unit && a.decl == decl)
+        {
+            let ctor = a
+                .ctor
+                .map_or("builtin".to_string(), |r| format!("f{}", r.0));
+            self.line(depth, &format!(".attr {} {ctor}", a.class));
+            for e in &a.args {
+                self.expr(e, depth + 1);
+            }
+        }
+    }
+
+    /// ` deprecated` / ` experimental` after the line of a declaration named at `decl` that has
+    /// these hint directives (`docs/spec/attributes.md` 7).
+    fn hint_mark(&self, decl: TextRange) -> &'static str {
+        let Some(file) = self.program.units.last().map(|u| u.file) else {
+            return "";
+        };
+        match self
+            .program
+            .hints
+            .iter()
+            .find(|h| h.decl.file == file && h.decl.range == decl)
+        {
+            Some(h) if h.deprecated && h.experimental => " deprecated experimental",
+            Some(h) if h.deprecated => " deprecated",
+            Some(h) if h.experimental => " experimental",
+            _ => "",
+        }
+    }
+
+    /// The lines of a type's members, each followed by its attributes.
+    fn member_block(&mut self, depth: usize, lines: Vec<(String, Option<TextRange>)>) {
+        for (line, decl) in lines {
+            let mark = decl.map_or("", |d| self.hint_mark(d));
+            self.line(depth, &format!("{line}{mark}"));
+            if let Some(d) = decl {
+                self.attr_lines(d, depth + 1);
+            }
+        }
+    }
+
+    /// A type name (`docs/spec/semantics.md` chapter 9).
     fn t(&self, ty: Ty) -> String {
         self.program.types.name(ty)
     }
 
-    fn line_no(&self, span: crate::source::TextRange) -> u32 {
+    fn line_no(&self, span: TextRange) -> u32 {
         self.src.line_index(span.start()) + 1
     }
 
@@ -84,13 +138,46 @@ impl<'a> Dumper<'a> {
         self.type_decls(None);
         for (i, g) in p.globals.iter().enumerate() {
             if g.unit.is_none_or(|u| u == unit) {
-                self.line(0, &format!(".global g{i} {}: {}", g.name, self.t(g.ty)));
+                let weak = weak_mark(g.ty);
+                // A `class var`'s marks are shown on its line in the class
+                let mark = match g.span {
+                    Some(s) if !g.name.contains('.') => self.hint_mark(s),
+                    _ => "",
+                };
+                self.line(
+                    0,
+                    &format!(".global g{i} {}: {}{weak}{mark}", g.name, self.t(g.ty)),
+                );
+                // A `class var`'s attributes are shown on its line in the class
+                if let Some(s) = g.span.filter(|_| !g.name.contains('.')) {
+                    self.attr_lines(s, 1);
+                }
             }
         }
         for (i, r) in p.routines.iter().enumerate() {
-            if r.unit == unit {
+            // An abstract method has no body (`docs/spec/objects.md` 15.1); the routines of the
+            // instantiations are shown under them
+            if r.unit == unit && !r.is_abstract && r.instance.is_none() {
                 self.routine(r, Some(i));
             }
+        }
+        // The instantiations the file asked for first, and their bodies
+        // (`docs/spec/generics.md` 8)
+        for inst in p.instances.iter().filter(|i| i.unit == unit) {
+            self.line(0, &format!(".instance {}", inst.name));
+            for r in &inst.routines {
+                let routine = &p.routines[r.0 as usize];
+                if !routine.is_abstract {
+                    self.routine(routine, Some(r.0 as usize));
+                }
+            }
+        }
+        // The generated functions the file asked for first (`docs/spec/equality.md` 9)
+        for g in p.generated.iter().filter(|g| g.unit == unit) {
+            let routine = &p.routines[g.routine.0 as usize];
+            let name = routine.instance.as_deref().unwrap_or(&routine.name);
+            self.line(0, &format!(".generated {name}"));
+            self.routine(routine, Some(g.routine.0 as usize));
         }
         let init = if is_program {
             p.init.as_ref()
@@ -112,12 +199,22 @@ impl<'a> Dumper<'a> {
         self.vars = &r.vars;
         let mut head = String::from(".routine ");
         if let Some(i) = index {
-            let _ = write!(head, "f{i} ");
+            // A generic body has no function (`docs/spec/generics.md` 8)
+            if r.generic {
+                head.push_str("- ");
+            } else {
+                let _ = write!(head, "f{i} ");
+            }
         }
         head.push_str(&r.name);
         if index.is_some() {
             head.push('(');
-            for (i, v) in r.vars.iter().take(r.param_count as usize).enumerate() {
+            let params = r
+                .vars
+                .iter()
+                .take(r.param_count as usize)
+                .filter(|v| !matches!(v.kind, VarKind::SelfParam | VarKind::RecordSelf));
+            for (i, v) in params.enumerate() {
                 if i > 0 {
                     head.push_str("; ");
                 }
@@ -134,19 +231,77 @@ impl<'a> Dumper<'a> {
                 let _ = write!(head, ": {}", self.t(t));
             }
         }
+        if r.closure {
+            head.push_str(" closure");
+        }
         if r.has_syntax_errors {
             head.push_str(" syntax-errors");
         } else if r.has_errors {
             head.push_str(" errors");
         }
+        if index.is_some() && !r.name.contains('.') {
+            head.push_str(self.hint_mark(r.name_span));
+        }
         self.line(0, &head);
+        // A method's attributes are shown on its line in the class (`docs/spec/attributes.md` 7)
+        if index.is_some() && !r.name.contains('.') {
+            self.attr_lines(r.name_span, 1);
+        }
         if index.is_some() {
             self.type_decls(Some(&r.name));
         }
         for (i, v) in r.vars.iter().enumerate() {
             let kind = var_kind_text(v.kind, v.is_for_var);
             let name = if v.name.is_empty() { "-" } else { &v.name };
-            self.line(1, &format!(".var v{i} {name}: {} {kind}", self.t(v.ty)));
+            let weak = weak_mark(v.ty);
+            let cell = if v.cell { " cell" } else { "" };
+            let mark = if v.name.is_empty() {
+                ""
+            } else {
+                self.hint_mark(v.span)
+            };
+            self.line(
+                1,
+                &format!(
+                    ".var v{i} {name}: {} {kind}{weak}{cell}{mark}",
+                    self.t(v.ty)
+                ),
+            );
+            if !v.name.is_empty() {
+                self.attr_lines(v.span, 2);
+            }
+        }
+        // The variables a closure captures (`docs/spec/objects.md` 15.5)
+        for (i, c) in r.captures.iter().enumerate() {
+            let v = &r.vars[c.0 as usize];
+            // A closure-form nested routine's index in its group's block
+            let k = r.groups.slots.get(i).map_or(i, |s| *s as usize);
+            let name = if v.name.is_empty() { "-" } else { &v.name };
+            let VarKind::Outer { up, var } = v.kind else {
+                continue;
+            };
+            let mut owner = Some(r);
+            for _ in 0..up {
+                owner = owner
+                    .and_then(|o| o.parent)
+                    .map(|p| &self.program.routines[p.0 as usize]);
+            }
+            let from = match owner.map(|o| &o.vars[var.0 as usize]) {
+                Some(o) if o.kind == VarKind::SelfParam => "self".to_string(),
+                _ if up == 1 => format!("from v{}", var.0),
+                Some(_) => format!("from {}.v{}", owner.map_or("", |o| o.name.as_str()), var.0),
+                None => format!("from v{} up={up}", var.0),
+            };
+            self.line(1, &format!(".capture #{k} {name}: {} {from}", self.t(v.ty)));
+        }
+        // The group blocks made on entry, and a closure-form routine's own block copied
+        // (`docs/spec/objects.md` 15.5)
+        if let Some(v) = r.groups.own {
+            self.line(1, &format!(".own-block v{}", v.0));
+        }
+        for (v, cells) in &r.groups.made {
+            let list: Vec<String> = cells.iter().map(|c| format!("v{}", c.0)).collect();
+            self.line(1, &format!(".group v{} [{}]", v.0, list.join(", ")));
         }
         for s in &r.body {
             self.stmt(s, 1);
@@ -154,7 +309,7 @@ impl<'a> Dumper<'a> {
     }
 
     /// The `type` declarations of the program (`routine` is `None`) or of a routine
-    /// (`docs/spec/semantics.md` 9.1).
+    /// (`docs/spec/semantics.md` chapter 9).
     fn type_decls(&mut self, routine: Option<&str>) {
         let depth = usize::from(routine.is_some());
         let decls: Vec<TypeDeclInfo> = self
@@ -168,65 +323,170 @@ impl<'a> Dumper<'a> {
             .cloned()
             .collect();
         for d in decls {
-            if !d.defines {
-                self.line(depth, &format!(".type {} = {}", d.name, self.t(d.ty)));
-                continue;
+            let start = self.out.len();
+            self.type_decl(&d, depth);
+            // The hint directives on its line (`docs/spec/attributes.md` 7)
+            let mark = self.hint_mark(d.span);
+            if let Some(eol) = self.out[start..].find('\n') {
+                self.out.insert_str(start + eol, mark);
             }
-            let types = &self.program.types;
-            match d.ty {
-                Ty::Record(_) => {
-                    self.line(depth, &format!(".type {} = record", d.name));
-                    let fields: Vec<String> = types
-                        .fields(d.ty)
+        }
+    }
+
+    /// The lines of one `type` declaration (`docs/spec/semantics.md` chapter 9).
+    fn type_decl(&mut self, d: &TypeDeclInfo, depth: usize) {
+        if !d.defines {
+            self.line(depth, &format!(".type {} = {}", d.name, self.t(d.ty)));
+            return;
+        }
+        let types = &self.program.types;
+        match d.ty {
+            Ty::Record(id) => {
+                self.line(depth, &format!(".type {} = record", d.name));
+                self.attr_lines(d.span, depth + 1);
+                let mut fields: Vec<(String, Option<TextRange>)> = types
+                    .fields(d.ty)
+                    .iter()
+                    .enumerate()
+                    .map(|(i, f)| {
+                        let weak = weak_mark(f.ty);
+                        (
+                            format!(".field {i} {}: {}{weak}", f.name, types.name(f.ty)),
+                            Some(f.span),
+                        )
+                    })
+                    .collect();
+                fields.extend(member_lines(types, &self.program.routines, id));
+                self.member_block(depth + 1, fields);
+            }
+            Ty::Class(id) => {
+                let parent = types
+                    .parent(id)
+                    .map_or("<error>".to_string(), |p| types.name(Ty::Class(p)));
+                let mut head = format!(".type {} = class({parent})", d.name);
+                // `docs/spec/objects.md` 15.1
+                if types.slot_kind(Ty::Class(id)) == crate::bytecode::SLOT_REF {
+                    head.push_str(" ref");
+                }
+                if types.class_is_abstract(id) {
+                    head.push_str(" abstract");
+                }
+                if let super::types::TypeKind::Class { sealed: true, .. } = types.get(id).kind {
+                    head.push_str(" sealed");
+                }
+                self.line(depth, &head);
+                self.attr_lines(d.span, depth + 1);
+                let mut lines: Vec<(String, Option<TextRange>)> = match &types.get(id).kind {
+                    super::types::TypeKind::Class { fields, .. } => fields
                         .iter()
-                        .enumerate()
-                        .map(|(i, f)| format!(".field {i} {}: {}", f.name, types.name(f.ty)))
-                        .collect();
-                    for f in fields {
-                        self.line(depth + 1, &f);
-                    }
+                        .map(|f| {
+                            let weak = weak_mark(f.ty);
+                            (
+                                format!(".field {} {}: {}{weak}", f.slot, f.name, types.name(f.ty)),
+                                Some(f.span),
+                            )
+                        })
+                        .collect(),
+                    _ => Vec::new(),
+                };
+                lines.extend(member_lines(types, &self.program.routines, id));
+                lines.extend(implements_lines(types, id));
+                self.member_block(depth + 1, lines);
+            }
+            Ty::Intf(id) => {
+                // `docs/spec/objects.md` 15.4
+                let parent = types
+                    .parent(id)
+                    .map_or("<error>".to_string(), |p| types.name(Ty::Intf(p)));
+                let mut head = format!(".type {} = interface({parent})", d.name);
+                if let super::types::TypeKind::Interface { guid: Some(g), .. } = types.get(id).kind
+                {
+                    let _ = write!(head, " guid={}", crate::bytecode::guid_text(&g));
                 }
-                Ty::Exception(id) => {
-                    let parent = types
-                        .parent(id)
-                        .map_or("<error>".to_string(), |p| types.name(Ty::Exception(p)));
-                    self.line(depth, &format!(".type {} = class({parent})", d.name));
-                }
-                Ty::Enum(_) => {
-                    let values: Vec<String> = types
-                        .enum_values(d.ty)
-                        .iter()
-                        .map(|v| format!("{} = {}", v.name, v.ord))
-                        .collect();
-                    self.line(
-                        depth,
-                        &format!(".type {} = ({})", d.name, values.join(", ")),
-                    );
-                }
-                Ty::Subrange(_) => {
-                    let def = subrange_definition(types, d.ty);
-                    self.line(depth, &format!(".type {} = {def}", d.name));
-                }
-                Ty::Set(_) | Ty::BigSet(_) => {
-                    let base = types.set_base(d.ty).unwrap_or(Ty::Error);
-                    self.line(
-                        depth,
-                        &format!(".type {} = set of {}", d.name, types.name(base)),
-                    );
-                }
-                Ty::DynArray(_) => {
-                    let elem = types.dyn_elem(d.ty).unwrap_or(Ty::Error);
-                    let def = if d.generic {
-                        format!("TArray<{}>", types.name(elem))
-                    } else {
-                        format!("array of {}", types.name(elem))
-                    };
-                    self.line(depth, &format!(".type {} = {def}", d.name));
-                }
-                _ => {
-                    let def = array_definition(types, d.ty);
-                    self.line(depth, &format!(".type {} = {def}", d.name));
-                }
+                self.line(depth, &head);
+                self.attr_lines(d.span, depth + 1);
+                let lines = intf_member_lines(types, id);
+                self.member_block(depth + 1, lines);
+            }
+            Ty::Helper(id) => {
+                // `docs/spec/objects.md` 15.6
+                let (is_class, target) = match &types.get(id).kind {
+                    super::types::TypeKind::Helper {
+                        is_class, target, ..
+                    } => (*is_class, *target),
+                    _ => (false, Ty::Error),
+                };
+                let kind = if is_class { "class" } else { "record" };
+                let parent = types
+                    .parent(id)
+                    .map(|p| format!("({})", types.name(Ty::Helper(p))))
+                    .unwrap_or_default();
+                self.line(
+                    depth,
+                    &format!(
+                        ".type {} = {kind} helper{parent} for {}",
+                        d.name,
+                        types.name(target)
+                    ),
+                );
+                self.attr_lines(d.span, depth + 1);
+                let lines = member_lines(types, &self.program.routines, id);
+                self.member_block(depth + 1, lines);
+            }
+            // `docs/spec/objects.md` 15.5
+            Ty::Proc(id) | Ty::Callable(id) => {
+                let text = types.proc_text(id, false, true);
+                self.line(depth, &format!(".type {} = {text}", d.name));
+            }
+            Ty::ClassRef(_) => {
+                let class = types.class_ref_target(d.ty).map_or(Ty::Error, Ty::Class);
+                self.line(
+                    depth,
+                    &format!(".type {} = class of {}", d.name, types.name(class)),
+                );
+            }
+            Ty::Enum(_) => {
+                let values: Vec<String> = types
+                    .enum_values(d.ty)
+                    .iter()
+                    .map(|v| format!("{} = {}", v.name, v.ord))
+                    .collect();
+                self.line(
+                    depth,
+                    &format!(".type {} = ({})", d.name, values.join(", ")),
+                );
+            }
+            Ty::Subrange(_) => {
+                let def = subrange_definition(types, d.ty);
+                self.line(depth, &format!(".type {} = {def}", d.name));
+            }
+            // `docs/spec/types.md` 1.3: the original type
+            Ty::Distinct(_) => {
+                let base = types.origin(d.ty).unwrap_or(Ty::Error);
+                self.line(
+                    depth,
+                    &format!(".type {} = type {}", d.name, types.name(base)),
+                );
+            }
+            Ty::Set(_) | Ty::BigSet(_) => {
+                let base = types.set_base(d.ty).unwrap_or(Ty::Error);
+                self.line(
+                    depth,
+                    &format!(".type {} = set of {}", d.name, types.name(base)),
+                );
+            }
+            Ty::DynArray(_) => {
+                let elem = types.dyn_elem(d.ty).unwrap_or(Ty::Error);
+                let def = if d.generic {
+                    format!("TArray<{}>", types.name(elem))
+                } else {
+                    format!("array of {}", types.name(elem))
+                };
+                self.line(depth, &format!(".type {} = {def}", d.name));
+            }
+            _ => {
+                let def = array_definition(types, d.ty);
+                self.line(depth, &format!(".type {} = {def}", d.name));
             }
         }
     }
@@ -234,6 +494,8 @@ impl<'a> Dumper<'a> {
     fn stmt(&mut self, s: &Stmt, depth: usize) {
         let at = format!("@{}", self.line_no(s.span));
         match &s.kind {
+            // Not shown: only a captured variable makes code there (a new cell)
+            StmtKind::Declare(_) => {}
             StmtKind::Assign {
                 target,
                 value,
@@ -244,6 +506,24 @@ impl<'a> Dumper<'a> {
                 self.line(depth, &format!("assign {at} {}{init}", range_flag(check)));
                 self.place(target, depth + 1);
                 self.expr(value, depth + 1);
+            }
+            StmtKind::PropertySet { name, call } => {
+                // `docs/spec/objects.md` 15.1: the target shows the `write` method, the receiver
+                // and the indices; the value is the last argument
+                self.line(depth, &format!("assign {at}"));
+                let ExprKind::Call { routine, args, .. } = &call.kind else {
+                    unreachable!("PropertySet always holds the call of the write method");
+                };
+                self.line(depth + 1, &format!("property {name} f{}", routine.0));
+                let (value, rest) = args.split_last().expect("the value is an argument");
+                for a in rest {
+                    if let CallArg::Value(e) = a {
+                        self.expr(e, depth + 2);
+                    }
+                }
+                if let CallArg::Value(v) = value {
+                    self.expr(v, depth + 1);
+                }
             }
             StmtKind::Block(stmts) => {
                 self.line(depth, &format!("block {at}"));
@@ -314,15 +594,32 @@ impl<'a> Dumper<'a> {
                 coll_var,
                 idx_var,
                 body,
+                enumerator,
                 ..
             } => {
+                let (head, pos) = match enumerator {
+                    Some(_) => ("for-in-enum", "enum"),
+                    None => ("for-in", "idx"),
+                };
                 self.line(
                     depth,
-                    &format!("for-in {at} coll=v{} idx=v{}", coll_var.0, idx_var.0),
+                    &format!("{head} {at} coll=v{} {pos}=v{}", coll_var.0, idx_var.0),
                 );
-                self.for_var(var, "", depth + 1);
+                let last = enumerator
+                    .as_ref()
+                    .and_then(|e| e.last)
+                    .map(|l| format!(" last=v{}", l.0));
+                self.for_var(var, &last.unwrap_or_default(), depth + 1);
                 self.line(depth + 1, "in");
                 self.expr(coll, depth + 2);
+                if let Some(e) = enumerator {
+                    self.line(depth + 1, "get-enumerator");
+                    self.expr(&e.get, depth + 2);
+                    self.line(depth + 1, "move-next");
+                    self.expr(&e.move_next, depth + 2);
+                    self.line(depth + 1, "current");
+                    self.expr(&e.current, depth + 2);
+                }
                 self.line(depth + 1, "body");
                 self.stmt(body, depth + 2);
             }
@@ -512,6 +809,17 @@ impl<'a> Dumper<'a> {
                 self.place(target, depth + 1);
                 self.expr(index, depth + 1);
             }
+            StmtKind::Exchange {
+                target,
+                first,
+                second,
+                ..
+            } => {
+                self.line(depth, &format!("exchange {at}"));
+                self.place(target, depth + 1);
+                self.expr(first, depth + 1);
+                self.expr(second, depth + 1);
+            }
             StmtKind::Delete {
                 target,
                 index,
@@ -521,6 +829,40 @@ impl<'a> Dumper<'a> {
                 self.place(target, depth + 1);
                 self.expr(index, depth + 1);
                 self.expr(count, depth + 1);
+            }
+            StmtKind::ArrayMoveRange {
+                target,
+                from,
+                to,
+                count,
+            } => {
+                self.line(depth, &format!("array-move-range {at}"));
+                self.place(target, depth + 1);
+                self.expr(from, depth + 1);
+                self.expr(to, depth + 1);
+                self.expr(count, depth + 1);
+            }
+            StmtKind::FreeIfClass { value } => {
+                self.line(depth, &format!("free-if-class {at}"));
+                self.expr(value, depth + 1);
+            }
+            StmtKind::CheckDefaultOrder { value } => {
+                self.line(depth, &format!("check-default-order {at}"));
+                self.expr(value, depth + 1);
+            }
+            StmtKind::CheckClassType { value, what } => {
+                self.line(depth, &format!("check-class-type {at}"));
+                self.expr(value, depth + 1);
+                self.expr(what, depth + 1);
+            }
+            StmtKind::Free { target, destroy } => {
+                let flag = if *destroy { " destroy" } else { "" };
+                self.line(depth, &format!("free {at}{flag}"));
+                self.expr(target, depth + 1);
+            }
+            StmtKind::FreeAndNil { target } => {
+                self.line(depth, &format!("free {at} and-nil"));
+                self.place(target, depth + 1);
             }
             StmtKind::Nop => self.line(depth, &format!("nop {at}")),
         }
@@ -533,7 +875,7 @@ impl<'a> Dumper<'a> {
                 self.line(depth, &format!("var v{} {name}", v.0));
             }
             Place::Global(g) => {
-                let name = self.program.globals[g.0 as usize].name.clone();
+                let name = self.program.global(*g).name.clone();
                 self.line(depth, &format!("global g{} {name}", g.0));
             }
             Place::StrIndex { base, index, .. } => {
@@ -557,10 +899,30 @@ impl<'a> Dumper<'a> {
                 self.place(base, depth + 1);
                 self.expr(index, depth + 1);
             }
-            Place::ExcMember { base, member } => {
-                let ty = self.t(exc_member_type(*member));
-                self.line(depth, &format!("member {ty} {}", member.name()));
+            Place::ObjField {
+                base,
+                slot,
+                ty,
+                name,
+            } => {
+                self.line(depth, &format!("objfield {} {name} #{slot}", self.t(*ty)));
                 self.expr(base, depth + 1);
+            }
+        }
+    }
+
+    /// An argument of a call: a value, `ref` / `out` and the place, or `temp` and the value
+    /// copied to the temporary (`docs/spec/objects.md` 15.1).
+    fn call_arg(&mut self, a: &CallArg, depth: usize) {
+        match a {
+            CallArg::Value(e) => self.expr(e, depth),
+            CallArg::Ref { place, is_out } => {
+                self.line(depth, if *is_out { "out" } else { "ref" });
+                self.place(place, depth + 1);
+            }
+            CallArg::Temp(e) => {
+                self.line(depth, "temp");
+                self.expr(e, depth + 1);
             }
         }
     }
@@ -576,12 +938,20 @@ impl<'a> Dumper<'a> {
         let folded = "";
         match &e.kind {
             ExprKind::Const => self.line(depth, &format!("const {ty} -")),
+            ExprKind::Var(v)
+                if matches!(
+                    self.vars[v.0 as usize].kind,
+                    VarKind::SelfParam | VarKind::RecordSelf
+                ) =>
+            {
+                self.line(depth, &format!("self {ty}{folded}"));
+            }
             ExprKind::Var(v) => {
                 let name = self.var_name(*v);
                 self.line(depth, &format!("var v{} {name}: {ty}{folded}", v.0));
             }
             ExprKind::Global(g) => {
-                let name = self.program.globals[g.0 as usize].name.clone();
+                let name = self.program.global(*g).name.clone();
                 self.line(depth, &format!("global g{} {name}: {ty}{folded}", g.0));
             }
             ExprKind::Binary { first, steps } => {
@@ -629,6 +999,20 @@ impl<'a> Dumper<'a> {
                     self.expr(b, depth + 1);
                 }
             }
+            ExprKind::IndexRange { first, last } => {
+                // `docs/spec/objects.md` 15.6: the bounds written
+                let mut line = String::from("range-index");
+                if first.is_some() {
+                    line.push_str(" first");
+                }
+                if last.is_some() {
+                    line.push_str(" last");
+                }
+                self.line(depth, &line);
+                for b in first.iter().chain(last.iter()) {
+                    self.expr(b, depth + 1);
+                }
+            }
             ExprKind::Field { base, index, name } => {
                 self.line(depth, &format!("field {ty} {name} #{index}"));
                 self.expr(base, depth + 1);
@@ -656,22 +1040,68 @@ impl<'a> Dumper<'a> {
                     }
                 }
             }
-            ExprKind::Call { routine, args } => {
+            ExprKind::Call {
+                routine,
+                args,
+                dispatch,
+            } => {
                 let r = &self.program.routines[routine.0 as usize];
                 let ret = match r.ret {
                     Some(t) => self.t(t),
                     None => "-".to_string(),
                 };
                 let name = r.name.clone();
-                self.line(depth, &format!("call f{} {name}: {ret}{folded}", routine.0));
-                for a in args {
-                    match a {
-                        CallArg::Value(e) => self.expr(e, depth + 1),
-                        CallArg::Ref { place, is_out } => {
-                            self.line(depth + 1, if *is_out { "out" } else { "ref" });
-                            self.place(place, depth + 2);
-                        }
+                // `docs/spec/objects.md` 15.1
+                let head = match dispatch {
+                    // `docs/spec/objects.md` 15.6
+                    Dispatch::Routine if r.operator => {
+                        // Operator names are case-insensitive (11.2)
+                        let last = name.rsplit('.').next().unwrap_or(&name);
+                        let conv = super::operators::is_conversion(last);
+                        let word = if conv { "convert-op" } else { "operator" };
+                        format!("{word} f{}", routine.0)
                     }
+                    Dispatch::Routine | Dispatch::Method if r.helper => {
+                        format!("helper-call f{}", routine.0)
+                    }
+                    Dispatch::Routine => format!("call f{}", routine.0),
+                    // `docs/spec/objects.md` 15.5
+                    Dispatch::Group(b) => format!("call f{} block {}", routine.0, block_name(*b)),
+                    Dispatch::Method => format!("method f{}", routine.0),
+                    Dispatch::Virtual(k) => format!("virtual {k}"),
+                    Dispatch::Inherited => format!("inherited f{}", routine.0),
+                    Dispatch::VirtualClass(k) => format!("class virtual {k}"),
+                    Dispatch::Intf(intf, k) => {
+                        // `docs/spec/objects.md` 15.4: the interface the receiver's type names
+                        let m = name.rsplit('.').next().unwrap_or(&name);
+                        let line = format!(
+                            "intfcall {}.{m} #{k}: {ret}{folded}",
+                            self.t(Ty::Intf(*intf))
+                        );
+                        self.line(depth, &line);
+                        for a in args {
+                            self.call_arg(a, depth + 1);
+                        }
+                        return;
+                    }
+                };
+                self.line(depth, &format!("{head} {name}: {ret}{folded}"));
+                for a in args {
+                    self.call_arg(a, depth + 1);
+                }
+            }
+            ExprKind::Key { op, args, func } => {
+                // `docs/spec/equality.md` 9: a call of the built-in generic routine
+                let name = match op {
+                    KeyOp::Equals => "KeyEquals",
+                    KeyOp::Hash => "KeyHash",
+                    KeyOp::Compare => "KeyCompare",
+                };
+                let arg = args.first().map_or_else(String::new, |a| self.t(a.ty));
+                let via = func.map_or_else(String::new, |f| format!(" via f{}", f.0));
+                self.line(depth, &format!("call {name}<{arg}>{via}: {ty}{folded}"));
+                for a in args {
+                    self.expr(a, depth + 1);
                 }
             }
             ExprKind::Builtin { func, args } => {
@@ -711,19 +1141,158 @@ impl<'a> Dumper<'a> {
                 self.line(depth, &format!("convert {text}{folded}"));
                 self.expr(operand, depth + 1);
             }
-            ExprKind::NewExc { class, msg } => {
-                self.line(depth, &format!("new {}", self.t(*class)));
-                self.expr(msg, depth + 1);
-            }
             ExprKind::ExcMember { base, member } => {
                 self.line(depth, &format!("member {ty} {}", member.name()));
                 self.expr(base, depth + 1);
+            }
+            ExprKind::ClassCheck { operand, class, op } => {
+                // `docs/spec/objects.md` 15.1, 15.4: a class reference's conversion names its
+                // type; the target is a class or an interface
+                let target = if self.program.types.is_interface(*class) {
+                    self.t(Ty::Intf(*class))
+                } else {
+                    self.t(Ty::Class(*class))
+                };
+                let line = match op {
+                    ClassCheckOp::Is => format!("is {target}"),
+                    ClassCheckOp::As => format!("as {target}"),
+                    ClassCheckOp::Cast => format!("as {target} cast"),
+                    ClassCheckOp::RefCast => format!("as {ty} cast"),
+                };
+                self.line(depth, &line);
+                self.expr(operand, depth + 1);
+            }
+            ExprKind::ClassName { base } => {
+                self.line(depth, &format!("builtin ClassName string{folded}"));
+                self.expr(base, depth + 1);
+            }
+            ExprKind::ClassInfo { op, args } => {
+                self.line(depth, &format!("builtin {} {ty}", op.name()));
+                for a in args {
+                    self.expr(a, depth + 1);
+                }
+            }
+            ExprKind::ClassRefValue(class) => {
+                self.line(depth, &format!("classref {}", self.t(Ty::Class(*class))));
+            }
+            // `docs/spec/objects.md` 15.5
+            ExprKind::RoutineRef(r) => {
+                let name = self.program.routines[r.0 as usize].name.clone();
+                self.line(depth, &format!("routine-ref f{} {name}", r.0));
+            }
+            ExprKind::MethodRef { base, routine, how } => {
+                let name = self.program.routines[routine.0 as usize].name.clone();
+                let head = match how {
+                    MethodRefHow::Method => format!("method-ref f{} {name}", routine.0),
+                    MethodRefHow::Virtual(k) => format!("method-ref virtual {k} {name}"),
+                    MethodRefHow::Class => format!("class-method-ref f{} {name}", routine.0),
+                    MethodRefHow::ClassVirtual(k) => {
+                        format!("class-method-ref virtual {k} {name}")
+                    }
+                };
+                self.line(depth, &head);
+                self.expr(base, depth + 1);
+            }
+            ExprKind::ToClosure(x) => {
+                self.line(depth, &format!("to-closure {ty}"));
+                self.expr(x, depth + 1);
+            }
+            ExprKind::Anon { func, .. } => self.line(depth, &format!("anon f{}", func.0)),
+            ExprKind::NestedRef { func, block } => {
+                let name = self.program.routines[func.0 as usize].name.clone();
+                let b = block_name(*block);
+                self.line(depth, &format!("nested-ref f{} {name} block {b}", func.0));
+            }
+            ExprKind::CallValue { callee, args } => {
+                let head = if matches!(callee.ty, Ty::Proc(_)) {
+                    "call-indirect"
+                } else {
+                    "call-closure"
+                };
+                let ret = if e.ty.is_error() {
+                    "-".to_string()
+                } else {
+                    ty.clone()
+                };
+                self.line(depth, &format!("{head}: {ret}"));
+                self.expr(callee, depth + 1);
+                for a in args {
+                    self.call_arg(a, depth + 1);
+                }
+            }
+            ExprKind::New {
+                class,
+                ctor,
+                args,
+                of,
+                dispatch,
+                ..
+            } => {
+                // `docs/spec/objects.md` 15.1; `T.Create` of a generic body has its constructor
+                // chosen by the instantiation (`docs/spec/generics.md` 8)
+                let f = match (ctor, dispatch) {
+                    _ if matches!(class, Ty::Param(_)) => "-".to_string(),
+                    (_, Dispatch::Virtual(k)) => format!("virtual {k}"),
+                    (Some(r), _) => format!("f{}", r.0),
+                    (None, _) => "builtin".to_string(),
+                };
+                let what = if of.is_some() { "create-of" } else { "create" };
+                self.line(depth, &format!("{what} {} {f}", self.t(*class)));
+                if let Some(c) = of {
+                    self.expr(c, depth + 1);
+                }
+                for a in args {
+                    self.call_arg(a, depth + 1);
+                }
+            }
+            ExprKind::RecordNew { call } => {
+                // `docs/spec/objects.md` 15.1: the constructor's arguments after `Self`
+                if let ExprKind::Call { routine, args, .. } = &call.kind {
+                    self.line(depth, &format!("create {ty} f{}", routine.0));
+                    for a in args.iter().skip(1) {
+                        self.call_arg(a, depth + 1);
+                    }
+                }
+            }
+            ExprKind::InheritedBuiltin { base, name, msg } => {
+                self.line(depth, &format!("inherited builtin {name}: -"));
+                self.expr(base, depth + 1);
+                if let Some(m) = msg {
+                    self.expr(m, depth + 1);
+                }
+            }
+            ExprKind::ObjField { base, slot, name } => {
+                self.line(depth, &format!("objfield {ty} {name} #{slot}"));
+                self.expr(base, depth + 1);
+            }
+            ExprKind::Weak(inner) => {
+                self.line(depth, &format!("weak {ty}"));
+                self.expr(inner, depth + 1);
             }
             ExprKind::TryStrToInt { s, target } => {
                 self.line(depth, &format!("builtin TryStrToInt {ty}"));
                 self.expr(s, depth + 1);
                 self.line(depth + 1, "out");
                 self.place(target, depth + 2);
+            }
+            ExprKind::Supports {
+                operand,
+                intf,
+                target,
+                class_ref,
+            } => {
+                // `docs/spec/objects.md` 15.4
+                let kind = if *class_ref {
+                    "supports-class"
+                } else {
+                    "supports"
+                };
+                self.line(depth, &format!("{kind} {}", self.t(Ty::Intf(*intf))));
+                self.expr(operand, depth + 1);
+                if let Some(t) = target {
+                    self.line(depth + 1, "out");
+                    self.place(t, depth + 2);
+                }
             }
             ExprKind::Error => self.line(depth, "error"),
         }
@@ -734,7 +1303,7 @@ impl<'a> Dumper<'a> {
         let text = match var {
             ForVar::Local(v) => format!("var v{} {}", v.0, self.var_name(*v)),
             ForVar::Global(id) => {
-                let name = &self.program.globals[id.0 as usize].name;
+                let name = &self.program.global(*id).name;
                 format!("global g{} {name}{suffix}", id.0)
             }
         };
@@ -751,17 +1320,14 @@ impl<'a> Dumper<'a> {
     }
 }
 
-/// The type of a member of an exception object (`docs/spec/exceptions.md` 2.1).
+/// The type of a member of an exception object kept outside its slots
+/// (`docs/spec/exceptions.md` 2.1).
 pub(crate) fn exc_member_type(m: ExcMember) -> Ty {
     match m {
-        ExcMember::Message | ExcMember::StackTrace | ExcMember::ClassName | ExcMember::Value => {
-            Ty::String
-        }
+        ExcMember::StackTrace => Ty::String,
         ExcMember::Suppressed => {
             Ty::DynArray(super::types::TypeId(crate::bytecode::EXCEPTION_ARRAY_TYPE))
         }
-        ExcMember::InnerException => Ty::Exception(super::types::EXCEPTION),
-        ExcMember::ErrorCode => Ty::Integer,
     }
 }
 
@@ -800,6 +1366,7 @@ fn calc_text(c: Calc, types: &TypeTable) -> String {
         Calc::Real(t) => format!("real:{}", types.name(t)),
         Calc::Curr => "curr".to_string(),
         Calc::Arr => "arr".to_string(),
+        Calc::Callable => "callable".to_string(),
     }
 }
 
@@ -812,6 +1379,7 @@ fn builtin_text(b: Builtin) -> &'static str {
         Builtin::Chr => "Chr",
         Builtin::Abs => "Abs",
         Builtin::ParamCount => "ParamCount",
+        Builtin::ExceptObject => "ExceptObject",
         Builtin::ParamStr => "ParamStr",
         Builtin::IntToStr => "IntToStr",
         Builtin::UIntToStr => "UIntToStr",
@@ -826,9 +1394,16 @@ fn builtin_text(b: Builtin) -> &'static str {
         Builtin::Low => "Low",
         Builtin::High => "High",
         Builtin::Assigned => "Assigned",
+        Builtin::IsRefCountedObject => "IsRefCountedObject",
+        Builtin::IsSameInstance => "SameInstance",
+        Builtin::ObjectClassName => "ObjectClassName",
+        Builtin::IsOverridden => "IsOverridden",
         Builtin::Succ => "Succ",
         Builtin::Pred => "Pred",
         Builtin::Sqrt => "Sqrt",
+        Builtin::HashCombine => "HashCombine",
+        Builtin::SameInstance => "TObject.Equals",
+        Builtin::InstanceHash => "TObject.GetHashCode",
         Builtin::Sqr => "Sqr",
         Builtin::Pi => "Pi",
         Builtin::Trunc => "Trunc",
@@ -852,17 +1427,19 @@ fn builtin_text(b: Builtin) -> &'static str {
         Builtin::StringOfChar => "StringOfChar",
         Builtin::QuotedStr => "QuotedStr",
         Builtin::TryStrToInt => "TryStrToInt",
+        Builtin::Supports => "Supports",
         Builtin::AnsiUpperCase => "AnsiUpperCase",
         Builtin::AnsiLowerCase => "AnsiLowerCase",
         Builtin::AnsiSameText => "AnsiSameText",
         Builtin::AnsiCompareText => "AnsiCompareText",
         Builtin::Eof => "Eof",
         Builtin::Eoln => "Eoln",
+        Builtin::ToString => "ToString",
     }
 }
 
 /// A constant value in the `hir` and `ir` dumps: `1`, `True`, `#65`, `"a"`, and a record or static
-/// array constant as `(X: 1; Name: "a")` / `(1, 2, 3)` (`docs/spec/semantics.md` 9.1).
+/// array constant as `(X: 1; Name: "a")` / `(1, 2, 3)` (`docs/spec/semantics.md` chapter 9).
 pub(crate) fn const_value_text(c: &Const, ty: Ty, types: &TypeTable) -> String {
     match c {
         Const::Int(v) => v.to_string(),
@@ -921,7 +1498,7 @@ fn subrange_definition(types: &TypeTable, ty: Ty) -> String {
 }
 
 /// The definition of a static array type in a `.type` line: `array[L..H] of T`, with a
-/// multi-dimensional array written as nested arrays (`docs/spec/semantics.md` 9.1).
+/// multi-dimensional array written as nested arrays (`docs/spec/semantics.md` chapter 9).
 fn array_definition(types: &TypeTable, ty: Ty) -> String {
     match ty.type_id().map(|id| &types.get(id).kind) {
         Some(TypeKind::Array {
@@ -960,4 +1537,209 @@ fn escape_units(units: &[u16]) -> String {
 fn escape_str(s: &str) -> String {
     let units: Vec<u16> = s.encode_utf16().collect();
     escape_units(&units)
+}
+
+/// ` weak` after the type of a `[weak]` field or variable (`docs/spec/objects.md` 15.1).
+fn weak_mark(ty: Ty) -> &'static str {
+    if matches!(ty, Ty::Weak(_)) {
+        " weak"
+    } else {
+        ""
+    }
+}
+
+/// The `.classvar`, `.method` and `.property` lines of a class or a record
+/// (`docs/spec/objects.md` 15.1).
+/// The methods and properties of an interface (`docs/spec/objects.md` 15.4): the methods by
+/// number, the properties with the numbers of their methods.
+fn intf_member_lines(
+    types: &super::types::TypeTable,
+    id: super::types::TypeId,
+) -> Vec<(String, Option<TextRange>)> {
+    let mut lines = Vec::new();
+    let number = |r: super::hir::RoutineId| {
+        types
+            .intf_methods(id)
+            .iter()
+            .find(|(_, m)| m.routine == Some(r))
+            .and_then(|(_, m)| m.vmt)
+    };
+    for m in types.class_methods(id) {
+        let mut line = format!(".method #{} {}", m.vmt.unwrap_or(0), m.name);
+        if !m.params.is_empty() {
+            let ps: Vec<String> = m
+                .params
+                .iter()
+                .map(|(t, mode)| format!("{}{}", mode_prefix(*mode), types.name(*t)))
+                .collect();
+            let _ = write!(line, "({})", ps.join(", "));
+        }
+        if let Some(r) = m.ret {
+            let _ = write!(line, ": {}", types.name(r));
+        }
+        lines.push((line, Some(m.span)));
+    }
+    for p in types.class_properties(id) {
+        let acc = |a: &Option<super::types::Accessor>| match a {
+            Some(super::types::Accessor::Method(r)) => {
+                number(*r).map_or("-".to_string(), |k| format!("#{k}"))
+            }
+            _ => "-".to_string(),
+        };
+        let mut line = format!(".property {}", p.name);
+        if !p.params.is_empty() {
+            let ps: Vec<String> = p.params.iter().map(|t| types.name(*t)).collect();
+            let _ = write!(line, "[{}]", ps.join(", "));
+        }
+        let _ = write!(line, ": {}", types.name(p.ty));
+        if let Some(n) = p.index {
+            let _ = write!(line, " index={n}");
+        }
+        let _ = write!(line, " read={} write={}", acc(&p.read), acc(&p.write));
+        if p.is_default {
+            line.push_str(" default");
+        }
+        lines.push((line, Some(p.span)));
+    }
+    lines
+}
+
+/// The interface table of a class (`docs/spec/objects.md` 15.4): `.implements IShape #0=f3
+/// #1=virtual 4`, `-` for an abstract method.
+fn implements_lines(
+    types: &super::types::TypeTable,
+    id: super::types::TypeId,
+) -> Vec<(String, Option<TextRange>)> {
+    let vmt = types.class_vmt(id);
+    types
+        .class_intfs(id)
+        .iter()
+        .map(|e| {
+            let mut line = format!(".implements {}", types.name(Ty::Intf(e.intf)));
+            for (k, x) in e.entries.iter().enumerate() {
+                let f = match x {
+                    // A generic type's methods have no function (`docs/spec/generics.md` 8)
+                    super::types::IntfEntry::Func(_) if types.is_generic(id) => "-".to_string(),
+                    super::types::IntfEntry::Func(r) => format!("f{}", r.0),
+                    super::types::IntfEntry::Virtual(v)
+                        if vmt.get(*v as usize) == Some(&super::types::VmtEntry::Abstract) =>
+                    {
+                        "-".to_string()
+                    }
+                    super::types::IntfEntry::Virtual(v) => format!("virtual {v}"),
+                    super::types::IntfEntry::Missing => "-".to_string(),
+                };
+                let _ = write!(line, " #{k}={f}");
+            }
+            (line, None)
+        })
+        .collect()
+}
+
+/// The mode of a parameter as written before its type in an interface method's line.
+fn mode_prefix(mode: crate::syntax::ast::ParamMode) -> &'static str {
+    match mode {
+        crate::syntax::ast::ParamMode::Value => "",
+        crate::syntax::ast::ParamMode::Const => "const ",
+        crate::syntax::ast::ParamMode::Var => "var ",
+        crate::syntax::ast::ParamMode::Out => "out ",
+    }
+}
+
+fn member_lines(
+    types: &super::types::TypeTable,
+    routines: &[Routine],
+    id: super::types::TypeId,
+) -> Vec<(String, Option<TextRange>)> {
+    let mut lines = Vec::new();
+    // `docs/spec/objects.md` 15.1
+    for st in types.class_statics(id) {
+        if let super::types::StaticKind::Var(g, ty) = st.kind {
+            lines.push((
+                format!(
+                    ".classvar g{} {}: {}{}",
+                    g.0,
+                    st.name,
+                    types.name(ty),
+                    weak_mark(ty)
+                ),
+                Some(st.span),
+            ));
+        }
+    }
+    for m in types.class_methods(id) {
+        let f = match m.routine {
+            // A generic type's methods have no function (`docs/spec/generics.md` 8)
+            // nor have the generic methods
+            Some(r)
+                if !m.is_abstract && !types.is_generic(id) && !routines[r.0 as usize].generic =>
+            {
+                format!("f{}", r.0)
+            }
+            _ => "-".to_string(),
+        };
+        let mut line = format!(".method {f} {}", m.name);
+        match m.self_kind {
+            // `docs/spec/objects.md` 15.6
+            _ if m.kind == super::types::MethodKind::Operator => line.push_str(" operator"),
+            super::types::SelfKind::Static => line.push_str(" static"),
+            super::types::SelfKind::Class => line.push_str(" class"),
+            super::types::SelfKind::Instance => {}
+        }
+        match m.vmt {
+            Some(k) if m.kind == super::types::MethodKind::Constructor => {
+                let _ = write!(line, " constructor virtual {k}");
+            }
+            _ if m.kind == super::types::MethodKind::Constructor => {
+                line.push_str(" constructor");
+            }
+            Some(k) if m.kind == super::types::MethodKind::Destructor => {
+                let _ = write!(line, " destructor {k}");
+            }
+            Some(k) if m.is_override => {
+                let _ = write!(line, " override {k}");
+            }
+            Some(k) => {
+                let _ = write!(line, " virtual {k}");
+            }
+            None => {}
+        }
+        lines.push((line, Some(m.span)));
+    }
+    for p in types.class_properties(id) {
+        let acc = |a: &Option<super::types::Accessor>| match a {
+            Some(super::types::Accessor::Field { slot, .. }) => format!("#{slot}"),
+            Some(super::types::Accessor::ClassVar(g)) => format!("g{}", g.0),
+            Some(super::types::Accessor::Method(r)) => format!("f{}", r.0),
+            None => "-".to_string(),
+        };
+        let mut line = String::from(".property ");
+        if p.is_class {
+            line.push_str("class ");
+        }
+        line.push_str(&p.name);
+        if !p.params.is_empty() {
+            let ps: Vec<String> = p.params.iter().map(|t| types.name(*t)).collect();
+            let _ = write!(line, "[{}]", ps.join(", "));
+        }
+        let _ = write!(line, ": {}", types.name(p.ty));
+        if let Some(n) = p.index {
+            let _ = write!(line, " index={n}");
+        }
+        let _ = write!(line, " read={} write={}", acc(&p.read), acc(&p.write));
+        if p.is_default {
+            line.push_str(" default");
+        }
+        lines.push((line, Some(p.span)));
+    }
+    lines
+}
+
+/// The variable holding a group block in the dump (`docs/spec/objects.md` 15.5): `vN`, or `link`
+/// for the closure of the routine.
+fn block_name(block: Option<VarId>) -> String {
+    match block {
+        Some(v) => format!("v{}", v.0),
+        None => "link".into(),
+    }
 }

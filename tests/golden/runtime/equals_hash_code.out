@@ -1,0 +1,11 @@
+identity: TRUE FALSE FALSE
+hash: TRUE FALSE
+override: TRUE FALSE FALSE
+override hash: TRUE TRUE
+inherited: TRUE FALSE FALSE
+inherited hash: TRUE FALSE
+through TObject: TRUE TRUE
+exception: TRUE FALSE TRUE
+method reference: TRUE FALSE TRUE
+method reference override: TRUE FALSE
+interface: TRUE FALSE TRUE

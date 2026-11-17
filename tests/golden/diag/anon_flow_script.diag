@@ -1,0 +1,16 @@
+error[E2000]: variable `A` may be read before it is assigned
+   --> anon_flow_script.pas:7:17
+    |
+  5 | var A: Integer;
+    |     - declared here
+  6 | var B: Integer;
+  7 | var P: TProc := procedure
+    |                 ^^^^^^^^^
+...
+ 12 |   end;
+    | ^^^^^ captured here
+    |
+    = note: Puy requires every local variable to be assigned before it is read
+    = fix: add an initial value: `var A: Integer = 0;`
+
+error: aborting due to 1 error

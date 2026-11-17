@@ -1,0 +1,10 @@
+warning[W0010]: attribute `[Ref]` is ignored (ignored-hint-directive)
+   --> dump_attr.pas:54:10
+    |
+ 54 |   [Mark, Ref] G: TPoint;
+    |          ^^^
+    |
+    = note: disable with `{$WARN ignored-hint-directive OFF}`
+    = fix: remove `[Ref]`
+
+warning: 1 warning emitted

@@ -1,0 +1,536 @@
+[
+  {
+    "schema": "puy.diagnostics/1",
+    "diagnostics": [
+      {
+        "code": "E3018",
+        "severity": "error",
+        "name": null,
+        "message": "`[unsafe]` is not supported in Puy",
+        "primary": {
+          "file": "unsafe_fix.pas",
+          "start": 687,
+          "end": 693,
+          "line": 15,
+          "column": 6,
+          "end_line": 15,
+          "end_column": 12,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "use `[weak]` instead"
+        ],
+        "fixes": [
+          {
+            "title": "use `[weak]`",
+            "applicability": "safe",
+            "edits": [
+              {
+                "file": "unsafe_fix.pas",
+                "start": 687,
+                "end": 693,
+                "line": 15,
+                "column": 6,
+                "end_line": 15,
+                "end_column": 12,
+                "original": "unsafe",
+                "replacement": "weak"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E3018]: `[unsafe]` is not supported in Puy\n   --> unsafe_fix.pas:15:6\n    |\n 15 |     [unsafe] Parent: TNode;\n    |      ^^^^^^\n    |\n    = note: use `[weak]` instead\n    = fix: use `[weak]`"
+      },
+      {
+        "code": "E3018",
+        "severity": "error",
+        "name": null,
+        "message": "`[unsafe]` is not supported in Puy",
+        "primary": {
+          "file": "unsafe_fix.pas",
+          "start": 715,
+          "end": 721,
+          "line": 16,
+          "column": 6,
+          "end_line": 16,
+          "end_column": 12,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "references to a manually managed class are not counted, so `[unsafe]` is not needed"
+        ],
+        "fixes": [
+          {
+            "title": "remove `[unsafe]`",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "unsafe_fix.pas",
+                "start": 714,
+                "end": 723,
+                "line": 16,
+                "column": 5,
+                "end_line": 16,
+                "end_column": 14,
+                "original": "[unsafe] ",
+                "replacement": ""
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E3018]: `[unsafe]` is not supported in Puy\n   --> unsafe_fix.pas:16:6\n    |\n 16 |     [unsafe] Shape: TShape;\n    |      ^^^^^^\n    |\n    = note: references to a manually managed class are not counted, so `[unsafe]` is not needed\n    = suggestion: remove `[unsafe]`"
+      },
+      {
+        "code": "E3018",
+        "severity": "error",
+        "name": null,
+        "message": "`[unsafe]` is not supported in Puy",
+        "primary": {
+          "file": "unsafe_fix.pas",
+          "start": 743,
+          "end": 749,
+          "line": 17,
+          "column": 6,
+          "end_line": 17,
+          "end_column": 12,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "`[weak]` in Puy can only be applied to reference counted classes and interfaces"
+        ],
+        "fixes": [
+          {
+            "title": "remove `[unsafe]`",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "unsafe_fix.pas",
+                "start": 743,
+                "end": 751,
+                "line": 17,
+                "column": 6,
+                "end_line": 17,
+                "end_column": 14,
+                "original": "unsafe, ",
+                "replacement": ""
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E3018]: `[unsafe]` is not supported in Puy\n   --> unsafe_fix.pas:17:6\n    |\n 17 |     [unsafe, weak] Items: TArray<TNode>;\n    |      ^^^^^^\n    |\n    = note: `[weak]` in Puy can only be applied to reference counted classes and interfaces\n    = suggestion: remove `[unsafe]`"
+      },
+      {
+        "code": "E0748",
+        "severity": "error",
+        "name": null,
+        "message": "`[weak]` can only be applied to a reference counted class or an interface",
+        "primary": {
+          "file": "unsafe_fix.pas",
+          "start": 751,
+          "end": 755,
+          "line": 17,
+          "column": 14,
+          "end_line": 17,
+          "end_column": 18,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "`[weak]` in Puy can only be applied to reference counted classes and interfaces"
+        ],
+        "fixes": [],
+        "rendered": "error[E0748]: `[weak]` can only be applied to a reference counted class or an interface\n   --> unsafe_fix.pas:17:14\n    |\n 17 |     [unsafe, weak] Items: TArray<TNode>;\n    |              ^^^^\n    |\n    = note: `[weak]` in Puy can only be applied to reference counted classes and interfaces"
+      },
+      {
+        "code": "E0748",
+        "severity": "error",
+        "name": null,
+        "message": "`[weak]` can only be applied to a reference counted class or an interface",
+        "primary": {
+          "file": "unsafe_fix.pas",
+          "start": 784,
+          "end": 788,
+          "line": 18,
+          "column": 6,
+          "end_line": 18,
+          "end_column": 10,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "`[weak]` in Puy can only be applied to reference counted classes and interfaces"
+        ],
+        "fixes": [],
+        "rendered": "error[E0748]: `[weak]` can only be applied to a reference counted class or an interface\n   --> unsafe_fix.pas:18:6\n    |\n 18 |     [weak, unsafe] Text: string;\n    |      ^^^^\n    |\n    = note: `[weak]` in Puy can only be applied to reference counted classes and interfaces"
+      },
+      {
+        "code": "E3018",
+        "severity": "error",
+        "name": null,
+        "message": "`[unsafe]` is not supported in Puy",
+        "primary": {
+          "file": "unsafe_fix.pas",
+          "start": 790,
+          "end": 796,
+          "line": 18,
+          "column": 12,
+          "end_line": 18,
+          "end_column": 18,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "`[weak]` in Puy can only be applied to reference counted classes and interfaces"
+        ],
+        "fixes": [
+          {
+            "title": "remove `[unsafe]`",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "unsafe_fix.pas",
+                "start": 788,
+                "end": 796,
+                "line": 18,
+                "column": 10,
+                "end_line": 18,
+                "end_column": 18,
+                "original": ", unsafe",
+                "replacement": ""
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E3018]: `[unsafe]` is not supported in Puy\n   --> unsafe_fix.pas:18:12\n    |\n 18 |     [weak, unsafe] Text: string;\n    |            ^^^^^^\n    |\n    = note: `[weak]` in Puy can only be applied to reference counted classes and interfaces\n    = suggestion: remove `[unsafe]`"
+      },
+      {
+        "code": "E3018",
+        "severity": "error",
+        "name": null,
+        "message": "`[unsafe]` is not supported in Puy",
+        "primary": {
+          "file": "unsafe_fix.pas",
+          "start": 817,
+          "end": 823,
+          "line": 19,
+          "column": 6,
+          "end_line": 19,
+          "end_column": 12,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "`[weak]` and `[unsafe]` can only be applied to fields and variables"
+        ],
+        "fixes": [
+          {
+            "title": "remove `[unsafe]`",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "unsafe_fix.pas",
+                "start": 816,
+                "end": 825,
+                "line": 19,
+                "column": 5,
+                "end_line": 19,
+                "end_column": 14,
+                "original": "[unsafe] ",
+                "replacement": ""
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E3018]: `[unsafe]` is not supported in Puy\n   --> unsafe_fix.pas:19:6\n    |\n 19 |     [unsafe] procedure Run;\n    |      ^^^^^^\n    |\n    = note: `[weak]` and `[unsafe]` can only be applied to fields and variables\n    = suggestion: remove `[unsafe]`"
+      },
+      {
+        "code": "E3018",
+        "severity": "error",
+        "name": null,
+        "message": "`[unsafe]` is not supported in Puy",
+        "primary": {
+          "file": "unsafe_fix.pas",
+          "start": 845,
+          "end": 851,
+          "line": 20,
+          "column": 6,
+          "end_line": 20,
+          "end_column": 12,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "`[weak]` and `[unsafe]` can only be applied to fields and variables"
+        ],
+        "fixes": [
+          {
+            "title": "remove `[unsafe]`",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "unsafe_fix.pas",
+                "start": 844,
+                "end": 853,
+                "line": 20,
+                "column": 5,
+                "end_line": 20,
+                "end_column": 14,
+                "original": "[unsafe] ",
+                "replacement": ""
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E3018]: `[unsafe]` is not supported in Puy\n   --> unsafe_fix.pas:20:6\n    |\n 20 |     [unsafe] property Up: TNode read Parent;\n    |      ^^^^^^\n    |\n    = note: `[weak]` and `[unsafe]` can only be applied to fields and variables\n    = suggestion: remove `[unsafe]`"
+      },
+      {
+        "code": "E3018",
+        "severity": "error",
+        "name": null,
+        "message": "`[unsafe]` is not supported in Puy",
+        "primary": {
+          "file": "unsafe_fix.pas",
+          "start": 895,
+          "end": 901,
+          "line": 22,
+          "column": 4,
+          "end_line": 22,
+          "end_column": 10,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "`[weak]` and `[unsafe]` can only be applied to fields and variables"
+        ],
+        "fixes": [
+          {
+            "title": "remove `[unsafe]`",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "unsafe_fix.pas",
+                "start": 894,
+                "end": 903,
+                "line": 22,
+                "column": 3,
+                "end_line": 22,
+                "end_column": 12,
+                "original": "[unsafe] ",
+                "replacement": ""
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E3018]: `[unsafe]` is not supported in Puy\n   --> unsafe_fix.pas:22:4\n    |\n 22 |   [unsafe] TNodes = TArray<TNode>;\n    |    ^^^^^^\n    |\n    = note: `[weak]` and `[unsafe]` can only be applied to fields and variables\n    = suggestion: remove `[unsafe]`"
+      },
+      {
+        "code": "E3018",
+        "severity": "error",
+        "name": null,
+        "message": "`[unsafe]` is not supported in Puy",
+        "primary": {
+          "file": "unsafe_fix.pas",
+          "start": 948,
+          "end": 954,
+          "line": 24,
+          "column": 6,
+          "end_line": 24,
+          "end_column": 12,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "`[weak]` in Puy can only be applied to reference counted classes and interfaces"
+        ],
+        "fixes": [
+          {
+            "title": "remove `[unsafe]`",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "unsafe_fix.pas",
+                "start": 947,
+                "end": 956,
+                "line": 24,
+                "column": 5,
+                "end_line": 24,
+                "end_column": 14,
+                "original": "[unsafe] ",
+                "replacement": ""
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E3018]: `[unsafe]` is not supported in Puy\n   --> unsafe_fix.pas:24:6\n    |\n 24 |     [unsafe] Name: string;\n    |      ^^^^^^\n    |\n    = note: `[weak]` in Puy can only be applied to reference counted classes and interfaces\n    = suggestion: remove `[unsafe]`"
+      },
+      {
+        "code": "E3018",
+        "severity": "error",
+        "name": null,
+        "message": "`[unsafe]` is not supported in Puy",
+        "primary": {
+          "file": "unsafe_fix.pas",
+          "start": 1033,
+          "end": 1039,
+          "line": 31,
+          "column": 23,
+          "end_line": 31,
+          "end_column": 29,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "`[weak]` and `[unsafe]` cannot be applied to parameters; use a `const` parameter to avoid counting"
+        ],
+        "fixes": [
+          {
+            "title": "remove `[unsafe]`",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "unsafe_fix.pas",
+                "start": 1032,
+                "end": 1041,
+                "line": 31,
+                "column": 22,
+                "end_line": 31,
+                "end_column": 31,
+                "original": "[unsafe] ",
+                "replacement": ""
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E3018]: `[unsafe]` is not supported in Puy\n   --> unsafe_fix.pas:31:23\n    |\n 31 | procedure Show(const [unsafe] N: TNode);\n    |                       ^^^^^^\n    |\n    = note: `[weak]` and `[unsafe]` cannot be applied to parameters; use a `const` parameter to avoid counting\n    = suggestion: remove `[unsafe]`"
+      },
+      {
+        "code": "E3018",
+        "severity": "error",
+        "name": null,
+        "message": "`[unsafe]` is not supported in Puy",
+        "primary": {
+          "file": "unsafe_fix.pas",
+          "start": 1092,
+          "end": 1098,
+          "line": 37,
+          "column": 4,
+          "end_line": 37,
+          "end_column": 10,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "use `[weak]` instead"
+        ],
+        "fixes": [
+          {
+            "title": "use `[weak]`",
+            "applicability": "safe",
+            "edits": [
+              {
+                "file": "unsafe_fix.pas",
+                "start": 1092,
+                "end": 1098,
+                "line": 37,
+                "column": 4,
+                "end_line": 37,
+                "end_column": 10,
+                "original": "unsafe",
+                "replacement": "weak"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E3018]: `[unsafe]` is not supported in Puy\n   --> unsafe_fix.pas:37:4\n    |\n 37 |   [unsafe] Root: TNode;\n    |    ^^^^^^\n    |\n    = note: use `[weak]` instead\n    = fix: use `[weak]`"
+      },
+      {
+        "code": "E3018",
+        "severity": "error",
+        "name": null,
+        "message": "`[unsafe]` is not supported in Puy",
+        "primary": {
+          "file": "unsafe_fix.pas",
+          "start": 1116,
+          "end": 1122,
+          "line": 38,
+          "column": 4,
+          "end_line": 38,
+          "end_column": 10,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "`[weak]` in Puy can only be applied to reference counted classes and interfaces"
+        ],
+        "fixes": [
+          {
+            "title": "remove `[unsafe]`",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "unsafe_fix.pas",
+                "start": 1115,
+                "end": 1124,
+                "line": 38,
+                "column": 3,
+                "end_line": 38,
+                "end_column": 12,
+                "original": "[unsafe] ",
+                "replacement": ""
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E3018]: `[unsafe]` is not supported in Puy\n   --> unsafe_fix.pas:38:4\n    |\n 38 |   [unsafe] Any: TObject;\n    |    ^^^^^^\n    |\n    = note: `[weak]` in Puy can only be applied to reference counted classes and interfaces\n    = suggestion: remove `[unsafe]`"
+      },
+      {
+        "code": "E3018",
+        "severity": "error",
+        "name": null,
+        "message": "`[unsafe]` is not supported in Puy",
+        "primary": {
+          "file": "unsafe_fix.pas",
+          "start": 1151,
+          "end": 1157,
+          "line": 40,
+          "column": 8,
+          "end_line": 40,
+          "end_column": 14,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "use `[weak]` instead"
+        ],
+        "fixes": [
+          {
+            "title": "use `[weak]`",
+            "applicability": "safe",
+            "edits": [
+              {
+                "file": "unsafe_fix.pas",
+                "start": 1151,
+                "end": 1157,
+                "line": 40,
+                "column": 8,
+                "end_line": 40,
+                "end_column": 14,
+                "original": "unsafe",
+                "replacement": "weak"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E3018]: `[unsafe]` is not supported in Puy\n   --> unsafe_fix.pas:40:8\n    |\n 40 |   var [unsafe] Last: TNode := nil;\n    |        ^^^^^^\n    |\n    = note: use `[weak]` instead\n    = fix: use `[weak]`"
+      }
+    ],
+    "summary": {
+      "errors": 14,
+      "warnings": 0,
+      "notes": 0
+    }
+  }
+]

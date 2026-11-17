@@ -1,0 +1,3 @@
+error: uncaught exception EAccessViolation: access to a freed object
+  at AnonFreedSelf.TPlain.Greeting.<anon1> (anon_freed_self.pas:17)
+  at AnonFreedSelf.<main> (anon_freed_self.pas:30)

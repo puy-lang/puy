@@ -1,0 +1,154 @@
+; puy ir 1
+.global
+  g0 O: TObject
+  g1 S: IShape
+  g2 Q: TSquare
+.func f0 DumpInterfaceChecks.<main> params=0
+  .reg t0: TObject temp
+  .reg t1: Int64 temp
+  .reg t2: string temp
+  .reg t3: Boolean temp
+  .reg t4: TObject temp
+  .reg t5: Integer temp
+  .reg t6: string temp
+  .reg t7: IShape temp
+  .reg t8: Int64 temp
+  .reg t9: Integer temp
+  .reg t10: Int64 temp
+  .reg t11: IShape temp
+  .reg t12: Int64 temp
+  .reg t13: Integer temp
+  .reg t14: Int64 temp
+  .reg t15: TSquare temp
+  .reg t16: Int64 temp
+  .reg t17: TObject temp
+  .reg t18: Int64 temp
+  .reg t19: Int64 temp
+  .reg t20: string temp
+  .reg t21: Boolean temp
+  .reg t22: TObject temp
+  .reg t23: Int64 temp
+  .reg t24: Boolean temp
+  .reg t25: Integer temp
+  .reg t26: Int64 temp
+  .reg t27: IShape temp
+  .reg t28: Int64 temp
+  .reg t29: string temp
+  .reg t30: string temp
+  .reg t31: Boolean temp
+  .reg t32: IShape temp
+  .reg t33: Boolean temp
+  .reg t34: Integer temp
+  .reg t35: string temp
+  .reg t36: string temp
+  .reg t37: Boolean temp
+  .reg t38: class of TSquare temp
+  .reg t39: Integer temp
+  .reg t40: class of TSquare temp
+  .reg t41: Integer temp
+  .reg t42: string temp
+bb0:
+  .line 31
+  New          t0, DumpInterfaceChecks.TSquare
+  LoadGlobal   t1, g0
+  AddRefObj    t0
+  StoreGlobal  t0, g0
+  ReleaseObj   t1
+  .line 32
+  LoadGlobal   t4, g0
+  Move         t3, t4
+  LoadInt      t5, DumpInterfaceChecks.IShape
+  IsIntf       t3, t5
+  BoolToStr    t2, t3
+  LoadConst    t6, "\n"
+  ConcatStr    t2, t2, t6
+  CallHost     -, h0(t2)
+  .line 33
+  LoadGlobal   t8, g0
+  AssignObj    t7, t8
+  LoadInt      t9, DumpInterfaceChecks.IShape
+  AsIntf       t7, t9
+  LoadGlobal   t10, g1
+  AddRefObj    t7
+  StoreGlobal  t7, g1
+  ReleaseObj   t10
+  .line 34
+  LoadGlobal   t12, g0
+  AssignObj    t11, t12
+  LoadInt      t13, DumpInterfaceChecks.IShape
+  AsIntf       t11, t13
+  LoadGlobal   t14, g1
+  AddRefObj    t11
+  StoreGlobal  t11, g1
+  ReleaseObj   t14
+  .line 35
+  LoadGlobal   t16, g1
+  AssignObj    t15, t16
+  AsClass      t15, DumpInterfaceChecks.TSquare
+  StoreGlobalRef t15, g2
+  .line 36
+  LoadGlobal   t18, g1
+  AssignObj    t17, t18
+  LoadGlobal   t19, g0
+  AddRefObj    t17
+  StoreGlobal  t17, g0
+  ReleaseObj   t19
+  .line 37
+  LoadGlobal   t23, g0
+  AssignObj    t22, t23
+  Move         t24, t22
+  LoadInt      t25, DumpInterfaceChecks.IShape
+  IsIntf       t24, t25
+  JmpIfFalse   t24, bb2, bb1
+bb1:
+  .line 37
+  LoadGlobal   t26, g1
+  AddRefObj    t22
+  StoreGlobal  t22, g1
+  ReleaseObj   t26
+  Jmp          bb3
+bb2:
+  .line 37
+  LoadZero     t27
+  LoadGlobal   t28, g1
+  AddRefObj    t27
+  StoreGlobal  t27, g1
+  ReleaseObj   t28
+  Jmp          bb3
+bb3:
+  .line 37
+  Move         t21, t24
+  BoolToStr    t20, t21
+  LoadConst    t29, " "
+  ConcatStr    t20, t20, t29
+  LoadGlobal   t32, g1
+  Move         t33, t32
+  LoadInt      t34, DumpInterfaceChecks.IShape
+  IsIntf       t33, t34
+  Move         t31, t33
+  BoolToStr    t30, t31
+  ConcatStr    t20, t20, t30
+  LoadConst    t35, " "
+  ConcatStr    t20, t20, t35
+  LoadInt      t38, class DumpInterfaceChecks.TSquare
+  LoadInt      t39, DumpInterfaceChecks.IShape
+  Move         t40, t38
+  Move         t41, t39
+  ClassSupports t37, t40, t41
+  BoolToStr    t36, t37
+  ConcatStr    t20, t20, t36
+  LoadConst    t42, "\n"
+  ConcatStr    t20, t20, t42
+  CallHost     -, h0(t20)
+  .line 38
+  RetVoid
+.finally t0:obj, t2, t6, t7:obj, t11:obj, t15, t17:obj, t20, t22:obj, t27:obj, t29, t30, t35, t36, t42
+.func f1 DumpInterfaceChecks.TSquare.Area params=1
+  .reg v0 Self: TSquare self
+  .reg v1 Result: Integer result
+bb0:
+  .line 23
+  LoadInt      v1, 4
+  .line 24
+  Ret          v1
+.finally

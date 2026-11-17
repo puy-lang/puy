@@ -1,0 +1,8 @@
+error[E0405]: expected an identifier
+   --> attr_trailing_comma.pas:10:9
+    |
+ 10 |   [Mark, ] TX = class
+    |         ^
+    |          - found here
+
+error: aborting due to 1 error

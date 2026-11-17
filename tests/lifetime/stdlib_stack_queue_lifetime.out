@@ -1,0 +1,31 @@
+a is held twice: 2
+drop a pop
+destroy c
+pop and keep
+kept b 1
+destroy b
+peek a
+clear
+destroy d
+push again
+free the stack
+destroy e
+destroy f
+stack done
+destroy a
+drop a dequeue
+destroy q1
+kept q2!
+destroy q2
+wrap round, then grow while wrapped
+capacity 8
+destroy q3
+free the queue
+destroy q4
+destroy q5
+destroy q6
+destroy q7
+queue done
+visit x
+EAccessViolation: access to a freed object
+end

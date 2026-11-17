@@ -1,0 +1,38 @@
+error[E0765]: record `TOnlyEqual` declares operator `Equal` but not `GetHashCode`
+   --> record_hash_errors.pas:12:20
+    |
+ 12 |     class operator Equal(const A, B: TOnlyEqual): Boolean;
+    |                    ^^^^^
+    |
+    = note: declare `function GetHashCode: Int64;` that returns the same value for equal records, for example `HashCombine(KeyHash(A), KeyHash(B))`
+    = suggestion: declare `function GetHashCode: Int64;`
+
+error[E0765]: record `TOnlyHash` declares `GetHashCode` but not operator `Equal`
+   --> record_hash_errors.pas:17:14
+    |
+ 17 |     function GetHashCode: Int64;
+    |              ^^^^^^^^^^^
+
+error[E0765]: `GetHashCode` of a record must be declared as `function GetHashCode: Int64`
+   --> record_hash_errors.pas:23:14
+    |
+ 22 |     class operator Equal(A, B: TIntegerHash): Boolean;
+    |                    ----- operator `Equal` declared here
+ 23 |     function GetHashCode: Integer;
+    |              ^^^^^^^^^^^
+
+error[E0765]: `GetHashCode` of a record must be declared as `function GetHashCode: Int64`
+   --> record_hash_errors.pas:29:20
+    |
+ 28 |     class operator Equal(const A, B: TStaticHash): Boolean;
+    |                    ----- operator `Equal` declared here
+ 29 |     class function GetHashCode: Int64; static;
+    |                    ^^^^^^^^^^^
+
+error[E0700]: undeclared identifier `TNoSuchType`
+   --> record_hash_errors.pas:36:27
+    |
+ 36 |     function GetHashCode: TNoSuchType;
+    |                           ^^^^^^^^^^^
+
+error: aborting due to 5 errors

@@ -1,0 +1,58 @@
+warning[W0011]: unit `Legacy` is deprecated: use Modern (deprecated)
+  --> main.pas:6:6
+   |
+ 6 | uses Legacy;
+   |      ^^^^^^
+  ::: src/Legacy.pas:1:6
+ 1 | unit Legacy deprecated 'use Modern';
+   |      ------ declared here
+   |
+   = note: disable with `{$WARN deprecated OFF}`
+
+warning[W0011]: `OldRun` is deprecated: use Run (deprecated)
+   --> main.pas:10:3
+    |
+ 10 |   OldRun;
+    |   ^^^^^^
+   ::: src/Legacy.pas:12:11
+ 12 | procedure OldRun; deprecated 'use Run';
+    |           ------ declared here
+    |
+    = note: disable with `{$WARN deprecated OFF}`
+
+warning[W0011]: `OldRun` is deprecated: use Run (deprecated)
+   --> main.pas:11:10
+    |
+ 11 |   Legacy.OldRun;
+    |          ^^^^^^
+   ::: src/Legacy.pas:12:11
+ 12 | procedure OldRun; deprecated 'use Run';
+    |           ------ declared here
+    |
+    = note: disable with `{$WARN deprecated OFF}`
+
+warning[W0012]: `Trial` is experimental (experimental)
+   --> main.pas:12:3
+    |
+ 12 |   Trial;
+    |   ^^^^^
+   ::: src/Legacy.pas:13:11
+ 13 | procedure Trial; experimental;
+    |           ----- declared here
+    |
+    = note: an experimental declaration may change or be removed without being deprecated first
+    = note: disable with `{$WARN experimental OFF}`
+
+warning[W0012]: `Trial` is experimental (experimental)
+   --> src/Legacy.pas:24:3
+    |
+ 13 | procedure Trial; experimental;
+    |           ----- declared here
+...
+ 24 |   Trial;
+    |   ^^^^^
+    |
+    = note: an experimental declaration may change or be removed without being deprecated first
+    = note: disable with `{$WARN experimental OFF}`
+
+warning: 5 warnings emitted

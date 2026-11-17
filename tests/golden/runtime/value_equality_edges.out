@@ -1,0 +1,14 @@
+  Equals called
+in destructor: TRUE
+  GetHashCode called
+hash in destructor: TRUE
+no fields: TRUE TRUE
+= stays identity: FALSE TRUE
+child, same fields: FALSE TRUE
+  TValEq.Equal
+descendant with Equal: TRUE
+weak left out: TRUE TRUE
+lower-case attributes: TRUE
+cycle: EStackOverflow
+generated Equals, freed: EAccessViolation
+value Equals, freed: EAccessViolation

@@ -4,7 +4,7 @@ use super::builtins::{self, BuiltinProc};
 use super::expr::PlaceUse;
 use super::hir::*;
 use super::overload::Pick;
-use super::types::{Const, Ty};
+use super::types::{Const, MethodKind, Ty};
 use super::{LSym, Resolved, Sema};
 use crate::diagnostics::{Code, Diagnostic, Fix, Stage, TextEdit};
 use crate::source::TextRange;
@@ -40,6 +40,7 @@ impl<'a, 's> Sema<'a, 's> {
                 if self.check_duplicate(&lower, range) {
                     return None;
                 }
+                self.note_typed_const(c.type_ref().is_some(), range);
                 let sym = LSym::Const {
                     ty: if value.is_some() { ty } else { Ty::Error },
                     value: value.unwrap_or(Const::Int(0)),
@@ -121,7 +122,8 @@ impl<'a, 's> Sema<'a, 's> {
             };
         };
         let e = self.lower_expr(&c);
-        self.coerce(e, Ty::Boolean, false, None)
+        // Not converted by `Implicit` (`docs/spec/objects.md` 11.4)
+        self.coerce_with(e, Ty::Boolean, false, None, false)
     }
 
     fn lower_if(&mut self, i: &ast::IfStmt) -> Option<StmtKind> {
@@ -163,9 +165,31 @@ impl<'a, 's> Sema<'a, 's> {
     fn lower_assign(&mut self, a: &ast::AssignStmt, span: TextRange) -> Option<StmtKind> {
         let target = a.target()?;
         let value_ast = a.value();
+        // `O.P := X` (`docs/spec/objects.md` 2.6)
+        if let Some(s) = self.assign_property(&target, value_ast.clone(), span) {
+            return s;
+        }
         // Type the right-hand side first (the target variable is read after the right-hand side),
         // except an array constructor and `nil`, which take their type from the target
-        let contextual = value_ast.as_ref().is_some_and(is_contextual);
+        // A class's name too, which is a value where a class reference is expected
+        // (`docs/spec/objects.md` 2.8)
+        let contextual = value_ast.as_ref().is_some_and(is_contextual)
+            || value_ast
+                .as_ref()
+                .is_some_and(|v| self.class_name_of(v).is_some())
+            // A routine or method name, or a procedural value, assigned to a procedural
+            // variable is a value (`docs/spec/objects.md` 9.4)
+            || (value_ast.as_ref().is_some_and(|v| {
+                matches!(
+                    v,
+                    ast::Expr::NameRef(_)
+                        | ast::Expr::Field(_)
+                        | ast::Expr::Index(_)
+                        | ast::Expr::Inherited(_)
+                )
+            }) && self
+                .dry_run(|s| s.lower_place(&target, PlaceUse::Assign))
+                .is_some_and(|(_, t)| t.is_procedural()));
         let (value, place) = if contextual {
             let place = self.lower_place(&target, PlaceUse::Assign);
             let expected = place.as_ref().map_or(Ty::Error, |(_, t)| *t);
@@ -177,6 +201,7 @@ impl<'a, 's> Sema<'a, 's> {
         };
         let value = value?;
         let (place, ty) = place?;
+        self.check_self_cycle(&target, &value);
         let checks = self.checks_at(span.start());
         // Record the assignment even if the type is unknown (for definite-assignment analysis; no code is generated)
         let value = if ty.is_error() || value.ty.is_error() {
@@ -208,6 +233,8 @@ impl<'a, 's> Sema<'a, 's> {
             (None, Some(e)) => e.ty,
             (None, None) => Ty::Error,
         };
+        let ty = self.decl_attributes(v.syntax(), super::attrs::AttrSite::Var, ty);
+        self.flush_attribute_checks();
         if self.check_duplicate(&lower, range) {
             return None;
         }
@@ -227,7 +254,13 @@ impl<'a, 's> Sema<'a, 's> {
             .last_mut()
             .unwrap()
             .push((lower, LSym::Var(id)));
-        let value = init?;
+        let Some(value) = init else {
+            // A captured variable gets a new cell where it is declared (`docs/spec/objects.md` 9.6)
+            return Some(Stmt {
+                kind: StmtKind::Declare(id),
+                span,
+            });
+        };
         Some(Stmt {
             kind: StmtKind::Assign {
                 target: Place::Var(id, span),
@@ -304,11 +337,25 @@ impl<'a, 's> Sema<'a, 's> {
     fn lower_for_in(&mut self, f: &ast::ForStmt, span: TextRange) -> Option<StmtKind> {
         let fv = f.var()?;
         let checks = self.checks_at(span.start());
-        let coll = f.from().map(|e| self.lower_expr(&e));
+        let coll = f.from().map(|e| match &e {
+            // An array constructor after a written loop variable type that is in error: the
+            // type's error is enough (no E0729 on top)
+            ast::Expr::ArrayCtor(ac) if self.loop_var_type_failed(&fv) => {
+                self.lower_ctor_elements_quietly(ac);
+                super::expr::err_expr(ast::trimmed_range(e.syntax()))
+            }
+            _ => self.lower_expr(&e),
+        });
+        if let Some(c) = coll.as_ref().filter(|c| !self.iterates_itself(c.ty)) {
+            let c = c.clone();
+            return self.lower_for_in_enum(f, &fv, checks, c);
+        }
         let elem = coll.as_ref().map_or(Ty::Error, |c| self.iteration_elem(c));
         self.cur_mut().scopes.push(Vec::new());
         let (var, var_ty) = match self.lower_loop_var(f, &fv, elem, false) {
-            LoopVar::Resolved(var, ty) => (var, ty),
+            // A `[weak]` loop variable takes the element without counting it
+            // (`docs/spec/objects.md` 4.4)
+            LoopVar::Resolved(var, ty) => (var, self.types.strong(ty)),
             LoopVar::Undeclared => {
                 self.lower_loop_body(f.body());
                 return None;
@@ -363,26 +410,106 @@ impl<'a, 's> Sema<'a, 's> {
             elem,
             conv,
             body: Box::new(body),
+            enumerator: None,
         })
     }
 
-    /// The element type of a `for..in` collection: an array's element type, or `Char` for a
-    /// string. Anything else is E0730 (`docs/spec/types.md` chapter 5).
+    /// Whether an inline loop variable's written type is in error (the parser skipped it, or it
+    /// does not resolve); its diagnostics come when the variable is declared.
+    fn loop_var_type_failed(&mut self, fv: &ast::ForVar) -> bool {
+        if !fv.is_inline() || fv.colon_token().is_none() {
+            return false;
+        }
+        match fv.type_ref() {
+            Some(t) => self.dry_run(|s| s.resolve_type(Some(t)).is_error()),
+            None => true,
+        }
+    }
+
+    /// Whether `for..in` iterates over a value of the type by itself (`docs/spec/types.md`
+    /// chapter 5): an array, a string or a set (and the error type, already reported).
+    fn iterates_itself(&self, ty: Ty) -> bool {
+        ty.is_error() || ty == Ty::String || ty.is_set() || self.types.elem_of(ty).is_some()
+    }
+
+    /// The element type of a `for..in` collection that iterates by itself: an array's element
+    /// type, `Char` for a string, a set's base type.
     fn iteration_elem(&mut self, coll: &Expr) -> Ty {
         match coll.ty {
-            Ty::Error => Ty::Error,
             Ty::String => Ty::Char,
             // A set's elements have its base type (`docs/spec/types.md` 8.3)
             t if t.is_set() => self.types.set_base(t).unwrap_or(Ty::Error),
-            t => match self.types.elem_of(t) {
-                Some(e) => e,
-                None => {
-                    let msg = format!("cannot iterate over a value of type `{}`", self.tn(t));
-                    self.error(Code::E(730), msg, coll.span);
-                    Ty::Error
-                }
-            },
+            t => self.types.elem_of(t).unwrap_or(Ty::Error),
         }
+    }
+
+    /// `for X in C` with `GetEnumerator` (`docs/spec/objects.md` chapter 13): hidden variables
+    /// hold the collection and the enumerator, and the element is `E.Current` converted to the
+    /// loop variable's type.
+    fn lower_for_in_enum(
+        &mut self,
+        f: &ast::ForStmt,
+        fv: &ast::ForVar,
+        checks: Checks,
+        coll: Expr,
+    ) -> Option<StmtKind> {
+        let range = fv
+            .name()
+            .map_or(fv.syntax().text_range(), |t| t.text_range());
+        let coll_var = self.add_var(String::new(), coll.ty, VarKind::Hidden, range);
+        let calls = self.enumerator_calls(&coll, coll_var);
+        let elem = calls.as_ref().map_or(Ty::Error, |c| c.current.ty);
+        self.cur_mut().scopes.push(Vec::new());
+        let (var, var_ty) = match self.lower_loop_var(f, fv, elem, false) {
+            // A `[weak]` loop variable takes the element without counting it
+            // (`docs/spec/objects.md` 4.4)
+            LoopVar::Resolved(var, ty) => (var, ty),
+            LoopVar::Undeclared => {
+                self.lower_loop_body(f.body());
+                return None;
+            }
+            LoopVar::Failed => return None,
+        };
+        let current = calls.as_ref().and_then(|c| {
+            if var_ty.is_error() {
+                return None;
+            }
+            let strong = self.types.strong(var_ty);
+            let e = self.coerce(c.current.clone(), strong, checks.range, None);
+            (!e.ty.is_error()).then_some(e)
+        });
+        // A global loop variable gets the element of the last entry again on exit
+        let last = match var {
+            ForVar::Global(g) if current.is_some() => Some(self.add_var(
+                String::new(),
+                self.globals[g.0 as usize].ty,
+                VarKind::Hidden,
+                range,
+            )),
+            _ => None,
+        };
+        let body = self.lower_loop_var_body(var, f.body());
+        let (Some(calls), Some(current)) = (calls, current) else {
+            return None;
+        };
+        Some(StmtKind::ForIn {
+            var,
+            var_span: fv.syntax().text_range(),
+            coll,
+            coll_var,
+            idx_var: calls.var,
+            elem,
+            conv: None,
+            body: Box::new(body),
+            enumerator: Some(Box::new(Enumerator {
+                get: calls.get,
+                move_next: calls.move_next,
+                current,
+                last,
+                checks,
+                cleanup: calls.cleanup,
+            })),
+        })
     }
 
     /// The body of a `for` loop: assigning to the loop variable there is E0707. Ends the scope
@@ -423,6 +550,19 @@ impl<'a, 's> Sema<'a, 's> {
         Diagnostic::error(Code::E(722), msg, Stage::Sema)
     }
 
+    /// E0722 for a loop variable of a type that is not ordinal, or E0762 for one of a type
+    /// parameter (`docs/spec/generics.md` 3.3).
+    fn loop_var_type_error(&mut self, ordinal: bool, ty: Ty, range: TextRange) {
+        if let Ty::Param(p) = ty {
+            self.param_misuse(p, super::generics::ParamOp::Ordinal, range);
+            return;
+        }
+        let d = self
+            .loop_var_error(ordinal)
+            .with_primary(self.span(range), "");
+        self.push(d);
+    }
+
     /// Resolves the loop variable of a `for` statement (`docs/spec/semantics.md` 4.5) inside the
     /// scope the caller opened for `for var X`. `inferred` is the type of `for var X` without a
     /// written type; `ordinal` requires an ordinal type (`for..to`). On failure the scope is closed.
@@ -453,17 +593,20 @@ impl<'a, 's> Sema<'a, 's> {
         let name = self.text(&name_tok).to_string();
         let lower = name.to_ascii_lowercase();
         let range = name_tok.text_range();
-        let wrong_type = |ty: Ty| ordinal && !ty.is_error() && !ty.is_ordinal();
+        // A distinct type as its root (`docs/spec/types.md` 1.3)
+        let wrong_type = |types: &super::types::TypeTable, ty: Ty| {
+            ordinal && !ty.is_error() && !types.root(ty).is_ordinal()
+        };
         if fv.is_inline() {
             let ty = match fv.type_ref() {
                 Some(t) => self.resolve_type(Some(t)),
+                // A written type the parser reported and skipped (`docs/spec/grammar.md` 1.3):
+                // the variable has the error type, not the inferred one, so nothing piles on
+                None if fv.colon_token().is_some() => Ty::Error,
                 None => inferred,
             };
-            if wrong_type(ty) {
-                let d = self
-                    .loop_var_error(ordinal)
-                    .with_primary(self.span(range), "");
-                self.push(d);
+            if wrong_type(&self.types, ty) {
+                self.loop_var_type_error(ordinal, ty, range);
             }
             if self.check_duplicate(&lower, range) {
                 return LoopVar::Failed;
@@ -504,7 +647,7 @@ impl<'a, 's> Sema<'a, 's> {
                 }
                 if matches!(
                     v.kind,
-                    VarKind::Param(ast::ParamMode::Var | ast::ParamMode::Out)
+                    VarKind::Param(ast::ParamMode::Var | ast::ParamMode::Out) | VarKind::RecordSelf
                 ) {
                     let d = self
                         .loop_var_error(ordinal)
@@ -514,11 +657,8 @@ impl<'a, 's> Sema<'a, 's> {
                     self.push(d);
                     return LoopVar::Failed;
                 }
-                if wrong_type(v.ty) {
-                    let d = self
-                        .loop_var_error(ordinal)
-                        .with_primary(self.span(range), "");
-                    self.push(d);
+                if wrong_type(&self.types, v.ty) {
+                    self.loop_var_type_error(ordinal, v.ty, range);
                     return LoopVar::Failed;
                 }
                 if self.cur.as_ref().is_some_and(|c| c.loop_vars.contains(&id)) {
@@ -535,13 +675,14 @@ impl<'a, 's> Sema<'a, 's> {
                     )
                     .with_primary(self.span(at), "the loop variable of the enclosing routine")
                     .with_secondary(self.span(range), "used as the loop variable here")
-                    .with_note("a nested routine cannot write a variable its enclosing routine uses as a `for` loop variable");
+                    .with_note("a nested routine or an anonymous method cannot write a variable its enclosing routine uses as a `for` loop variable");
                     self.push(d);
                     // No W0001 piles on
                     self.cur_mut().vars[id.0 as usize].is_loop_var = true;
                     return LoopVar::Failed;
                 }
                 self.cur_mut().vars[id.0 as usize].is_loop_var = true;
+                self.cur_mut().vars[id.0 as usize].written = true;
                 LoopVar::Resolved(ForVar::Local(id), v.ty)
             }
             Some((_, LSym::Const { span: decl, .. })) => {
@@ -584,7 +725,7 @@ impl<'a, 's> Sema<'a, 's> {
                             self.push(d);
                             return LoopVar::Failed;
                         }
-                        if wrong_type(g.ty) {
+                        if wrong_type(&self.types, g.ty) {
                             let d = self
                                 .loop_var_error(ordinal)
                                 .with_primary(self.span(range), "");
@@ -703,7 +844,7 @@ impl<'a, 's> Sema<'a, 's> {
 
     /// `case` (`docs/spec/semantics.md` 4.10).
     fn lower_case(&mut self, c: &ast::CaseStmt) -> StmtKind {
-        let mut selector = match c.selector() {
+        let selector = match c.selector() {
             Some(e) => self.lower_expr_raw(&e),
             None => Expr {
                 kind: ExprKind::Error,
@@ -716,6 +857,8 @@ impl<'a, 's> Sema<'a, 's> {
         };
         // The labels are checked against the selector's own type (a subrange keeps its bounds);
         // the selector's value has the base type, as any value of a subrange
+        // A distinct type as its root (`docs/spec/types.md` 1.3)
+        let mut selector = self.rooted(selector);
         // A `UTF8String` selector is compared as a `string` (`docs/spec/types.md` 8.5)
         if selector.ty == Ty::Utf8String {
             selector = self.convert_u8(selector, Ty::String);
@@ -725,6 +868,10 @@ impl<'a, 's> Sema<'a, 's> {
         let is_string = selector.ty == Ty::String;
         let label_ty = if declared.is_error() || declared.is_ordinal() || is_string {
             declared
+        } else if let Ty::Param(p) = declared {
+            // `docs/spec/generics.md` 3.3
+            self.param_misuse(p, super::generics::ParamOp::Ordinal, selector.span);
+            Ty::Error
         } else {
             let t = self.tn(declared);
             self.error(
@@ -860,11 +1007,12 @@ impl<'a, 's> Sema<'a, 's> {
             let span = h
                 .on_token()
                 .map_or(ast::trimmed_range(h.syntax()), |t| t.text_range());
-            let class = match h.type_ref() {
+            // A name, or a name with type arguments (`docs/spec/generics.md` 1.3)
+            let class = match h.syntax().children().find_map(ast::TypeSpec::cast) {
                 Some(tr) => {
                     let range = tr.syntax().text_range();
-                    match self.resolve_type_ref(&tr) {
-                        ty @ Ty::Exception(id) => {
+                    match self.resolve_type(Some(tr.clone())) {
+                        ty @ Ty::Class(id) if self.types.is_exception_class(id) => {
                             if let Some((_, prev)) = caught
                                 .iter()
                                 .find(|(c, _)| self.types.is_descendant(id, *c))
@@ -885,11 +1033,16 @@ impl<'a, 's> Sema<'a, 's> {
                         Ty::Error => Ty::Error,
                         other => {
                             let t = self.tn(other);
-                            self.error(
+                            let d = self.error(
                                 Code::E(733),
                                 format!("`{t}` is not an exception class"),
                                 range,
                             );
+                            if matches!(other, Ty::Class(_)) {
+                                // Only exceptions are raised (`docs/spec/objects.md` 8.3)
+                                d.notes
+                                    .push("every exception derives from `Exception`".into());
+                            }
                             Ty::Error
                         }
                     }
@@ -960,20 +1113,37 @@ impl<'a, 's> Sema<'a, 's> {
         true
     }
 
-    /// The exception of `raise X` / `RaiseOuterException(X)`: an exception class value (E0702).
+    /// The exception of `raise X` / `RaiseOuterException(X)`: a value of an exception class
+    /// (`docs/spec/objects.md` 8.3). Another class (`TObject` too) and an interface are E3021,
+    /// any other type E0702.
     fn exception_value(&mut self, e: &ast::Expr) -> Expr {
-        let root = Ty::Exception(super::types::EXCEPTION);
+        let root = Ty::Class(super::types::EXCEPTION);
         let x = self.lower_expected(e, root);
-        if x.ty.is_error() || matches!(x.ty, Ty::Exception(_)) {
+        if x.ty.is_error() {
+            return x;
+        }
+        if let Ty::Class(id) = x.ty
+            && self.types.is_exception_class(id)
+        {
             return x;
         }
         let t = self.tn(x.ty);
         let at = x.span;
-        self.error(
-            Code::E(702),
-            format!("type mismatch: expected `Exception`, found `{t}`"),
-            at,
-        );
+        if let Ty::Class(_) | Ty::Intf(_) = x.ty {
+            self.error(
+                Code::E(3021),
+                format!("raising `{t}` is not supported in Puy"),
+                at,
+            )
+            .notes
+            .push(builtins::deleted_note(Code::E(3021)).into());
+        } else {
+            self.error(
+                Code::E(702),
+                format!("type mismatch: expected `Exception`, found `{t}`"),
+                at,
+            );
+        }
         Expr {
             kind: ExprKind::Error,
             ty: Ty::Error,
@@ -982,70 +1152,148 @@ impl<'a, 's> Sema<'a, 's> {
         }
     }
 
-    /// `E.Free`, `E.Destroy` and `FreeAndNil(E)` of an exception (E3019; `docs/spec/exceptions.md`
-    /// chapter 1), and other members of an exception written as a statement. `None` if the statement
-    /// is not one of these.
-    fn exception_member_stmt(
+    /// `FreeAndNil(E)` of an exception without `System.SysUtils` (E3019, as in M2;
+    /// `docs/spec/exceptions.md` chapter 1, `docs/spec/objects.md` 8.6): the class rule needs
+    /// the unit for the name. `None` if the statement is not this one.
+    fn exception_free_and_nil(&mut self, callee: &ast::Expr, args: &[ast::Arg]) -> Option<()> {
+        let ast::Expr::NameRef(n) = callee else {
+            return None;
+        };
+        if !(n.text().eq_ignore_ascii_case("freeandnil")
+            && self.find_visible("freeandnil").is_none()
+            && args.len() == 1)
+        {
+            return None;
+        }
+        let v = args[0].value()?;
+        match self.trial_type(&v) {
+            Ty::Class(id) if self.types.is_exception_class(id) => {}
+            _ => return None,
+        }
+        self.lower_expr(&v);
+        let range = ast::trimmed_range(callee.syntax());
+        let name = self.src(range);
+        self.error(
+            Code::E(3019),
+            format!("`{name}` is not supported in Puy"),
+            range,
+        )
+        .notes
+        .push(builtins::deleted_note(Code::E(3019)).into());
+        Some(())
+    }
+
+    /// A statement `O.Name` / `O.Name(…)` on a class instance (`docs/spec/objects.md` 3.2):
+    /// `Free` / `Destroy` (when the class has no field of that name) destroy the instance;
+    /// anything else is not a statement. `None` if `callee` is not a member of an instance.
+    fn class_member_stmt(
         &mut self,
         callee: &ast::Expr,
         args: &[ast::Arg],
         span: TextRange,
-    ) -> Option<()> {
-        match callee {
-            ast::Expr::Field(f) if self.is_value_chain(callee) => {
-                let base = f.base()?;
-                if !matches!(self.trial_type(&base), Ty::Exception(_)) {
-                    return None;
-                }
-                let x = self.lower_expr(callee);
-                for a in args {
-                    if let Some(v) = a.value() {
-                        self.lower_expr(&v);
-                    }
-                }
-                if !x.ty.is_error() {
-                    self.error(Code::E(402), "expected a statement", span);
-                }
-                Some(())
-            }
-            ast::Expr::NameRef(n)
-                if n.text().eq_ignore_ascii_case("freeandnil")
-                    && self.find_visible("freeandnil").is_none()
-                    && args.len() == 1 =>
-            {
-                let v = args[0].value()?;
-                if !matches!(self.trial_type(&v), Ty::Exception(_)) {
-                    return None;
-                }
-                self.lower_expr(&v);
-                let range = ast::trimmed_range(callee.syntax());
-                let name = self.src(range);
-                self.error(
-                    Code::E(3019),
-                    format!("`{name}` is not supported in Puy"),
-                    range,
-                )
-                .notes
-                .push(builtins::deleted_note(Code::E(3019)).into());
-                Some(())
-            }
-            _ => None,
+    ) -> Option<Option<StmtKind>> {
+        let ast::Expr::Field(f) = callee else {
+            return None;
+        };
+        if !self.is_value_chain(callee) {
+            return None;
         }
+        let base = f.base()?;
+        let Ty::Class(id) = self.trial_type(&base) else {
+            return None;
+        };
+        let field = f.field()?;
+        let lower = self.text(&field).to_ascii_lowercase();
+        let has_field = self
+            .types
+            .class_fields(id)
+            .iter()
+            .any(|(_, x)| x.name.eq_ignore_ascii_case(&lower));
+        if matches!(lower.as_str(), "free" | "destroy") && !has_field {
+            let target = self.lower_expr(&base);
+            let values: Vec<Expr> = args
+                .iter()
+                .filter_map(|a| a.value())
+                .map(|v| self.lower_expr(&v))
+                .collect();
+            if !values.is_empty() {
+                self.error(
+                    Code::E(705),
+                    format!(
+                        "wrong number of arguments: expected 0, found {}",
+                        values.len()
+                    ),
+                    span,
+                );
+                return Some(None);
+            }
+            if target.ty.is_error() {
+                return Some(None);
+            }
+            let name_range = field.text_range();
+            return Some(self.free_stmt(target, lower == "destroy", name_range, Some(span)));
+        }
+        if has_field {
+            let x = self.lower_expr(callee);
+            for a in args {
+                if let Some(v) = a.value() {
+                    self.lower_expr(&v);
+                }
+            }
+            if !x.ty.is_error() {
+                self.error(Code::E(402), "expected a statement", span);
+            }
+            return Some(None);
+        }
+        // A method call (`docs/spec/objects.md` 2.3): resolved as a name
+        None
     }
 
     fn lower_expr_stmt(&mut self, e: &ast::ExprStmt, span: TextRange) -> Option<StmtKind> {
         let expr = e.expr()?;
         let (callee, args): (ast::Expr, Vec<ast::Arg>) = match &expr {
             ast::Expr::Call(c) => (c.callee()?, c.args()),
-            ast::Expr::NameRef(_) | ast::Expr::Field(_) => (expr.clone(), Vec::new()),
+            ast::Expr::NameRef(_) | ast::Expr::Field(_) | ast::Expr::Inherited(_) => {
+                (expr.clone(), Vec::new())
+            }
             _ => {
-                // A form for which the parser has reported E0402
-                self.lower_expr(&expr);
+                // A form for which the parser has reported E0402: typed as a value, so a
+                // procedural value (`A[0];`, `(A[0]);`) is not called and gets no E0725 on top
+                // of it
+                let mut inner = expr.clone();
+                while let ast::Expr::Paren(p) = &inner
+                    && let Some(e) = p.inner()
+                {
+                    inner = e;
+                }
+                self.lower_value(&inner);
                 return None;
             }
         };
-        if self.exception_member_stmt(&callee, &args, span).is_some() {
+        if let ast::Expr::Inherited(i) = &expr
+            && i.name().is_none()
+        {
+            return self.bare_inherited(span);
+        }
+        if !matches!(&expr, ast::Expr::Call(c) if c.has_error_arg())
+            && let Some(v) = self.procedural_callee(&callee)
+        {
+            // A call of a procedural value, with or without parentheses
+            // (`docs/spec/objects.md` 9.4)
+            let call = self.call_value(v, &args, span);
+            return matches!(call.kind, ExprKind::CallValue { .. }).then_some(StmtKind::Expr(call));
+        }
+        if let Some(k) = self.class_member_stmt(&callee, &args, span) {
+            return k;
+        }
+        if self.exception_free_and_nil(&callee, &args).is_some() {
             return None;
+        }
+        if matches!(callee, ast::Expr::Paren(_)) {
+            // `(F)()`, `(procedure begin … end)()`: typed as the call expression it is (no name to
+            // resolve), so its errors are reported and a call of a value is kept
+            let call = self.lower_expr(&expr);
+            return matches!(call.kind, ExprKind::CallValue { .. }).then_some(StmtKind::Expr(call));
         }
         let (r, name, range) = self.resolve_name_expr(&callee)?;
         if matches!(&expr, ast::Expr::Call(c) if c.has_error_arg()) {
@@ -1065,6 +1313,7 @@ impl<'a, 's> Sema<'a, 's> {
                     Pick::Routine(c) => c,
                     Pick::Failed => return None,
                 };
+                self.routine_hint_use(id, range);
                 if bare && !self.check_bare_routine_stmt(id, range) {
                     return None;
                 }
@@ -1077,6 +1326,10 @@ impl<'a, 's> Sema<'a, 's> {
             Resolved::Func(f) => {
                 let call = self.lower_builtin_call_stmt(f, &name, &args, range, span);
                 call.map(StmtKind::Expr)
+            }
+            Resolved::Key(op, t) => {
+                let call = self.lower_key_call(op, t, &args, span);
+                (!call.ty.is_error()).then_some(StmtKind::Expr(call))
             }
             Resolved::Proc(p) => self.lower_builtin_proc(p, &args, range, span),
             Resolved::Type(t) => {
@@ -1124,8 +1377,59 @@ impl<'a, 's> Sema<'a, 's> {
                 );
                 None
             }
-            Resolved::ExcCreate(_) | Resolved::ExcCreateFmt(_) => {
-                // A new exception object that nothing holds
+            Resolved::Member {
+                recv,
+                class,
+                member,
+                inherited,
+            } => {
+                let bare = !matches!(expr, ast::Expr::Call(_));
+                if bare
+                    && matches!(
+                        member,
+                        super::methods::Member::Field { .. } | super::methods::Member::Property(..)
+                    )
+                {
+                    self.error(Code::E(402), "expected a statement", span);
+                    return None;
+                }
+                if let super::methods::Member::Methods { name: n, .. } = &member
+                    && class == super::types::TINDEXRANGE
+                    && n.eq_ignore_ascii_case(super::types::INDEX_RANGE_CLAMP)
+                {
+                    // Written out here (`docs/spec/objects.md` 12.3, 14.10)
+                    return self.index_range_clamp(*recv, &args, span);
+                }
+                if let super::methods::Member::Methods { name: n, .. } = &member
+                    && args.is_empty()
+                    && matches!(recv.ty, Ty::Class(_))
+                    && let Some((_, m)) = self.methods_named(class, n).first()
+                {
+                    // `Free` / `Destroy` inside a method destroy `Self` (`docs/spec/objects.md`
+                    // 3.2); `inherited Destroy` calls the parent's destructor
+                    let free = m.routine.is_none() && m.name == "Free";
+                    if free || (m.kind == MethodKind::Destructor && !inherited) {
+                        return self.free_stmt(*recv, !free, range, None);
+                    }
+                }
+                let args = (!bare).then_some(&args[..]);
+                let x = self.member_expr(*recv, class, member, inherited, args, false, range, span);
+                (!x.ty.is_error()
+                    || matches!(
+                        x.kind,
+                        ExprKind::Call { .. } | ExprKind::InheritedBuiltin { .. }
+                    ))
+                .then_some(StmtKind::Expr(x))
+            }
+            Resolved::ClassCreate(id, ctor) if !self.types.is_exception_class(id) => {
+                // A new instance that nothing holds: one of a class managed by hand leaks
+                // (`docs/spec/objects.md` 4.1)
+                let x = self.new_instance(id, &ctor, &args, span, range, None);
+                (!x.ty.is_error()).then_some(StmtKind::Expr(x))
+            }
+            Resolved::ClassCreate(..) => {
+                // A new exception object that nothing holds: not a statement, as in M2
+                // (`docs/spec/objects.md` 8.6)
                 for a in &args {
                     if let Some(v) = a.value() {
                         self.lower_expr(&v);
@@ -1181,7 +1485,9 @@ impl<'a, 's> Sema<'a, 's> {
             }
             Resolved::Error => {
                 for a in &args {
-                    if let Some(v) = a.value() {
+                    if let Some(v) = a.value()
+                        && !self.bare_routine_arg(&v)
+                    {
                         self.lower_expr(&v);
                     }
                 }
@@ -1309,8 +1615,42 @@ impl<'a, 's> Sema<'a, 's> {
                 if ty.is_error() {
                     return None;
                 }
-                // An enumeration or subrange is also allowed (`docs/spec/semantics.md` 5.3)
-                let base = self.types.base(ty);
+                // `class operator Inc` / `Dec`: `X := Inc(X)` (`docs/spec/objects.md` 11.2)
+                if self.operator_owner(ty).is_some() {
+                    let name = if p == BuiltinProc::Dec { "Dec" } else { "Inc" };
+                    let value = self.lower_expr(&v);
+                    if value.ty.is_error() {
+                        return None;
+                    }
+                    let call = self.unary_operator(value, name, name, range, span);
+                    if let Ok(x) = call {
+                        if let Some(d) = args.get(1).and_then(|a| a.value()) {
+                            self.lower_expr(&d);
+                            self.error(
+                                Code::E(705),
+                                "wrong number of arguments: expected 1, found 2",
+                                span,
+                            );
+                            return None;
+                        }
+                        if x.ty.is_error() {
+                            return None;
+                        }
+                        let value = self.coerce(x, ty, checks.range, None);
+                        if value.ty.is_error() {
+                            return None;
+                        }
+                        return Some(StmtKind::Assign {
+                            target: place,
+                            value,
+                            check: checks,
+                            is_init: false,
+                        });
+                    }
+                }
+                // An enumeration or subrange is also allowed (`docs/spec/semantics.md` 5.3), and a
+                // distinct type as its root (`docs/spec/types.md` 1.3)
+                let base = self.types.base(self.types.root(ty));
                 if !(base.is_integer() || matches!(base, Ty::Char | Ty::Enum(_))) {
                     let r = ast::trimmed_range(v.syntax());
                     self.error(Code::E(702), format!("type mismatch: expected an integer type or `Char`, found `{}` (argument 1, parameter `X`)", self.tn(ty)), r);
@@ -1384,7 +1724,8 @@ impl<'a, 's> Sema<'a, 's> {
                 }
                 let c = args[0].value()?;
                 let cond = self.lower_expr(&c);
-                let cond = self.coerce(cond, Ty::Boolean, false, Some((1, "Condition")));
+                let cond =
+                    self.coerce_with(cond, Ty::Boolean, false, Some((1, "Condition")), false);
                 let message = match args.get(1).and_then(|a| a.value()) {
                     Some(m) => {
                         let e = self.lower_expr(&m);
@@ -1478,9 +1819,21 @@ impl<'a, 's> Sema<'a, 's> {
                             None => self.lower_expr(&v),
                         };
                         let Some(rt) = ret else {
+                            // A constructor has no result either (`docs/spec/objects.md` 3.1)
+                            let what = match self
+                                .cur
+                                .as_ref()
+                                .and_then(|c| c.routine)
+                                .and_then(|r| self.method_of_routine(r))
+                                .map(|(_, m)| m.kind)
+                            {
+                                Some(MethodKind::Constructor) => "constructor",
+                                Some(MethodKind::Destructor) => "destructor",
+                                _ => "procedure",
+                            };
                             let d = Diagnostic::error(
                                 Code::E(711),
-                                "`Exit` with a value is not allowed in a procedure",
+                                format!("`Exit` with a value is not allowed in a {what}"),
                                 Stage::Sema,
                             )
                             .with_primary(self.span(range), "");
@@ -1508,6 +1861,12 @@ impl<'a, 's> Sema<'a, 's> {
             BuiltinProc::Insert | BuiltinProc::Delete => {
                 self.lower_insert_delete(args, p == BuiltinProc::Delete, span)
             }
+            BuiltinProc::Exchange => self.lower_exchange(args, span),
+            BuiltinProc::ArrayMoveRange => self.lower_array_move_range(args, span),
+            BuiltinProc::FreeIfClass => self.lower_stdlib_value_proc(args, false, span),
+            BuiltinProc::CheckDefaultOrder => self.lower_stdlib_value_proc(args, true, span),
+            BuiltinProc::CheckClassType => self.lower_check_class_type(args, span),
+            BuiltinProc::FreeAndNil => self.lower_free_and_nil(args, range, span),
             BuiltinProc::Include | BuiltinProc::Exclude => {
                 self.check_no_width_pub(args);
                 self.lower_include(args, p == BuiltinProc::Exclude, span)
@@ -1568,7 +1927,8 @@ impl<'a, 's> Sema<'a, 's> {
             return None;
         };
         let (place, ty) = match self.lower_place(&v, PlaceUse::SetLength) {
-            Some(x) => x,
+            // A distinct type of a string as its root (`docs/spec/types.md` 1.3)
+            Some((p, t)) => (p, self.types.root(t)),
             None => {
                 if let Some(super::expr::PlaceResult::NotVariable(r)) =
                     self.last_place_result.take()
@@ -1668,6 +2028,336 @@ impl<'a, 's> Sema<'a, 's> {
 }
 
 impl Sema<'_, '_> {
+    /// `FreeAndNil(var Obj)` (`docs/spec/objects.md` 3.2): `Obj` is a variable of any class type
+    /// (the exact type rule of `var` parameters does not apply).
+    fn lower_free_and_nil(
+        &mut self,
+        args: &[ast::Arg],
+        name_range: TextRange,
+        span: TextRange,
+    ) -> Option<StmtKind> {
+        self.check_no_width_pub(args);
+        let values: Vec<ast::Expr> = args.iter().filter_map(|a| a.value()).collect();
+        if args.len() != 1 {
+            for v in &values {
+                self.lower_expr_unchecked_ctor(v);
+            }
+            self.error(
+                Code::E(705),
+                format!(
+                    "wrong number of arguments: expected 1, found {}",
+                    args.len()
+                ),
+                span,
+            );
+            return None;
+        }
+        let v = values.first()?;
+        let (place, ty) = self.ref_place(v, (1, "Obj"), false, None)?;
+        if ty.is_error() {
+            return None;
+        }
+        if matches!(ty, Ty::Class(_)) && self.types.slot_kind(ty) == crate::bytecode::SLOT_REF {
+            // A reference counted class (`docs/spec/objects.md` 3.2)
+            let callee = ast::trimmed_range(v.syntax());
+            let text = self.src(callee);
+            self.ref_counted_free("FreeAndNil", name_range, Some((span, text)));
+            return None;
+        }
+        if let Ty::Param(p) = ty {
+            // A type parameter that takes only manually managed classes
+            // (`docs/spec/generics.md` 3.3)
+            if self.param_frees(p) {
+                return Some(StmtKind::FreeAndNil { target: place });
+            }
+            let r = ast::trimmed_range(v.syntax());
+            self.param_misuse(p, super::generics::ParamOp::Free, r);
+            return None;
+        }
+        if !matches!(ty, Ty::Class(_)) {
+            let r = ast::trimmed_range(v.syntax());
+            let d = Diagnostic::error(
+                Code::E(702),
+                format!(
+                    "type mismatch: expected a class type, found `{}` (argument 1, parameter `Obj`)",
+                    self.tn(ty)
+                ),
+                Stage::Sema,
+            )
+            .with_primary(self.span(r), "")
+            .with_note("`FreeAndNil` takes a variable of a class type");
+            self.push(d);
+            return None;
+        }
+        Some(StmtKind::FreeAndNil { target: place })
+    }
+
+    /// `O.Free` / `O.Destroy` (`docs/spec/objects.md` 3.2): the destruction of an instance, or
+    /// E3019 when the static type of `target` is a reference counted class (`name` is the
+    /// member as written; `stmt`, the whole statement, which the fix replaces with `O := nil`
+    /// when `target` can be assigned).
+    fn free_stmt(
+        &mut self,
+        target: Expr,
+        destroy: bool,
+        name: TextRange,
+        stmt: Option<TextRange>,
+    ) -> Option<StmtKind> {
+        if self.types.slot_kind(target.ty) == crate::bytecode::SLOT_REF {
+            let assignable =
+                matches!(
+                    target.kind,
+                    // `Self` and `const` parameters cannot be assigned
+                    ExprKind::Var(v) if self.cur.as_ref().is_some_and(|c| !matches!(
+                        c.vars[v.0 as usize].kind,
+                        VarKind::SelfParam | VarKind::Param(ParamMode::Const)
+                    ))
+                ) || matches!(target.kind, ExprKind::Global(_) | ExprKind::ObjField { .. });
+            let fix = stmt
+                .filter(|_| assignable)
+                .map(|s| (s, self.src(target.span)));
+            let member = if destroy { "Destroy" } else { "Free" };
+            self.ref_counted_free(member, name, fix);
+            return None;
+        }
+        Some(StmtKind::Free { target, destroy })
+    }
+
+    /// E3019 for `Free` / `Destroy` / `FreeAndNil` of a reference counted class
+    /// (`docs/spec/objects.md` 3.2): `fix` is the statement and the text of the variable to
+    /// assign `nil` to instead.
+    fn ref_counted_free(
+        &mut self,
+        member: &str,
+        range: TextRange,
+        fix: Option<(TextRange, String)>,
+    ) {
+        let mut d = Diagnostic::error(
+            Code::E(3019),
+            format!("`{member}` is not supported in Puy"),
+            Stage::Sema,
+        )
+        .with_primary(self.span(range), "")
+        .with_note(builtins::deleted_note(Code::E(3019)));
+        if let Some((stmt, var)) = fix {
+            d = d.with_fix(Fix::suggestion(
+                format!("replace with `{var} := nil`"),
+                vec![TextEdit::replace(
+                    self.input.file,
+                    stmt,
+                    format!("{var} := nil"),
+                )],
+            ));
+        }
+        self.push(d);
+    }
+
+    /// `Exchange(var A, I, J)` (`docs/spec/types.md` chapter 7): `A` is a dynamic or static array,
+    /// `I` and `J` its indices.
+    fn lower_exchange(&mut self, args: &[ast::Arg], span: TextRange) -> Option<StmtKind> {
+        self.check_no_width_pub(args);
+        let values: Vec<ast::Expr> = args.iter().filter_map(|a| a.value()).collect();
+        let lower_rest = |this: &mut Self, from: usize| {
+            for v in &values[from..] {
+                this.lower_expr_unchecked_ctor(v);
+            }
+        };
+        if args.len() != 3 {
+            lower_rest(self, 0);
+            self.error(
+                Code::E(705),
+                format!(
+                    "wrong number of arguments: expected 3, found {}",
+                    args.len()
+                ),
+                span,
+            );
+            return None;
+        }
+        if values.len() != 3 {
+            lower_rest(self, 0);
+            return None;
+        }
+        let a = &values[0];
+        let Some((place, ty)) = self.lower_place(a, PlaceUse::IncDec) else {
+            if let Some(super::expr::PlaceResult::NotVariable(r)) = self.last_place_result.take() {
+                self.error(
+                    Code::E(706),
+                    "argument 1 must be a variable (parameter `A` is `var`)",
+                    r,
+                );
+            }
+            lower_rest(self, 1);
+            return None;
+        };
+        if ty.is_error() {
+            lower_rest(self, 1);
+            return None;
+        }
+        let index = |this: &mut Self, e: &ast::Expr| {
+            if let Ty::DynArray(_) = ty {
+                this.dyn_index(e)
+            } else {
+                this.array_index(ty, e)
+            }
+        };
+        if !matches!(ty, Ty::DynArray(_)) && self.types.array(ty).is_none() {
+            lower_rest(self, 1);
+            let r = ast::trimmed_range(a.syntax());
+            self.error(
+                Code::E(702),
+                format!(
+                    "type mismatch: expected an array, found `{}` (argument 1, parameter `A`)",
+                    self.tn(ty)
+                ),
+                r,
+            );
+            return None;
+        }
+        let first = index(self, &values[1]);
+        let second = index(self, &values[2]);
+        Some(StmtKind::Exchange {
+            target: place,
+            first: first?,
+            second: second?,
+            span,
+        })
+    }
+
+    /// `ArrayMoveRange(var A, FromIndex, ToIndex, Count)` (`docs/spec/bytecode.md` 2.22; the
+    /// units of the standard library only): `A` is a dynamic array, the others `Integer`s.
+    fn lower_array_move_range(&mut self, args: &[ast::Arg], span: TextRange) -> Option<StmtKind> {
+        self.check_no_width_pub(args);
+        let values: Vec<ast::Expr> = args.iter().filter_map(|a| a.value()).collect();
+        let lower_rest = |this: &mut Self, from: usize| {
+            for v in &values[from..] {
+                this.lower_expr_unchecked_ctor(v);
+            }
+        };
+        if args.len() != 4 {
+            lower_rest(self, 0);
+            self.error(
+                Code::E(705),
+                format!(
+                    "wrong number of arguments: expected 4, found {}",
+                    args.len()
+                ),
+                span,
+            );
+            return None;
+        }
+        if values.len() != 4 {
+            lower_rest(self, 0);
+            return None;
+        }
+        let a = &values[0];
+        let Some((place, ty)) = self.lower_place(a, PlaceUse::IncDec) else {
+            if let Some(super::expr::PlaceResult::NotVariable(r)) = self.last_place_result.take() {
+                self.error(
+                    Code::E(706),
+                    "argument 1 must be a variable (parameter `A` is `var`)",
+                    r,
+                );
+            }
+            lower_rest(self, 1);
+            return None;
+        };
+        if ty.is_error() {
+            lower_rest(self, 1);
+            return None;
+        }
+        if !matches!(ty, Ty::DynArray(_)) {
+            lower_rest(self, 1);
+            let r = ast::trimmed_range(a.syntax());
+            self.error(
+                Code::E(702),
+                format!(
+                    "type mismatch: expected a dynamic array, found `{}` (argument 1, parameter `A`)",
+                    self.tn(ty)
+                ),
+                r,
+            );
+            return None;
+        }
+        let from = self.dyn_index(&values[1]);
+        let to = self.dyn_index(&values[2]);
+        let count = self.dyn_index(&values[3]);
+        Some(StmtKind::ArrayMoveRange {
+            target: place,
+            from: from?,
+            to: to?,
+            count: count?,
+        })
+    }
+
+    /// `FreeIfClass(X)` / `CheckDefaultOrder(X)` (`check`) (`docs/spec/collections.md` 12.1,
+    /// 10.2; the units of the standard library only): a value of any type, whose type decides what
+    /// the statement does once it is known (lower): `X.Free` for a class, `EInvalidOperation`
+    /// without a default order.
+    fn lower_stdlib_value_proc(
+        &mut self,
+        args: &[ast::Arg],
+        check: bool,
+        span: TextRange,
+    ) -> Option<StmtKind> {
+        self.check_no_width_pub(args);
+        let values: Vec<ast::Expr> = args.iter().filter_map(|a| a.value()).collect();
+        if args.len() != 1 {
+            for v in &values {
+                self.lower_expr_unchecked_ctor(v);
+            }
+            self.error(
+                Code::E(705),
+                format!(
+                    "wrong number of arguments: expected 1, found {}",
+                    args.len()
+                ),
+                span,
+            );
+            return None;
+        }
+        let value = self.lower_value(values.first()?);
+        if value.ty.is_error() {
+            return None;
+        }
+        Some(if check {
+            StmtKind::CheckDefaultOrder { value }
+        } else {
+            StmtKind::FreeIfClass { value }
+        })
+    }
+
+    /// `CheckClassType(X, What)` (`docs/spec/collections.md` 9.3, 12.1; the units of the standard
+    /// library only): a value of any type, whose type decides once it is known (lower) whether
+    /// the statement raises `EInvalidOperation` with the string `What`.
+    fn lower_check_class_type(&mut self, args: &[ast::Arg], span: TextRange) -> Option<StmtKind> {
+        self.check_no_width_pub(args);
+        let values: Vec<ast::Expr> = args.iter().filter_map(|a| a.value()).collect();
+        if args.len() != 2 || values.len() != 2 {
+            for v in &values {
+                self.lower_expr_unchecked_ctor(v);
+            }
+            if args.len() != 2 {
+                self.error(
+                    Code::E(705),
+                    format!(
+                        "wrong number of arguments: expected 2, found {}",
+                        args.len()
+                    ),
+                    span,
+                );
+            }
+            return None;
+        }
+        let value = self.lower_value(&values[0]);
+        let what = self.lower_expr(&values[1]);
+        let what = self.coerce(what, Ty::String, false, Some((2, "What")));
+        if value.ty.is_error() || what.ty.is_error() {
+            return None;
+        }
+        Some(StmtKind::CheckClassType { value, what })
+    }
+
     /// `Insert(Source, var S, Index)` / `Delete(var S, Index, Count)` (`docs/spec/semantics.md`
     /// 5.3, `docs/spec/types.md` 8.6): `S` is a string, a `UTF8String` or a dynamic array.
     fn lower_insert_delete(
@@ -1723,6 +2413,8 @@ impl Sema<'_, '_> {
             lower_all(self, Some(target_at));
             return None;
         }
+        // A distinct type of a string as its root (`docs/spec/types.md` 1.3)
+        let ty = self.types.root(ty);
         if !matches!(ty, Ty::String | Ty::Utf8String | Ty::DynArray(_)) {
             lower_all(self, Some(target_at));
             let r = ast::trimmed_range(s.syntax());
@@ -1815,7 +2507,7 @@ fn body_declares_name(body: &crate::syntax::SyntaxNode, lower: &str, bytes: &[u8
 /// in parentheses).
 pub(super) fn is_contextual(e: &ast::Expr) -> bool {
     match e {
-        ast::Expr::ArrayCtor(_) | ast::Expr::Nil(_) => true,
+        ast::Expr::ArrayCtor(_) | ast::Expr::Nil(_) | ast::Expr::Anon(_) => true,
         ast::Expr::Paren(p) => p.inner().as_ref().is_some_and(is_contextual),
         _ => false,
     }

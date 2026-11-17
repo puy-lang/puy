@@ -364,7 +364,10 @@ fn declarations() {
     let p = parse_src(b"program P;\nvar : Integer;\nbegin end.");
     assert_eq!(codes(&p), ["E0405"]);
     let p = parse_src(b"program P;\ntype\n  TFoo = class(TObject)\n  private\n    FX: Integer;\n  public\n    procedure Bar;\n  end;\n  TRec = record X: Integer; end;\nvar X: Integer;\nbegin end.");
-    assert_eq!(codes(&p), ["E3200"]);
+    // A class body is read as a whole (`docs/spec/objects.md` chapter 1)
+    assert!(codes(&p).is_empty());
+    assert!(p.cst.contains("CLASS_BODY"));
+    assert!(p.cst.contains("METHOD_DECL"));
     assert!(p.cst.contains("VAR_SECTION"));
     let p = parse_src(b"program P;\nlabel L;\nbegin end.");
     assert_eq!(codes(&p), ["E3001"]);
@@ -580,4 +583,82 @@ fn slice_index_items() {
     assert!(p.cst.contains("SLICE@10..13"), "{}", p.cst);
     let p = assert_clean("X := A[L.., J];");
     assert!(p.cst.contains("SLICE@7..10"), "{}", p.cst);
+}
+
+#[test]
+// A `>=` closing type arguments or type parameters is split into a `>` and an `=` holding one
+// character each, so the CST still gives back the source text (generics.md 1.3, 1.5).
+fn split_ge_keeps_the_text() {
+    let p = assert_clean("const C: TArray<Integer>= nil;");
+    assert!(p.cst.contains("GT@23..24 \">\""), "{}", p.cst);
+    assert!(p.cst.contains("EQ@24..25 \"=\""), "{}", p.cst);
+    let p = assert_clean("type TBox<T>= record end;");
+    assert!(p.cst.contains("GT@11..12 \">\""), "{}", p.cst);
+    assert!(p.cst.contains("EQ@12..13 \"=\""), "{}", p.cst);
+    let p = assert_clean("var X: TList<TList<Integer>>= nil;");
+    assert!(p.cst.contains("GT@26..27 \">\""), "{}", p.cst);
+    assert!(p.cst.contains("GT@27..28 \">\""), "{}", p.cst);
+    assert!(p.cst.contains("EQ@28..29 \"=\""), "{}", p.cst);
+}
+
+#[test]
+// Generic declarations, headings and type arguments in type positions read without errors and
+// keep the source text (generics.md 1.1 to 1.3).
+fn generic_declarations_are_lossless() {
+    for src in [
+        "type TPair<K, V> = record Key: K; Value: V; end;",
+        "type TOwned<K; V: class, constructor; W: IFoo<K>> = class end;",
+        "type TStack<T> = class procedure Push(const Item: T); function Map<U>: TArray<U>; end;",
+        "procedure TStack<T>.Push(const Item: T); begin end;",
+        "function TList<T>.Map<U>(const F: TFunc<T, U>): TArray<U>; begin end;",
+        "procedure TOuter<T>.TInner.Run; begin end;",
+        "function Max<T>(const A, B: T): T; begin end;",
+        "type TIntList = class(TList<Integer>) end;",
+        "var D: TDictionary<string, TList<Integer>>;",
+    ] {
+        assert_clean(src);
+    }
+}
+
+#[test]
+// Comments and line breaks inside type arguments in an expression are trivia: the `<` still
+// starts TYPE_ARGS and the CST keeps the text (generics.md 1.4).
+fn expr_type_args_with_trivia() {
+    let src = "X := Max<{a} Integer,\n  TList<string> // b\n>(1);";
+    let p = assert_clean(src);
+    assert_eq!(p.root.text().to_string(), src);
+    assert_eq!(p.cst.matches("TYPE_ARGS@").count(), 1, "{}", p.cst);
+    assert_eq!(p.cst.matches("GENERIC_TYPE_REF@").count(), 1, "{}", p.cst);
+}
+
+#[test]
+// A token that is not part of the form of `TypeArgs` before the `>`, or a token after the `>`
+// that can start an expression, keeps `<` a comparison (generics.md 1.4).
+fn expr_lt_stays_comparison() {
+    for (idx, src) in [
+        "X := A < B;",
+        "X := A < B > C;",
+        "X := A < B > -C;",
+        "X := A < B > [C];",
+        "X := A < 1 > (C);",
+        "X := A < B.C(1) > (C);",
+        "F(A < B, C > D);",
+        "X := A < B >= (C);",
+    ]
+    .iter()
+    .enumerate()
+    {
+        let p = assert_clean(src);
+        assert!(!p.cst.contains("TYPE_ARGS@"), "{idx}: {}", p.cst);
+    }
+}
+
+#[test]
+// A lexical error inside what would be type arguments keeps `<` a comparison: the error is
+// reported once by the lexer and the type arguments are not read around it.
+fn expr_type_args_not_read_over_lex_error() {
+    let src = "X := A < B ? > (C);";
+    let p = parse_src(src.as_bytes());
+    assert_eq!(p.root.text().to_string(), src);
+    assert!(!p.cst.contains("TYPE_ARGS@"), "{}", p.cst);
 }

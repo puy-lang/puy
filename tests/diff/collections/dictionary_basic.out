@@ -1,0 +1,19 @@
+count 3
+one -> 1
+two -> 2
+four missing
+contains two: TRUE
+contains TWO: FALSE
+items[three] = 3
+count 2
+contains two: FALSE
+two missing
+count 3
+one -> 10
+three -> 30
+five -> 5
+two -> 20
+contains value 20: TRUE
+contains value 2: FALSE
+count 0
+one missing

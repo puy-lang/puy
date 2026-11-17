@@ -1,0 +1,4 @@
+base hello
+child hello
+class TBase
+class TChild

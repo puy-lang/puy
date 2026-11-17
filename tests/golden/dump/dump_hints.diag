@@ -1,0 +1,24 @@
+warning[W0012]: `G` is experimental (experimental)
+   --> dump_hints.pas:27:8
+    |
+ 17 |   G: Integer = 1 experimental;
+    |   - declared here
+...
+ 27 |   L := G;
+    |        ^
+    |
+    = note: an experimental declaration may change or be removed without being deprecated first
+    = note: disable with `{$WARN experimental OFF}`
+
+warning[W0011]: `Old` is deprecated: use New (deprecated)
+   --> dump_hints.pas:32:3
+    |
+ 23 | procedure Old; deprecated 'use New';
+    |           --- declared here
+...
+ 32 |   Old;
+    |   ^^^
+    |
+    = note: disable with `{$WARN deprecated OFF}`
+
+warning: 2 warnings emitted

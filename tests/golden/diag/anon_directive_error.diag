@@ -1,0 +1,16 @@
+error[E0400]: expected `begin`, found `inline`
+   --> anon_directive_error.pas:12:29
+    |
+ 12 |   R := procedure(X: Integer) inline; begin end;
+    |                             ^
+    |                              ------ found here
+    |
+    = fix: insert `begin`
+
+error[E0400]: expected `;`, found `inline`
+   --> anon_directive_error.pas:12:30
+    |
+ 12 |   R := procedure(X: Integer) inline; begin end;
+    |                              ^^^^^^
+
+error: aborting due to 2 errors

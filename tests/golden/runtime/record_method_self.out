@@ -1,0 +1,10 @@
+3 4
+element: array element 0 is passed to a var parameter of a call in progress
+other element: 0
+after: 1
+7 8
+field: an object field is passed to a var parameter of a call in progress
+freed: access to a freed object
+const: 5 0
+caller: 5
+loop: 1 0

@@ -1,0 +1,3 @@
+error: uncaught exception ERangeError: over 10
+  at AnonRaise.MakeCheck.<anon1> (anon_raise.pas:20)
+  at AnonRaise.<main> (anon_raise.pas:36)

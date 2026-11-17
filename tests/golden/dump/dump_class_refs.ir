@@ -1,0 +1,114 @@
+; puy ir 1
+.global
+  g0 TShape.Count: Integer
+  g1 C: TShapeClass
+  g2 S: TShape
+.func f0 DumpClassRefs.<main> params=0
+  .reg t0: TShapeClass temp
+  .reg t1: TShape temp
+  .reg t2: TShapeClass temp
+  .reg t3: TShape temp
+  .reg t4: TShape temp
+  .reg t5: - state
+  .reg t6: Exception exception
+  .reg t7: TShape temp
+  .reg t8: Integer temp
+  .reg t9: string temp
+  .reg t10: TShapeClass temp
+  .reg t11: string temp
+  .reg t12: TClass temp
+  .reg t13: TShape temp
+  .reg t14: string temp
+  .reg t15: Integer temp
+  .reg t16: Integer temp
+  .reg t17: string temp
+  .reg t18: TShape temp
+  .try bb1..bb1 finally bb2..bb4 t5, t6
+bb0:
+  .line 37
+  LoadInt      t0, class DumpClassRefs.TShape
+  StoreGlobal  t0, g1
+  .line 38
+  LoadGlobal   t2, g1
+  LoadZero     t3
+  NewOf        t3, t2
+  Jmp          bb1
+bb1:
+  .line 38
+  Move         t4, t3
+  CallVirtual  -, DumpClassRefs.TShape.Create[6](t4)
+  Move         t7, t3
+  CallVirtual  -, TObject.AfterConstruction[1](t7)
+  LoadZero     t5
+  Jmp          bb2
+bb2:
+  .line 38
+  LoadInt      t8, 1
+  JmpIfNeInt   t5, t8, bb4, bb3
+bb3:
+  .line 38
+  DestroyFailed t3
+  Jmp          bb4
+bb4:
+  .line 38
+  EndFinally   t5, bb5
+bb5:
+  .line 38
+  Move         t1, t3
+  StoreGlobal  t1, g2
+  .line 39
+  LoadGlobal   t10, g1
+  CallVirtualClass t10, DumpClassRefs.TShape.Name[8](t10)
+  MoveRef      t9, t10
+  LoadGlobal   t13, g2
+  ClassType    t12, t13
+  CallVirtualClass t12, DumpClassRefs.TShape.Name[8](t12)
+  MoveRef      t11, t12
+  ConcatStr    t9, t9, t11
+  LoadGlobal   t16, g0
+  Call         t15, f3(t16)
+  IntToStr     t14, t15
+  ConcatStr    t9, t9, t14
+  LoadConst    t17, "\n"
+  ConcatStr    t9, t9, t17
+  CallHost     -, h0(t9)
+  .line 40
+  LoadGlobal   t18, g2
+  Free         t18
+  .line 41
+  RetVoid
+.finally t6, t9, t11, t14, t17
+.func f1 DumpClassRefs.TShape.Create params=1
+  .reg v0 Self: TShape self
+  .reg t0: Integer temp
+bb0:
+  .line 20
+  LoadGlobal   t0, g0
+  AddIntI      t0, t0, 1
+  NarrowOvf    t0, t0, 4
+  StoreGlobal  t0, g0
+  .line 21
+  RetVoid
+.finally
+.func f2 DumpClassRefs.TShape.Name params=1
+  .reg v0 Self: TShapeClass self
+  .reg v1 Result: string result
+bb0:
+  .line 25
+  ClassRefName v1, v0
+  .line 26
+  Ret          v1
+.finally v1
+.func f3 DumpClassRefs.TShape.Twice params=1
+  .reg v0 N: Integer param
+  .reg v1 Result: Integer result
+  .reg t0: Integer temp
+bb0:
+  .line 30
+  Move         v1, v0
+  LoadInt      t0, 2
+  MulInt       v1, v1, t0
+  NarrowOvf    v1, v1, 4
+  .line 31
+  Ret          v1
+.finally

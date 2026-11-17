@@ -1,8 +1,8 @@
 program DumpTry;
 
 // The dumps of try statements (semantics.md 9, bytecode.md 5.1, 5.2): `try` with `body`, `on`,
-// `else`, `except`, `finally` and `raise-outer` in the hir dump; the `.try` lines, `ExcClass`,
-// `ClassIs`, `RaiseOuter` and `EndFinally` with the jumps that leave through the `finally` block
+// `else`, `except`, `finally` and `raise-outer` in the hir dump; the `.try` lines, `IsClass` of
+// `on` (M3-35), `RaiseOuter` and `EndFinally` with the jumps that leave through the `finally` block
 // in the ir and bytecode dumps.
 
 type

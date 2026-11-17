@@ -1,0 +1,12 @@
+-1 0 1
+-1 0 1
+-1 0 0
+-1 0
+1 0
+-1 0
+comparer of TPoint: TRUE
+EInvalidOperation: `TPoint` has no default order; pass a comparer
+TRUE FALSE TRUE
+TRUE FALSE TRUE
+TRUE FALSE TRUE
+TRUE FALSE 2

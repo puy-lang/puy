@@ -1,0 +1,513 @@
+program DumpGenericInstances
+.type TList<T> = class(TObject)
+  .field 0 FItems: TArray<T>
+  .field 1 FCount: Integer
+  .method - Add
+  .method - Get
+.type TPoint = record
+  .field 0 X: Integer
+  .field 1 Y: Integer
+.type TFoo = class(TObject)
+.type TBar = class(TObject)
+.type TRef = class(TRefObject) ref
+.type TRef2 = class(TRefObject) ref
+.global g0 Ints: TList<Integer>
+.global g1 Strs: TList<string>
+.global g2 Points: TList<TPoint>
+.global g3 Foos: TList<TFoo>
+.global g4 Bars: TList<TBar>
+.global g5 Refs: TList<TRef>
+.global g6 Refs2: TList<TRef2>
+.global g7 Longs: TList<Int64>
+.global g8 Items: TArray<Integer>
+.global g9 Count: Integer
+.global g10 P: TPoint
+.routine - TList<T>.Add(const X: T)
+  .var v0 Self: TList<T> self
+  .var v1 X: T const param
+  if @38
+    cond
+      binary Boolean
+        objfield Integer FCount #1
+          self TList<T>
+        = Boolean int:Integer
+          builtin Length Integer
+            objfield TArray<T> FItems #0
+              self TList<T>
+    then
+      setlength @39
+        objfield TArray<T> FItems #0
+          self TList<T>
+        binary Int64
+          objfield Integer FCount #1
+            self TList<T>
+          * Integer int:Integer
+            const Integer 2
+          + Integer int:Integer
+            const Integer 4
+  assign @40 R+
+    index T
+      objfield TArray<T> FItems #0
+        self TList<T>
+      objfield Int64 FCount #1
+        self TList<T>
+    var v1 X: T
+  inc @41 calc=Integer Q+R+
+    objfield Integer FCount #1
+      self TList<T>
+.routine - TList<T>.Get(I: Integer): T
+  .var v0 Self: TList<T> self
+  .var v1 I: Integer param
+  .var v2 Result: T result
+  assign @46 R+
+    var v2 Result
+    index T
+      objfield TArray<T> FItems #0
+        self TList<T>
+      var v1 I: Int64
+.routine f2 AddInt(var Items: TArray<Integer>; var Count: Integer; const X: Integer)
+  .var v0 Items: TArray<Integer> var param
+  .var v1 Count: Integer var param
+  .var v2 X: Integer const param
+  if @51
+    cond
+      binary Boolean
+        var v1 Count: Integer
+        = Boolean int:Integer
+          builtin Length Integer
+            var v0 Items: TArray<Integer>
+    then
+      setlength @52
+        var v0 Items
+        binary Int64
+          var v1 Count: Integer
+          * Integer int:Integer
+            const Integer 2
+          + Integer int:Integer
+            const Integer 4
+  assign @53 R+
+    index Integer
+      var v0 Items
+      var v1 Count: Int64
+    var v2 X: Integer
+  inc @54 calc=Integer Q+R+
+    var v1 Count
+.instance TList<Integer>
+.routine f3 TList<Integer>.Add(const X: Integer)
+  .var v0 Self: TList<Integer> self
+  .var v1 X: Integer const param
+  if @38
+    cond
+      binary Boolean
+        objfield Integer FCount #1
+          self TList<Integer>
+        = Boolean int:Integer
+          builtin Length Integer
+            objfield TArray<Integer> FItems #0
+              self TList<Integer>
+    then
+      setlength @39
+        objfield TArray<Integer> FItems #0
+          self TList<Integer>
+        binary Int64
+          objfield Integer FCount #1
+            self TList<Integer>
+          * Integer int:Integer
+            const Integer 2
+          + Integer int:Integer
+            const Integer 4
+  assign @40 R+
+    index Integer
+      objfield TArray<Integer> FItems #0
+        self TList<Integer>
+      objfield Int64 FCount #1
+        self TList<Integer>
+    var v1 X: Integer
+  inc @41 calc=Integer Q+R+
+    objfield Integer FCount #1
+      self TList<Integer>
+.routine f4 TList<Integer>.Get(I: Integer): Integer
+  .var v0 Self: TList<Integer> self
+  .var v1 I: Integer param
+  .var v2 Result: Integer result
+  assign @46 R+
+    var v2 Result
+    index Integer
+      objfield TArray<Integer> FItems #0
+        self TList<Integer>
+      var v1 I: Int64
+.instance TList<string>
+.routine f5 TList<string>.Add(const X: string)
+  .var v0 Self: TList<string> self
+  .var v1 X: string const param
+  if @38
+    cond
+      binary Boolean
+        objfield Integer FCount #1
+          self TList<string>
+        = Boolean int:Integer
+          builtin Length Integer
+            objfield TArray<string> FItems #0
+              self TList<string>
+    then
+      setlength @39
+        objfield TArray<string> FItems #0
+          self TList<string>
+        binary Int64
+          objfield Integer FCount #1
+            self TList<string>
+          * Integer int:Integer
+            const Integer 2
+          + Integer int:Integer
+            const Integer 4
+  assign @40 R+
+    index string
+      objfield TArray<string> FItems #0
+        self TList<string>
+      objfield Int64 FCount #1
+        self TList<string>
+    var v1 X: string
+  inc @41 calc=Integer Q+R+
+    objfield Integer FCount #1
+      self TList<string>
+.routine f6 TList<string>.Get(I: Integer): string
+  .var v0 Self: TList<string> self
+  .var v1 I: Integer param
+  .var v2 Result: string result
+  assign @46 R+
+    var v2 Result
+    index string
+      objfield TArray<string> FItems #0
+        self TList<string>
+      var v1 I: Int64
+.instance TList<TPoint>
+.routine f7 TList<TPoint>.Add(const X: TPoint)
+  .var v0 Self: TList<TPoint> self
+  .var v1 X: TPoint const param
+  if @38
+    cond
+      binary Boolean
+        objfield Integer FCount #1
+          self TList<TPoint>
+        = Boolean int:Integer
+          builtin Length Integer
+            objfield TArray<TPoint> FItems #0
+              self TList<TPoint>
+    then
+      setlength @39
+        objfield TArray<TPoint> FItems #0
+          self TList<TPoint>
+        binary Int64
+          objfield Integer FCount #1
+            self TList<TPoint>
+          * Integer int:Integer
+            const Integer 2
+          + Integer int:Integer
+            const Integer 4
+  assign @40 R+
+    index TPoint
+      objfield TArray<TPoint> FItems #0
+        self TList<TPoint>
+      objfield Int64 FCount #1
+        self TList<TPoint>
+    var v1 X: TPoint
+  inc @41 calc=Integer Q+R+
+    objfield Integer FCount #1
+      self TList<TPoint>
+.routine f8 TList<TPoint>.Get(I: Integer): TPoint
+  .var v0 Self: TList<TPoint> self
+  .var v1 I: Integer param
+  .var v2 Result: TPoint result
+  assign @46 R+
+    var v2 Result
+    index TPoint
+      objfield TArray<TPoint> FItems #0
+        self TList<TPoint>
+      var v1 I: Int64
+.instance TList<TFoo>
+.routine f9 TList<TFoo>.Add(const X: TFoo)
+  .var v0 Self: TList<TFoo> self
+  .var v1 X: TFoo const param
+  if @38
+    cond
+      binary Boolean
+        objfield Integer FCount #1
+          self TList<TFoo>
+        = Boolean int:Integer
+          builtin Length Integer
+            objfield TArray<TFoo> FItems #0
+              self TList<TFoo>
+    then
+      setlength @39
+        objfield TArray<TFoo> FItems #0
+          self TList<TFoo>
+        binary Int64
+          objfield Integer FCount #1
+            self TList<TFoo>
+          * Integer int:Integer
+            const Integer 2
+          + Integer int:Integer
+            const Integer 4
+  assign @40 R+
+    index TFoo
+      objfield TArray<TFoo> FItems #0
+        self TList<TFoo>
+      objfield Int64 FCount #1
+        self TList<TFoo>
+    var v1 X: TFoo
+  inc @41 calc=Integer Q+R+
+    objfield Integer FCount #1
+      self TList<TFoo>
+.instance TList<TBar>
+.routine f11 TList<TBar>.Add(const X: TBar)
+  .var v0 Self: TList<TBar> self
+  .var v1 X: TBar const param
+  if @38
+    cond
+      binary Boolean
+        objfield Integer FCount #1
+          self TList<TBar>
+        = Boolean int:Integer
+          builtin Length Integer
+            objfield TArray<TBar> FItems #0
+              self TList<TBar>
+    then
+      setlength @39
+        objfield TArray<TBar> FItems #0
+          self TList<TBar>
+        binary Int64
+          objfield Integer FCount #1
+            self TList<TBar>
+          * Integer int:Integer
+            const Integer 2
+          + Integer int:Integer
+            const Integer 4
+  assign @40 R+
+    index TBar
+      objfield TArray<TBar> FItems #0
+        self TList<TBar>
+      objfield Int64 FCount #1
+        self TList<TBar>
+    var v1 X: TBar
+  inc @41 calc=Integer Q+R+
+    objfield Integer FCount #1
+      self TList<TBar>
+.instance TList<TRef>
+.routine f13 TList<TRef>.Add(const X: TRef)
+  .var v0 Self: TList<TRef> self
+  .var v1 X: TRef const param
+  if @38
+    cond
+      binary Boolean
+        objfield Integer FCount #1
+          self TList<TRef>
+        = Boolean int:Integer
+          builtin Length Integer
+            objfield TArray<TRef> FItems #0
+              self TList<TRef>
+    then
+      setlength @39
+        objfield TArray<TRef> FItems #0
+          self TList<TRef>
+        binary Int64
+          objfield Integer FCount #1
+            self TList<TRef>
+          * Integer int:Integer
+            const Integer 2
+          + Integer int:Integer
+            const Integer 4
+  assign @40 R+
+    index TRef
+      objfield TArray<TRef> FItems #0
+        self TList<TRef>
+      objfield Int64 FCount #1
+        self TList<TRef>
+    var v1 X: TRef
+  inc @41 calc=Integer Q+R+
+    objfield Integer FCount #1
+      self TList<TRef>
+.instance TList<TRef2>
+.routine f15 TList<TRef2>.Add(const X: TRef2)
+  .var v0 Self: TList<TRef2> self
+  .var v1 X: TRef2 const param
+  if @38
+    cond
+      binary Boolean
+        objfield Integer FCount #1
+          self TList<TRef2>
+        = Boolean int:Integer
+          builtin Length Integer
+            objfield TArray<TRef2> FItems #0
+              self TList<TRef2>
+    then
+      setlength @39
+        objfield TArray<TRef2> FItems #0
+          self TList<TRef2>
+        binary Int64
+          objfield Integer FCount #1
+            self TList<TRef2>
+          * Integer int:Integer
+            const Integer 2
+          + Integer int:Integer
+            const Integer 4
+  assign @40 R+
+    index TRef2
+      objfield TArray<TRef2> FItems #0
+        self TList<TRef2>
+      objfield Int64 FCount #1
+        self TList<TRef2>
+    var v1 X: TRef2
+  inc @41 calc=Integer Q+R+
+    objfield Integer FCount #1
+      self TList<TRef2>
+.instance TList<Int64>
+.routine f17 TList<Int64>.Add(const X: Int64)
+  .var v0 Self: TList<Int64> self
+  .var v1 X: Int64 const param
+  if @38
+    cond
+      binary Boolean
+        objfield Integer FCount #1
+          self TList<Int64>
+        = Boolean int:Integer
+          builtin Length Integer
+            objfield TArray<Int64> FItems #0
+              self TList<Int64>
+    then
+      setlength @39
+        objfield TArray<Int64> FItems #0
+          self TList<Int64>
+        binary Int64
+          objfield Integer FCount #1
+            self TList<Int64>
+          * Integer int:Integer
+            const Integer 2
+          + Integer int:Integer
+            const Integer 4
+  assign @40 R+
+    index Int64
+      objfield TArray<Int64> FItems #0
+        self TList<Int64>
+      objfield Int64 FCount #1
+        self TList<Int64>
+    var v1 X: Int64
+  inc @41 calc=Integer Q+R+
+    objfield Integer FCount #1
+      self TList<Int64>
+.routine f18 TList<Int64>.Get(I: Integer): Int64
+  .var v0 Self: TList<Int64> self
+  .var v1 I: Integer param
+  .var v2 Result: Int64 result
+  assign @46 R+
+    var v2 Result
+    index Int64
+      objfield TArray<Int64> FItems #0
+        self TList<Int64>
+      var v1 I: Int64
+.routine <main>
+  assign @70 R+
+    global g0 Ints
+    create TList<Integer> builtin
+  expr @71
+    method f3 TList<Integer>.Add: -
+      global g0 Ints: TList<Integer>
+      const Integer 1
+  assign @72 R+
+    global g1 Strs
+    create TList<string> builtin
+  expr @73
+    method f5 TList<string>.Add: -
+      global g1 Strs: TList<string>
+      const string "a"
+  assign @74 R+
+    global g2 Points
+    create TList<TPoint> builtin
+  assign @75 R+
+    global g10 P
+    builtin Default TPoint
+  expr @76
+    method f7 TList<TPoint>.Add: -
+      global g2 Points: TList<TPoint>
+      global g10 P: TPoint
+  assign @77 R+
+    global g3 Foos
+    create TList<TFoo> builtin
+  expr @78
+    method f9 TList<TFoo>.Add: -
+      global g3 Foos: TList<TFoo>
+      const TFoo nil
+  assign @79 R+
+    global g4 Bars
+    create TList<TBar> builtin
+  expr @80
+    method f11 TList<TBar>.Add: -
+      global g4 Bars: TList<TBar>
+      const TBar nil
+  assign @81 R+
+    global g5 Refs
+    create TList<TRef> builtin
+  expr @82
+    method f13 TList<TRef>.Add: -
+      global g5 Refs: TList<TRef>
+      create TRef builtin
+  assign @83 R+
+    global g6 Refs2
+    create TList<TRef2> builtin
+  expr @84
+    method f15 TList<TRef2>.Add: -
+      global g6 Refs2: TList<TRef2>
+      create TRef2 builtin
+  assign @85 R+
+    global g7 Longs
+    create TList<Int64> builtin
+  expr @86
+    method f17 TList<Int64>.Add: -
+      global g7 Longs: TList<Int64>
+      const Int64 3
+  assign @87 R+
+    global g9 Count
+    const Integer 0
+  expr @88
+    call f2 AddInt: -
+      ref
+        global g8 Items
+      ref
+        global g9 Count
+      const Integer 2
+  writeln @89
+    arg
+      method f4 TList<Integer>.Get: Integer
+        global g0 Ints: TList<Integer>
+        const Integer 0
+    arg
+      method f6 TList<string>.Get: string
+        global g1 Strs: TList<string>
+        const Integer 0
+    arg
+      field Integer X #0
+        method f8 TList<TPoint>.Get: TPoint
+          global g2 Points: TList<TPoint>
+          const Integer 0
+    arg
+      method f18 TList<Int64>.Get: Int64
+        global g7 Longs: TList<Int64>
+        const Integer 0
+    arg
+      builtin Length Integer
+        global g8 Items: TArray<Integer>
+  free @90
+    global g0 Ints: TList<Integer>
+  free @91
+    global g1 Strs: TList<string>
+  free @92
+    global g2 Points: TList<TPoint>
+  free @93
+    global g3 Foos: TList<TFoo>
+  free @94
+    global g4 Bars: TList<TBar>
+  free @95
+    global g5 Refs: TList<TRef>
+  free @96
+    global g6 Refs2: TList<TRef2>
+  free @97
+    global g7 Longs: TList<Int64>

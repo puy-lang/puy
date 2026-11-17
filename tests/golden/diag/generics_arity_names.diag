@@ -1,0 +1,7 @@
+error[E0702]: type mismatch: expected `TProc`, found `Integer`
+   --> generics_arity_names.pas:21:8
+    |
+ 21 |   Q := 5; // E0702: `TProc` is still the built-in procedure type
+    |        ^
+
+error: aborting due to 1 error

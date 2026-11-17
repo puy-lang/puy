@@ -1,0 +1,14 @@
+still alive: global
+after DropGlobal
+destroy global
+-
+still alive: field TRUE
+after DropField
+destroy field
+-
+replaced with replacement
+destroy replacement
+cleared TRUE
+local is local
+destroy local
+end

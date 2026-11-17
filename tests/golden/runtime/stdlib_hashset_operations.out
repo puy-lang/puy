@@ -1,0 +1,13 @@
+start (4): 5 3 8 1
+union with 9 3 2 9 7 (7): 5 3 8 1 9 2 7
+intersect with 7 1 4 5 2 1 (4): 5 1 2 7
+except 2 6 5 (2): 1 7
+union with a set (5): 1 7 30 20 10
+intersect with a list (3): 7 30 10
+except a list (2): 7 10
+union with itself (2): 7 10
+intersect with itself (2): 7 10
+except itself (0):
+union with nothing (2): 4 6
+except nothing (2): 4 6
+intersect with nothing (0):

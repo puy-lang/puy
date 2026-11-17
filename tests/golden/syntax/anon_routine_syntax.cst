@@ -1,0 +1,242 @@
+SOURCE_FILE@0..535
+  PROGRAM@0..535
+    PROGRAM_HEADER@0..26
+      PROGRAM_KW@0..7 "program"
+      WHITESPACE@7..8 " "
+      IDENT@8..25 "AnonRoutineSyntax"
+      SEMICOLON@25..26 ";"
+    NEWLINE@26..27 "\n"
+    NEWLINE@27..28 "\n"
+    LINE_COMMENT@28..120 "// The syntax of anonymous methods (objects.md 9.1): `ANON_ROUTINE` with the parameters, the"
+    NEWLINE@120..121 "\n"
+    LINE_COMMENT@121..203 "// return type and a `ROUTINE_BODY` that has a `var` section and a nested routine."
+    NEWLINE@203..204 "\n"
+    NEWLINE@204..205 "\n"
+    TYPE_SECTION@205..265
+      TYPE_KW@205..209 "type"
+      NEWLINE@209..210 "\n"
+      WHITESPACE@210..212 "  "
+      TYPE_DECL@212..265
+        IDENT@212..216 "TAdd"
+        WHITESPACE@216..217 " "
+        EQ@217..218 "="
+        WHITESPACE@218..219 " "
+        REF_TYPE@219..264
+          REFERENCE_KW@219..228 "reference"
+          WHITESPACE@228..229 " "
+          TO_KW@229..231 "to"
+          WHITESPACE@231..232 " "
+          PROC_TYPE@232..264
+            FUNCTION_KW@232..240 "function"
+            PARAM_LIST@240..255
+              L_PAREN@240..241 "("
+              PARAM_GROUP@241..254
+                IDENT_LIST@241..245
+                  IDENT@241..242 "A"
+                  COMMA@242..243 ","
+                  WHITESPACE@243..244 " "
+                  IDENT@244..245 "B"
+                COLON@245..246 ":"
+                WHITESPACE@246..247 " "
+                TYPE_REF@247..254
+                  QUALIFIED_NAME@247..254
+                    IDENT@247..254 "Integer"
+              R_PAREN@254..255 ")"
+            COLON@255..256 ":"
+            WHITESPACE@256..257 " "
+            RETURN_TYPE@257..264
+              TYPE_REF@257..264
+                QUALIFIED_NAME@257..264
+                  IDENT@257..264 "Integer"
+        SEMICOLON@264..265 ";"
+    NEWLINE@265..266 "\n"
+    NEWLINE@266..267 "\n"
+    VAR_SECTION@267..281
+      VAR_KW@267..270 "var"
+      NEWLINE@270..271 "\n"
+      WHITESPACE@271..273 "  "
+      VAR_DECL@273..281
+        IDENT_LIST@273..274
+          IDENT@273..274 "F"
+        COLON@274..275 ":"
+        WHITESPACE@275..276 " "
+        TYPE_REF@276..280
+          QUALIFIED_NAME@276..280
+            IDENT@276..280 "TAdd"
+        SEMICOLON@280..281 ";"
+    NEWLINE@281..282 "\n"
+    COMPOUND_STMT@282..533
+      BEGIN_KW@282..287 "begin"
+      NEWLINE@287..288 "\n"
+      WHITESPACE@288..290 "  "
+      ASSIGN_STMT@290..508
+        NAME_REF@290..291
+          IDENT@290..291 "F"
+        WHITESPACE@291..292 " "
+        ASSIGN@292..294 ":="
+        WHITESPACE@294..295 " "
+        ANON_ROUTINE@295..508
+          FUNCTION_KW@295..303 "function"
+          PARAM_LIST@303..318
+            L_PAREN@303..304 "("
+            PARAM_GROUP@304..317
+              IDENT_LIST@304..308
+                IDENT@304..305 "A"
+                COMMA@305..306 ","
+                WHITESPACE@306..307 " "
+                IDENT@307..308 "B"
+              COLON@308..309 ":"
+              WHITESPACE@309..310 " "
+              TYPE_REF@310..317
+                QUALIFIED_NAME@310..317
+                  IDENT@310..317 "Integer"
+            R_PAREN@317..318 ")"
+          COLON@318..319 ":"
+          WHITESPACE@319..320 " "
+          RETURN_TYPE@320..327
+            TYPE_REF@320..327
+              QUALIFIED_NAME@320..327
+                IDENT@320..327 "Integer"
+          NEWLINE@327..328 "\n"
+          WHITESPACE@328..332 "    "
+          ROUTINE_BODY@332..508
+            VAR_SECTION@332..353
+              VAR_KW@332..335 "var"
+              NEWLINE@335..336 "\n"
+              WHITESPACE@336..342 "      "
+              VAR_DECL@342..353
+                IDENT_LIST@342..343
+                  IDENT@342..343 "T"
+                COLON@343..344 ":"
+                WHITESPACE@344..345 " "
+                TYPE_REF@345..352
+                  QUALIFIED_NAME@345..352
+                    IDENT@345..352 "Integer"
+                SEMICOLON@352..353 ";"
+            NEWLINE@353..354 "\n"
+            NEWLINE@354..355 "\n"
+            WHITESPACE@355..361 "      "
+            ROUTINE_DECL@361..445
+              ROUTINE_HEADER@361..396
+                FUNCTION_KW@361..369 "function"
+                WHITESPACE@369..370 " "
+                QUALIFIED_NAME@370..375
+                  IDENT@370..375 "Twice"
+                PARAM_LIST@375..387
+                  L_PAREN@375..376 "("
+                  PARAM_GROUP@376..386
+                    IDENT_LIST@376..377
+                      IDENT@376..377 "X"
+                    COLON@377..378 ":"
+                    WHITESPACE@378..379 " "
+                    TYPE_REF@379..386
+                      QUALIFIED_NAME@379..386
+                        IDENT@379..386 "Integer"
+                  R_PAREN@386..387 ")"
+                COLON@387..388 ":"
+                WHITESPACE@388..389 " "
+                RETURN_TYPE@389..396
+                  TYPE_REF@389..396
+                    QUALIFIED_NAME@389..396
+                      IDENT@389..396 "Integer"
+              SEMICOLON@396..397 ";"
+              NEWLINE@397..398 "\n"
+              WHITESPACE@398..404 "      "
+              ROUTINE_BODY@404..444
+                COMPOUND_STMT@404..444
+                  BEGIN_KW@404..409 "begin"
+                  NEWLINE@409..410 "\n"
+                  WHITESPACE@410..418 "        "
+                  ASSIGN_STMT@418..433
+                    NAME_REF@418..424
+                      IDENT@418..424 "Result"
+                    WHITESPACE@424..425 " "
+                    ASSIGN@425..427 ":="
+                    WHITESPACE@427..428 " "
+                    BINARY_EXPR@428..433
+                      NAME_REF@428..429
+                        IDENT@428..429 "X"
+                      WHITESPACE@429..430 " "
+                      STAR@430..431 "*"
+                      WHITESPACE@431..432 " "
+                      LITERAL@432..433
+                        INT_LIT@432..433 "2"
+                  SEMICOLON@433..434 ";"
+                  NEWLINE@434..435 "\n"
+                  WHITESPACE@435..441 "      "
+                  END_KW@441..444 "end"
+              SEMICOLON@444..445 ";"
+            NEWLINE@445..446 "\n"
+            NEWLINE@446..447 "\n"
+            WHITESPACE@447..451 "    "
+            COMPOUND_STMT@451..508
+              BEGIN_KW@451..456 "begin"
+              NEWLINE@456..457 "\n"
+              WHITESPACE@457..463 "      "
+              ASSIGN_STMT@463..473
+                NAME_REF@463..464
+                  IDENT@463..464 "T"
+                WHITESPACE@464..465 " "
+                ASSIGN@465..467 ":="
+                WHITESPACE@467..468 " "
+                BINARY_EXPR@468..473
+                  NAME_REF@468..469
+                    IDENT@468..469 "A"
+                  WHITESPACE@469..470 " "
+                  PLUS@470..471 "+"
+                  WHITESPACE@471..472 " "
+                  NAME_REF@472..473
+                    IDENT@472..473 "B"
+              SEMICOLON@473..474 ";"
+              NEWLINE@474..475 "\n"
+              WHITESPACE@475..481 "      "
+              ASSIGN_STMT@481..499
+                NAME_REF@481..487
+                  IDENT@481..487 "Result"
+                WHITESPACE@487..488 " "
+                ASSIGN@488..490 ":="
+                WHITESPACE@490..491 " "
+                CALL_EXPR@491..499
+                  NAME_REF@491..496
+                    IDENT@491..496 "Twice"
+                  ARG_LIST@496..499
+                    L_PAREN@496..497 "("
+                    ARG@497..498
+                      NAME_REF@497..498
+                        IDENT@497..498 "T"
+                    R_PAREN@498..499 ")"
+              SEMICOLON@499..500 ";"
+              NEWLINE@500..501 "\n"
+              WHITESPACE@501..505 "    "
+              END_KW@505..508 "end"
+      SEMICOLON@508..509 ";"
+      NEWLINE@509..510 "\n"
+      WHITESPACE@510..512 "  "
+      EXPR_STMT@512..528
+        CALL_EXPR@512..528
+          NAME_REF@512..519
+            IDENT@512..519 "WriteLn"
+          ARG_LIST@519..528
+            L_PAREN@519..520 "("
+            ARG@520..527
+              CALL_EXPR@520..527
+                NAME_REF@520..521
+                  IDENT@520..521 "F"
+                ARG_LIST@521..527
+                  L_PAREN@521..522 "("
+                  ARG@522..523
+                    LITERAL@522..523
+                      INT_LIT@522..523 "1"
+                  COMMA@523..524 ","
+                  WHITESPACE@524..525 " "
+                  ARG@525..526
+                    LITERAL@525..526
+                      INT_LIT@525..526 "2"
+                  R_PAREN@526..527 ")"
+            R_PAREN@527..528 ")"
+      SEMICOLON@528..529 ";"
+      NEWLINE@529..530 "\n"
+      END_KW@530..533 "end"
+    DOT@533..534 "."
+    NEWLINE@534..535 "\n"
+    EOF@535..535 ""

@@ -1,0 +1,221 @@
+; puy ir 1
+.global
+  g0 Tag: TTag
+  g1 A: TCircle
+  g2 B: TCircle
+.func f0 CastObjectParamTemp.<main> params=0
+  .reg t0: TTag temp
+  .reg t1: TCircle temp
+  .reg t2: TCircle temp
+  .reg t3: TCircle temp
+  .reg t4: Integer temp
+  .reg t5: TCircle temp
+  .reg t6: Integer temp
+  .reg t7: string temp
+  .reg t8: Boolean temp
+  .reg t9: TCircle temp
+  .reg t10: TObject temp
+  .reg t11: TObject temp
+  .reg t12: Int64 temp
+  .reg t13: string temp
+  .reg t14: string temp
+  .reg t15: Boolean temp
+  .reg t16: TCircle temp
+  .reg t17: TObject temp
+  .reg t18: TObject temp
+  .reg t19: Int64 temp
+  .reg t20: string temp
+  .reg t21: TCircle temp
+  .reg t22: Integer temp
+  .reg t23: string temp
+  .reg t24: Boolean temp
+  .reg t25: TCircle temp
+  .reg t26: TObject temp
+  .reg t27: TObject temp
+  .reg t28: Int64 temp
+  .reg t29: string temp
+  .reg t30: TObject temp
+  .reg t31: TObject temp
+  .reg t32: Int64 temp
+  .reg t33: TObject temp
+  .reg t34: TObject temp
+  .reg t35: Int64 temp
+  .reg t36: TObject temp
+  .reg t37: TObject temp
+  .reg t38: Int64 temp
+  .reg t39: TCircle temp
+  .reg t40: TCircle temp
+  .reg t41: string temp
+bb0:
+  .line 55
+  New          t0, CastObjectParamTemp.TTag
+  StoreGlobalRef t0, g0
+  .line 56
+  LoadZero     t1
+  New          t1, CastObjectParamTemp.TCircle
+  StoreGlobal  t1, g1
+  .line 57
+  LoadZero     t2
+  New          t2, CastObjectParamTemp.TCircle
+  StoreGlobal  t2, g2
+  .line 58
+  LoadGlobal   t3, g1
+  LoadInt      t4, 3
+  ObjSet       t3, 0, t4
+  .line 59
+  LoadGlobal   t5, g2
+  LoadInt      t6, 3
+  ObjSet       t5, 0, t6
+  .line 60
+  LoadGlobal   t9, g1
+  LoadGlobal   t12, g2
+  AssignObj    t11, t12
+  Move         t10, t11
+  CallVirtual  t8, CastObjectParamTemp.TCircle.Equals[4](t9, t10)
+  BoolToStr    t7, t8
+  LoadConst    t13, " "
+  ConcatStr    t7, t7, t13
+  LoadGlobal   t16, g1
+  LoadGlobal   t19, g0
+  AssignObj    t18, t19
+  Move         t17, t18
+  CallVirtual  t15, CastObjectParamTemp.TCircle.Equals[4](t16, t17)
+  BoolToStr    t14, t15
+  ConcatStr    t7, t7, t14
+  LoadConst    t20, "\n"
+  ConcatStr    t7, t7, t20
+  CallHost     -, h0(t7)
+  .line 61
+  LoadGlobal   t21, g2
+  LoadInt      t22, 4
+  ObjSet       t21, 0, t22
+  .line 62
+  LoadGlobal   t25, g1
+  LoadGlobal   t28, g2
+  AssignObj    t27, t28
+  Move         t26, t27
+  CallVirtual  t24, CastObjectParamTemp.TCircle.Equals[4](t25, t26)
+  BoolToStr    t23, t24
+  LoadConst    t29, "\n"
+  ConcatStr    t23, t23, t29
+  CallHost     -, h0(t23)
+  .line 63
+  LoadGlobal   t32, g1
+  AssignObj    t31, t32
+  Move         t30, t31
+  Call         -, f5(t30)
+  .line 64
+  LoadGlobal   t35, g0
+  AssignObj    t34, t35
+  Move         t33, t34
+  Call         -, f5(t33)
+  .line 65
+  LoadGlobal   t38, g2
+  AssignObj    t37, t38
+  Move         t36, t37
+  Call         -, f5(t36)
+  .line 66
+  LoadGlobal   t39, g1
+  Free         t39
+  .line 67
+  LoadGlobal   t40, g2
+  Free         t40
+  .line 68
+  LoadConst    t41, "done\n"
+  CallHost     -, h0(t41)
+  .line 69
+  RetVoid
+.finally t0, t7, t11:obj, t13, t14, t18:obj, t20, t23, t27:obj, t29, t31:obj, t34:obj, t37:obj, t41
+.func f1 CastObjectParamTemp.TCircle.Equals params=2
+  .reg v0 Self: TCircle self
+  .reg v1 Obj: TObject param
+  .reg v2 Result: Boolean result
+  .reg t0: Boolean temp
+  .reg t1: TCircle temp
+  .reg t2: TObject temp
+  .reg t3: Integer temp
+bb0:
+  .line 25
+  Move         t0, v1
+  IsClass      t0, CastObjectParamTemp.TCircle
+  Move         v2, t0
+  JmpIfFalse   v2, bb2, bb1
+bb1:
+  .line 25
+  AssignObj    t2, v1
+  AsClass      t2, CastObjectParamTemp.TCircle
+  Move         t1, t2
+  ObjGet       v2, t1, 0
+  ObjGet       t3, v0, 0
+  EqInt        v2, v2, t3
+  Jmp          bb2
+bb2:
+  .line 26
+  Ret          v2
+.finally t2:obj
+.func f2 CastObjectParamTemp.TCircle.GetHashCode params=1
+  .reg v0 Self: TCircle self
+  .reg v1 Result: Int64 result
+bb0:
+  .line 30
+  ObjGet       v1, v0, 0
+  .line 31
+  Ret          v1
+.finally
+.func f3 CastObjectParamTemp.TTag.Destroy params=1
+  .reg v0 Self: TTag self
+  .reg t0: Integer temp
+  .reg t1: string temp
+bb0:
+  .line 33
+  LoadInt      t0, CastObjectParamTemp.TTag
+  DtorEnter    v0, t0
+  .line 35
+  LoadConst    t1, "destroy tag\n"
+  CallHost     -, h0(t1)
+  .line 37
+  RetVoid
+.finally t1
+.func f4 CastObjectParamTemp.ShowRadius params=1
+  .reg v0 C: TCircle param
+  .reg t0: string temp
+  .reg t1: string temp
+  .reg t2: Integer temp
+  .reg t3: string temp
+bb0:
+  .line 41
+  LoadConst    t0, "radius "
+  ObjGet       t2, v0, 0
+  IntToStr     t1, t2
+  ConcatStr    t0, t0, t1
+  LoadConst    t3, "\n"
+  ConcatStr    t0, t0, t3
+  CallHost     -, h0(t0)
+  .line 42
+  RetVoid
+.finally t0, t1, t3
+.func f5 CastObjectParamTemp.ShowObject params=1
+  .reg v0 Obj: TObject param
+  .reg t0: Boolean temp
+  .reg t1: TCircle temp
+  .reg t2: TObject temp
+bb0:
+  .line 46
+  Move         t0, v0
+  IsClass      t0, CastObjectParamTemp.TCircle
+  JmpIfFalse   t0, bb2, bb1
+bb1:
+  .line 47
+  AssignObj    t2, v0
+  AsClass      t2, CastObjectParamTemp.TCircle
+  Move         t1, t2
+  Call         -, f4(t1)
+  .line 46
+  Jmp          bb3
+bb2:
+  .line 46
+  Jmp          bb3
+bb3:
+  .line 48
+  RetVoid
+.finally t2:obj

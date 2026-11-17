@@ -4,7 +4,7 @@ program DynLifetime;
 // builds the array from its elements and moves it, `SetLength` changes the variable without
 // counting, an element is read with `DynGetRef` and written with `DynSetRef` while shared, an
 // open array argument from a static array is materialized, and an element passed to a `var`
-// parameter makes a cell rooted at the array.
+// parameter is lent from the global holding the array (`Lend` / `Unlend`).
 
 type
   TPair = array[0..1] of string;

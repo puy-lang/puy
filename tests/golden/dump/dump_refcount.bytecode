@@ -1,0 +1,68 @@
+; puyc format 0
+.const
+  0: str "\n"
+.type
+  64: class DumpRefcount.TBox ref slots=1 objs=0 parent=ty20 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+.global
+  0: obj Shared
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpRefcount file="dump_refcount.pas" init=- fini=- entry=0
+.func 0 DumpRefcount.<main> params=0 regs=2
+  .line 34
+  0000  Call         r1, f1
+  .line 35
+  0001  ReleaseObj   r0
+  0002  LoadGlobal   r1, g0
+  0003  AddRefObj    r0
+  0004  StoreGlobal  r0, g0
+  0005  ReleaseObj   r1
+  .line 36
+  0006  RetVoid
+.finally r0:obj
+.func 1 DumpRefcount.Run params=0 regs=12
+  .local r0 B
+  .local r1 O
+  .local r2 P
+  .line 23
+  0000  New          r0, ty64
+  .line 24
+  0001  AssignObj    r1, r0
+  .line 25
+  0002  New          r2, ty64
+  .line 26
+  0003  AssignObj    r1, r2
+  .line 27
+  0004  ObjGet       r8, r0, 0
+  0005  AddRefObj    r2
+  0006  ObjSet       r0, 0, r2
+  0007  ReleaseObj   r8
+  .line 28
+  0008  ObjGet       r8, r0, 0
+  0009  AssignObj    r3, r8
+  000a  LoadGlobal   r8, g0
+  000b  AddRefObj    r3
+  000c  StoreGlobal  r3, g0
+  000d  ReleaseObj   r8
+  .line 29
+  000e  LoadGlobal   r8, g0
+  000f  AssignObj    r1, r8
+  .line 30
+  0010  RefCount     r8, r0
+  0011  IntToStr     r4, r8
+  0012  LoadZero     r10
+  0013  EqInt        r9, r1, r10
+  0014  NotBool      r9, r9
+  0015  BoolToStr    r5, r9
+  0016  ConcatStr    r4, r4, r5
+  0017  LoadZero     r11
+  0018  EqInt        r10, r2, r11
+  0019  NotBool      r10, r10
+  001a  BoolToStr    r6, r10
+  001b  ConcatStr    r4, r4, r6
+  001c  LoadConst    r7, k0
+  001d  ConcatStr    r4, r4, r7
+  001e  CallHost     r4, h0
+  .line 31
+  001f  RetVoid
+.finally r0, r1:obj, r2:obj, r3:obj, r4, r5, r6, r7

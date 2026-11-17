@@ -1,0 +1,7 @@
+error[E0708]: `Integer` is a type and cannot be used as a value
+   --> generic_expr_compare.pas:20:13
+    |
+ 20 |   X := Zero<Integer> + 1;
+    |             ^^^^^^^
+
+error: aborting due to 1 error

@@ -1,0 +1,15 @@
+and:
+  eval a
+  eval b
+  off
+or:
+  eval c
+  eval d
+  on
+Trunc 1, Round 10
+calls:
+  Boolean TRUE
+  string on
+  flag on 3
+array: on on off
+Exit: off

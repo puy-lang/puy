@@ -1,0 +1,106 @@
+; puy ir 1
+.global
+  g0 A: TBox<TUserId>
+  g1 B: TBox<Int64>
+  g2 S: TSmall
+  g3 N: Integer
+.func f0 Hello.<main> params=0
+  .reg t0: TBox<TUserId> temp
+  .reg t1: TBox<Int64> temp
+  .reg t2: TBox<TUserId> temp
+  .reg t3: Int64 temp
+  .reg t4: TBox<Int64> temp
+  .reg t5: Int64 temp
+  .reg t6: TBox<TUserId> temp
+  .reg t7: Int64 temp
+  .reg t8: Integer temp
+  .reg t9: Byte temp
+  .reg t10: Int64 temp
+  .reg t11: Int64 temp
+  .reg t12: string temp
+  .reg t13: Int64 temp
+  .reg t14: TBox<TUserId> temp
+  .reg t15: string temp
+  .reg t16: string temp
+  .reg t17: Int64 temp
+  .reg t18: TBox<Int64> temp
+  .reg t19: string temp
+  .reg t20: string temp
+  .reg t21: Byte temp
+  .reg t22: string temp
+  .reg t23: TBox<TUserId> temp
+  .reg t24: TBox<Int64> temp
+bb0:
+  .line 28
+  LoadZero     t0
+  New          t0, Hello.TBox<Hello.TUserId>
+  StoreGlobal  t0, g0
+  .line 29
+  LoadZero     t1
+  New          t1, Hello.TBox<Int64>
+  StoreGlobal  t1, g1
+  .line 30
+  LoadGlobal   t2, g0
+  LoadInt      t3, 1
+  ObjSet       t2, 0, t3
+  .line 31
+  LoadGlobal   t4, g1
+  LoadGlobal   t6, g0
+  CallMethod   t5, f1(t6)
+  LoadInt      t7, 1
+  AddIntChk    t5, t5, t7
+  ObjSet       t4, 0, t5
+  .line 32
+  LoadInt      t8, 200
+  StoreGlobal  t8, g3
+  .line 33
+  LoadGlobal   t9, g3
+  Move         t10, t9
+  LoadInt      t11, 256
+  ChkRange     t10, t11, "`TSmall` (0..255)"
+  StoreGlobal  t9, g2
+  .line 34
+  LoadGlobal   t14, g0
+  CallMethod   t13, f1(t14)
+  IntToStr     t12, t13
+  LoadConst    t15, " "
+  ConcatStr    t12, t12, t15
+  LoadGlobal   t18, g1
+  CallMethod   t17, f2(t18)
+  IntToStr     t16, t17
+  ConcatStr    t12, t12, t16
+  LoadConst    t19, " "
+  ConcatStr    t12, t12, t19
+  LoadGlobal   t21, g2
+  IntToStr     t20, t21
+  ConcatStr    t12, t12, t20
+  LoadConst    t22, "\n"
+  ConcatStr    t12, t12, t22
+  CallHost     -, h0(t12)
+  .line 35
+  LoadGlobal   t23, g0
+  Free         t23
+  .line 36
+  LoadGlobal   t24, g1
+  Free         t24
+  .line 37
+  RetVoid
+.finally t12, t15, t16, t19, t20, t22
+.func f1 Hello.TBox<Hello.TUserId>.Get params=1
+  .reg v0 Self: TBox<TUserId> self
+  .reg v1 Result: Int64 result
+bb0:
+  .line 19
+  ObjGet       v1, v0, 0
+  .line 20
+  Ret          v1
+.finally
+.func f2 Hello.TBox<Int64>.Get params=1
+  .reg v0 Self: TBox<Int64> self
+  .reg v1 Result: Int64 result
+bb0:
+  .line 19
+  ObjGet       v1, v0, 0
+  .line 20
+  Ret          v1
+.finally

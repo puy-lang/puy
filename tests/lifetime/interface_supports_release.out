@@ -1,0 +1,16 @@
+TRUE FALSE
+a is alive: a
+destroy a
+-
+TRUE b
+still held by G
+FALSE TRUE
+after the last reference
+destroy b
+-
+TRUE
+destroy c
+after c
+as failed
+destroy d
+end

@@ -1,0 +1,9 @@
+warning[W0005]: directive `{$IFDEF PUY}` is not at a declaration or statement boundary (directive-placement)
+   --> dir_class_boundaries.pas:28:11
+    |
+ 28 |     Size: {$IFDEF PUY}Integer{$ENDIF};
+    |           ^^^^^^^^^^^^
+    |
+    = note: disable with `{$WARN directive-placement OFF}`
+
+warning: 1 warning emitted

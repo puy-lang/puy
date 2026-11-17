@@ -1,0 +1,139 @@
+error[E0761]: generic type `TBox` needs type arguments
+   --> generic_instance_errors.pas:56:6
+    |
+ 56 |   A: TBox;
+    |      ^^^^
+
+error[E0761]: `TBox` expects 1 type argument, found 2
+   --> generic_instance_errors.pas:57:10
+    |
+ 57 |   B: TBox<Integer, string>;
+    |          ^^^^^^^^^^^^^^^^^
+
+error[E0761]: `Integer` is not generic
+   --> generic_instance_errors.pas:58:6
+    |
+ 58 |   C: Integer<string>;
+    |      ^^^^^^^^^^^^^^^
+
+error[E0759]: `TAbstract` does not satisfy the constraint `constructor` of `T` in `TMake<T>`
+   --> generic_instance_errors.pas:60:13
+    |
+ 14 |   TMake<T: class, constructor> = class
+    |         - type parameter declared here
+...
+ 60 |   M2: TMake<TAbstract>;
+    |             ^^^^^^^^^
+    |
+    = note: the type needs a public constructor `Create` without parameters, and must not be abstract
+
+error[E0759]: `TNeedsArg` does not satisfy the constraint `constructor` of `T` in `TMake<T>`
+   --> generic_instance_errors.pas:61:13
+    |
+ 14 |   TMake<T: class, constructor> = class
+    |         - type parameter declared here
+...
+ 61 |   M3: TMake<TNeedsArg>;
+    |             ^^^^^^^^^
+    |
+    = note: the type needs a public constructor `Create` without parameters, and must not be abstract
+
+error[E0759]: `Integer` does not satisfy the constraint `class` of `T` in `TMake<T>`
+   --> generic_instance_errors.pas:63:13
+    |
+ 14 |   TMake<T: class, constructor> = class
+    |         - type parameter declared here
+...
+ 63 |   M5: TMake<Integer>;
+    |             ^^^^^^^
+
+error[E0760]: `TThing` is a reference counted class and cannot be used for `T` of `TOwned<T>`
+   --> generic_instance_errors.pas:64:14
+    |
+ 16 |   TOwned<T: class, NotRefCounted> = class
+    |          - type parameter declared here
+...
+ 64 |   O1: TOwned<TThing>;
+    |              ^^^^^^
+    |
+    = note: reference counted objects are freed when the last reference goes away, so they do not need an owning container
+
+error[E0760]: `IThing` is an interface and cannot be used for `T` of `TOwned<T>`
+   --> generic_instance_errors.pas:67:14
+    |
+ 16 |   TOwned<T: class, NotRefCounted> = class
+    |          - type parameter declared here
+...
+ 67 |   O4: TOwned<IThing>;
+    |              ^^^^^^
+    |
+    = note: reference counted objects are freed when the last reference goes away, so they do not need an owning container
+
+error[E0760]: `IThing` is an interface and cannot be used for `K` of `TKeyed<K>`
+   --> generic_instance_errors.pas:68:14
+    |
+ 18 |   TKeyed<K: NotRefCounted> = record
+    |          - type parameter declared here
+...
+ 68 |   K1: TKeyed<IThing>;
+    |              ^^^^^^
+    |
+    = note: reference counted objects are freed when the last reference goes away, so they do not need an owning container
+
+error[E0759]: `string` does not satisfy the constraint `record` of `T` in `TValue<T>`
+   --> generic_instance_errors.pas:70:14
+    |
+ 21 |   TValue<T: record> = record
+    |          - type parameter declared here
+...
+ 70 |   V1: TValue<string>;
+    |              ^^^^^^
+
+error[E0759]: `TBox<Integer>` does not satisfy the constraint `record` of `T` in `TValue<T>`
+   --> generic_instance_errors.pas:72:14
+    |
+ 21 |   TValue<T: record> = record
+    |          - type parameter declared here
+...
+ 72 |   V3: TValue<TBox<Integer>>;
+    |              ^^^^^^^^^^^^^
+
+error[E0759]: `TPlain` does not satisfy the constraint `TShape` of `T` in `TOnly<T>`
+   --> generic_instance_errors.pas:74:13
+    |
+ 28 |   TOnly<T: TShape> = class
+    |         - type parameter declared here
+...
+ 74 |   S2: TOnly<TPlain>;
+    |             ^^^^^^
+
+error[E0759]: `TPlain` does not satisfy the constraint `IThing` of `T` in `TNamed<T>`
+   --> generic_instance_errors.pas:77:14
+    |
+ 34 |   TNamed<T: IThing> = class
+    |          - type parameter declared here
+...
+ 77 |   N3: TNamed<TPlain>;
+    |              ^^^^^^
+
+error[E0700]: undeclared identifier `Nope.TBox`
+   --> generic_instance_errors.pas:78:6
+    |
+ 78 |   U: Nope.TBox<Integer>;
+    |      ^^^^^^^^^
+
+error[E0761]: generic type `TBox` needs type arguments
+   --> generic_instance_errors.pas:81:8
+    |
+ 81 |   X := TBox.Create.Item;
+    |        ^^^^
+
+error[E0700]: `TArray<Integer>` has no member `Create`
+   --> generic_instance_errors.pas:82:31
+    |
+ 82 |   X := Length(TArray<Integer>.Create(1, 2));
+    |                               ^^^^^^
+    |
+    = note: use an array constructor, as in `[1, 2]`
+
+error: aborting due to 16 errors

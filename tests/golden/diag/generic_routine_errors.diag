@@ -1,0 +1,159 @@
+error[E0757]: a virtual method cannot have type parameters
+   --> generic_routine_errors.pas:15:24
+    |
+ 15 |     procedure Virt<T>; virtual;
+    |                        ^^^^^^^
+
+error[E0757]: a constructor cannot have type parameters
+   --> generic_routine_errors.pas:16:5
+    |
+ 16 |     constructor Create<T>;
+    |     ^^^^^^^^^^^
+
+error[E0757]: a destructor cannot have type parameters
+   --> generic_routine_errors.pas:17:5
+    |
+ 17 |     destructor Destroy<T>; override;
+    |     ^^^^^^^^^^
+
+error[E0757]: an operator cannot have type parameters
+   --> generic_routine_errors.pas:18:11
+    |
+ 18 |     class operator Add<T>(const A, B: TFoo): TFoo;
+    |           ^^^^^^^^
+
+error[E0723]: method `TFoo.Plain` has no body
+   --> generic_routine_errors.pas:21:15
+    |
+ 21 |     procedure Plain;
+    |               ^^^^^
+
+error[E0757]: a property cannot have type parameters
+   --> generic_routine_errors.pas:22:5
+    |
+ 22 |     property Prop<T>: Integer;
+    |     ^^^^^^^^
+
+error[E0757]: a virtual method cannot have type parameters
+   --> generic_routine_errors.pas:26:21
+    |
+ 26 |     procedure Method<T>;
+    |                     ^^^
+
+error[E0701]: `T` is already declared
+   --> generic_routine_errors.pas:30:21
+    |
+ 29 |   TBox<T> = class
+    |        - declared here
+ 30 |     procedure Clash<T>;
+    |                     ^ declared again here
+
+error[E0757]: type parameters of `TFoo.Renamed` must be written as in its declaration: `<T>`
+   --> generic_routine_errors.pas:35:23
+    |
+ 35 | procedure TFoo.Renamed<U>;
+    |                       ^^^
+    |
+    = fix: write `<T>`
+
+error[E0757]: type parameters of `TFoo.LeftOut` must be written as in its declaration: `<T>`
+   --> generic_routine_errors.pas:39:16
+    |
+ 39 | procedure TFoo.LeftOut;
+    |                ^^^^^^^
+    |
+    = fix: write `<T>`
+
+error[E0761]: `TFoo.Plain` is not generic
+   --> generic_routine_errors.pas:43:21
+    |
+ 43 | procedure TFoo.Plain<T>;
+    |                     ^^^
+
+error[E0761]: `TFoo` is not generic
+   --> generic_routine_errors.pas:47:15
+    |
+ 47 | procedure TFoo<T>.Plain;
+    |               ^^^
+
+error[E0700]: undeclared identifier `TMissing`
+   --> generic_routine_errors.pas:51:11
+    |
+ 51 | procedure TMissing<T>.Run;
+    |           ^^^^^^^^
+
+error[E0757]: a nested routine cannot have type parameters
+   --> generic_routine_errors.pas:61:18
+    |
+ 61 |   procedure Inner<T>;
+    |                  ^^^
+
+error[E0701]: `T` is already declared
+   --> generic_routine_errors.pas:77:20
+    |
+ 77 | procedure Twice<T, T>;
+    |                    ^ declared again here
+    |                 - declared here
+
+error[E0757]: constraints are written only in the first declaration of `Fwd`
+   --> generic_routine_errors.pas:83:16
+    |
+ 83 | procedure Fwd<T: class>;
+    |                ^^^^^^^
+    |
+    = fix: remove the constraints
+
+error[E0757]: type parameters of `Other` must be written as in its declaration: `<T>`
+   --> generic_routine_errors.pas:89:16
+    |
+ 89 | procedure Other<U>;
+    |                ^^^
+    |
+    = fix: write `<T>`
+
+error[E0708]: `NotGeneric` is not a type
+   --> generic_routine_errors.pas:97:11
+    |
+ 97 | procedure NotGeneric<T>.Run;
+    |           ^^^^^^^^^^
+
+error[E0763]: cannot infer the type argument `T` of `Show`
+    --> generic_routine_errors.pas:105:8
+     |
+ 105 |   P := Show;
+     |        ^^^^
+     |
+     = note: write the type arguments, as in `Show<T>(…)`
+
+error[E0761]: `Show` expects 1 type argument, found 2
+    --> generic_routine_errors.pas:106:7
+     |
+ 106 |   Show<Integer, string>(1);
+     |       ^^^^^^^^^^^^^^^^^
+
+error[E0761]: `NotGeneric` is not generic
+    --> generic_routine_errors.pas:107:3
+     |
+ 107 |   NotGeneric<Integer>;
+     |   ^^^^^^^^^^^^^^^^^^^
+     |
+     = note: to compare, write `(A < B) > (C)`
+
+error[E0761]: `Zero<Integer>` needs parentheses here
+    --> generic_routine_errors.pas:108:8
+     |
+ 108 |   N := Zero<Integer> + 1;
+     |        ^^^^^^^^^^^^^
+     |
+     = fix: add `()`
+
+error[E0759]: `Integer` does not satisfy the constraint `class` of `T` in `Fwd`
+    --> generic_routine_errors.pas:109:7
+     |
+  81 | procedure Fwd<T: class>; forward;
+     |               - type parameter declared here
+...
+ 109 |   Fwd<Integer>;
+     |       ^^^^^^^
+
+error: aborting due to 23 errors

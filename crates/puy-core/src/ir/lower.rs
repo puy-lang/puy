@@ -4,7 +4,9 @@
 //! unmanaged types (and call arguments) are created like a stack: a statement or expression
 //! releases the ones it created when it ends, and the depth at creation becomes the temporary's
 //! slot (codegen turns it into a register). A temporary of a managed type gets a register of its
-//! own that keeps its reference until the routine ends (`docs/design/lifetime.md` 3.4).
+//! own (one per position in the code) that keeps its reference until the routine ends; a dynamic
+//! array holding no object is let go of earlier, when the statement that created it ends (the
+//! condition of an `if` / `while` before the body; `docs/design/lifetime.md` 3.4).
 //!
 //! An expression is lowered into a destination register given by the caller, so an assignment to a
 //! local variable computes straight into its register. For a managed type the destination either
@@ -15,9 +17,14 @@ use super::*;
 use crate::bytecode::{self, op};
 use crate::directives::DirectiveOutput;
 use crate::sema::hir::*;
-use crate::sema::types::{Const, EXCEPTION, TypeId, TypeTable, bound_text, setbits};
+use crate::sema::types::{
+    Const, EXCEPTION, KeyKind, OrderKind, TypeId, TypeTable, bound_text, setbits,
+};
 use crate::source::SourceFile;
 use crate::syntax::ast::ParamMode;
+
+/// The most operands one `ConcatStrN` joins (`FuncLower::concat_n`): `C` stays a narrow operand.
+const CONCAT_N_MAX: usize = 255;
 
 /// Lowers the program. Expects a program without errors. `files` are the directives and the
 /// source of each unit of `p.units` (same order), `paths` the source paths of the unit section
@@ -29,6 +36,9 @@ pub fn lower(p: &Program, files: &[(&DirectiveOutput, &SourceFile)], paths: &[St
     let mut units: Vec<UnitEntry> = Vec::new();
     let mut entry = 0;
     let mut func_index = vec![0u32; p.routines.len()];
+    // The routines the analysis made after every unit's: the instantiations' and the generated
+    // ones (`docs/spec/generics.md` 7, `docs/spec/equality.md` 8.3)
+    let late: std::collections::HashSet<RoutineId> = p.instance_order.iter().copied().collect();
     for (k, u) in p.units.iter().enumerate() {
         if u.is_program {
             entry = order.len() as u32;
@@ -48,7 +58,14 @@ pub fn lower(p: &Program, files: &[(&DirectiveOutput, &SourceFile)], paths: &[St
             order.len() as u32 - 1
         });
         for (i, r) in p.routines.iter().enumerate() {
-            if r.unit as usize == k {
+            // An abstract method has no function (`docs/spec/objects.md` 14.1), nor has a
+            // generic body (`docs/spec/generics.md` 7)
+            if r.unit as usize == k
+                && !r.is_abstract
+                && !r.generic
+                && r.instance.is_none()
+                && !late.contains(&RoutineId(i as u32))
+            {
                 func_index[i] = order.len() as u32;
                 order.push((r, Some(RoutineId(i as u32))));
             }
@@ -62,12 +79,50 @@ pub fn lower(p: &Program, files: &[(&DirectiveOutput, &SourceFile)], paths: &[St
             global_count: u.global_count,
         });
     }
+    // The routines of the instantiations and the generated ones, after every unit's
+    // (`docs/spec/generics.md` 7)
+    for id in &p.instance_order {
+        let r = &p.routines[id.0 as usize];
+        if r.is_abstract || r.generic {
+            continue;
+        }
+        func_index[id.0 as usize] = order.len() as u32;
+        order.push((r, Some(*id)));
+    }
+    // A type parameter left in the HIR is an error of the compiler (`docs/design/generics.md`
+    // 3.1): checked over every routine in the debug builds
+    #[cfg(debug_assertions)]
+    for (r, _) in &order {
+        if let Some(t) = crate::sema::hirwalk::has_param(r, &p.types) {
+            panic!(
+                "a type parameter is left in `{}` after instantiation: {}",
+                r.name,
+                p.types.name(t)
+            );
+        }
+    }
+    let func_names = p
+        .routines
+        .iter()
+        .map(|r| {
+            if let Some(full) = &r.instance {
+                return full.clone();
+            }
+            // The methods of the built-in classes are `System`'s (`TObject.ToString`)
+            if r.builtin {
+                r.name.clone()
+            } else {
+                format!("{}.{}", p.units[r.unit as usize].name, r.name)
+            }
+        })
+        .collect();
     let mut ml = ModuleLower {
         files,
         unit: 0,
         hosts: Vec::new(),
         unit_names: p.units.iter().map(|u| u.name.clone()).collect(),
         func_index,
+        func_names,
     };
     let funcs = order
         .into_iter()
@@ -99,6 +154,7 @@ pub fn lower(p: &Program, files: &[(&DirectiveOutput, &SourceFile)], paths: &[St
         funcs,
         units,
         entry,
+        func_index: ml.func_index,
     }
 }
 
@@ -111,6 +167,8 @@ struct ModuleLower<'a> {
     unit_names: Vec<String>,
     /// The function index of each routine.
     func_index: Vec<u32>,
+    /// The full name of each routine (`Hello.TShape.Area`; the `ir` dump of `CallVirtual`).
+    func_names: Vec<String>,
 }
 
 impl ModuleLower<'_> {
@@ -135,6 +193,17 @@ impl ModuleLower<'_> {
     }
 }
 
+/// Where the instructions emitted from some point on start: the open block and its number of
+/// instructions then, and the number of blocks then (the later blocks were all created since),
+/// with the handler table entries added since.
+struct Region {
+    block: BlockId,
+    insts: usize,
+    blocks: usize,
+    /// The number of handler table entries then.
+    tries: usize,
+}
+
 /// A block while it is being built.
 #[derive(Default)]
 struct BlockBuild {
@@ -156,6 +225,10 @@ struct FuncLower<'m, 'a> {
     cur: Option<BlockId>,
     temps: Vec<Temp>,
     next_slot: u32,
+    /// The owning temporaries let go of early ([`Self::alloc`]) of the statements being lowered,
+    /// in creation order: a statement lets go of the ones it created when it ends
+    /// (`docs/design/lifetime.md` 3.4).
+    owned: Vec<Reg>,
     line: u32,
     /// (`Break` target, `Continue` target, `cleanup.len()` at the loop) of the enclosing loops.
     loops: Vec<(BlockId, BlockId, usize)>,
@@ -163,8 +236,14 @@ struct FuncLower<'m, 'a> {
     cleanup: Vec<Cleanup>,
     /// The handler table, inner entries first.
     tries: Vec<TryEntry>,
+    /// The number of `try..except` and `try..finally` bodies written in the source around the
+    /// statement (not the implicit `try..finally` of `for..in` and the like).
+    guarded: u32,
     /// `{$Q}` at the position of the current statement.
     current_overflow: bool,
+    /// The variables whose cell has a register of its own, after the named variables
+    /// (`docs/spec/objects.md` 14.9; [`cell_vars`]).
+    cells: Vec<VarId>,
 }
 
 impl<'m, 'a> FuncLower<'m, 'a> {
@@ -174,6 +253,14 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         id: Option<RoutineId>,
         program: &'m Program,
     ) -> Self {
+        // The HIR after instantiation has no type parameter (`docs/design/generics.md` 3.1)
+        for v in &r.vars {
+            assert!(
+                !matches!(v.ty, Ty::Param(_)),
+                "a type parameter is left in `{}` after instantiation",
+                r.name
+            );
+        }
         FuncLower {
             ml,
             r,
@@ -184,18 +271,39 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             cur: None,
             temps: Vec::new(),
             next_slot: 0,
+            owned: Vec::new(),
             line: 1,
             loops: Vec::new(),
             cleanup: Vec::new(),
             tries: Vec::new(),
+            guarded: 0,
             current_overflow: false,
+            cells: cell_vars(program, r),
         }
     }
 
     fn lower(mut self) -> Function {
+        self.count_arguments_on_entry();
         if self.r.link {
             self.line = self.ml.line_of(self.r.name_span);
             self.outer_refs();
+        }
+        if !self.cells.is_empty() {
+            self.line = self.ml.line_of(self.r.name_span);
+            self.cells_on_entry();
+        }
+        if self.r.groups.own.is_some() || !self.r.groups.made.is_empty() {
+            self.line = self.ml.line_of(self.r.name_span);
+            self.group_blocks_on_entry();
+        }
+        if let Some(class) = self.r.dtor_of {
+            // A destructor records that its body started (`docs/spec/objects.md` 8.5, 14.8)
+            self.line = self.ml.line_of(self.r.name_span);
+            let m = self.mark();
+            let t = self.alloc_arg(Some(Ty::Integer));
+            self.op_table(op::LOAD_INT, t, Operand::Type(Ty::Class(class)));
+            self.intrinsic(op::intr::DTOR_ENTER, &[self.reg_of(VarId(0)), t]);
+            self.release(m);
         }
         for s in &self.r.body {
             self.stmt(s);
@@ -233,6 +341,32 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                         then: place(then),
                         other: place(other),
                     },
+                    Term::BranchImm {
+                        op,
+                        a,
+                        imm,
+                        then,
+                        other,
+                    } => Term::BranchImm {
+                        op,
+                        a,
+                        imm,
+                        then: place(then),
+                        other: place(other),
+                    },
+                    Term::ForLoop {
+                        counter,
+                        limit,
+                        delta,
+                        top,
+                        exit,
+                    } => Term::ForLoop {
+                        counter,
+                        limit,
+                        delta,
+                        top: place(top),
+                        exit: place(exit),
+                    },
                     Term::EndFinally {
                         state,
                         next,
@@ -252,12 +386,18 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             })
             .collect();
         Function {
-            name: format!("{}.{}", self.ml.unit_names[self.ml.unit], self.r.name),
+            name: match &self.r.instance {
+                Some(full) => full.clone(),
+                None => format!("{}.{}", self.ml.unit_names[self.ml.unit], self.r.name),
+            },
             file: self.ml.unit as u32,
+            origin: self
+                .id
+                .and_then(|id| self.program.origins.get(&id).cloned()),
             short_name: self.r.name.clone(),
             name_span: self.r.name_span,
-            params: self.r.param_count + u32::from(self.r.link),
-            link: self.r.link,
+            params: self.r.param_count + u32::from(hidden_first(self.r)),
+            link: hidden_first(self.r),
             outer: self
                 .r
                 .parent
@@ -272,7 +412,21 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                     ty: v.ty,
                     kind: v.kind,
                     is_for_var: v.is_for_var,
+                    shared: v.captured || v.cell,
                 })
+                .chain(self.cells.iter().map(|c| {
+                    let v = &self.r.vars[c.0 as usize];
+                    VarReg {
+                        name: v.name.clone(),
+                        ty: v.ty,
+                        kind: VarKind::Cell {
+                            var: *c,
+                            owned: owns_cell(v),
+                        },
+                        is_for_var: false,
+                        shared: true,
+                    }
+                }))
                 .collect(),
             finally: self.finally_list(),
             tries: self.tries,
@@ -289,13 +443,21 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             .vars
             .iter()
             .enumerate()
-            .filter(|(_, v)| owns_value(v));
+            .filter(|(_, v)| self.owns_var(v));
         let temps = self
             .temps
             .iter()
             .enumerate()
             .filter(|(_, t)| t.slot.is_none() && t.kind != TempKind::State);
+        let n = self.r.vars.len();
+        let cells = self
+            .cells
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| owns_cell(&self.r.vars[c.0 as usize]))
+            .map(|(k, _)| Reg::Var((n + k) as u32));
         vars.map(|(i, _)| Reg::Var(i as u32))
+            .chain(cells)
             .chain(temps.map(|(i, _)| Reg::Temp(i as u32)))
             .collect()
     }
@@ -364,6 +526,24 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         self.push(op, InstKind::Plain(operands));
     }
 
+    /// `Intrinsic` (`docs/spec/bytecode.md` 2.19): the intrinsic `id` with the registers in the
+    /// order of its shape (`A`, then `B`; a range may list only its first register).
+    fn intrinsic(&mut self, id: u8, regs: &[Reg]) {
+        let mut operands: Vec<Operand> = regs.iter().map(|&r| Operand::Reg(r)).collect();
+        operands.push(Operand::Imm(i64::from(id)));
+        self.plain(op::INTRINSIC, operands);
+    }
+
+    /// An intrinsic `id` whose arguments are `B` and `B+1`: copies them (borrowed, `Move`) to two
+    /// consecutive call-argument temporaries.
+    fn intrinsic_pair(&mut self, id: u8, dst: Reg, args: [(Reg, Ty); 2]) {
+        let b = self.alloc_arg(Some(args[0].1));
+        let c = self.alloc_arg(Some(args[1].1));
+        self.op2(op::MOVE, b, args[0].0);
+        self.op2(op::MOVE, c, args[1].0);
+        self.intrinsic(id, &[dst, b, c]);
+    }
+
     fn op1(&mut self, op: u8, a: Reg) {
         self.plain(op, vec![Operand::Reg(a)]);
     }
@@ -416,15 +596,23 @@ impl<'m, 'a> FuncLower<'m, 'a> {
     }
 
     /// A temporary for the value of an expression. A managed type gets a register of its own that
-    /// owns the value until the routine ends (`docs/design/lifetime.md` 3.4).
+    /// owns the value until the routine ends, except that a dynamic array holding no object is
+    /// let go of when the statement that created it ends: a reference held longer would make a
+    /// later `SetLength` of the variable it was read from copy the elements (or raise
+    /// `EAliasError` while an element is lent), and letting go of it runs no destructor
+    /// (`docs/design/lifetime.md` 3.4).
     fn alloc(&mut self, ty: Ty) -> Reg {
-        if ty.is_managed() {
+        if self.managed(ty) {
             self.temps.push(Temp {
                 ty: Some(ty),
                 kind: TempKind::Value,
                 slot: None,
             });
-            Reg::Temp(self.temps.len() as u32 - 1)
+            let reg = Reg::Temp(self.temps.len() as u32 - 1);
+            if self.released_early(ty) {
+                self.owned.push(reg);
+            }
+            reg
         } else {
             self.alloc_kind(Some(ty), TempKind::Value)
         }
@@ -449,7 +637,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
     /// `const` / `var` / `out` parameter, or an owning temporary. A call argument does not.
     fn owns(&self, reg: Reg) -> bool {
         match reg {
-            Reg::Var(v) => owns_value(&self.r.vars[v as usize]),
+            Reg::Var(v) => self.owns_var(&self.r.vars[v as usize]),
             Reg::Temp(t) => self.temps[t as usize].slot.is_none(),
             Reg::Link => false,
         }
@@ -457,6 +645,198 @@ impl<'m, 'a> FuncLower<'m, 'a> {
 
     fn mark(&self) -> u32 {
         self.next_slot
+    }
+
+    // ---- How values are counted (`docs/spec/objects.md` 4.1, 14.3) ----
+
+    /// Whether a variable owns its value ([`owns_value`]).
+    fn owns_var(&self, v: &Var) -> bool {
+        owns_value(v, &self.program.types)
+    }
+
+    /// Whether a value of `ty` is counted, directly or by its contents ([`TypeTable::managed`]).
+    fn managed(&self, ty: Ty) -> bool {
+        self.program.types.managed(ty)
+    }
+
+    /// How a value of `ty` written to `dst` is counted: by its contents when either the value or
+    /// the register is exactly `TObject` (a class value goes into a `TObject` variable without a
+    /// conversion; the old value there may be an instance of either kind), otherwise as `ty`.
+    fn write_kind(&self, ty: Ty, dst: Reg) -> u8 {
+        let types = &self.program.types;
+        let by_reg = self
+            .reg_type(dst)
+            .is_some_and(|t| types.slot_kind(t) == bytecode::SLOT_OBJ);
+        if by_reg {
+            bytecode::SLOT_OBJ
+        } else {
+            types.slot_kind(ty)
+        }
+    }
+
+    /// The type of a register's value (`None` for reference slots and frames).
+    fn reg_type(&self, r: Reg) -> Option<Ty> {
+        match r {
+            Reg::Var(v) => self.r.vars.get(v as usize).map(|v| v.ty),
+            Reg::Temp(t) => self.temps.get(t as usize).and_then(|t| t.ty),
+            Reg::Link => None,
+        }
+    }
+
+    /// `dst := src` of an existing value of `ty`: counted (`AssignRef`; `AssignObj` by its
+    /// contents), or `Move`.
+    fn copy_value(&mut self, ty: Ty, dst: Reg, src: Reg) {
+        let opc = match self.write_kind(ty, dst) {
+            bytecode::SLOT_REF => op::ASSIGN_REF,
+            bytecode::SLOT_OBJ => op::ASSIGN_OBJ,
+            _ => op::MOVE,
+        };
+        self.op2(opc, dst, src);
+    }
+
+    /// The reference `src` holds moves to `dst`, which lets go of its old value; `src` becomes 0
+    /// (`MoveRef`; by its contents, counted into `dst` and let go of from `src`).
+    fn move_value(&mut self, ty: Ty, dst: Reg, src: Reg) {
+        match self.write_kind(ty, dst) {
+            bytecode::SLOT_REF => self.op2(op::MOVE_REF, dst, src),
+            bytecode::SLOT_OBJ => {
+                self.op2(op::ASSIGN_OBJ, dst, src);
+                self.op1(op::RELEASE_OBJ, src);
+            }
+            _ => self.op2(op::MOVE, dst, src),
+        }
+    }
+
+    /// Lets go of the value of `r` and clears it (`Release` / `ReleaseObj`; `LoadZero` for a
+    /// register that does not own its value).
+    fn clear_value(&mut self, ty: Ty, r: Reg) {
+        let opc = if !self.owns(r) {
+            op::LOAD_ZERO
+        } else if self.write_kind(ty, r) == bytecode::SLOT_OBJ {
+            op::RELEASE_OBJ
+        } else {
+            op::RELEASE
+        };
+        self.op1(opc, r);
+    }
+
+    /// `ClearRef` of the reference `r` to an `out` argument of type `ty` before the call
+    /// (`docs/design/lifetime.md` 3.3); by its contents, the old value is read, the place set to
+    /// 0, then the old value let go of.
+    fn clear_ref(&mut self, ty: Ty, r: Reg) {
+        match self.program.types.slot_kind(ty) {
+            bytecode::SLOT_REF => self.op1(op::CLEAR_REF, r),
+            bytecode::SLOT_OBJ => {
+                let z = self.alloc_borrow(Ty::Int64);
+                self.op1(op::LOAD_ZERO, z);
+                self.set_value(
+                    ty,
+                    true,
+                    (op::STORE_REF, op::STORE_REF_REF),
+                    vec![Operand::Reg(r), Operand::Reg(z)],
+                    z,
+                    (op::LOAD_REF, vec![Operand::Reg(r)]),
+                );
+            }
+            _ => {}
+        }
+    }
+
+    /// A read into `dst` (operands `dst` then `rest`): `plain` for a value not counted or when not
+    /// `counted`, `counted_op` (`…Ref`) for a counted one; by its contents, `plain` into an
+    /// uncounted temporary then `AssignObj` (`docs/spec/objects.md` 14.3).
+    fn get_value(
+        &mut self,
+        ty: Ty,
+        counted: bool,
+        (plain, counted_op): (u8, u8),
+        dst: Reg,
+        rest: Vec<Operand>,
+    ) {
+        let kind = if counted {
+            self.write_kind(ty, dst)
+        } else {
+            bytecode::SLOT_PLAIN
+        };
+        let mut operands = vec![Operand::Reg(dst)];
+        match kind {
+            bytecode::SLOT_REF => {
+                operands.extend(rest);
+                self.plain(counted_op, operands);
+            }
+            bytecode::SLOT_OBJ => {
+                let t = self.alloc_borrow(Ty::Int64);
+                operands[0] = Operand::Reg(t);
+                operands.extend(rest);
+                self.plain(plain, operands);
+                self.op2(op::ASSIGN_OBJ, dst, t);
+            }
+            _ => {
+                operands.extend(rest);
+                self.plain(plain, operands);
+            }
+        }
+    }
+
+    /// A write of `src` (which keeps its reference) with the operands `set` (in the instruction's
+    /// order): `plain` for a value not counted or when not `counted`, `counted_op` for a counted
+    /// one. By its contents: the old value is read first with `get` (its opcode and the operands
+    /// after the destination), `src` is counted, written uncounted, then the old value let go of
+    /// (`docs/spec/objects.md` 14.3).
+    fn set_value(
+        &mut self,
+        ty: Ty,
+        counted: bool,
+        (plain, counted_op): (u8, u8),
+        set: Vec<Operand>,
+        src: Reg,
+        get: (u8, Vec<Operand>),
+    ) {
+        let kind = if counted {
+            self.program.types.slot_kind(ty)
+        } else {
+            bytecode::SLOT_PLAIN
+        };
+        match kind {
+            bytecode::SLOT_REF => self.plain(counted_op, set),
+            bytecode::SLOT_OBJ => {
+                let old = self.alloc_borrow(Ty::Int64);
+                let mut operands = vec![Operand::Reg(old)];
+                operands.extend(get.1);
+                self.plain(get.0, operands);
+                self.op1(op::ADD_REF_OBJ, src);
+                self.plain(plain, set);
+                self.op1(op::RELEASE_OBJ, old);
+            }
+            _ => self.plain(plain, set),
+        }
+    }
+
+    /// Whether a hidden value of `ty` (a temporary, the collection of `for..in`) is let go of when
+    /// its statement ends instead of when the routine ends: a dynamic array holding no object
+    /// (`docs/design/lifetime.md` 3.4).
+    fn released_early(&self, ty: Ty) -> bool {
+        matches!(ty, Ty::DynArray(_)) && !self.program.types.holds_object(ty)
+    }
+
+    /// Lets go of the owning temporaries created since `self.owned` had `first` entries
+    /// (`Release`, which also clears them), and returns them. On a path where one was not written,
+    /// it holds 0 or a value of an earlier pass that it still owns, so releasing it is always
+    /// right. Nothing is emitted where the code is unreachable (the end of the routine releases
+    /// them there).
+    fn release_owned(&mut self, first: usize) -> Vec<Reg> {
+        let regs = self.owned.split_off(first);
+        self.emit_releases(&regs);
+        regs
+    }
+
+    /// `Release` of each of `regs`, newest first, where the code is reachable.
+    fn emit_releases(&mut self, regs: &[Reg]) {
+        if self.cur.is_some() {
+            for &r in regs.iter().rev() {
+                self.op1(op::RELEASE, r);
+            }
+        }
     }
 
     fn release(&mut self, mark: u32) {
@@ -476,10 +856,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
     /// Whether the variable's register holds a reference slot: a `var` / `out` parameter, or a
     /// variable of an enclosing routine (`docs/spec/semantics.md` 4.9).
     fn is_ref_param(&self, v: VarId) -> bool {
-        matches!(
-            self.r.vars[v.0 as usize].kind,
-            VarKind::Param(ParamMode::Var | ParamMode::Out) | VarKind::Outer { .. }
-        )
+        holds_ref(&self.r.vars[v.0 as usize])
     }
 
     /// The routine `up` levels out of the one being lowered.
@@ -497,7 +874,10 @@ impl<'m, 'a> FuncLower<'m, 'a> {
     fn origin(&self, v: VarId) -> &'m Var {
         let var = &self.r.vars[v.0 as usize];
         match var.kind {
-            VarKind::Outer { up, var } => &self.enclosing(up).vars[var.0 as usize],
+            // A closure's variables of enclosing routines are cells it captured
+            VarKind::Outer { up, var } if !self.r.closure => {
+                &self.enclosing(up).vars[var.0 as usize]
+            }
             _ => var,
         }
     }
@@ -510,7 +890,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         for (i, v) in self.r.vars.iter().enumerate() {
             if let VarKind::Outer { up, var } = v.kind {
                 let owner = self.enclosing(up);
-                let b = var.0 + u32::from(owner.link);
+                let b = var.0 + u32::from(hidden_first(owner));
                 let reg = Reg::Var(i as u32);
                 self.plain(
                     op::OUTER_REF,
@@ -520,13 +900,199 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                         Operand::Imm(up as i64),
                     ],
                 );
-                if matches!(
-                    owner.vars[var.0 as usize].kind,
-                    VarKind::Param(ParamMode::Var | ParamMode::Out)
-                ) {
+                if holds_ref(&owner.vars[var.0 as usize]) {
                     self.op2(op::LOAD_REF, reg, reg);
                 }
             }
+        }
+    }
+
+    /// Counts the arguments of the managed value parameters that do not borrow them
+    /// (`docs/design/lifetime.md` 3.3): the caller lends them, and these parameters are written
+    /// (or used by a nested routine), so they hold a reference of their own, released with the
+    /// managed registers. First, before anything can raise and release them. A parameter with a
+    /// cell copies its value there instead ([`FuncLower::cells_on_entry`]).
+    fn count_arguments_on_entry(&mut self) {
+        for (i, v) in self.r.vars.iter().enumerate() {
+            if v.kind != VarKind::Param(ParamMode::Value) || !self.owns_var(v) {
+                continue;
+            }
+            self.line = self.ml.line_of(self.r.name_span);
+            let opc = match self.program.types.slot_kind(v.ty) {
+                bytecode::SLOT_OBJ => op::ADD_REF_OBJ,
+                _ => op::ADD_REF,
+            };
+            self.op1(opc, self.reg_of(VarId(i as u32)));
+        }
+    }
+
+    /// The register of the cell of the variable `v` (`docs/spec/objects.md` 14.9).
+    fn cell_reg(&self, v: VarId) -> Reg {
+        let k = self
+            .cells
+            .iter()
+            .position(|c| *c == v)
+            .expect("a captured variable has a cell register");
+        Reg::Var((self.r.vars.len() + k) as u32)
+    }
+
+    /// The cells made or taken when the routine is entered (`docs/spec/objects.md` 14.9): a new
+    /// cell for each captured parameter and local (a parameter's borrowed value is copied into
+    /// it, counted; `Self` and a `const` parameter, which cannot change, keep their register),
+    /// the cells a closure captured (`CapGet`), and the cells of the variables of enclosing
+    /// routines (read through the static link). A variable declared inline gets its cell where it is declared.
+    fn cells_on_entry(&mut self) {
+        let n = self.r.vars.len();
+        for (k, c) in self.cells.clone().into_iter().enumerate() {
+            let v = &self.r.vars[c.0 as usize];
+            let h = Reg::Var((n + k) as u32);
+            let x = self.reg_of(c);
+            match v.kind {
+                VarKind::Outer { .. } if self.r.closure => {
+                    let k = self
+                        .r
+                        .captures
+                        .iter()
+                        .position(|x| *x == c)
+                        .expect("a closure's variable of an enclosing routine is captured");
+                    // A closure-form nested routine takes it from its group's block
+                    let i = self.r.groups.slots.get(k).map_or(k, |s| *s as usize);
+                    self.plain(
+                        op::CAP_GET,
+                        vec![
+                            Operand::Reg(h),
+                            Operand::Reg(Reg::Link),
+                            Operand::Imm(i as i64),
+                        ],
+                    );
+                    self.intrinsic(op::intr::CELL_REF, &[x, h]);
+                }
+                VarKind::Outer { up, var } => {
+                    let owner = self.enclosing(up);
+                    let b = cell_index(self.program, owner, var)
+                        .expect("the variable of an enclosing routine has a cell register")
+                        + u32::from(hidden_first(owner));
+                    self.plain(
+                        op::OUTER_REF,
+                        vec![
+                            Operand::Reg(h),
+                            Operand::Imm(b as i64),
+                            Operand::Imm(up as i64),
+                        ],
+                    );
+                    self.op2(op::LOAD_REF, h, h);
+                }
+                // `E` of `on E` gets its cell where the handler takes the exception
+                VarKind::Exception => {}
+                _ if declared_inline(v) => {}
+                VarKind::SelfParam | VarKind::Param(ParamMode::Const) => self.copy_to_cell(c),
+                // A value parameter borrows its argument: the cell gets a counted copy, and the
+                // register a reference to the cell
+                VarKind::Param(_) => {
+                    self.copy_to_cell(c);
+                    self.intrinsic(op::intr::CELL_REF, &[x, h]);
+                }
+                _ => {
+                    self.new_cell(v.ty, h);
+                    self.intrinsic(op::intr::CELL_REF, &[x, h]);
+                }
+            }
+        }
+    }
+
+    /// A new cell holding a counted copy of the value of `v`: a borrowed one (`Self`, a `const`
+    /// or value parameter, `E` of `on E`).
+    fn copy_to_cell(&mut self, v: VarId) {
+        let (h, x) = (self.cell_reg(v), self.reg_of(v));
+        let kind = self.new_cell(self.r.vars[v.0 as usize].ty, h);
+        match kind {
+            bytecode::SLOT_REF => self.op2(op::CELL_SET_REF, h, x),
+            bytecode::SLOT_OBJ => {
+                self.op1(op::ADD_REF_OBJ, x);
+                self.op2(op::CELL_SET, h, x);
+            }
+            _ => self.op2(op::CELL_SET, h, x),
+        }
+    }
+
+    /// `NewCell` / `NewCellRef` / `NewCellObj` of a value of type `ty` into `h`: the kind of the
+    /// cell's value (a `[weak]` value is not counted).
+    fn new_cell(&mut self, ty: Ty, h: Reg) -> u8 {
+        let kind = self.program.types.slot_kind(ty);
+        let id = match kind {
+            bytecode::SLOT_REF => op::intr::NEW_CELL_REF,
+            bytecode::SLOT_OBJ => op::intr::NEW_CELL_OBJ,
+            _ => op::intr::NEW_CELL,
+        };
+        self.intrinsic(id, &[h]);
+        kind
+    }
+
+    /// A new cell for the variable `v` declared inline, where its declaration runs (or a `for`
+    /// loop starts an iteration; `docs/spec/objects.md` 9.6): the old cell is let go of, and
+    /// lives on in the closures holding it.
+    fn renew_cell(&mut self, v: VarId) {
+        let var = &self.r.vars[v.0 as usize];
+        if !(var.cell && declared_inline(var)) {
+            return;
+        }
+        let h = self.cell_reg(v);
+        self.new_cell(var.ty, h);
+        self.intrinsic(op::intr::CELL_REF, &[self.reg_of(v), h]);
+    }
+
+    /// `MakeClosure` of an anonymous method, or of a group block without a function (`func` is
+    /// -1; `docs/spec/objects.md` 14.9): its function and the cells it captures, in consecutive
+    /// registers.
+    /// `func` is the closure's function, or `None` for a group block (-1).
+    fn make_closure(&mut self, func: Option<u32>, captures: &[VarId], dst: Reg) {
+        let m = self.mark();
+        let f = self.alloc_arg(Some(Ty::Int64));
+        let n = self.alloc_arg(Some(Ty::Int64));
+        let cells: Vec<Reg> = captures.iter().map(|_| self.alloc_arg(None)).collect();
+        match func {
+            Some(func) => self.load_func(f, func, 0),
+            None => self.load_int(f, -1),
+        }
+        self.load_int(n, captures.len() as i64);
+        for (t, c) in cells.iter().zip(captures) {
+            let h = self.cell_reg(*c);
+            self.op2(op::MOVE, *t, h);
+        }
+        let mut regs = vec![dst, f, n];
+        regs.extend(cells);
+        self.intrinsic(op::intr::MAKE_CLOSURE, &regs);
+        self.release(m);
+    }
+
+    /// The group blocks made on entry (`docs/spec/objects.md` 14.9): a closure-form nested
+    /// routine's own block copied for the routines nested in it, and the blocks of the groups of
+    /// the closure-form routines nested in this one (no function; they capture cells only, so
+    /// their order does not matter).
+    fn group_blocks_on_entry(&mut self) {
+        let r = self.r;
+        if let Some(v) = r.groups.own {
+            self.store_place(&Place::Var(v, r.name_span), Reg::Link);
+        }
+        for (v, cells) in &r.groups.made {
+            let x = self.reg_of(*v);
+            if self.is_ref_param(*v) {
+                let t = self.alloc(Ty::Callable(crate::sema::types::TPROC));
+                self.make_closure(None, cells, t);
+                self.store_place(&Place::Var(*v, r.name_span), t);
+            } else {
+                self.make_closure(None, cells, x);
+            }
+        }
+    }
+
+    /// The group block (`docs/spec/objects.md` 14.9) in `block` (`None`: the closure of the
+    /// routine being lowered), uncounted into `dst`.
+    fn load_block(&mut self, block: Option<VarId>, dst: Reg) {
+        match block {
+            None => self.op2(op::MOVE, dst, Reg::Link),
+            Some(v) if self.is_ref_param(v) => self.op2(op::LOAD_REF, dst, self.reg_of(v)),
+            Some(v) => self.op2(op::MOVE, dst, self.reg_of(v)),
         }
     }
 
@@ -537,6 +1103,19 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             self.plain(op::LOAD_INT, vec![Operand::Reg(dst), Operand::Imm(v)]);
         } else {
             self.op_table(op::LOAD_CONST, dst, Operand::Int(v));
+        }
+    }
+
+    /// Loads a function index plus `add` as an integer (a routine value, a closure's function;
+    /// `docs/spec/objects.md` 14.9): like [`Self::load_int`], with an operand that tells codegen
+    /// the value names a function, so the function table can be renumbered after sharing
+    /// (`docs/spec/generics.md` 7).
+    fn load_func(&mut self, dst: Reg, func: u32, add: i64) {
+        let value = Operand::FuncValue { func, add };
+        if (i16::MIN as i64..=i16::MAX as i64).contains(&(i64::from(func) + add)) {
+            self.plain(op::LOAD_INT, vec![Operand::Reg(dst), value]);
+        } else {
+            self.op_table(op::LOAD_CONST, dst, value);
         }
     }
 
@@ -584,7 +1163,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                     }
                 }
             }
-            Const::Char(ch) if ty.is_managed() => self.load_str(dst, &[*ch]),
+            Const::Char(ch) if ty == Ty::String => self.load_str(dst, &[*ch]),
             Const::Char(ch) => self.load_int(dst, *ch as i64),
             Const::Str(s) => self.load_str(dst, s),
             Const::U8(s) if s.is_empty() => self.load_str(dst, &[]),
@@ -607,7 +1186,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             }
             Const::Agg(_) => self.op_table(op::LOAD_CONST, dst, Operand::Agg(ty, c.clone())),
             // `nil` is 0, the empty dynamic array
-            Const::Nil => self.load_str(dst, &[]),
+            Const::Nil => self.clear_value(ty, dst),
             Const::Set(words) => match ty {
                 // The empty big set is 0
                 Ty::BigSet(_) if words.is_empty() => self.load_str(dst, &[]),
@@ -629,27 +1208,72 @@ impl<'m, 'a> FuncLower<'m, 'a> {
     fn stmt(&mut self, s: &Stmt) {
         let old = self.set_line(s.span);
         let mark = self.mark();
+        let first_owned = self.owned.len();
         let saved_overflow = self.current_overflow;
         self.current_overflow = self.ml.dir().switches.at(s.span.start()).overflow_checks;
         match &s.kind {
-            StmtKind::Assign { target, value, .. } => self.assign(target, value),
+            StmtKind::Assign {
+                target,
+                value,
+                is_init,
+                ..
+            } => {
+                if *is_init && let Place::Var(v, _) = target {
+                    self.renew_cell(*v);
+                }
+                self.assign(target, value)
+            }
+            StmtKind::Declare(v) => self.renew_cell(*v),
             StmtKind::Block(list) => {
                 for x in list {
                     self.stmt(x);
                 }
             }
             StmtKind::Expr(e) => match &e.kind {
+                ExprKind::InheritedBuiltin { msg: None, .. } => {}
+                ExprKind::InheritedBuiltin { .. } => {
+                    // `inherited Create(Msg)` of `Exception` writes `Message` (no value)
+                    let t = self.alloc_borrow(Ty::Integer);
+                    self.expr(e, t);
+                }
                 // A procedure call has no value to keep (`bytecode.md` 5.1: the destination is `-`)
-                ExprKind::Call { routine, args }
-                    if self.program.routines[routine.0 as usize].ret.is_none() =>
-                {
-                    self.call_routine(*routine, args, None)
+                ExprKind::Call {
+                    routine,
+                    args,
+                    dispatch,
+                } if self.program.routines[routine.0 as usize].ret.is_none() => {
+                    self.call_routine(*routine, args, *dispatch, None)
+                }
+                ExprKind::CallValue { callee, args } if e.ty.is_error() => {
+                    self.call_value(callee, args, None, None)
                 }
                 _ => {
                     let t = self.alloc(e.ty);
                     self.expr(e, t);
                 }
             },
+            StmtKind::PropertySet { call, .. } => {
+                let ExprKind::Call {
+                    routine,
+                    args,
+                    dispatch,
+                } = &call.kind
+                else {
+                    unreachable!("PropertySet always holds the call of the write method");
+                };
+                self.call_routine(*routine, args, *dispatch, None);
+            }
+            StmtKind::FreeAndNil { target } => self.free_and_nil(target),
+            StmtKind::Free { target, destroy } => {
+                // `docs/spec/objects.md` 3.2, 14.3
+                let t = self.borrowed_value(target);
+                let id = if *destroy {
+                    op::intr::DESTROY
+                } else {
+                    op::intr::FREE
+                };
+                self.intrinsic(id, &[t]);
+            }
             StmtKind::If {
                 branches,
                 else_body,
@@ -658,11 +1282,15 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 for (cond, body) in branches {
                     let next = self.new_block();
                     let m = self.mark();
+                    let first = self.owned.len();
                     self.cond(cond, next, false);
                     self.release(m);
+                    // The condition's temporaries are let go on both paths before the bodies run
+                    let cond_regs = self.release_owned(first);
                     self.stmt(body);
                     self.jump(end);
                     self.bind(next);
+                    self.emit_releases(&cond_regs);
                 }
                 if let Some(e) = else_body {
                     self.stmt(e);
@@ -679,13 +1307,17 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 let end = self.new_block();
                 self.bind(top);
                 let m = self.mark();
+                let first = self.owned.len();
                 self.cond(cond, end, false);
                 self.release(m);
+                // The condition's temporaries are let go before the body and after the loop
+                let cond_regs = self.release_owned(first);
                 self.loops.push((end, top, self.cleanup.len()));
                 self.stmt(body);
                 self.loops.pop();
                 self.jump(top);
                 self.bind(end);
+                self.emit_releases(&cond_regs);
             }
             StmtKind::Repeat { body, cond } => {
                 let top = self.new_block();
@@ -712,6 +1344,15 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 counter,
                 ..
             } => self.for_stmt(*var, *counter, from, to, *downto, body),
+            StmtKind::ForIn {
+                var,
+                coll,
+                coll_var,
+                idx_var,
+                body,
+                enumerator: Some(en),
+                ..
+            } => self.for_in_enum(*var, *coll_var, *idx_var, coll, en, body),
             StmtKind::ForIn {
                 var,
                 coll,
@@ -789,7 +1430,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 *checks,
             ),
             StmtKind::Read { targets, newline } => self.read(targets, *newline),
-            StmtKind::Flush => self.plain(op::FLUSH_OUT, Vec::new()),
+            StmtKind::Flush => self.intrinsic(op::intr::FLUSH_OUT, &[]),
             StmtKind::Write { args, newline, err } => self.write(args, *newline, *err),
             StmtKind::SetLength { target, lens } => self.set_length(target, lens),
             StmtKind::Insert {
@@ -803,6 +1444,30 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 index,
                 count,
             } => self.delete(target, index, count),
+            StmtKind::Exchange {
+                target,
+                first,
+                second,
+                span,
+            } => self.exchange(target, first, second, *span),
+            StmtKind::ArrayMoveRange {
+                target,
+                from,
+                to,
+                count,
+            } => self.array_move_range(target, [from, to, count]),
+            StmtKind::FreeIfClass { value } => {
+                // `docs/spec/collections.md` 12.1: `Free` (3.2) once the type is a class; any
+                // other type is only evaluated
+                if let Ty::Class(_) = value.ty {
+                    let t = self.borrowed_value(value);
+                    self.intrinsic(op::intr::FREE, &[t]);
+                } else {
+                    self.expr_any(value);
+                }
+            }
+            StmtKind::CheckDefaultOrder { value } => self.check_default_order(value),
+            StmtKind::CheckClassType { value, what } => self.check_class_type(value, what),
             StmtKind::Assert {
                 cond,
                 message,
@@ -823,15 +1488,13 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                     self.load_text(t, ")");
                     self.op3(op::CONCAT_STR, msg, msg, t);
                 }
-                // The message moves into the exception object, which `Raise` hands to the VM
-                self.plain(
-                    op::NEW_EXC,
-                    vec![
-                        Operand::Reg(msg),
-                        Operand::Type(Ty::Exception(TypeId(bytecode::exc::ASSERTION_FAILED))),
-                    ],
-                );
-                self.terminate(Term::Raise(msg));
+                // A new `EAssertionFailed` with the message (`docs/spec/objects.md` 14.8), which
+                // `Raise` hands to the VM
+                let class = Ty::Class(TypeId(bytecode::exc::ASSERTION_FAILED));
+                let x = self.alloc(class);
+                self.new_into(x, class);
+                self.obj_set(x, bytecode::EXC_SLOT_MESSAGE, msg, Ty::String, true);
+                self.terminate(Term::Raise(x));
                 self.bind(skip);
             }
             StmtKind::Raise(Some(x)) => {
@@ -843,7 +1506,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             StmtKind::Raise(None) => {
                 // `raise;`: a new reference of the exception of the innermost `except` block
                 let exc = self.current_exception();
-                let t = self.alloc(Ty::Exception(crate::sema::types::EXCEPTION));
+                let t = self.alloc(Ty::Class(EXCEPTION));
                 self.op2(op::ASSIGN_REF, t, exc);
                 self.terminate(Term::Raise(t));
             }
@@ -863,6 +1526,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             StmtKind::Nop => {}
         }
         self.current_overflow = saved_overflow;
+        self.release_owned(first_owned);
         self.release(mark);
         self.line = old;
     }
@@ -930,6 +1594,13 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         self.load_const(dst, c, ty);
     }
 
+    /// Whether the statement is in the body of a `try..except` or a `try..finally` written in
+    /// the source (whose handler may read a variable after an exception; the implicit
+    /// `finally` blocks, such as that of `for..in`, read none).
+    fn in_try(&self) -> bool {
+        self.guarded > 0
+    }
+
     fn current_exception(&self) -> Reg {
         self.cleanup
             .iter()
@@ -947,14 +1618,16 @@ impl<'m, 'a> FuncLower<'m, 'a> {
     }
 
     fn try_except(&mut self, body: &[Stmt], handlers: &[Handler], else_body: Option<&[Stmt]>) {
-        let exc = self.alloc_kind_owning(Ty::Exception(EXCEPTION), TempKind::Exception);
+        let exc = self.alloc_kind_owning(Ty::Class(EXCEPTION), TempKind::Exception);
         let after = self.new_block();
         let body_first = self.next_position();
         let start = self.new_block();
         self.bind(start);
+        self.guarded += 1;
         for s in body {
             self.stmt(s);
         }
+        self.guarded -= 1;
         self.jump(after);
         let handler_first = self.next_position();
         let dispatch = self.new_block();
@@ -964,14 +1637,18 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             let old = self.set_line(h.span);
             let next = self.new_block();
             let m = self.mark();
-            let t = self.alloc(Ty::Integer);
-            self.op2(op::EXC_CLASS, t, exc);
-            self.op_table(op::CLASS_IS, t, Operand::Type(h.class));
+            // `docs/spec/objects.md` 8.3: the `is` of the exception's class
+            let t = self.alloc_borrow(Ty::Boolean);
+            self.op2(op::MOVE, t, exc);
+            self.op_table(op::IS_CLASS, t, Operand::Type(h.class));
             self.branch(op::JMP_IF_FALSE, t, None, next);
             self.release(m);
             if let Some(v) = h.var {
                 // `E` borrows the exception the block holds
                 self.op2(op::MOVE, self.reg_of(v), exc);
+                if self.r.vars[v.0 as usize].cell {
+                    self.copy_to_cell(v);
+                }
             }
             self.line = old;
             if let Some(b) = &h.body {
@@ -1005,55 +1682,210 @@ impl<'m, 'a> FuncLower<'m, 'a> {
     }
 
     fn try_finally(&mut self, body: &[Stmt], fin: &[Stmt]) {
-        // The state and the exception are adjacent registers (`EndFinally A`, `r(A+1)`)
-        let state = self.alloc_kind_owning(Ty::Integer, TempKind::State);
-        let exc = self.alloc_kind_owning(Ty::Exception(EXCEPTION), TempKind::Exception);
-        let fin_block = self.new_block();
-        let after = self.new_block();
-        let body_first = self.next_position();
-        let start = self.new_block();
-        self.bind(start);
+        let scope = self.finally_begin();
         let depth = self.cleanup.len();
         self.cleanup.push(Cleanup::Finally {
-            state,
-            fin: fin_block,
+            state: scope.state,
+            fin: scope.fin,
             conts: Vec::new(),
         });
+        self.guarded += 1;
         for s in body {
             self.stmt(s);
         }
-        if self.cur.is_some() {
-            self.op1(op::LOAD_ZERO, state);
-        }
+        self.guarded -= 1;
         let Some(Cleanup::Finally { conts, .. }) = self.cleanup.pop() else {
             unreachable!("pushed above")
         };
-        let handler_first = self.next_position();
-        self.bind(fin_block);
+        let handler_first = self.finally_handler(&scope);
         for s in fin {
             self.stmt(s);
         }
-        // The block that ends with `EndFinally` (bound now if the last statement left none open)
-        self.current();
-        let handler_last_pos = self.next_position() - 1;
-        self.terminate(Term::EndFinally {
-            state,
-            next: after,
-            targets: conts.iter().map(|c| c.0).collect(),
-        });
-        self.tries.push(TryEntry {
-            finally: true,
-            body: (body_first, handler_first - 1),
-            handler: (handler_first, handler_last_pos),
-            reg: state,
-            exc: Some(exc),
-        });
+        self.finally_end(&scope, handler_first, conts.iter().map(|c| c.0).collect());
         // The jumps that went through the block go on from here
         for (cont, leave) in conts {
             self.bind(cont);
             self.leave_from(depth, leave);
         }
-        self.bind(after);
+        self.bind(scope.after);
+    }
+
+    /// The start of the body of a `try..finally` (its registers and blocks).
+    fn finally_begin(&mut self) -> FinallyScope {
+        // The state and the exception are adjacent registers (`EndFinally A`, `r(A+1)`)
+        let state = self.alloc_kind_owning(Ty::Integer, TempKind::State);
+        let exc = self.alloc_kind_owning(Ty::Class(EXCEPTION), TempKind::Exception);
+        let fin = self.new_block();
+        let after = self.new_block();
+        let body_first = self.next_position();
+        let start = self.new_block();
+        self.bind(start);
+        FinallyScope {
+            state,
+            exc,
+            fin,
+            after,
+            body_first,
+        }
+    }
+
+    /// The end of the body of a `try..finally` and the start of its `finally` block; returns the
+    /// block's first position.
+    fn finally_handler(&mut self, scope: &FinallyScope) -> BlockId {
+        if self.cur.is_some() {
+            self.op1(op::LOAD_ZERO, scope.state);
+        }
+        let handler_first = self.next_position();
+        self.bind(scope.fin);
+        handler_first
+    }
+
+    /// The end of the `finally` block (`EndFinally`, going on to `scope.after` or one of the
+    /// jumps' `targets`) and the entry of the handler table.
+    fn finally_end(&mut self, scope: &FinallyScope, handler_first: BlockId, targets: Vec<BlockId>) {
+        // The block that ends with `EndFinally` (bound now if the last statement left none open)
+        self.current();
+        let handler_last_pos = self.next_position() - 1;
+        self.terminate(Term::EndFinally {
+            state: scope.state,
+            next: scope.after,
+            targets,
+        });
+        self.tries.push(TryEntry {
+            finally: true,
+            body: (scope.body_first, handler_first - 1),
+            handler: (handler_first, handler_last_pos),
+            reg: scope.state,
+            exc: Some(scope.exc),
+        });
+    }
+
+    /// `TFoo.Create(…)` (`docs/spec/objects.md` 3.1, 14.3): `New`, then the constructor and
+    /// `AfterConstruction` in a `try` whose `finally` block destroys the instance after an
+    /// exception (`DestroyFailed`). The arguments are evaluated before `New`, so an exception in
+    /// them leaves no instance behind. Without a constructor or `AfterConstruction` of the
+    /// class's own, `New` is all of it.
+    #[allow(clippy::too_many_arguments)]
+    fn new_instance(
+        &mut self,
+        class: Ty,
+        ctor: Option<RoutineId>,
+        args: &[CallArg],
+        after: bool,
+        of: Option<&Expr>,
+        dispatch: Dispatch,
+        dst: Reg,
+    ) {
+        // A built-in constructor with an argument is `Exception.Create(Msg)` / `CreateFmt`
+        let msg = match (ctor, args) {
+            (None, [CallArg::Value(m)]) => Some(m),
+            _ => None,
+        };
+        // The message of `Exception.Create(Msg)` / `CreateFmt`, written to `Message` after `New`
+        // (`docs/spec/objects.md` 8.2, 14.8)
+        let write_msg = |s: &mut Self, msg: Option<Reg>, inst: Reg| {
+            if let Some(m) = msg {
+                s.obj_set(inst, bytecode::EXC_SLOT_MESSAGE, m, Ty::String, true);
+            }
+        };
+        if ctor.is_none() && !after && of.is_none() {
+            let m = msg.map(|m| self.expr_any(m));
+            self.new_into(dst, class);
+            write_msg(self, m, dst);
+            return;
+        }
+        // The class reference of `C.Create(…)` is evaluated first (a class reference is not
+        // counted), then the arguments (`docs/spec/objects.md` 3.1)
+        let of = of.map(|c| {
+            let r = self.alloc_arg(Some(c.ty));
+            self.expr(c, r);
+            r
+        });
+        let msg = msg.map(|m| self.expr_any(m));
+        // The instance stays in a temporary below the call's frame until the sequence ends (a
+        // handle of a class managed by hand is not counted)
+        let inst = self.alloc_arg(Some(class));
+        let new = NewIn { class, inst, of };
+        let scope = match ctor {
+            Some(r) => {
+                let mut all = Vec::with_capacity(args.len() + 1);
+                // `Self`: the call puts the new instance there (`NewInstance`)
+                all.push(CallArg::Value(Expr {
+                    kind: ExprKind::Error,
+                    ty: class,
+                    value: None,
+                    span: TextRange::default(),
+                }));
+                all.extend(args.iter().cloned());
+                self.call_routine_with(r, &all, dispatch, None, Some(new))
+                    .0
+                    .expect("a constructor call begins the `try`")
+            }
+            None => {
+                self.new_in(&new);
+                let scope = self.finally_begin();
+                write_msg(self, msg, inst);
+                scope
+            }
+        };
+        if after || of.is_some() {
+            let m = self.mark();
+            // Through a class reference the class may be a descendant overriding it
+            let name = match self
+                .program
+                .types
+                .class_vmt(class.type_id().expect("a class"))
+                [bytecode::VMT_AFTER_CONSTRUCTION as usize]
+            {
+                crate::sema::types::VmtEntry::Func(r) => self.ml.func_names[r.0 as usize].clone(),
+                _ => "TObject.AfterConstruction".to_string(),
+            };
+            let a = self.alloc_arg(Some(class));
+            self.op2(op::MOVE, a, inst);
+            let callee = Operand::Virtual {
+                index: bytecode::VMT_AFTER_CONSTRUCTION,
+                name,
+            };
+            self.call(op::CALL_VIRTUAL, None, callee, vec![a], a);
+            self.release(m);
+        }
+        let handler_first = self.finally_handler(&scope);
+        // After an exception (state 1; `docs/spec/exceptions.md` 6.2) the instance is destroyed
+        let m = self.mark();
+        let one = self.alloc_arg(Some(Ty::Integer));
+        self.load_int(one, 1);
+        let skip = self.new_block();
+        self.branch(op::JMP_IF_NE_INT, scope.state, Some(one), skip);
+        self.intrinsic(op::intr::DESTROY_FAILED, &[inst]);
+        self.jump(skip);
+        self.bind(skip);
+        self.release(m);
+        self.finally_end(&scope, handler_first, Vec::new());
+        self.bind(scope.after);
+        // A reference counted instance holds the creation's reference, which moves to `dst`
+        self.move_value(class, dst, inst);
+    }
+
+    /// The new instance of a creation (`New`, or `NewOf` through a class reference).
+    fn new_in(&mut self, n: &NewIn) {
+        match n.of {
+            Some(c) => {
+                self.op1(op::LOAD_ZERO, n.inst);
+                self.intrinsic(op::intr::NEW_OF, &[n.inst, c]);
+            }
+            None => self.new_into(n.inst, n.class),
+        }
+    }
+
+    /// `New dst, class`. A making instruction lets go of the old value of `dst` (by its
+    /// contents), so a register that does not own its value (a call argument, which may hold a
+    /// handle borrowed by an earlier call) is cleared first (`docs/spec/objects.md` 14.3,
+    /// `docs/design/lifetime.md` 3.1).
+    fn new_into(&mut self, dst: Reg, class: Ty) {
+        if !self.owns(dst) {
+            self.op1(op::LOAD_ZERO, dst);
+        }
+        self.op_table(op::NEW, dst, Operand::Type(class));
     }
 
     /// `Exit`, `Break` or `Continue`: releases the exceptions of the `except` blocks it leaves and
@@ -1101,7 +1933,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             Place::Global(g) => self.program.globals[g.0 as usize].ty,
             Place::StrIndex { .. } => Ty::Char,
             Place::Field { ty, .. } | Place::Elem { ty, .. } => *ty,
-            Place::ExcMember { .. } => Ty::String,
+            Place::ObjField { ty, .. } => *ty,
         }
     }
 
@@ -1114,13 +1946,26 @@ impl<'m, 'a> FuncLower<'m, 'a> {
     }
 
     fn assign(&mut self, target: &Place, value: &Expr) {
+        if let Some((steps, kind)) = append_steps(target, self.place_type(target), value) {
+            return self.append(target, steps, kind);
+        }
         match target {
             Place::Var(..) | Place::Global(_) => {
-                if let Some(reg) = self.direct_var_reg(target) {
+                // A `[weak]` variable does not take the value's reference: the value is written
+                // uncounted, from the register of a variable or a container read without
+                // counting, or from a temporary that keeps a new value (`docs/spec/objects.md`
+                // 4.4)
+                let weak = matches!(self.place_type(target), Ty::Weak(_));
+                if weak {
+                    let v = self.borrowed_value(value);
+                    self.store_place(target, v);
+                } else if let Some(reg) = self.direct_var_reg(target) {
                     self.expr_into_var(value, reg);
                 } else {
-                    let t = self.alloc(self.place_type(target));
-                    self.expr(value, t);
+                    // A local variable on the right is stored from its own register (the store
+                    // counts it): a counted copy in a temporary would hold the value until the
+                    // routine ends (`docs/design/lifetime.md` 3.4)
+                    let t = self.expr_any(value);
                     self.store_place(target, t);
                 }
             }
@@ -1131,20 +1976,16 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 self.expr(index, i);
                 let v = self.alloc(value.ty);
                 self.expr(value, v);
+                // The string is changed in place through its place read without counting, so
+                // that the place's own reference is the only one and the write needs no copy
+                // (`docs/spec/types.md` 9.1)
                 let old = self.set_line(*span);
+                let f = |this: &mut Self, t: Reg| this.op3(op::STR_SET_INDEX, t, i, v);
                 if let Some(part) = part {
                     self.part_check(&part);
-                    let t = self.alloc(Ty::String);
-                    self.part_load(&part, t);
-                    self.op3(op::STR_SET_INDEX, t, i, v);
-                    self.part_store(&part, t);
-                } else if let Some(reg) = self.direct_var_reg(base) {
-                    self.op3(op::STR_SET_INDEX, reg, i, v);
+                    self.modify_part(&part, f);
                 } else {
-                    let t = self.alloc(Ty::String);
-                    self.load_place(base, t);
-                    self.op3(op::STR_SET_INDEX, t, i, v);
-                    self.store_place(base, t);
+                    self.modify_root(base, f);
                 }
                 self.line = old;
             }
@@ -1152,77 +1993,403 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 // The indices of the target, the right-hand side, then the range checks and the
                 // target itself (`docs/spec/types.md` chapter 3)
                 let part = self.eval_part(target);
-                let v = self.alloc(value.ty);
-                self.expr(value, v);
+                let v = self.weak_aware_value(target, value);
                 self.part_check(&part);
                 self.part_store(&part, v);
             }
-            Place::ExcMember { base, member } => {
-                // The object, then the right-hand side. A call on the right could drop the
-                // object, so it is then held counted
-                let b = if expr_has_call(value) {
-                    let t = self.alloc(base.ty);
-                    self.expr(base, t);
-                    t
-                } else {
-                    self.borrowed_value(base)
-                };
-                let v = self.alloc(value.ty);
-                self.expr(value, v);
-                self.plain(
-                    op::EXC_SET,
-                    vec![
-                        Operand::Reg(b),
-                        Operand::Imm(exc_slot(*member) as i64),
-                        Operand::Reg(v),
-                    ],
-                );
+            Place::ObjField { base, slot, ty, .. } => {
+                // The instance, then the right-hand side (`docs/spec/objects.md` 2.6), then the
+                // write. A call on the right could change the variable holding the handle, so
+                // the handle is then copied first
+                let b =
+                    self.obj_handle(base, expr_has_call(value) && !self.stable_var(base, value));
+                let v = self.weak_aware_value(target, value);
+                self.obj_set(b, *slot, v, *ty, true);
             }
         }
     }
 
-    /// Puts an expression into a variable's register (through a temporary if the expression reads that variable).
-    fn expr_into_var(&mut self, e: &Expr, reg: Reg) {
-        if expr_reads_reg(e, reg) {
-            let t = self.alloc(e.ty);
-            self.expr(e, t);
-            let opc = if e.ty.is_managed() {
-                op::MOVE_REF
-            } else {
-                op::MOVE
-            };
-            self.op2(opc, reg, t);
+    /// The register with the right-hand side of an assignment to `target`: for a `[weak]`
+    /// place, which does not count it, a value read without counting where it can be
+    /// (`borrowed_value`); otherwise as `expr_any`.
+    fn weak_aware_value(&mut self, target: &Place, value: &Expr) -> Reg {
+        if matches!(self.place_type(target), Ty::Weak(_)) {
+            self.borrowed_value(value)
         } else {
-            self.expr(e, reg);
+            self.expr_any(value)
         }
+    }
+
+    /// `T := T + X1 + … + Xn` for a string or `UTF8String` place `T` (`append_steps`;
+    /// `docs/spec/types.md` 9.1): the place's indices, a counted copy of its value, the operands
+    /// joined into one value, then `AppendStr` / `AppendU8` on the place changed in place
+    /// (`modify_root` / `modify_part`), which appends to the place's own string when nothing else
+    /// refers to it. The operands run after the copy is taken: if they change the place, the copy
+    /// is no longer its value and the instruction makes a new string from the copy, as the
+    /// left-to-right order of `T + X1` asks (`docs/spec/semantics.md` 3.1).
+    fn append(&mut self, target: &Place, steps: &[BinStep], kind: AppendKind) {
+        let ty = self.place_type(target);
+        let part = is_part(target).then(|| {
+            let part = self.eval_part(target);
+            self.part_check(&part);
+            part
+        });
+        let snap = self.alloc(ty);
+        match &part {
+            Some(part) => self.part_load(part, snap),
+            None => self.load_place(target, snap),
+        }
+        let (join, joined_ty) = match kind {
+            AppendKind::U8 => (op::CONCAT_U8, Ty::Utf8String),
+            AppendKind::Str | AppendKind::U8ViaStr => (op::CONCAT_STR, Ty::String),
+        };
+        // A single operand is only read by the append, so a variable's register serves as it
+        // is; several are joined in a temporary first (three or more strings at once, as in
+        // `binary_lazy`)
+        let mut x = if let [step] = steps {
+            let old = self.set_line(step.span);
+            let x = self.expr_any(&step.rhs);
+            self.line = old;
+            x
+        } else if join == op::CONCAT_STR && steps.len() >= 3 {
+            let x = self.alloc(joined_ty);
+            let operands: Vec<(&Expr, TextRange)> =
+                steps.iter().map(|s| (&s.rhs, s.span)).collect();
+            self.concat_n(x, &operands);
+            x
+        } else {
+            let x = self.alloc(joined_ty);
+            for (k, step) in steps.iter().enumerate() {
+                let old = self.set_line(step.span);
+                if k == 0 {
+                    self.expr(&step.rhs, x);
+                } else {
+                    let r = self.expr_any(&step.rhs);
+                    self.op3(join, x, x, r);
+                }
+                self.line = old;
+            }
+            x
+        };
+        if kind == AppendKind::U8ViaStr {
+            // `UTF8String(string(T) + Y)` is `T` and `UTF8String(Y)` joined: `string(T)` has no
+            // lone surrogate for `Y` to pair with
+            let y = self.alloc(Ty::Utf8String);
+            self.convert(Conversion::StrToU8, Ty::String, y, x);
+            x = y;
+        }
+        let opc = match kind {
+            AppendKind::Str => op::APPEND_STR,
+            AppendKind::U8 | AppendKind::U8ViaStr => op::APPEND_U8,
+        };
+        let old = self.set_line(steps[0].span);
+        let f = |this: &mut Self, t: Reg| this.op3(opc, t, snap, x);
+        match &part {
+            Some(part) => self.modify_part(part, f),
+            None => {
+                self.modify_root(target, f);
+            }
+        }
+        // The copy is let go at once: held on, it would be a second reference to the place's
+        // string at the next append in another statement (`S := S + 'a'; S := S + 'b'` in a
+        // loop), which would then copy. A string has no destructor, so when is not observable
+        self.op1(op::RELEASE, snap);
+        self.line = old;
+    }
+
+    /// Puts an expression into a variable's register. The value is made in a temporary and then
+    /// moved to the variable, so that if an instruction raises on the way, the variable keeps its
+    /// old value (`docs/spec/semantics.md` 3.1; `Z := X + 1` under `{$Q+}`, `T := (X + Y) + Z`
+    /// near the memory limit). Where that cannot be observed, the temporary is replaced by the
+    /// variable and dropped ([`Self::write_in_place`]). Outside the bodies of `try` statements,
+    /// the value is made in the variable: an exception then leaves the routine, and nothing
+    /// reads the variable again.
+    fn expr_into_var(&mut self, e: &Expr, reg: Reg) {
+        let reads = self.expr_sees_var(e, reg);
+        if !self.in_try() && !reads {
+            self.expr(e, reg);
+            return;
+        }
+        let ty = self.reg_type(reg).unwrap_or(e.ty);
+        let t = self.alloc(ty);
+        if reads || self.owns(t) != self.owns(reg) {
+            self.expr(e, t);
+            self.move_value(e.ty, reg, t);
+            return;
+        }
+        let start = self.region_start();
+        // `write_in_place` renumbers the temporaries made by the expression in its instructions,
+        // its handler table entries (a constructor call's) and `owned`: an expression leaves no
+        // cleanups or loops behind that could hold them
+        let outer = (self.cleanup.len(), self.loops.len());
+        self.expr(e, t);
+        debug_assert_eq!(
+            outer,
+            (self.cleanup.len(), self.loops.len()),
+            "an expression leaves the cleanups and the loops as they were"
+        );
+        if !self.write_in_place(&start, t, reg) {
+            self.move_value(e.ty, reg, t);
+        }
+    }
+
+    /// Whether evaluating the expression may read or write the variable `reg` before it ends, so
+    /// that the value cannot be made in the variable's register: the expression reads it, or it
+    /// is used by a nested routine (`docs/spec/semantics.md` 4.9) and the expression calls code,
+    /// which may reach that routine (`Z := (X + 1) + Peek` with `Peek` reading `Z`).
+    fn expr_sees_var(&self, e: &Expr, reg: Reg) -> bool {
+        let nested = match reg {
+            Reg::Var(v) => self.r.vars.get(v as usize).is_some_and(|v| v.captured),
+            _ => false,
+        };
+        expr_reads_reg(e, reg) || (nested && expr_has_call(e))
+    }
+
+    /// Where the instructions about to be emitted start ([`Region`]).
+    fn region_start(&mut self) -> Region {
+        let block = self.current();
+        Region {
+            block,
+            insts: self.blocks[block as usize].insts.len(),
+            blocks: self.blocks.len(),
+            tries: self.tries.len(),
+        }
+    }
+
+    /// Calls `each` with every register operand of the instructions and terminators emitted since
+    /// `start`, and every register of the handler table entries added since.
+    fn region_regs(&mut self, start: &Region, mut each: impl FnMut(&mut Reg)) {
+        for entry in &mut self.tries[start.tries..] {
+            each(&mut entry.reg);
+            if let Some(e) = &mut entry.exc {
+                each(e);
+            }
+        }
+        let first = &mut self.blocks[start.block as usize];
+        for inst in &mut first.insts[start.insts..] {
+            inst.each_reg_mut(&mut each);
+        }
+        if let Some((term, _)) = &mut first.term {
+            term.each_reg_mut(&mut each);
+        }
+        for b in &mut self.blocks[start.blocks..] {
+            for inst in &mut b.insts {
+                inst.each_reg_mut(&mut each);
+            }
+            if let Some((term, _)) = &mut b.term {
+                term.each_reg_mut(&mut each);
+            }
+        }
+    }
+
+    /// After the value of an assignment to the variable `reg` was made in the new temporary `t`
+    /// by the instructions since `start`: whether writing `reg` in place of `t` there cannot be
+    /// observed, and if so, does that and drops `t` (as if it had never been created). That holds
+    /// when `t` is written only by the last instruction (no instruction runs after the variable
+    /// is written), or when none of the instructions may raise (`opt::may_raise`; only plain
+    /// branches end the blocks).
+    fn write_in_place(&mut self, start: &Region, t: Reg, reg: Reg) -> bool {
+        let Reg::Temp(n) = t else {
+            unreachable!("`alloc` returns a temporary")
+        };
+        let mut uses = 0;
+        self.region_regs(start, |r| uses += u32::from(*r == t));
+        let first = &self.blocks[start.block as usize];
+        let only_last = uses == 1
+            && self.blocks.len() == start.blocks
+            && self.cur == Some(start.block)
+            && first.insts.len() > start.insts
+            && first.insts.last().is_some_and(|i| {
+                let mut found = false;
+                i.each_reg(|r| found |= r == t);
+                found
+            });
+        let safe = || {
+            let plain = |b: &BlockBuild| {
+                matches!(
+                    b.term,
+                    None | Some((
+                        Term::Jmp(_) | Term::Branch { .. } | Term::BranchImm { .. },
+                        _
+                    ))
+                )
+            };
+            first.insts[start.insts..]
+                .iter()
+                .all(|i| !opt::may_raise(i))
+                && plain(first)
+                && self.blocks[start.blocks..]
+                    .iter()
+                    .all(|b| b.insts.iter().all(|i| !opt::may_raise(i)) && plain(b))
+        };
+        if !(only_last || safe()) {
+            return false;
+        }
+        // `t` is the newest temporary but for those made by the expression: they and their
+        // stack slots move down by one
+        let slot = self.temps[n as usize].slot;
+        self.region_regs(start, |r| match *r {
+            _ if *r == t => *r = reg,
+            Reg::Temp(k) if k > n => *r = Reg::Temp(k - 1),
+            _ => {}
+        });
+        self.owned.retain(|&r| r != t);
+        for r in &mut self.owned {
+            if let Reg::Temp(k) = r
+                && *k > n
+            {
+                *k -= 1;
+            }
+        }
+        self.temps.remove(n as usize);
+        if let Some(s) = slot {
+            for temp in &mut self.temps[n as usize..] {
+                if let Some(x) = &mut temp.slot
+                    && *x > s
+                {
+                    *x -= 1;
+                }
+            }
+            self.next_slot -= 1;
+        }
+        true
+    }
+
+    /// `is` / `as` / a conversion by type name (`docs/spec/objects.md` 2.8, 2.9, 14.3). A variable
+    /// `dst` is written only after the check passes, through a temporary, so that it never holds an
+    /// instance of a class its type does not allow (nor a handle in a `Boolean`) after the
+    /// exception; a temporary `dst` is not read after the exception and is checked in place,
+    /// unless it does not own its value and the operand is counted (then a counted temporary is
+    /// checked and moved into it).
+    /// A target that is an interface uses `IsIntf` / `AsIntf` (7.6, 14.7).
+    fn class_check(&mut self, operand: &Expr, class: TypeId, op: ClassCheckOp, ty: Ty, dst: Reg) {
+        let intf = self.program.types.is_interface(class);
+        let class = if intf {
+            Ty::Intf(class)
+        } else {
+            Ty::Class(class)
+        };
+        let in_place = matches!(dst, Reg::Temp(_));
+        if op == ClassCheckOp::Is {
+            // `IsClass` / `IsIntf` turns an uncounted copy of the handle into the result
+            let b = self.borrowed_value(operand);
+            let t = if in_place {
+                dst
+            } else {
+                self.alloc_borrow(Ty::Boolean)
+            };
+            self.op2(op::MOVE, t, b);
+            if intf {
+                self.intf_test(op::intr::IS_INTF, t, class);
+            } else {
+                self.op_table(op::IS_CLASS, t, Operand::Type(class));
+            }
+            if t != dst {
+                self.op2(op::MOVE, dst, t);
+            }
+            return;
+        }
+        // a temporary of an uncounted class type on the stack of temporaries cannot hold the
+        // counted value of a counted operand (`TCircle(Obj)` with `Obj: TObject`): nothing would
+        // let go of it, and writing it would let go of whatever the shared slot held before
+        let t = if in_place && (self.owns(dst) || !self.managed(operand.ty)) {
+            dst
+        } else {
+            self.alloc(operand.ty)
+        };
+        self.expr(operand, t);
+        if op == ClassCheckOp::RefCast {
+            let m = self.mark();
+            let k = self.alloc_arg(Some(Ty::Integer));
+            self.op_table(op::LOAD_INT, k, Operand::Type(class));
+            self.intrinsic(op::intr::AS_CLASS_REF, &[t, k]);
+            self.release(m);
+        } else if intf {
+            self.intf_test(op::intr::AS_INTF, t, class);
+        } else {
+            self.op_table(op::AS_CLASS, t, Operand::Type(class));
+        }
+        if t != dst {
+            self.move_value(ty, dst, t);
+        }
+    }
+
+    /// `IsIntf` / `AsIntf` of the handle in `r` against the interface `intf`, whose type index is
+    /// loaded into a temporary (`docs/spec/objects.md` 14.7).
+    fn intf_test(&mut self, id: u8, r: Reg, intf: Ty) {
+        let m = self.mark();
+        let k = self.alloc(Ty::Integer);
+        self.op_table(op::LOAD_INT, k, Operand::Type(intf));
+        self.intrinsic(id, &[r, k]);
+        self.release(m);
+    }
+
+    /// `Supports(X, IA[, V])` / `Supports(C, IA)` (`docs/spec/objects.md` 7.6, 14.7). With `V`,
+    /// `X` is held counted in a temporary while `V` is written: with `X` as `IA` when the instance
+    /// implements it, `nil` otherwise.
+    fn supports(
+        &mut self,
+        operand: &Expr,
+        intf: TypeId,
+        target: Option<&Place>,
+        class_ref: bool,
+        dst: Reg,
+    ) {
+        let intf = Ty::Intf(intf);
+        if class_ref {
+            let c = self.borrowed_value(operand);
+            let k = self.alloc(Ty::Integer);
+            self.op_table(op::LOAD_INT, k, Operand::Type(intf));
+            self.intrinsic_pair(
+                op::intr::CLASS_SUPPORTS,
+                dst,
+                [(c, operand.ty), (k, Ty::Integer)],
+            );
+            return;
+        }
+        let Some(target) = target else {
+            let b = self.borrowed_value(operand);
+            let t = self.alloc_borrow(Ty::Boolean);
+            self.op2(op::MOVE, t, b);
+            self.intf_test(op::intr::IS_INTF, t, intf);
+            self.op2(op::MOVE, dst, t);
+            return;
+        };
+        let x = self.alloc(operand.ty);
+        self.expr(operand, x);
+        let t = self.alloc_borrow(Ty::Boolean);
+        self.op2(op::MOVE, t, x);
+        self.intf_test(op::intr::IS_INTF, t, intf);
+        let other = self.new_block();
+        let end = self.new_block();
+        self.branch(op::JMP_IF_FALSE, t, None, other);
+        self.store_place(target, x);
+        self.jump(end);
+        self.bind(other);
+        let z = self.alloc(intf);
+        self.op1(op::LOAD_ZERO, z);
+        self.store_place(target, z);
+        self.bind(end);
+        self.op2(op::MOVE, dst, t);
     }
 
     /// Reads the value of a place into `dst` (`Move` for a variable). A managed value is counted
     /// (`AssignRef` and the `…Ref` loads; `docs/design/lifetime.md` 3.5).
     fn load_place(&mut self, p: &Place, dst: Reg) {
-        let managed = self.place_type(p).is_managed();
+        let ty = self.place_type(p);
         match p {
             Place::Var(v, _) => {
                 let r = self.reg_of(*v);
                 if self.is_ref_param(*v) {
-                    let opc = if managed {
-                        op::LOAD_REF_REF
-                    } else {
-                        op::LOAD_REF
-                    };
-                    self.op2(opc, dst, r);
+                    let ops = (op::LOAD_REF, op::LOAD_REF_REF);
+                    self.get_value(ty, true, ops, dst, vec![Operand::Reg(r)]);
                 } else if r != dst {
-                    let opc = if managed { op::ASSIGN_REF } else { op::MOVE };
-                    self.op2(opc, dst, r);
+                    self.copy_value(ty, dst, r);
                 }
             }
             Place::Global(g) => {
-                let opc = if managed {
-                    op::LOAD_GLOBAL_REF
-                } else {
-                    op::LOAD_GLOBAL
-                };
-                self.op_table(opc, dst, Operand::Global(g.0))
+                let ops = (op::LOAD_GLOBAL, op::LOAD_GLOBAL_REF);
+                self.get_value(ty, true, ops, dst, vec![Operand::Global(g.0)]);
             }
             Place::StrIndex { base, index, .. } => {
                 let b = self.alloc(Ty::String);
@@ -1236,38 +2403,46 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 self.part_check(&part);
                 self.part_load(&part, dst);
             }
-            Place::ExcMember { .. } => unreachable!("a member of an exception is only assigned"),
+            Place::ObjField { base, slot, ty, .. } => {
+                let b = self.obj_handle(base, false);
+                self.obj_get(dst, b, *slot, *ty, true);
+            }
         }
     }
 
     /// Writes the value of `src` to a place. A managed value is counted (`src` keeps its reference).
     fn store_place(&mut self, p: &Place, src: Reg) {
-        let managed = self.place_type(p).is_managed();
+        let ty = self.place_type(p);
         match p {
             Place::Var(v, _) => {
                 let r = self.reg_of(*v);
                 if self.is_ref_param(*v) {
-                    let opc = if managed {
-                        op::STORE_REF_REF
-                    } else {
-                        op::STORE_REF
-                    };
-                    self.op2(opc, r, src);
+                    self.set_value(
+                        ty,
+                        true,
+                        (op::STORE_REF, op::STORE_REF_REF),
+                        vec![Operand::Reg(r), Operand::Reg(src)],
+                        src,
+                        (op::LOAD_REF, vec![Operand::Reg(r)]),
+                    );
                 } else if r != src {
-                    let opc = if managed { op::ASSIGN_REF } else { op::MOVE };
-                    self.op2(opc, r, src);
+                    self.copy_value(ty, r, src);
                 }
             }
-            Place::Global(g) => {
-                let opc = if managed {
-                    op::STORE_GLOBAL_REF
-                } else {
-                    op::STORE_GLOBAL
-                };
-                self.op_table(opc, src, Operand::Global(g.0))
+            Place::Global(g) => self.set_value(
+                ty,
+                true,
+                (op::STORE_GLOBAL, op::STORE_GLOBAL_REF),
+                vec![Operand::Reg(src), Operand::Global(g.0)],
+                src,
+                (op::LOAD_GLOBAL, vec![Operand::Global(g.0)]),
+            ),
+            Place::StrIndex { .. } => {
+                unreachable!("string elements are not stored this way")
             }
-            Place::StrIndex { .. } | Place::ExcMember { .. } => {
-                unreachable!("string elements and exception members are not stored this way")
+            Place::ObjField { base, slot, ty, .. } => {
+                let b = self.obj_handle(base, false);
+                self.obj_set(b, *slot, src, *ty, true);
             }
             Place::Field { .. } | Place::Elem { .. } => {
                 let part = self.eval_part(p);
@@ -1313,9 +2488,23 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 part.steps.push(PartStep { slot, ty: *ty });
                 part
             }
+            Place::ObjField { base, .. } => {
+                // The instance comes first, like the indices: the handle is read here, before
+                // the right-hand side, so a call there that changes the variable holding it does
+                // not move the write to another instance (`docs/spec/objects.md` 2.2). An
+                // instance of a reference counted class is counted for it (an owning temporary)
+                let h = self.alloc(base.ty);
+                self.expr(base, h);
+                Part {
+                    root: p,
+                    steps: Vec::new(),
+                    handle: Some(h),
+                }
+            }
             _ => Part {
                 root: p,
                 steps: Vec::new(),
+                handle: None,
             },
         }
     }
@@ -1403,85 +2592,81 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 self.op_table(op::LOAD_GLOBAL, t, Operand::Global(g.0));
                 t
             }
-            _ => unreachable!("the root of a place is a variable or a global"),
+            Place::ObjField { base, slot, ty, .. } => {
+                let b = self.obj_handle(base, false);
+                let t = self.alloc_borrow(*ty);
+                self.obj_get(t, b, *slot, *ty, false);
+                t
+            }
+            _ => unreachable!("the root of a place is a variable, a global or an object's field"),
         }
+    }
+
+    /// Whether `base` is a local variable (or `Self`) that evaluating `value` cannot write: it is
+    /// not a reference parameter, no nested routine uses it, and `value` passes it to no `var` /
+    /// `out` parameter. Its value can then be borrowed across `value` (`docs/design/lifetime.md`
+    /// 3.3), without a counted copy that would outlive the statement.
+    fn stable_var(&self, base: &Expr, value: &Expr) -> bool {
+        base.value.is_none()
+            && matches!(&base.kind, ExprKind::Var(v)
+                if !self.is_ref_param(*v)
+                    && !self.r.vars[v.0 as usize].captured
+                    && !expr_writes_var(value, *v))
+    }
+
+    /// The handle of the instance whose field is used: borrowed (the variable's register, or a
+    /// field read without counting) unless `copy`, when it goes to a temporary first. A handle of
+    /// a class managed by hand is not counted (`docs/spec/objects.md` 4.1).
+    fn obj_handle(&mut self, base: &Expr, copy: bool) -> Reg {
+        if copy {
+            let t = self.alloc(base.ty);
+            self.expr(base, t);
+            t
+        } else {
+            self.borrowed_value(base)
+        }
+    }
+
+    /// `ObjGet` / `ObjGetRef` (`docs/spec/objects.md` 14.3): slot `slot` of the instance `obj`,
+    /// counted when `counted` and the value is managed.
+    fn obj_get(&mut self, dst: Reg, obj: Reg, slot: u32, ty: Ty, counted: bool) {
+        let rest = vec![Operand::Reg(obj), Operand::Imm(i64::from(slot))];
+        self.get_value(ty, counted, (op::OBJ_GET, op::OBJ_GET_REF), dst, rest);
+    }
+
+    /// `ObjSet` / `ObjSetRef`: writes `src` to slot `slot` of the instance `obj` (shared, so not
+    /// made unique), counted when `counted` and the value is managed (`src` keeps its reference).
+    fn obj_set(&mut self, obj: Reg, slot: u32, src: Reg, ty: Ty, counted: bool) {
+        let at = Operand::Imm(i64::from(slot));
+        self.set_value(
+            ty,
+            counted,
+            (op::OBJ_SET, op::OBJ_SET_REF),
+            vec![Operand::Reg(obj), at.clone(), Operand::Reg(src)],
+            src,
+            (op::OBJ_GET, vec![Operand::Reg(obj), at]),
+        );
     }
 
     /// A slot read: `FieldGet` / `ValGet`, counted (`…Ref`) when `counted` and the value is managed.
     fn get_slot(&mut self, dst: Reg, container: Reg, slot: &SlotRef, ty: Ty, counted: bool) {
-        let managed = counted && ty.is_managed();
-        match slot {
-            SlotRef::Field(i) => {
-                let opc = if managed {
-                    op::FIELD_GET_REF
-                } else {
-                    op::FIELD_GET
-                };
-                self.plain(
-                    opc,
-                    vec![
-                        Operand::Reg(dst),
-                        Operand::Reg(container),
-                        Operand::Imm(*i as i64),
-                    ],
-                );
-            }
-            SlotRef::Elem { reg, .. } => {
-                let opc = if managed {
-                    op::VAL_GET_REF
-                } else {
-                    op::VAL_GET
-                };
-                self.op3(opc, dst, container, *reg);
-            }
-            SlotRef::Dyn(reg) => {
-                let opc = if managed {
-                    op::DYN_GET_REF
-                } else {
-                    op::DYN_GET
-                };
-                self.op3(opc, dst, container, *reg);
-            }
-        }
+        let (ops, at) = slot_access(slot, true);
+        self.get_value(ty, counted, ops, dst, vec![Operand::Reg(container), at]);
     }
 
     /// A slot write into a unique container: `FieldSet` / `ValSet`, counted (`…Ref`) when `counted`
     /// and the value is managed.
     fn set_slot(&mut self, container: Reg, slot: &SlotRef, src: Reg, ty: Ty, counted: bool) {
-        let managed = counted && ty.is_managed();
-        match slot {
-            SlotRef::Field(i) => {
-                let opc = if managed {
-                    op::FIELD_SET_REF
-                } else {
-                    op::FIELD_SET
-                };
-                self.plain(
-                    opc,
-                    vec![
-                        Operand::Reg(container),
-                        Operand::Imm(*i as i64),
-                        Operand::Reg(src),
-                    ],
-                );
-            }
-            SlotRef::Elem { reg, .. } => {
-                let opc = if managed {
-                    op::VAL_SET_REF
-                } else {
-                    op::VAL_SET
-                };
-                self.op3(opc, container, *reg, src);
-            }
-            SlotRef::Dyn(reg) => {
-                let opc = if managed {
-                    op::DYN_SET_REF
-                } else {
-                    op::DYN_SET
-                };
-                self.op3(opc, container, *reg, src);
-            }
-        }
+        let (ops, at) = slot_access(slot, false);
+        let (get, _) = slot_access(slot, true);
+        self.set_value(
+            ty,
+            counted,
+            ops,
+            vec![Operand::Reg(container), at.clone(), Operand::Reg(src)],
+            src,
+            (get.0, vec![Operand::Reg(container), at]),
+        );
     }
 
     /// Reads the value of a field or element place into `dst` (counted).
@@ -1489,7 +2674,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         let Some((last, inner)) = part.steps.split_last() else {
             return self.load_place(part.root, dst);
         };
-        let mut c = self.root_borrowed(part.root);
+        let mut c = self.part_root_borrowed(part);
         for step in inner {
             let t = self.alloc_borrow(step.ty);
             self.get_slot(t, c, &step.slot, step.ty, false);
@@ -1500,13 +2685,40 @@ impl<'m, 'a> FuncLower<'m, 'a> {
 
     /// The root of a place made unique for writing (`Unique`; `docs/design/lifetime.md` 3.6). A
     /// global or a reference parameter is read without counting, made unique and written back at
-    /// once, so the slot owns the copy. Writing a reference parameter back before `Unique` too
-    /// makes the containers of a cell unique first (`docs/spec/bytecode.md` 2.8, `MakeCell`).
+    /// once, so the slot owns the copy.
     fn open_root(&mut self, root: &Place) -> Reg {
         let ty = self.place_type(root);
         self.modify_root(root, |this, t| {
             this.op_table(op::UNIQUE, t, Operand::Type(ty))
         })
+    }
+
+    /// The value of the root of a field or element place, read without counting: an instance's
+    /// field through the handle `eval_part` took first, any other root as `root_borrowed`.
+    fn part_root_borrowed(&mut self, part: &Part<'_>) -> Reg {
+        match (part.root, part.handle) {
+            (Place::ObjField { slot, ty, .. }, Some(h)) => {
+                let t = self.alloc_borrow(*ty);
+                self.obj_get(t, h, *slot, *ty, false);
+                t
+            }
+            _ => self.root_borrowed(part.root),
+        }
+    }
+
+    /// The root of a field or element place made unique for writing (`open_root`), an
+    /// instance's field through the handle `eval_part` took first.
+    fn part_open_root(&mut self, part: &Part<'_>) -> Reg {
+        match (part.root, part.handle) {
+            (Place::ObjField { slot, ty, .. }, Some(h)) => {
+                let t = self.alloc_borrow(*ty);
+                self.obj_get(t, h, *slot, *ty, false);
+                self.op_table(op::UNIQUE, t, Operand::Type(*ty));
+                self.obj_set(h, *slot, t, *ty, false);
+                t
+            }
+            _ => self.open_root(part.root),
+        }
     }
 
     /// Changes the value of a variable or global in place: `f` gets a register with the value read
@@ -1525,7 +2737,6 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 let r = self.reg_of(*v);
                 let t = self.alloc_borrow(ty);
                 self.op2(op::LOAD_REF, t, r);
-                self.op2(op::STORE_REF, r, t);
                 f(self, t);
                 self.op2(op::STORE_REF, r, t);
                 t
@@ -1537,7 +2748,16 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 self.op_table(op::STORE_GLOBAL, t, Operand::Global(g.0));
                 t
             }
-            _ => unreachable!("the root of a place is a variable or a global"),
+            Place::ObjField { base, slot, .. } => {
+                // The instance's slot, like a global's
+                let b = self.obj_handle(base, false);
+                let t = self.alloc_borrow(ty);
+                self.obj_get(t, b, *slot, ty, false);
+                f(self, t);
+                self.obj_set(b, *slot, t, ty, false);
+                t
+            }
+            _ => unreachable!("the root of a place is a variable, a global or an object's field"),
         }
     }
 
@@ -1553,13 +2773,13 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             .collect();
         let last_dyn = containers.iter().rposition(|t| t.is_dyn_indexed());
         let (mut c, from, dyn_root) = match last_dyn {
-            None => (self.open_root(part.root), 0, None),
+            None => (self.part_open_root(part), 0, None),
             Some(0) if matches!(containers[0], Ty::OpenArray(_)) => {
                 (self.open_open_array(part.root), 0, None)
             }
             Some(k) => {
                 // The dynamic array is read without counting along the way
-                let mut c = self.root_borrowed(part.root);
+                let mut c = self.part_root_borrowed(part);
                 for step in &part.steps[..k] {
                     let t = self.alloc_borrow(step.ty);
                     self.get_slot(t, c, &step.slot, step.ty, false);
@@ -1634,75 +2854,6 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         self.set_slot(c, &last.slot, t, last.ty, false);
     }
 
-    /// A cell for a field or element passed to a `var` / `out` parameter (`MakeCell`;
-    /// `docs/design/lifetime.md` 3.7): the root's reference slot and the path of slot numbers, or,
-    /// for a place inside an element of a dynamic array, that array's block and the path from the
-    /// element. The containers are made unique first, so the cell can record their types.
-    /// `materialize` makes the place's own value unique first (a static array passed to a `var`
-    /// open array parameter).
-    fn make_cell(&mut self, place: &Place, dst: Reg, materialize: Option<Ty>) {
-        let part = self.eval_part(place);
-        self.part_check(&part);
-        let opened = self.open_containers(&part);
-        if let Some(ty) = materialize {
-            let last = part
-                .steps
-                .last()
-                .expect("a field or element place has a step");
-            let t = self.alloc_borrow(last.ty);
-            self.get_slot(t, opened.inner, &last.slot, last.ty, false);
-            self.op_table(op::UNIQUE, t, Operand::Type(ty));
-            self.set_slot(opened.inner, &last.slot, t, last.ty, false);
-        }
-        let (root, steps) = match opened.dyn_root {
-            Some((k, block)) => (block, &part.steps[k..]),
-            None => {
-                let root = self.alloc_kind(None, TempKind::Ref);
-                match part.root {
-                    Place::Var(v, _) if self.is_ref_param(*v) => {
-                        let r = self.reg_of(*v);
-                        self.op2(op::MOVE, root, r);
-                    }
-                    Place::Var(v, _) => {
-                        let r = self.reg_of(*v);
-                        self.op2(op::MAKE_REF, root, r);
-                    }
-                    Place::Global(g) => {
-                        self.op_table(op::MAKE_GLOBAL_REF, root, Operand::Global(g.0))
-                    }
-                    _ => unreachable!("the root of a place is a variable or a global"),
-                }
-                (root, &part.steps[..])
-            }
-        };
-        // The cell and its path are consecutive temporaries
-        let cell = self.alloc_kind(None, TempKind::Value);
-        let path: Vec<Reg> = steps.iter().map(|_| self.alloc_borrow(Ty::Int64)).collect();
-        for (step, &p) in steps.iter().zip(&path) {
-            match &step.slot {
-                SlotRef::Field(i) => self.load_int(p, *i as i64),
-                SlotRef::Elem { reg, .. } | SlotRef::Dyn(reg) => self.op2(op::MOVE, p, *reg),
-            }
-        }
-        self.op1(op::LOAD_ZERO, cell);
-        let mut operands = vec![
-            Operand::Reg(cell),
-            Operand::Reg(root),
-            Operand::Imm(path.len() as i64),
-        ];
-        operands.extend(path.iter().map(|p| Operand::Reg(*p)));
-        self.plain(op::MAKE_CELL, operands);
-        // The cell lives in a register of its own until the routine ends; the argument borrows it
-        self.temps.push(Temp {
-            ty: None,
-            kind: TempKind::Cell,
-            slot: None,
-        });
-        let owned = Reg::Temp(self.temps.len() as u32 - 1);
-        self.op2(op::MOVE_REF, owned, cell);
-        self.op2(op::MOVE, dst, owned);
-    }
-
     /// A register with the value of an expression that is only read right away: a variable's
     /// register, or a container read without counting (`docs/design/lifetime.md` 3.6). Anything
     /// that makes a value goes to an owning temporary.
@@ -1717,6 +2868,12 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                     let b = self.borrowed_value(base);
                     let t = self.alloc_borrow(e.ty);
                     self.get_slot(t, b, &SlotRef::Field(*index), e.ty, false);
+                    return t;
+                }
+                ExprKind::ObjField { base, slot, .. } => {
+                    let b = self.borrowed_value(base);
+                    let t = self.alloc_borrow(e.ty);
+                    self.obj_get(t, b, *slot, e.ty, false);
                     return t;
                 }
                 ExprKind::Elem { base, index } => {
@@ -1770,7 +2927,18 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         downto: bool,
         body: &Stmt,
     ) {
+        // A captured loop variable is counted in a hidden register and written to its cell on
+        // each entry to the body (a `for var` one to a new cell; `docs/spec/objects.md` 9.6)
+        let cell = match var {
+            ForVar::Local(v) if self.is_ref_param(v) => Some(v),
+            _ => None,
+        };
         let (counter, var_ty, global): (Reg, Ty, Option<GlobalId>) = match var {
+            ForVar::Local(v) if cell.is_some() => (
+                self.alloc_borrow(Ty::Int64),
+                self.r.vars[v.0 as usize].ty,
+                None,
+            ),
             ForVar::Local(v) => (self.reg_of(v), self.r.vars[v.0 as usize].ty, None),
             ForVar::Global(id) => (
                 self.reg_of(counter.expect("a global loop variable has a counter")),
@@ -1808,6 +2976,10 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         self.bind(top);
         if let Some(g) = global {
             self.op_table(op::STORE_GLOBAL, counter, Operand::Global(g.0));
+        }
+        if let Some(v) = cell {
+            self.renew_cell(v);
+            self.op2(op::STORE_REF, self.reg_of(v), counter);
         }
         self.loops.push((brk, cont, self.cleanup.len()));
         self.stmt(body);
@@ -1889,6 +3061,136 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             self.load_loop_elem(f);
         }
         self.bind(end);
+        // The collection is let go of once the loop is done (`Break` comes here too)
+        if self.released_early(f.coll_ty) {
+            self.emit_releases(&[c]);
+        }
+    }
+
+    /// `for X in C` with `GetEnumerator` (`docs/spec/objects.md` 13.2, 14.10): the collection and
+    /// the enumerator in hidden variables, then the loop in the body of a `try` whose `finally`
+    /// block lets go of the enumerator.
+    fn for_in_enum(
+        &mut self,
+        var: ForVar,
+        coll_var: VarId,
+        enum_var: VarId,
+        coll: &Expr,
+        en: &Enumerator,
+        body: &Stmt,
+    ) {
+        let c = self.reg_of(coll_var);
+        let e = self.reg_of(enum_var);
+        self.expr_into_var(coll, c);
+        self.expr_into_var(&en.get, e);
+        let global = match var {
+            ForVar::Global(g) => Some(g),
+            ForVar::Local(_) => None,
+        };
+        // The element given last starts as the global's own value, so that the loop gives it
+        // back unchanged if the body is never entered
+        let last = en.last.map(|l| {
+            let r = self.reg_of(l);
+            let g = global.expect("only a global loop variable has `last`");
+            let ty = self.program.globals[g.0 as usize].ty;
+            let value = Expr {
+                kind: ExprKind::Global(g),
+                ty,
+                value: None,
+                span: coll.span,
+            };
+            self.expr_into_var(&value, r);
+            (l, r)
+        });
+        let scope = self.finally_begin();
+        let depth = self.cleanup.len();
+        self.cleanup.push(Cleanup::Finally {
+            state: scope.state,
+            fin: scope.fin,
+            conts: Vec::new(),
+        });
+        let top = self.new_block();
+        let cont = self.new_block();
+        let end = self.new_block();
+        self.bind(top);
+        self.cond(&en.move_next, end, false);
+        // `X := E.Current`; as an initial value, it gives a captured `for var X` a new cell
+        // (`objects.md` 9.6)
+        let target = match (var, last) {
+            (_, Some((l, _))) => Place::Var(l, TextRange::default()),
+            (ForVar::Local(v), None) => Place::Var(v, TextRange::default()),
+            (ForVar::Global(_), None) => {
+                unreachable!("sema gives a global loop variable `last`")
+            }
+        };
+        self.stmt(&Stmt {
+            kind: StmtKind::Assign {
+                target,
+                value: en.current.clone(),
+                check: en.checks,
+                is_init: true,
+            },
+            span: en.current.span,
+        });
+        if let (Some(g), Some((_, r))) = (global, last) {
+            self.store_place(&Place::Global(g), r);
+        }
+        self.loops.push((end, cont, self.cleanup.len()));
+        self.stmt(body);
+        self.loops.pop();
+        self.bind(cont);
+        self.jump(top);
+        self.bind(end);
+        if let (Some(g), Some((_, r))) = (global, last) {
+            self.store_place(&Place::Global(g), r);
+        }
+        let Some(Cleanup::Finally { conts, .. }) = self.cleanup.pop() else {
+            unreachable!("pushed above")
+        };
+        let handler_first = self.finally_handler(&scope);
+        self.enum_cleanup(en, e);
+        self.finally_end(&scope, handler_first, conts.iter().map(|c| c.0).collect());
+        for (cont, leave) in conts {
+            self.bind(cont);
+            self.leave_from(depth, leave);
+        }
+        self.bind(scope.after);
+    }
+
+    /// The `finally` block of `for..in` with `GetEnumerator` (`docs/spec/objects.md` 13.2, 14.10):
+    /// `Free` of an enumerator of a class managed by hand, letting go of a reference counted one
+    /// or a record, and by its contents for an interface or `TObject`.
+    fn enum_cleanup(&mut self, en: &Enumerator, e: Reg) {
+        let ty = self
+            .reg_type(e)
+            .expect("the enumerator's hidden variable has a type");
+        match en.cleanup {
+            EnumCleanup::Free => self.intrinsic(op::intr::FREE, &[e]),
+            EnumCleanup::Release => self.clear_value(ty, e),
+            EnumCleanup::ByContents => {
+                let m = self.mark();
+                let t = self.alloc_borrow(Ty::Int64);
+                let is_ref = self.alloc_borrow(Ty::Boolean);
+                self.op2(op::MOVE, t, e);
+                self.op2(op::MOVE, is_ref, e);
+                self.op_table(
+                    op::IS_CLASS,
+                    is_ref,
+                    Operand::Type(Ty::Class(crate::sema::types::TREFOBJECT)),
+                );
+                let manual = self.new_block();
+                let done = self.new_block();
+                self.branch(op::JMP_IF_FALSE, is_ref, None, manual);
+                self.clear_value(ty, e);
+                self.jump(done);
+                self.bind(manual);
+                // The variable does not own an instance managed by hand
+                self.op1(op::LOAD_ZERO, e);
+                self.intrinsic(op::intr::FREE, &[t]);
+                self.bind(done);
+                self.release(m);
+            }
+        }
     }
 
     /// `for X in S` over a set (`docs/spec/types.md` 8.3): the position holds the last element
@@ -1940,48 +3242,47 @@ impl<'m, 'a> FuncLower<'m, 'a> {
     fn load_loop_elem(&mut self, f: &ForIn) {
         let mark = self.mark();
         let (c, i) = (self.reg_of(f.coll_var), self.reg_of(f.idx_var));
-        let (dst, var_ty) = match f.var {
-            ForVar::Local(v) => (self.reg_of(v), self.r.vars[v.0 as usize].ty),
-            ForVar::Global(g) => {
-                let ty = self.program.globals[g.0 as usize].ty;
-                (self.alloc(ty), ty)
-            }
+        // A captured loop variable gets the element through its cell (a `for var` one in a new
+        // cell; `docs/spec/objects.md` 9.6)
+        let cell = match f.var {
+            ForVar::Local(v) if self.is_ref_param(v) => Some(v),
+            _ => None,
+        };
+        let dst = match f.var {
+            ForVar::Local(v) if cell.is_some() => self.alloc(self.r.vars[v.0 as usize].ty),
+            ForVar::Local(v) => self.reg_of(v),
+            ForVar::Global(g) => self.alloc(self.program.globals[g.0 as usize].ty),
         };
         // The element goes straight to the variable unless it is converted to a string
         let raw = match f.conv {
             Some(Conversion::CharToStr) => self.alloc_borrow(f.elem),
             _ => dst,
         };
-        let managed = f.elem.is_managed();
         if f.coll_ty.is_set() {
             // The position is the element
             self.op2(op::MOVE, raw, i);
+        } else if f.coll_ty == Ty::String {
+            self.op3(op::STR_INDEX, raw, c, i);
         } else {
-            let opc = if f.coll_ty == Ty::String {
-                op::STR_INDEX
-            } else if f.coll_ty.is_dyn_indexed() {
-                if managed {
-                    op::DYN_GET_REF
-                } else {
-                    op::DYN_GET
-                }
-            } else if managed {
-                op::VAL_GET_REF
+            let ops = if f.coll_ty.is_dyn_indexed() {
+                (op::DYN_GET, op::DYN_GET_REF)
             } else {
-                op::VAL_GET
+                (op::VAL_GET, op::VAL_GET_REF)
             };
-            self.op3(opc, raw, c, i);
+            let rest = vec![Operand::Reg(c), Operand::Reg(i)];
+            // A `[weak]` loop variable does not count the element (`docs/spec/objects.md` 4.4)
+            let counted = !matches!(self.reg_type(raw), Some(Ty::Weak(_)));
+            self.get_value(f.elem, counted, ops, raw, rest);
         }
         if let Some(kind) = f.conv {
             self.convert(kind, f.elem, dst, raw);
         }
         if let ForVar::Global(g) = f.var {
-            let opc = if var_ty.is_managed() {
-                op::STORE_GLOBAL_REF
-            } else {
-                op::STORE_GLOBAL
-            };
-            self.op_table(opc, dst, Operand::Global(g.0));
+            self.store_place(&Place::Global(g), dst);
+        }
+        if let Some(v) = cell {
+            self.renew_cell(v);
+            self.store_place(&Place::Var(v, TextRange::default()), dst);
         }
         self.release(mark);
     }
@@ -2188,20 +3489,29 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             self.part_check(&part);
             part
         });
-        let t = match (direct, &part) {
-            (Some(r), _) => r,
+        // Inside the body of a `try`, a variable's value is made in a temporary and then moved to
+        // its register, so that a handler sees the value before the call if a check raises
+        // (`docs/spec/semantics.md` 3.1; `Inc(X)` is `X := X + 1`, as in `expr_into_var`).
+        // Elsewhere the value is made in the register
+        let staged = direct.is_some() && self.in_try() && (checks.range || checks.overflow);
+        let (src, t) = match (direct, &part) {
+            (Some(r), _) if staged => (r, self.alloc(target_ty)),
+            (Some(r), _) => (r, r),
             (None, Some(part)) => {
                 let t = self.alloc(target_ty);
                 self.part_load(part, t);
-                t
+                (t, t)
             }
             (None, None) => {
                 let t = self.alloc(target_ty);
                 self.load_place(target, t);
-                t
+                (t, t)
             }
         };
+        let start = staged.then(|| self.region_start());
         let is64 = matches!(calc, Ty::Int64 | Ty::UInt64);
+        // `{$Q-}` `Integer`: the 32-bit operations narrow the result themselves
+        let wide32 = wraps32(calc, checks.overflow);
         let small_const = match delta {
             None => Some(1i64),
             Some(d) => match &d.value {
@@ -2213,11 +3523,17 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             Some(v) if !(is64 && checks.overflow) => {
                 let v = if negative { -v } else { v };
                 if (i8::MIN as i64..=i8::MAX as i64).contains(&v) {
-                    self.op_imm(op::ADD_INT_I, t, t, v);
+                    let opc = if wide32 {
+                        op::ADD_INT32_I
+                    } else {
+                        op::ADD_INT_I
+                    };
+                    self.op_imm(opc, t, src, v);
                 } else {
                     let d = self.alloc(calc);
                     self.load_int(d, v);
-                    self.op3(op::ADD_INT, t, t, d);
+                    let opc = if wide32 { op::ADD_INT32 } else { op::ADD_INT };
+                    self.op3(opc, t, src, d);
                 }
             }
             _ => {
@@ -2231,25 +3547,43 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                     (Ty::Int64, true, true) => op::SUB_INT_CHK,
                     (Ty::UInt64, true, false) => op::ADD_UINT_CHK,
                     (Ty::UInt64, true, true) => op::SUB_UINT_CHK,
+                    (_, _, false) if wide32 => op::ADD_INT32,
+                    (_, _, true) if wide32 => op::SUB_INT32,
                     (_, _, false) => op::ADD_INT,
                     (_, _, true) => op::SUB_INT,
                 };
-                self.op3(opc, t, t, d);
+                self.op3(opc, t, src, d);
             }
         }
-        self.narrow_arith(t, calc, checks.overflow);
         // From the computation type to the target type (`{$R}` of assignment): to the base type,
         // then the range of an enumeration or subrange
         let base = match self.program.types.base(target_ty) {
             Ty::Enum(_) => calc,
             b => b,
         };
+        // Under `{$Q-}` a narrowing conversion to the target does the job of the `Narrow`
+        let to_target = Conversion::Int {
+            to: base,
+            check: checks.range,
+        };
+        if !wide32
+            && (arith_pending(calc, checks.overflow).is_none()
+                || !Self::conversion_narrows_low_bits(to_target, calc))
+        {
+            self.narrow_arith(t, calc, checks.overflow);
+        }
         self.convert_int(t, t, calc, base, checks.range);
         if matches!(target_ty, Ty::Enum(_) | Ty::Subrange(_)) && checks.range {
             self.range_check(t, target_ty);
         }
         match (direct, &part) {
-            (Some(_), _) => {}
+            (Some(r), _) => {
+                if let Some(start) = start
+                    && !self.write_in_place(&start, t, r)
+                {
+                    self.op2(op::MOVE, r, t);
+                }
+            }
             (None, Some(part)) => self.part_store(part, t),
             (None, None) => self.store_place(target, t),
         }
@@ -2273,7 +3607,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             if ty == Ty::String {
                 this.op2(op::STR_SET_LEN, t, regs[0]);
             } else if ty == Ty::Utf8String {
-                this.op2(op::U8_SET_LEN, t, regs[0]);
+                this.intrinsic(op::intr::U8_SET_LEN, &[t, regs[0]]);
             } else {
                 this.set_len_dims(t, ty, &regs);
             }
@@ -2309,12 +3643,12 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 };
                 this.array_edit(opc, ty, t, [(src, source.ty), (idx, Ty::Int64)]);
             } else {
-                let opc = if ty == Ty::Utf8String {
-                    op::U8_INSERT
+                let id = if ty == Ty::Utf8String {
+                    op::intr::U8_INSERT
                 } else {
-                    op::STR_INSERT
+                    op::intr::STR_INSERT
                 };
-                this.string_edit(opc, t, [(src, source.ty), (idx, Ty::Int64)]);
+                this.string_edit(id, t, [(src, source.ty), (idx, Ty::Int64)]);
             }
         };
         self.edit_place(target, part, f);
@@ -2332,8 +3666,71 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         let args = [(idx, Ty::Int64), (cnt, Ty::Int64)];
         let f = |this: &mut Self, t: Reg| match ty {
             Ty::DynArray(_) => this.array_edit(op::ARR_DELETE, ty, t, args),
-            Ty::Utf8String => this.string_edit(op::U8_DELETE, t, args),
-            _ => this.string_edit(op::STR_DELETE, t, args),
+            Ty::Utf8String => this.string_edit(op::intr::U8_DELETE, t, args),
+            _ => this.string_edit(op::intr::STR_DELETE, t, args),
+        };
+        self.edit_place(target, part, f);
+    }
+
+    /// `Exchange` (`docs/spec/types.md` chapter 7): the target's indices and the two indices,
+    /// then the two elements swapped without counting (the counts stay the same). A dynamic array
+    /// is written shared; a static array is made unique first. `I = J` writes each element back.
+    fn exchange(&mut self, target: &Place, first: &Expr, second: &Expr, span: TextRange) {
+        let part = is_part(target).then(|| self.eval_part(target));
+        let ty = self.place_type(target);
+        let elem = match ty {
+            Ty::DynArray(_) => self.program.types.dyn_elem(ty),
+            _ => self.program.types.array(ty).map(|(_, _, _, e)| e),
+        }
+        .expect("`Exchange` takes an array");
+        let (get, set, ri, rj) = if let Ty::DynArray(_) = ty {
+            let ri = self.alloc_borrow(Ty::Int64);
+            self.expr(first, ri);
+            let rj = self.alloc_borrow(Ty::Int64);
+            self.expr(second, rj);
+            (op::DYN_GET, op::DYN_SET, ri, rj)
+        } else {
+            let (ri, ci) = self.elem_index(ty, first, span);
+            let (rj, cj) = self.elem_index(ty, second, span);
+            for (r, c) in [(ri, ci), (rj, cj)] {
+                if let Some(c) = c {
+                    self.chk_index(r, &c);
+                }
+            }
+            (op::VAL_GET, op::VAL_SET, ri, rj)
+        };
+        let f = |this: &mut Self, t: Reg| {
+            if let Ty::Array(_) = ty {
+                this.op_table(op::UNIQUE, t, Operand::Type(ty));
+            }
+            let x = this.alloc_borrow(elem);
+            let y = this.alloc_borrow(elem);
+            this.op3(get, x, t, ri);
+            this.op3(get, y, t, rj);
+            this.op3(set, t, ri, y);
+            this.op3(set, t, rj, x);
+        };
+        self.edit_place(target, part, f);
+    }
+
+    /// `ArrayMoveRange` (`docs/spec/bytecode.md` 2.22): the target's indices, then the three
+    /// `Int64` arguments, then the rotation of the dynamic array in place (shared, as `Exchange`
+    /// writes it; no count changes).
+    fn array_move_range(&mut self, target: &Place, args: [&Expr; 3]) {
+        let part = is_part(target).then(|| self.eval_part(target));
+        let values = args.map(|e| {
+            let r = self.alloc_borrow(Ty::Int64);
+            self.expr(e, r);
+            r
+        });
+        let f = |this: &mut Self, t: Reg| {
+            // `B` to `B+2` are consecutive call-argument temporaries
+            let regs = values.map(|v| {
+                let r = this.alloc_arg(Some(Ty::Int64));
+                this.op2(op::MOVE, r, v);
+                r
+            });
+            this.intrinsic(op::intr::ARRAY_MOVE_RANGE, &[t, regs[0], regs[1], regs[2]]);
         };
         self.edit_place(target, part, f);
     }
@@ -2357,12 +3754,8 @@ impl<'m, 'a> FuncLower<'m, 'a> {
     }
 
     /// A string instruction `opc A B` that replaces the string in `t` (`B`, `B+1` are `args`).
-    fn string_edit(&mut self, opc: u8, t: Reg, args: [(Reg, Ty); 2]) {
-        let b = self.alloc_arg(Some(args[0].1));
-        let c = self.alloc_arg(Some(args[1].1));
-        self.op2(op::MOVE, b, args[0].0);
-        self.op2(op::MOVE, c, args[1].0);
-        self.op2(opc, t, b);
+    fn string_edit(&mut self, id: u8, t: Reg, args: [(Reg, Ty); 2]) {
+        self.intrinsic_pair(id, t, args);
     }
 
     /// An array instruction `opc A Bx` on the array in `t` (an owning value read without counting;
@@ -2443,15 +3836,17 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             self.op_table(op::UNIQUE, a, Operand::Type(ty));
         }
         let k = self.alloc_borrow(Ty::Int64);
+        let slot = if dynamic {
+            SlotRef::Dyn(k)
+        } else {
+            SlotRef::Elem {
+                reg: k,
+                check: None,
+            }
+        };
         for (i, (x, v)) in elems.iter().zip(vals).enumerate() {
             self.load_int(k, i as i64);
-            let opc = match (dynamic, x.ty.is_managed()) {
-                (true, true) => op::DYN_SET_REF,
-                (true, false) => op::DYN_SET,
-                (false, true) => op::VAL_SET_REF,
-                (false, false) => op::VAL_SET,
-            };
-            self.op3(opc, a, k, v);
+            self.set_slot(a, &slot, v, x.ty, true);
         }
         self.op2(op::MOVE_REF, dst, a);
     }
@@ -2460,7 +3855,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
     /// (`docs/spec/bytecode.md` 2.17), then `ReadLn` drops the rest of the line.
     fn read(&mut self, targets: &[Place], newline: bool) {
         if newline {
-            self.plain(op::READ_LN_BEGIN, Vec::new());
+            self.intrinsic(op::intr::READ_LN_BEGIN, &[]);
         }
         for (i, p) in targets.iter().enumerate() {
             let last = i + 1 == targets.len();
@@ -2473,11 +3868,11 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             let ty = self.place_type(p);
             let v = if ty == Ty::Char {
                 let t = self.alloc(ty);
-                self.op1(op::READ_CHAR, t);
+                self.intrinsic(op::intr::READ_CHAR, &[t]);
                 t
             } else if matches!(ty, Ty::String | Ty::Utf8String) {
                 let a = self.alloc(Ty::String);
-                self.op1(op::READ_REST, a);
+                self.intrinsic(op::intr::READ_REST, &[a]);
                 if ty == Ty::Utf8String {
                     let t = self.alloc(ty);
                     self.op2(op::STR_TO_U8, t, a);
@@ -2489,23 +3884,23 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 // A number: a word, or the rest of the line for the last variable of `ReadLn`
                 // (only blanks may follow it)
                 let a = self.alloc(Ty::String);
-                let opc = if newline && last {
-                    op::READ_REST
+                let id = if newline && last {
+                    op::intr::READ_REST
                 } else {
-                    op::READ_WORD
+                    op::intr::READ_WORD
                 };
-                self.op1(opc, a);
+                self.intrinsic(id, &[a]);
                 let t = self.alloc(ty);
                 if ty.is_integer() {
                     let w = ty.width_code().unwrap_or(6) as i64;
                     self.op_imm(op::STR_TO_INT_IO, t, a, w);
                 } else {
-                    let kind = match ty {
-                        Ty::Single => bytecode::FLOAT_IO_SINGLE,
-                        Ty::Currency => bytecode::FLOAT_IO_CURRENCY,
-                        _ => bytecode::FLOAT_IO_DOUBLE,
+                    let id = match ty {
+                        Ty::Single => op::intr::STR_TO_F32_IO,
+                        Ty::Currency => op::intr::STR_TO_CURR_IO,
+                        _ => op::intr::STR_TO_F64_IO,
                     };
-                    self.op_imm(op::STR_TO_FLOAT_IO, t, a, kind);
+                    self.intrinsic(id, &[t, a]);
                 }
                 t
             };
@@ -2515,7 +3910,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             }
         }
         if newline {
-            self.plain(op::READ_LN_END, Vec::new());
+            self.intrinsic(op::intr::READ_LN_END, &[]);
         }
     }
 
@@ -2592,13 +3987,20 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             );
             return;
         }
+        let id = match e.ty {
+            Ty::Double => Some(op::intr::F64_TO_STR),
+            Ty::Single => Some(op::intr::F32_TO_STR),
+            Ty::Currency => Some(op::intr::CURR_TO_STR),
+            _ => None,
+        };
+        if let Some(id) = id {
+            self.intrinsic(id, &[dst, x]);
+            return;
+        }
         let opc = match e.ty {
             Ty::Char => op::STR_FROM_CHAR,
             Ty::Boolean => op::BOOL_TO_STR,
             Ty::UInt64 => op::UINT_TO_STR,
-            Ty::Double => op::F64_TO_STR,
-            Ty::Single => op::F32_TO_STR,
-            Ty::Currency => op::CURR_TO_STR,
             _ => op::INT_TO_STR,
         };
         self.op2(opc, dst, x);
@@ -2617,42 +4019,73 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             self.op2(op::F32_TO_F64, x, x);
         }
         let dr = self.expr_any(d);
-        let opc = if e.ty == Ty::Currency {
-            op::CURR_TO_FIXED
+        let (id, xty) = if e.ty == Ty::Currency {
+            (op::intr::CURR_TO_FIXED, Ty::Currency)
         } else {
-            op::F64_TO_FIXED
+            (op::intr::F64_TO_FIXED, Ty::Double)
         };
-        self.op3(opc, dst, x, dr);
+        self.intrinsic_pair(id, dst, [(x, xty), (dr, d.ty)]);
     }
 
     // ---- Integer helpers ----
 
     /// Narrows the result when the computation type is narrow (`{$Q}`).
     fn narrow_arith(&mut self, reg: Reg, calc: Ty, overflow: bool) {
-        if matches!(calc, Ty::Int64 | Ty::UInt64) {
+        let Some(w) = narrow_width(calc) else {
             return;
-        }
-        let w = calc.width_code().unwrap_or(4) as i64;
+        };
         let opc = if overflow { op::NARROW_OVF } else { op::NARROW };
         self.op_imm(opc, reg, reg, w);
     }
 
+    /// Emits the pending `Narrow` of `reg`, if any.
+    fn settle(&mut self, reg: Reg, pending: Pending) {
+        if let Some(w) = pending {
+            self.op_imm(op::NARROW, reg, reg, w);
+        }
+    }
+
+    /// Settles `pending` unless it is the width `want` (that of the operation about to read the
+    /// low bits of `reg`).
+    fn settle_unless(&mut self, reg: Reg, pending: Pending, want: Pending) {
+        if pending.is_some() && pending != want {
+            self.settle(reg, pending);
+        }
+    }
+
+    /// The `Narrow` width of an integer conversion from `from` to `to`, or `None` when the value
+    /// already fits (a wider type: nothing to do).
+    fn int_conversion_width(from: Ty, to: Ty) -> Option<i64> {
+        let (flo, fhi) = from.range().unwrap_or((i64::MIN as i128, i64::MAX as i128));
+        let (tlo, thi) = to.range().unwrap_or((i64::MIN as i128, i64::MAX as i128));
+        if from == to || (tlo <= flo && fhi <= thi) {
+            return None;
+        }
+        Some(to.width_code().unwrap_or(6) as i64)
+    }
+
     /// Integer type conversion (`{$R}` of assignment compatibility). Nothing to do for a wider type.
     fn convert_int(&mut self, dst: Reg, src: Reg, from: Ty, to: Ty, range: bool) {
-        let widening = || {
-            let (flo, fhi) = from.range().unwrap_or((i64::MIN as i128, i64::MAX as i128));
-            let (tlo, thi) = to.range().unwrap_or((i64::MIN as i128, i64::MAX as i128));
-            tlo <= flo && fhi <= thi
-        };
-        if from == to || widening() {
+        let Some(w) = Self::int_conversion_width(from, to) else {
             if dst != src {
                 self.op2(op::MOVE, dst, src);
             }
             return;
-        }
-        let w = to.width_code().unwrap_or(6) as i64;
+        };
         let opc = if range { op::NARROW_RNG } else { op::NARROW };
         self.op_imm(opc, dst, src, w);
+    }
+
+    /// Whether the conversion is a plain `Narrow` that reads only the low 32 bits or fewer, and
+    /// so also does the job of a pending `Narrow` of its operand.
+    fn conversion_narrows_low_bits(kind: Conversion, from: Ty) -> bool {
+        match kind {
+            Conversion::Int { to, check: false } => {
+                Self::int_conversion_width(from, to).is_some_and(low_bits_width)
+            }
+            Conversion::IntToChar { check: false } => true,
+            _ => false,
+        }
     }
 
     /// Converts the value of `src` (of type `from`) into `dst`. `dst` may be `src`, except for
@@ -2663,10 +4096,10 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             Conversion::CharToStr => self.op2(op::STR_FROM_CHAR, dst, src),
             Conversion::StrToU8 => self.op2(op::STR_TO_U8, dst, src),
             Conversion::U8ToStr => self.op2(op::U8_TO_STR, dst, src),
-            Conversion::IntToChar { check } => {
-                let opc = if check { op::NARROW_RNG } else { op::NARROW };
-                self.op_imm(opc, dst, src, 3);
-            }
+            // The checked form uses the `Char` width so that the `ERangeError` names `Char`
+            // (`docs/spec/semantics.md` 2.5); both widths keep the low 16 bits
+            Conversion::IntToChar { check: true } => self.op_imm(op::NARROW_RNG, dst, src, 8),
+            Conversion::IntToChar { check: false } => self.op_imm(op::NARROW, dst, src, 3),
             Conversion::IntToBool => {
                 let z = self.alloc(from);
                 self.op1(op::LOAD_ZERO, z);
@@ -2753,6 +4186,15 @@ impl<'m, 'a> FuncLower<'m, 'a> {
 
     /// Puts the value of an expression into `dst`.
     fn expr(&mut self, e: &Expr, dst: Reg) {
+        let pending = self.expr_lazy(e, dst);
+        let old = self.set_line(e.span);
+        self.settle(dst, pending);
+        self.line = old;
+    }
+
+    /// Puts the value of an expression into `dst`, possibly leaving a `Narrow` pending (`Pending`):
+    /// the caller settles it unless it only reads the low bits of `dst`.
+    fn expr_lazy(&mut self, e: &Expr, dst: Reg) -> Pending {
         let old = self.set_line(e.span);
         let mark = self.mark();
         if let Some(c) = &e.value
@@ -2761,8 +4203,9 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             self.load_const(dst, c, e.ty);
             self.release(mark);
             self.line = old;
-            return;
+            return None;
         }
+        let mut pending = None;
         match &e.kind {
             ExprKind::Const => {
                 // value has already been handled above
@@ -2770,20 +4213,29 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             }
             ExprKind::Var(v) => self.load_place(&Place::Var(*v, e.span), dst),
             ExprKind::Global(g) => self.load_place(&Place::Global(*g), dst),
-            ExprKind::Binary { first, steps } => self.binary(first, steps, dst),
+            ExprKind::Binary { first, steps } => pending = self.binary_lazy(first, steps, dst),
             ExprKind::Unary {
                 op: uop,
                 operand,
                 calc,
             } => {
-                self.expr(operand, dst);
+                // `not` and a wrapping `-` read only the low bits of a narrow operand
+                let wraps = match (uop, calc) {
+                    (UnOp::Not, Calc::Int(t)) => arith_pending(*t, false),
+                    (UnOp::Neg, Calc::Int(t)) => arith_pending(*t, self.current_overflow),
+                    _ => None,
+                };
+                let p = self.expr_lazy(operand, dst);
+                self.settle_unless(dst, p, wraps);
                 match (uop, calc) {
                     (UnOp::Not, Calc::Bool) => self.op2(op::NOT_BOOL, dst, dst),
                     (UnOp::Not, Calc::Int(t)) => {
                         self.op2(op::NOT_INT, dst, dst);
-                        if !matches!(t, Ty::Int64 | Ty::UInt64) {
-                            let w = t.width_code().expect("narrow integer type") as i64;
-                            self.op_imm(op::NARROW, dst, dst, w);
+                        // Not checked by `{$Q}`; left pending only under `{$Q-}`
+                        let overflow = self.current_overflow;
+                        pending = arith_pending(*t, overflow);
+                        if overflow {
+                            self.narrow_arith(dst, *t, false);
                         }
                     }
                     (UnOp::Neg, Calc::Real(Ty::Single)) => self.op2(op::NEG_F32, dst, dst),
@@ -2795,7 +4247,10 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                             self.op2(op::NEG_INT_CHK, dst, dst);
                         } else {
                             self.op2(op::NEG_INT, dst, dst);
-                            self.narrow_arith(dst, *t, overflow);
+                            pending = arith_pending(*t, overflow);
+                            if overflow {
+                                self.narrow_arith(dst, *t, overflow);
+                            }
                         }
                     }
                     _ => {}
@@ -2818,19 +4273,75 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             ExprKind::Elem { base, index } => {
                 let b = self.index_base(base, index);
                 let (i, get) = self.read_index(base.ty, index, e.span);
-                let opc = match (get, e.ty.is_managed()) {
-                    (op::DYN_GET, true) => op::DYN_GET_REF,
-                    (_, true) => op::VAL_GET_REF,
-                    _ => get,
+                let ops = match get {
+                    op::DYN_GET => (op::DYN_GET, op::DYN_GET_REF),
+                    op::VAL_GET => (op::VAL_GET, op::VAL_GET_REF),
+                    other => (other, other),
                 };
-                self.op3(opc, dst, b, i);
+                let rest = vec![Operand::Reg(b), Operand::Reg(i)];
+                self.get_value(e.ty, true, ops, dst, rest);
             }
             ExprKind::ArrayCtor(elems) => self.array_ctor(e.ty, elems, dst),
             ExprKind::Slice { base, low, high } => {
                 self.slice(base, low.as_deref(), high.as_deref(), e.ty, dst)
             }
-            ExprKind::Call { routine, args } => self.call_routine(*routine, args, Some(dst)),
+            ExprKind::IndexRange { first, last } => {
+                self.index_range(first.as_deref(), last.as_deref(), e.ty, dst)
+            }
+            ExprKind::Call {
+                routine,
+                args,
+                dispatch,
+            } => self.call_routine(*routine, args, *dispatch, Some(dst)),
+            // `docs/spec/objects.md` 14.9
+            ExprKind::RoutineRef(r) => {
+                let f = self.ml.func_index[r.0 as usize];
+                self.load_func(dst, f, 1);
+            }
+            ExprKind::ToClosure(x) => {
+                let t = self.alloc_borrow(Ty::Int64);
+                self.expr(x, t);
+                self.intrinsic(op::intr::ROUTINE_REF, &[dst, t]);
+            }
+            ExprKind::Anon { func, captures } => {
+                let f = self.ml.func_index[func.0 as usize];
+                self.make_closure(Some(f), captures, dst)
+            }
+            ExprKind::NestedRef { func, block } => {
+                let m = self.mark();
+                let b = self.alloc_arg(None);
+                let f = self.alloc_arg(Some(Ty::Int64));
+                self.load_block(*block, b);
+                self.load_func(f, self.ml.func_index[func.0 as usize], 0);
+                self.intrinsic(op::intr::CLOSURE_WITH, &[dst, b]);
+                self.release(m);
+            }
+            ExprKind::MethodRef { base, routine, how } => {
+                self.method_ref(base, *routine, *how, dst)
+            }
+            ExprKind::CallValue { callee, args } => {
+                let ret = (!e.ty.is_error()).then_some(e.ty);
+                self.call_value(callee, args, ret, Some(dst));
+            }
+            ExprKind::RecordNew { call } => {
+                // `docs/spec/objects.md` chapter 6: the constructor runs on a temporary holding
+                // the default value, which becomes the value
+                let ExprKind::Call {
+                    routine,
+                    args,
+                    dispatch,
+                } = &call.kind
+                else {
+                    unreachable!("RecordNew always holds the call of the constructor");
+                };
+                let (_, temps) = self.call_routine_with(*routine, args, *dispatch, None, None);
+                let t = *temps
+                    .first()
+                    .expect("a record constructor's first argument is a temporary");
+                self.move_value(e.ty, dst, t);
+            }
             ExprKind::Builtin { func, args } => self.builtin(*func, args, e.ty, dst),
+            ExprKind::Key { op, args, func } => self.key(*op, args, *func, dst),
             ExprKind::Convert {
                 operand,
                 kind: kind @ (Conversion::CharToStr | Conversion::StrToU8 | Conversion::U8ToStr),
@@ -2848,39 +4359,108 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 self.convert_set(operand.ty, *to, *check, dst, src);
             }
             ExprKind::Convert { operand, kind } => {
-                self.expr(operand, dst);
+                // A narrowing conversion does the job of the operand's pending `Narrow`
+                let p = self.expr_lazy(operand, dst);
+                if !Self::conversion_narrows_low_bits(*kind, operand.ty) {
+                    self.settle(dst, p);
+                }
                 self.convert(*kind, operand.ty, dst, dst);
             }
             ExprKind::SetCtor(elems) => self.set_ctor(e.ty, elems, dst),
-            ExprKind::NewExc { class, msg } => {
-                // The message moves into the new object (`docs/spec/exceptions.md` 6.2)
-                self.expr(msg, dst);
-                self.op_table(op::NEW_EXC, dst, Operand::Type(*class));
+            ExprKind::New {
+                class,
+                ctor,
+                args,
+                after,
+                of,
+                dispatch,
+            } => self.new_instance(*class, *ctor, args, *after, of.as_deref(), *dispatch, dst),
+            ExprKind::ClassRefValue(class) => {
+                // `docs/spec/objects.md` 14.1: the type index + 1
+                self.op_table(op::LOAD_INT, dst, Operand::ClassRef(Ty::Class(*class)));
+            }
+            ExprKind::ClassInfo { op: info, args } => {
+                // `docs/spec/objects.md` 14.3: the intrinsics check their operands
+                let id = match info {
+                    ClassInfoOp::ClassType => op::intr::CLASS_TYPE,
+                    ClassInfoOp::ClassRefName => op::intr::CLASS_REF_NAME,
+                    ClassInfoOp::ClassParent => op::intr::CLASS_PARENT,
+                    ClassInfoOp::InheritsFrom => op::intr::CLASS_INHERITS,
+                    ClassInfoOp::RefCount => op::intr::REF_COUNT,
+                };
+                if let [a, b] = args.as_slice() {
+                    let x = self.borrowed_value(a);
+                    let y = self.borrowed_value(b);
+                    self.intrinsic_pair(id, dst, [(x, a.ty), (y, b.ty)]);
+                } else {
+                    let b = self.borrowed_value(&args[0]);
+                    self.intrinsic(id, &[dst, b]);
+                }
+            }
+            ExprKind::InheritedBuiltin {
+                base,
+                msg: Some(msg),
+                ..
+            } => {
+                // `inherited Create(Msg)` of `Exception` writes `Message` of `Self`
+                // (`docs/spec/objects.md` 8.2, 14.3)
+                let b = self.borrowed_value(base);
+                let m = self.expr_any(msg);
+                self.obj_set(b, bytecode::EXC_SLOT_MESSAGE, m, Ty::String, true);
+            }
+            // The built-in body does nothing (`docs/spec/objects.md` 14.3)
+            ExprKind::InheritedBuiltin { .. } => {}
+            ExprKind::ObjField { base, slot, .. } => {
+                let b = self.borrowed_value(base);
+                self.obj_get(dst, b, *slot, e.ty, true);
+            }
+            ExprKind::Weak(inner) => {
+                // `docs/spec/objects.md` 4.4, 14.3: the handle is read without counting, then
+                // `LoadWeak` counts it into `dst` (or writes `nil`)
+                let h = self.borrowed_value(inner);
+                self.op2(op::LOAD_WEAK, dst, h);
+            }
+            ExprKind::ClassCheck { operand, class, op } => {
+                self.class_check(operand, *class, *op, e.ty, dst)
+            }
+            ExprKind::Supports {
+                operand,
+                intf,
+                target,
+                class_ref,
+            } => self.supports(operand, *intf, target.as_ref(), *class_ref, dst),
+            ExprKind::ClassName { base } => {
+                // `docs/spec/objects.md` 14.3: the intrinsic checks the handle
+                let b = self.borrowed_value(base);
+                self.intrinsic(op::intr::CLASS_NAME, &[dst, b]);
             }
             ExprKind::ExcMember { base, member } => {
                 let b = self.borrowed_value(base);
-                let (opc, n) = match member {
-                    ExcMember::StackTrace => (op::EXC_INFO, bytecode::EXC_INFO_STACK_TRACE),
-                    ExcMember::Suppressed => (op::EXC_INFO, bytecode::EXC_INFO_SUPPRESSED),
-                    ExcMember::ClassName => (op::EXC_INFO, bytecode::EXC_INFO_CLASS_NAME),
-                    m => (op::EXC_GET, exc_slot(*m)),
+                let n = match member {
+                    ExcMember::StackTrace => bytecode::EXC_INFO_STACK_TRACE,
+                    ExcMember::Suppressed => bytecode::EXC_INFO_SUPPRESSED,
                 };
                 self.plain(
-                    opc,
+                    op::EXC_INFO,
                     vec![Operand::Reg(dst), Operand::Reg(b), Operand::Imm(n as i64)],
                 );
             }
             ExprKind::TryStrToInt { s, target } => {
                 // The value goes to the `out` argument after the conversion (`docs/spec/semantics.md` 5.3)
                 let x = self.expr_any(s);
-                let v = self.alloc(Ty::Integer);
-                self.op3(op::TRY_STR_TO_INT, dst, x, v);
-                self.store_place(target, v);
+                let b = self.alloc_arg(Some(s.ty));
+                let v = self.alloc_arg(Some(Ty::Integer));
+                self.op2(op::MOVE, b, x);
+                self.intrinsic(op::intr::TRY_STR_TO_INT, &[dst, b, v]);
+                let r = self.alloc(Ty::Integer);
+                self.op2(op::MOVE, r, v);
+                self.store_place(target, r);
             }
             ExprKind::Error => self.op1(op::LOAD_ZERO, dst),
         }
         self.release(mark);
         self.line = old;
+        pending
     }
 
     /// A register holding the expression's value (the variable's register for a variable, otherwise a temporary).
@@ -2896,8 +4476,8 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         t
     }
 
-    /// A left fold.
-    fn binary(&mut self, first: &Expr, steps: &[BinStep], dst: Reg) {
+    /// A left fold. Under `{$Q-}` the `Narrow` of a narrow integer result may be left pending (`Pending`).
+    fn binary_lazy(&mut self, first: &Expr, steps: &[BinStep], dst: Reg) -> Pending {
         // A string comparison: the strings on its left are concatenated in a register of their own,
         // and the comparison's `Boolean` goes on in the accumulator (a string never enters `dst`)
         // A comparison of big sets (or of a small set with a big one) likewise
@@ -2911,11 +4491,11 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         if let Some(k) = (0..steps.len()).find(|&k| {
             let s = &steps[k];
             (matches!(s.calc, Calc::Str | Calc::U8) && s.op.is_comparison())
-                || s.calc == Calc::Ref
+                || matches!(s.calc, Calc::Ref | Calc::Callable)
                 || big_cmp(k)
         }) {
             let rest = &steps[k + 1..];
-            let acc = if rest.iter().any(|s| expr_reads_reg(&s.rhs, dst)) {
+            let acc = if rest.iter().any(|s| self.expr_sees_var(&s.rhs, dst)) {
                 self.alloc(steps.last().map_or(first.ty, |s| s.ty))
             } else {
                 dst
@@ -2925,7 +4505,8 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 self.expr_any(first)
             } else {
                 let t = self.alloc(lhs_ty);
-                self.binary(first, &steps[..k], t);
+                let p = self.binary_lazy(first, &steps[..k], t);
+                self.settle(t, p);
                 t
             };
             let step = &steps[k];
@@ -2942,11 +4523,27 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 };
                 self.set_compare(step.op, acc, lhs, r, true);
                 self.line = old;
-                self.fold_steps(acc, rest);
+                let p = self.fold_steps(acc, rest, None);
+                self.settle(acc, p);
                 if acc != dst {
                     self.op2(op::MOVE, dst, acc);
                 }
-                return;
+                return None;
+            }
+            if step.calc == Calc::Callable {
+                // `docs/spec/objects.md` 9.5, 14.9
+                let ty = step.rhs.ty;
+                self.intrinsic_pair(op::intr::CALLABLE_EQUAL, acc, [(lhs, ty), (r, ty)]);
+                if step.op == BinOp::Ne {
+                    self.op2(op::NOT_BOOL, acc, acc);
+                }
+                self.line = old;
+                let p = self.fold_steps(acc, rest, None);
+                self.settle(acc, p);
+                if acc != dst {
+                    self.op2(op::MOVE, dst, acc);
+                }
+                return None;
             }
             // A dynamic array and `nil` compare the references (`docs/spec/types.md` 2.3)
             let (eq, cmp) = match step.calc {
@@ -2968,35 +4565,99 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 }
             }
             self.line = old;
-            self.fold_steps(acc, rest);
+            let p = self.fold_steps(acc, rest, None);
+            self.settle(acc, p);
             if acc != dst {
                 self.op2(op::MOVE, dst, acc);
             }
-            return;
+            return None;
         }
-        // If a right operand reads the dst variable, accumulate in a temporary
+        // A chain of three or more strings joined with `+`: made at once
+        if steps.len() >= 2
+            && steps
+                .iter()
+                .all(|s| s.calc == Calc::Str && s.op == BinOp::Add)
+        {
+            let operands: Vec<(&Expr, TextRange)> = std::iter::once((first, steps[0].span))
+                .chain(steps.iter().map(|s| (&s.rhs, s.span)))
+                .collect();
+            self.concat_n(dst, &operands);
+            return None;
+        }
+        // If a right operand reads the dst variable, accumulate in a temporary. A variable gets
+        // here as `dst` only when `expr_into_var` found that the whole expression does not see
+        // it, so this check (and the one in `binary_lazy`) is a guard that keeps the rule in one
+        // place ([`Self::expr_sees_var`])
         let ty = steps.last().map_or(first.ty, |s| s.ty);
-        let acc = if steps.iter().any(|s| expr_reads_reg(&s.rhs, dst)) {
+        let acc = if steps.iter().any(|s| self.expr_sees_var(&s.rhs, dst)) {
             self.alloc(ty)
         } else {
             dst
         };
-        self.expr(first, acc);
-        self.fold_steps(acc, steps);
+        let p = self.expr_lazy(first, acc);
+        let pending = self.fold_steps(acc, steps, p);
         if acc != dst {
-            let opc = if ty.is_managed() {
-                op::MOVE_REF
+            self.move_value(ty, dst, acc);
+        }
+        pending
+    }
+
+    /// `X1 + … + Xn` of strings (n ≥ 2) into `dst` with `ConcatStrN` (`docs/spec/bytecode.md`
+    /// 2.4): each operand, evaluated left to right on the line of its operator, is borrowed into
+    /// consecutive registers (a variable's register is moved unless an operand may write it), and
+    /// they are joined at once. More operands than one instruction takes are joined in groups,
+    /// each group's result the first operand of the next.
+    fn concat_n(&mut self, dst: Reg, operands: &[(&Expr, TextRange)]) {
+        let exprs: Vec<&Expr> = operands.iter().map(|(e, _)| *e).collect();
+        let mut carried: Option<Reg> = None;
+        let mut rest = operands;
+        while !rest.is_empty() {
+            let carry = usize::from(carried.is_some());
+            let (group, tail) = rest.split_at((CONCAT_N_MAX - carry).min(rest.len()));
+            let slots: Vec<Reg> = (0..carry + group.len())
+                .map(|_| self.alloc_arg(Some(Ty::String)))
+                .collect();
+            if let Some(c) = carried {
+                self.op2(op::MOVE, slots[0], c);
+            }
+            for (&(e, span), &slot) in group.iter().zip(&slots[carry..]) {
+                let old = self.set_line(span);
+                self.borrow_arg(e, slot, exprs.as_slice());
+                self.line = old;
+            }
+            let to = if tail.is_empty() {
+                dst
             } else {
-                op::MOVE
+                self.alloc(Ty::String)
             };
-            self.op2(opc, dst, acc);
+            let old = self.set_line(group[0].1);
+            let mut ops = vec![
+                Operand::Reg(to),
+                Operand::Reg(slots[0]),
+                Operand::Imm(slots.len() as i64),
+            ];
+            ops.extend(slots.iter().map(|&r| Operand::Reg(r)));
+            self.plain(op::CONCAT_STR_N, ops);
+            self.line = old;
+            carried = Some(to);
+            rest = tail;
         }
     }
 
-    /// Applies the steps of a left fold to the accumulator `acc` (string comparisons are done by `binary`).
-    fn fold_steps(&mut self, acc: Reg, steps: &[BinStep]) {
+    /// Applies the steps of a left fold to the accumulator `acc` (string comparisons are done by
+    /// `binary_lazy`). `pending` is the accumulator's pending `Narrow` on entry; returns the one
+    /// left on exit.
+    fn fold_steps(&mut self, acc: Reg, steps: &[BinStep], mut pending: Pending) -> Pending {
         for step in steps {
             let old = self.set_line(step.span);
+            // Only a wrapping integer operation reads an accumulator whose `Narrow` is pending
+            let wraps = match step.calc {
+                Calc::Int(calc) => int_op_wraps(step.op, calc, self.current_overflow),
+                _ => None,
+            };
+            self.settle_unless(acc, pending, wraps);
+            let acc_pending = pending.filter(|_| pending == wraps);
+            pending = None;
             match step.calc {
                 Calc::Bool => match step.op {
                     BinOp::And | BinOp::Or => {
@@ -3023,7 +4684,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                     let r = self.expr_any(&step.rhs);
                     self.compare_int(step.op, acc, acc, r, false);
                 }
-                Calc::Ref => unreachable!("`binary` compares references"),
+                Calc::Ref | Calc::Callable => unreachable!("`binary` compares references"),
                 Calc::Set if step.op.is_comparison() => {
                     // Small sets (`binary` compares big ones)
                     let r = self.expr_any(&step.rhs);
@@ -3080,13 +4741,27 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                     self.op2(op::MOVE_REF, acc, a);
                 }
                 Calc::Int(calc) => {
-                    let r = self.expr_any(&step.rhs);
                     let unsigned = calc == Ty::UInt64;
                     if step.op.is_comparison() {
+                        let r = self.expr_any(&step.rhs);
                         self.compare_int(step.op, acc, acc, r, unsigned);
                     } else {
+                        let (r, rp) = self.expr_any_lazy(&step.rhs);
+                        let shift = matches!(step.op, BinOp::Shl | BinOp::Shr);
+                        // The shift amount is read modulo the width: any pending `Narrow` will do
+                        let r_pending = if shift && wraps.is_some() {
+                            None
+                        } else {
+                            self.settle_unless(r, rp, wraps);
+                            rp.filter(|_| rp == wraps)
+                        };
                         let overflow = self.current_overflow;
-                        self.int_arith(step.op, calc, overflow, acc, acc, r);
+                        let p = self.int_arith(step.op, calc, overflow, acc, acc, r);
+                        pending = match step.op {
+                            // Bitwise operations keep the operands' pending `Narrow`
+                            BinOp::And | BinOp::Or | BinOp::Xor => acc_pending.or(r_pending),
+                            _ => p,
+                        };
                     }
                 }
                 Calc::Real(calc) => {
@@ -3111,6 +4786,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             }
             self.line = old;
         }
+        pending
     }
 
     /// Puts the value of a comparison (`Boolean`) into `dst`.
@@ -3157,11 +4833,31 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         }
     }
 
-    /// An integer binary operation (the result is narrowed to the computation type).
-    fn int_arith(&mut self, bop: BinOp, calc: Ty, overflow: bool, dst: Reg, a: Reg, b: Reg) {
+    /// An integer binary operation (the result is narrowed to the computation type). Under `{$Q-}`
+    /// the `Narrow` of `+`, `-`, `*`, `div` and of a `Cardinal` shift is returned pending instead,
+    /// except for `+`, `-` and `*` in `Integer`, whose 32-bit operations narrow the result
+    /// themselves (`AddInt32` ...). `and`, `or` and `xor` of narrowed operands need no `Narrow`.
+    fn int_arith(
+        &mut self,
+        bop: BinOp,
+        calc: Ty,
+        overflow: bool,
+        dst: Reg,
+        a: Reg,
+        b: Reg,
+    ) -> Pending {
         let is64 = matches!(calc, Ty::Int64 | Ty::UInt64);
         let unsigned = calc == Ty::UInt64;
         match bop {
+            BinOp::Add | BinOp::Sub | BinOp::Mul if wraps32(calc, overflow) => {
+                let opc = match bop {
+                    BinOp::Add => op::ADD_INT32,
+                    BinOp::Sub => op::SUB_INT32,
+                    _ => op::MUL_INT32,
+                };
+                self.op3(opc, dst, a, b);
+                None
+            }
             BinOp::Add | BinOp::Sub | BinOp::Mul => {
                 let opc = match (bop, is64 && overflow, unsigned) {
                     (BinOp::Add, true, false) => op::ADD_INT_CHK,
@@ -3175,7 +4871,10 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                     _ => op::MUL_INT,
                 };
                 self.op3(opc, dst, a, b);
-                self.narrow_arith(dst, calc, overflow);
+                if overflow {
+                    self.narrow_arith(dst, calc, overflow);
+                }
+                arith_pending(calc, overflow)
             }
             BinOp::Div => {
                 let opc = if unsigned {
@@ -3186,28 +4885,58 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                     op::DIV_INT
                 };
                 self.op3(opc, dst, a, b);
-                self.narrow_arith(dst, calc, overflow);
+                if overflow {
+                    self.narrow_arith(dst, calc, overflow);
+                }
+                arith_pending(calc, overflow)
             }
             BinOp::Mod => {
                 let opc = if unsigned { op::MOD_UINT } else { op::MOD_INT };
                 self.op3(opc, dst, a, b);
+                None
             }
-            BinOp::And => self.op3(op::AND_INT, dst, a, b),
-            BinOp::Or => self.op3(op::OR_INT, dst, a, b),
-            BinOp::Xor => self.op3(op::XOR_INT, dst, a, b),
+            BinOp::And | BinOp::Or | BinOp::Xor => {
+                let opc = match bop {
+                    BinOp::And => op::AND_INT,
+                    BinOp::Or => op::OR_INT,
+                    _ => op::XOR_INT,
+                };
+                self.op3(opc, dst, a, b);
+                None
+            }
             BinOp::Shl | BinOp::Shr => {
                 let left = bop == BinOp::Shl;
                 if is64 {
                     self.op3(if left { op::SHL_INT } else { op::SHR_INT }, dst, a, b);
+                    None
                 } else {
+                    // The result is sign-extended (`Integer`); a `Cardinal` one is zero-extended
                     self.op3(if left { op::SHL_INT32 } else { op::SHR_INT32 }, dst, a, b);
-                    if calc == Ty::Cardinal {
+                    if calc != Ty::Cardinal {
+                        return None;
+                    }
+                    let p = arith_pending(calc, overflow);
+                    if p.is_none() {
                         self.op_imm(op::NARROW, dst, dst, 5);
                     }
+                    p
                 }
             }
             _ => unreachable!("not an integer operation"),
         }
+    }
+
+    /// A register holding the expression's value, with its pending `Narrow` (`expr_lazy`).
+    fn expr_any_lazy(&mut self, e: &Expr) -> (Reg, Pending) {
+        if e.value.is_none()
+            && let ExprKind::Var(v) = &e.kind
+            && !self.is_ref_param(*v)
+        {
+            return (self.reg_of(*v), None);
+        }
+        let t = self.alloc(e.ty);
+        let p = self.expr_lazy(e, t);
+        (t, p)
     }
 
     /// Conditional branch: jumps to `target` when the expression equals `jump_if`.
@@ -3230,7 +4959,8 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             } => self.cond(operand, target, !jump_if),
             ExprKind::Binary { first, steps }
                 if steps.last().is_some_and(|s| {
-                    s.op.is_comparison() && !matches!(s.calc, Calc::Set | Calc::Real(_))
+                    s.op.is_comparison()
+                        && !matches!(s.calc, Calc::Set | Calc::Real(_) | Calc::Callable)
                 }) =>
             {
                 // If the last step is a comparison, compute its left side (`X and 1` in `X and 1 = 0`) first
@@ -3282,8 +5012,8 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                     Calc::Bool | Calc::Char | Calc::Ord | Calc::Ref => {
                         self.fused_compare(step.op, a, b, false, target, jump_if)
                     }
-                    Calc::Set | Calc::SetIn | Calc::Real(_) => {
-                        unreachable!("the guard leaves out sets and reals")
+                    Calc::Set | Calc::SetIn | Calc::Real(_) | Calc::Callable => {
+                        unreachable!("the guard leaves out sets, reals and callable values")
                     }
                     Calc::Arr => unreachable!("arrays are not compared"),
                 }
@@ -3397,13 +5127,41 @@ impl<'m, 'a> FuncLower<'m, 'a> {
     /// A routine call. `dst` is `None` for a procedure called as a statement.
     ///
     /// Arguments go to consecutive temporaries at the top of the frame (`docs/design/lifetime.md` 3.3):
-    /// a managed value argument is made there (the callee owns it), a managed `const` argument is
-    /// borrowed there with `Move`, and an `out` argument of a managed type is cleared before the call.
-    fn call_routine(&mut self, routine: RoutineId, args: &[CallArg], dst: Option<Reg>) {
+    /// a managed value or `const` argument is borrowed there with `Move` (a callee writing a value
+    /// parameter counts it when entered), and an `out` argument of a managed type is cleared
+    /// before the call.
+    ///
+    /// A method gets the receiver (`Self`) as its first argument; `dispatch` says how the call
+    /// reaches it (`docs/spec/objects.md` 14.3).
+    fn call_routine(
+        &mut self,
+        routine: RoutineId,
+        args: &[CallArg],
+        dispatch: Dispatch,
+        dst: Option<Reg>,
+    ) {
+        self.call_routine_with(routine, args, dispatch, dst, None);
+    }
+
+    /// [`Lowerer::call_routine`]; with `new` (the class and the register of the new instance),
+    /// the call of a constructor in `TFoo.Create(…)`: after the arguments, `New` puts the instance
+    /// in the register and the `try` of the creation begins (returned), and the instance is
+    /// moved to `Self` (the first argument, which is not evaluated). Also returns the
+    /// temporaries of the `CallArg::Temp` arguments, in order (the value of a record constructor
+    /// is the first; `docs/spec/objects.md` chapter 6).
+    fn call_routine_with(
+        &mut self,
+        routine: RoutineId,
+        args: &[CallArg],
+        dispatch: Dispatch,
+        dst: Option<Reg>,
+        new: Option<NewIn>,
+    ) -> (Option<FinallyScope>, Vec<Reg>) {
         let callee = &self.program.routines[routine.0 as usize];
         let modes: Vec<Option<ParamMode>> = (0..args.len())
             .map(|i| match callee.vars.get(i).map(|v| v.kind) {
                 Some(VarKind::Param(m)) => Some(m),
+                Some(VarKind::RecordSelf) => Some(ParamMode::Var),
                 _ => None,
             })
             .collect();
@@ -3413,6 +5171,12 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         let ret = callee.ret;
         // A nested routine taking the static link gets it first: a reference to the frame of the
         // routine it is nested in, this one or one `up` levels out (`docs/spec/semantics.md` 4.9)
+        // A closure-form nested routine gets its group's block first (`docs/spec/objects.md`
+        // 14.9)
+        let block = match dispatch {
+            Dispatch::Group(b) => Some((b, self.alloc_kind(None, TempKind::Ref))),
+            _ => None,
+        };
         let link = callee.link.then(|| {
             let parent = callee
                 .parent
@@ -3425,19 +5189,154 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             let t = self.alloc_kind(None, TempKind::Ref);
             (t, up as i64)
         });
+        let self_first = matches!(
+            callee.vars.first().map(|v| v.kind),
+            Some(VarKind::SelfParam)
+        );
+        let laid = self.eval_args(
+            args,
+            &modes,
+            &param_tys,
+            new.is_some(),
+            self_first,
+            ret,
+            link.is_some() || block.is_some(),
+            false,
+        );
+        let (mut slots, temps, lent) = (laid.slots, laid.temps, laid.lent);
+        let mut frame = slots.first().copied();
+        slots.truncate(args.len());
+        if let Some((t, up)) = link {
+            self.plain(
+                op::OUTER_REF,
+                vec![Operand::Reg(t), Operand::Imm(0), Operand::Imm(up)],
+            );
+            slots.insert(0, t);
+            frame = Some(t);
+        }
+        if let Some((b, t)) = block {
+            self.load_block(b, t);
+            slots.insert(0, t);
+            frame = Some(t);
+        }
+        let frame = frame.expect("a call has a frame");
+        let scope = new.map(|n| {
+            self.new_in(&n);
+            let scope = self.finally_begin();
+            self.op2(op::MOVE, frame, n.inst);
+            scope
+        });
+        let (opc, callee) = match dispatch {
+            Dispatch::Routine | Dispatch::Group(_) => (
+                op::CALL,
+                Operand::Func(self.ml.func_index[routine.0 as usize]),
+            ),
+            Dispatch::Method | Dispatch::Inherited => (
+                op::CALL_METHOD,
+                Operand::Func(self.ml.func_index[routine.0 as usize]),
+            ),
+            Dispatch::Virtual(index) => (
+                op::CALL_VIRTUAL,
+                Operand::Virtual {
+                    index,
+                    name: self.ml.func_names[routine.0 as usize].clone(),
+                },
+            ),
+            Dispatch::VirtualClass(index) => (
+                op::CALL_VIRTUAL_CLASS,
+                Operand::Virtual {
+                    index,
+                    name: self.ml.func_names[routine.0 as usize].clone(),
+                },
+            ),
+            Dispatch::Intf(intf, method) => {
+                // `docs/spec/objects.md` 15.4: the interface the receiver's type names
+                let full = &self.ml.func_names[routine.0 as usize];
+                let m = full.rsplit('.').next().unwrap_or(full);
+                let name = format!("{}.{m}", self.program.types.full_name(Ty::Intf(intf)));
+                (
+                    op::CALL_INTF,
+                    Operand::Intf {
+                        intf: Ty::Intf(intf),
+                        method,
+                        name,
+                    },
+                )
+            }
+        };
+        match (dst, ret) {
+            // The result comes back in the frame; move its reference to the destination
+            (Some(d), Some(rt)) if self.managed(rt) => {
+                self.call(opc, Some(frame), callee, slots, frame);
+                self.move_value(rt, d, frame);
+            }
+            _ => self.call(opc, dst, callee, slots, frame),
+        }
+        if lent {
+            self.plain(op::UNLEND, Vec::new());
+        }
+        (scope, temps)
+    }
+
+    /// Evaluates the arguments of a call into consecutive call-argument temporaries
+    /// (`docs/design/lifetime.md` 3.3): managed value and `const` ones (and `Self` with
+    /// `self_first`) borrowed, others made there, `var` / `out` ones as reference slots, a field or element
+    /// lent (`Lend`) after every argument is evaluated. `modes` and `param_tys` are the
+    /// parameters'; `skip_first` leaves the first argument for the caller (the new instance of a
+    /// constructor); `lead` puts a register before the arguments (the frame of `CallClosure`),
+    /// and `linked` tells that the static link comes first (so a call without arguments needs
+    /// no register of its own for its frame).
+    #[allow(clippy::too_many_arguments)]
+    fn eval_args(
+        &mut self,
+        args: &[CallArg],
+        modes: &[Option<ParamMode>],
+        param_tys: &[Ty],
+        skip_first: bool,
+        self_first: bool,
+        ret: Option<Ty>,
+        linked: bool,
+        lead: bool,
+    ) -> LaidArgs {
+        // A field or element passed to a `var` / `out` parameter is lent to the call (`Lend`) after
+        // every argument is evaluated, and given back after it (`Unlend`; `docs/spec/types.md`
+        // chapter 3). Its registers come before the arguments, so the call does not overwrite them.
+        let mut lends: Vec<Option<Lending>> = args
+            .iter()
+            .map(|a| match a {
+                CallArg::Ref { place, .. } if is_lent(place) => Some(self.alloc_lending(place)),
+                _ => None,
+            })
+            .collect();
+        // The copy a `CallArg::Temp` passes by reference: before the arguments too, so the callee's
+        // frame (which starts at the arguments) does not overlap it
+        let copies: Vec<Option<Reg>> = args
+            .iter()
+            .map(|a| match a {
+                CallArg::Temp(e) => Some(self.alloc(e.ty)),
+                _ => None,
+            })
+            .collect();
         // The arguments are laid out in consecutive temporaries; with no arguments the frame still gets one
         let mut slots = Vec::with_capacity(args.len().max(1) + 1);
+        if lead {
+            slots.push(self.alloc_kind(None, TempKind::Ref));
+        }
         for a in args {
             let t = match a {
                 CallArg::Value(e) => self.alloc_arg(Some(e.ty)),
-                CallArg::Ref { .. } => self.alloc_kind(None, TempKind::Ref),
+                CallArg::Ref { .. } | CallArg::Temp(_) => self.alloc_kind(None, TempKind::Ref),
             };
             slots.push(t);
         }
-        if slots.is_empty() && link.is_none() {
+        if slots.is_empty() && !linked {
             slots.push(self.alloc_arg(ret));
         }
-        for (i, (a, &reg)) in args.iter().zip(&slots).enumerate() {
+        let mut temps = Vec::new();
+        for (i, (a, &reg)) in args.iter().zip(&slots[usize::from(lead)..]).enumerate() {
+            if i == 0 && skip_first {
+                continue;
+            }
             // A static array passed to an open array parameter is made a block first: the callee
             // cannot know the length of a default value, 0 (`docs/spec/types.md` chapter 9)
             let open_static = match (a, param_tys[i]) {
@@ -3452,7 +5351,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             match a {
                 CallArg::Value(e) if open_static.is_some() => {
                     let ty = e.ty;
-                    if modes[i] == Some(ParamMode::Const) {
+                    if lends_argument(modes[i]) {
                         let t = self.alloc(ty);
                         self.expr(e, t);
                         self.op_table(op::MATERIALIZE, t, Operand::Type(ty));
@@ -3462,44 +5361,305 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                         self.op_table(op::MATERIALIZE, reg, Operand::Type(ty));
                     }
                 }
-                CallArg::Value(e) if e.ty.is_managed() && modes[i] == Some(ParamMode::Const) => {
-                    self.borrow_arg(e, reg, args)
+                // A value or `const` argument is lent (`docs/design/lifetime.md` 3.3), `Self` too
+                // (`docs/spec/objects.md` 4.1)
+                CallArg::Value(e)
+                    if self.managed(e.ty)
+                        && (lends_argument(modes[i]) || (i == 0 && self_first)) =>
+                {
+                    self.lend_arg(e, reg, args)
                 }
                 CallArg::Value(e) => self.value_arg(e, reg),
+                CallArg::Ref { place, .. } if is_lent(place) => {
+                    let lending = lends[i].as_mut().expect("a lent place has its registers");
+                    self.eval_lending(place, lending);
+                }
                 CallArg::Ref { place, is_out } => {
                     self.make_ref(place, reg, open_static);
-                    if *is_out && self.place_type(place).is_managed() {
-                        self.op1(op::CLEAR_REF, reg);
+                    if *is_out {
+                        self.clear_ref(self.place_type(place), reg);
                     }
+                }
+                CallArg::Temp(e) => {
+                    // A copy the callee writes to (`docs/spec/objects.md` chapter 6)
+                    let t = copies[i].expect("a `Temp` argument has its copy");
+                    self.expr(e, t);
+                    self.op2(op::MAKE_REF, reg, t);
+                    temps.push(t);
                 }
             }
         }
-        let mut frame = slots.first().copied();
-        slots.truncate(args.len());
-        if let Some((t, up)) = link {
-            self.plain(
-                op::OUTER_REF,
-                vec![Operand::Reg(t), Operand::Imm(0), Operand::Imm(up)],
-            );
-            slots.insert(0, t);
-            frame = Some(t);
-        }
-        let frame = frame.expect("a call has a frame");
-        let f = self.ml.func_index[routine.0 as usize];
-        match dst {
-            // The result comes back in the frame; move its reference to the destination
-            Some(d) if ret.is_some_and(Ty::is_managed) => {
-                self.call(op::CALL, Some(frame), Operand::Func(f), slots, frame);
-                self.op2(op::MOVE_REF, d, frame);
+        // The containers are opened for writing before anything is taken out, so that taking a
+        // location out twice is reported as such
+        for (a, lending) in args.iter().zip(&lends) {
+            if let (CallArg::Ref { place, .. }, Some(lending)) = (a, lending) {
+                self.open_lending(place, lending);
             }
-            _ => self.call(op::CALL, dst, Operand::Func(f), slots, frame),
+        }
+        for (i, (a, &reg)) in args.iter().zip(&slots[usize::from(lead)..]).enumerate() {
+            let (Some(lending), CallArg::Ref { place, is_out }) = (&lends[i], a) else {
+                continue;
+            };
+            self.lend(lending);
+            // A static array passed to a `var` open array parameter becomes a block (the callee
+            // cannot know the length of a default value, 0)
+            if let Ty::OpenArray(_) = param_tys[i]
+                && let ty @ Ty::Array(_) = self.place_type(place)
+            {
+                self.op_table(op::UNIQUE, lending.value, Operand::Type(ty));
+            }
+            self.op2(op::MAKE_REF, reg, lending.value);
+            if *is_out {
+                self.clear_ref(self.place_type(place), reg);
+            }
+        }
+        LaidArgs {
+            slots,
+            temps,
+            lent: lends.iter().any(Option::is_some),
+        }
+    }
+
+    /// A method reference into `dst` (`docs/spec/objects.md` 9.3, 14.9): `MethodRef` /
+    /// `VirtualRef` / `ClassMethodRef` / `ClassVirtualRef` with the receiver (borrowed) and the
+    /// function (its index, or the entry of the class's table) in consecutive registers.
+    fn method_ref(&mut self, base: &Expr, routine: RoutineId, how: MethodRefHow, dst: Reg) {
+        let recv = self.alloc_arg(Some(base.ty));
+        let f = self.alloc_arg(Some(Ty::Int64));
+        // The receiver is only read (the value holds its instance weakly): a variable or a field
+        // is not counted, so making the value does not keep the instance alive
+        let b = self.borrowed_value(base);
+        self.op2(op::MOVE, recv, b);
+        let (id, entry) = match how {
+            MethodRefHow::Method => (op::intr::METHOD_REF, None),
+            MethodRefHow::Virtual(k) => (op::intr::VIRTUAL_REF, Some(k)),
+            MethodRefHow::Class => (op::intr::CLASS_METHOD_REF, None),
+            MethodRefHow::ClassVirtual(k) => (op::intr::CLASS_VIRTUAL_REF, Some(k)),
+        };
+        match entry {
+            // A virtual method's entry in the table
+            Some(k) => self.load_int(f, i64::from(k)),
+            None => self.load_func(f, self.ml.func_index[routine.0 as usize], 0),
+        }
+        self.intrinsic(id, &[dst, recv, f]);
+    }
+
+    /// A call of a procedural value (`docs/spec/objects.md` 9.4, 14.9): `CallIndirect` with the
+    /// arguments from the frame, or `CallClosure` with the frame before them. The value is
+    /// evaluated first; a counted one that the call could let go of (anything but a local
+    /// variable nothing else writes) is held in a temporary of its own while the call runs.
+    fn call_value(&mut self, callee: &Expr, args: &[CallArg], ret: Option<Ty>, dst: Option<Reg>) {
+        let closure = matches!(callee.ty, Ty::Callable(_));
+        let (modes, param_tys): (Vec<Option<ParamMode>>, Vec<Ty>) = self
+            .program
+            .types
+            .proc_sig(callee.ty)
+            .map(|(_, ps, _)| ps.iter().map(|p| (Some(p.mode), p.ty)).unzip())
+            .unwrap_or_default();
+        let value = match &callee.kind {
+            ExprKind::Var(v)
+                if closure
+                    && callee.value.is_none()
+                    && !self.is_ref_param(*v)
+                    && !args.writes(*v)
+                    && !self.r.vars[v.0 as usize].captured =>
+            {
+                self.reg_of(*v)
+            }
+            _ => {
+                let t = self.alloc(callee.ty);
+                self.expr(callee, t);
+                t
+            }
+        };
+        let laid = self.eval_args(args, &modes, &param_tys, false, false, ret, false, closure);
+        let mut slots = laid.slots;
+        let frame = *slots.first().expect("a call has a frame");
+        if closure {
+            slots.remove(0);
+        }
+        slots.truncate(args.len());
+        let opc = if closure {
+            op::CALL_CLOSURE
+        } else {
+            op::CALL_INDIRECT
+        };
+        let callee_op = Operand::Reg(value);
+        match (dst, ret) {
+            (Some(d), Some(rt)) if self.managed(rt) => {
+                self.call(opc, Some(frame), callee_op, slots, frame);
+                self.move_value(rt, d, frame);
+            }
+            _ => self.call(opc, dst, callee_op, slots, frame),
+        }
+        if laid.lent {
+            self.plain(op::UNLEND, Vec::new());
+        }
+    }
+
+    /// `FreeAndNil(X)` (`docs/spec/objects.md` 3.2): `X` is copied to a temporary and set to
+    /// `nil`, then the copy is freed, so the destructor reads `nil` in `X`. A field or element
+    /// is not lent: its path is evaluated once, read and written before `Free`.
+    fn free_and_nil(&mut self, target: &Place) {
+        let ty = self.place_type(target);
+        let t = self.alloc_borrow(ty);
+        let z = self.alloc_borrow(ty);
+        self.op1(op::LOAD_ZERO, z);
+        match target {
+            Place::Var(..) | Place::Global(_) => {
+                let r = self.root_borrowed(target);
+                self.op2(op::MOVE, t, r);
+                self.store_place(target, z);
+            }
+            Place::ObjField { slot, .. } => {
+                let part = self.eval_part(target);
+                let h = part.handle.expect("an instance's field has its handle");
+                self.obj_get(t, h, *slot, ty, false);
+                self.obj_set(h, *slot, z, ty, false);
+            }
+            _ => {
+                let part = self.eval_part(target);
+                self.part_check(&part);
+                self.part_load(&part, t);
+                self.part_store(&part, z);
+            }
+        }
+        self.intrinsic(op::intr::FREE, &[t]);
+    }
+
+    /// `Lend` of a place whose registers `eval_lending` filled.
+    fn lend(&mut self, lending: &Lending) {
+        let mut operands = vec![
+            Operand::Reg(lending.value),
+            Operand::Reg(lending.root),
+            Operand::Imm(lending.path.len() as i64),
+        ];
+        operands.extend(lending.path.iter().map(|p| Operand::Reg(*p)));
+        self.plain(op::LEND, operands);
+    }
+
+    /// The registers lending a field or element to a call (`Lend`): the value taken out and the
+    /// path after it, and the root (a reference slot, or an instance's handle whose slot number
+    /// starts the path; `docs/spec/objects.md` 14.3), all before the call's arguments.
+    fn alloc_lending(&mut self, place: &Place) -> Lending {
+        let value = self.alloc_kind(Some(self.place_type(place)), TempKind::Lent);
+        let root_place = part_root(place);
+        let mut depth = 0;
+        let mut p = place;
+        while let Place::Field { base, .. } | Place::Elem { base, .. } = p {
+            depth += 1;
+            p = base;
+        }
+        let obj = matches!(root_place, Place::ObjField { .. });
+        let path = (0..depth + usize::from(obj))
+            .map(|_| self.alloc_borrow(Ty::Int64))
+            .collect();
+        let root = match root_place {
+            Place::Var(v, _) if self.is_ref_param(*v) => self.reg_of(*v),
+            Place::ObjField { base, .. } => self.alloc_borrow(base.ty),
+            _ => self.alloc_kind(None, TempKind::Ref),
+        };
+        Lending {
+            value,
+            root,
+            path,
+            steps: Vec::new(),
+        }
+    }
+
+    /// Evaluates the indices of a lent place in its turn among the arguments: they are copied to
+    /// the lending path, which `Unlend` follows again after the call, and the static array
+    /// indices are checked.
+    fn eval_lending(&mut self, place: &Place, lending: &mut Lending) {
+        let part = self.eval_part(place);
+        self.part_check(&part);
+        // An instance's field: the slot number comes first on the path
+        let from = match (part.root, part.handle) {
+            (Place::ObjField { slot, .. }, Some(h)) => {
+                self.load_int(lending.path[0], *slot as i64);
+                self.op2(op::MOVE, lending.root, h);
+                1
+            }
+            _ => 0,
+        };
+        for (step, &p) in part.steps.iter().zip(&lending.path[from..]) {
+            let slot = match &step.slot {
+                SlotRef::Field(i) => {
+                    self.load_int(p, *i as i64);
+                    SlotRef::Field(*i)
+                }
+                SlotRef::Elem { reg, .. } => {
+                    self.op2(op::MOVE, p, *reg);
+                    SlotRef::Elem {
+                        reg: p,
+                        check: None,
+                    }
+                }
+                SlotRef::Dyn(reg) => {
+                    self.op2(op::MOVE, p, *reg);
+                    SlotRef::Dyn(p)
+                }
+            };
+            lending.steps.push(PartStep { slot, ty: step.ty });
+        }
+        match part.root {
+            Place::Var(v, _) if self.is_ref_param(*v) => {}
+            Place::Var(v, _) => {
+                let r = self.reg_of(*v);
+                self.op2(op::MAKE_REF, lending.root, r);
+            }
+            Place::Global(g) => {
+                self.op_table(op::MAKE_GLOBAL_REF, lending.root, Operand::Global(g.0))
+            }
+            Place::ObjField { .. } => {}
+            _ => unreachable!("the root of a place is a variable, a global or an instance's field"),
+        }
+    }
+
+    /// Opens the containers of a lent place for writing (`Lend` takes the value out of a unique
+    /// record or static array). When a record or static array comes before the innermost
+    /// dynamic array, that array's index is checked here, so `Lend` meets a default container
+    /// only as an empty dynamic array.
+    fn open_lending(&mut self, place: &Place, lending: &Lending) {
+        let root = part_root(place);
+        // An instance is shared: only the records and static arrays inside its field are opened
+        if lending.steps.is_empty() {
+            return;
+        }
+        let part = Part {
+            root,
+            handle: matches!(root, Place::ObjField { .. }).then_some(lending.root),
+            steps: lending
+                .steps
+                .iter()
+                .map(|s| PartStep {
+                    slot: s.slot.copy_unchecked(),
+                    ty: s.ty,
+                })
+                .collect(),
+        };
+        // The containers from the root; the last one holds the lent slot
+        let containers: Vec<Ty> = std::iter::once(self.place_type(root))
+            .chain(part.steps.iter().map(|s| s.ty))
+            .take(part.steps.len())
+            .collect();
+        let last_dyn = containers.iter().rposition(|t| t.is_dyn_indexed());
+        let check = last_dyn.is_some_and(|k| containers[..k].iter().any(|t| !t.is_dyn_indexed()));
+        // An element of a dynamic array reached through dynamic arrays only needs nothing here
+        if !check && last_dyn == Some(containers.len() - 1) {
+            return;
+        }
+        let opened = self.open_containers(&part);
+        if check && let Some((k, block)) = opened.dyn_root {
+            let t = self.alloc_borrow(part.steps[k].ty);
+            self.get_slot(t, block, &part.steps[k].slot, part.steps[k].ty, false);
         }
     }
 
     /// Puts the value of an argument into a call argument temporary. A managed value is made there
     /// from 0 (the temporary may hold an integer or a borrowed reference from an earlier call).
     fn value_arg(&mut self, e: &Expr, slot: Reg) {
-        if e.ty.is_managed() {
+        if self.managed(e.ty) {
             self.op1(op::LOAD_ZERO, slot);
             let empty = matches!(&e.value, Some(Const::Str(s)) if s.is_empty());
             if empty {
@@ -3509,11 +5669,44 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         self.expr(e, slot);
     }
 
-    /// Puts a borrowed managed value into a call argument temporary (`const` arguments and the
-    /// register ranges of built-in instructions; `docs/design/lifetime.md` 3.3). A local variable
-    /// that nothing in `siblings` can write during the call is lent as it is; anything else is
-    /// first copied (counted) into an owning temporary, which lends it.
+    /// Puts a borrowed managed value into a call argument temporary (value and `const` arguments
+    /// and the register ranges of built-in instructions; `docs/design/lifetime.md` 3.3). A local
+    /// variable that nothing in `siblings` can write during the call is lent as it is; anything
+    /// else is first copied (counted) into an owning temporary, which lends it.
     fn borrow_arg(&mut self, e: &Expr, slot: Reg, siblings: &(impl WritesVar + ?Sized)) {
+        self.borrow_arg_copy(e, slot, siblings);
+    }
+
+    /// [`FuncLower::borrow_arg`] of a call argument: a copy of a variable (a global, a field, an
+    /// element) holding no object is let go of when the statement ends, unobserved. Held to the
+    /// end of the routine, it would make the next `T := T + X` or element write of that variable
+    /// copy the whole value (`docs/design/lifetime.md` 3.3, 3.4).
+    fn lend_arg(&mut self, e: &Expr, slot: Reg, siblings: &(impl WritesVar + ?Sized)) {
+        let read = e.value.is_none()
+            && matches!(
+                e.kind,
+                ExprKind::Var(_)
+                    | ExprKind::Global(_)
+                    | ExprKind::Field { .. }
+                    | ExprKind::Elem { .. }
+                    | ExprKind::ObjField { .. }
+            );
+        if let Some(t) = self.borrow_arg_copy(e, slot, siblings)
+            && read
+            && !self.released_early(e.ty)
+            && !self.program.types.holds_object(e.ty)
+        {
+            self.owned.push(t);
+        }
+    }
+
+    /// [`FuncLower::borrow_arg`], returning the owning temporary of a copy.
+    fn borrow_arg_copy(
+        &mut self,
+        e: &Expr,
+        slot: Reg,
+        siblings: &(impl WritesVar + ?Sized),
+    ) -> Option<Reg> {
         if e.value.is_none()
             && let ExprKind::Var(v) = &e.kind
             && !self.is_ref_param(*v)
@@ -3523,21 +5716,20 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         {
             let r = self.reg_of(*v);
             self.op2(op::MOVE, slot, r);
-            return;
+            return None;
         }
         let t = self.alloc(e.ty);
         self.expr(e, t);
         self.op2(op::MOVE, slot, t);
+        Some(t)
     }
 
-    /// Creates a reference slot for a `var` / `out` argument in `dst`. `materialize` is the static
-    /// array type of a place passed to a `var` open array parameter: the place's value is made a
-    /// unique block first (the callee cannot know the length of a default value, 0).
+    /// Creates a reference slot for a variable passed to a `var` / `out` argument in `dst`.
+    /// `materialize` is the static array type of a variable passed to a `var` open array
+    /// parameter: its value is made a unique block first (the callee cannot know the length of a
+    /// default value, 0).
     fn make_ref(&mut self, place: &Place, dst: Reg, materialize: Option<Ty>) {
         if let Some(ty) = materialize {
-            if is_part(place) {
-                return self.make_cell(place, dst, Some(ty));
-            }
             self.modify_root(place, |this, t| {
                 this.op_table(op::UNIQUE, t, Operand::Type(ty))
             });
@@ -3553,11 +5745,258 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 }
             }
             Place::Global(g) => self.op_table(op::MAKE_GLOBAL_REF, dst, Operand::Global(g.0)),
-            Place::StrIndex { .. } | Place::ExcMember { .. } => {
-                unreachable!("string elements and exception members cannot be var arguments")
+            Place::StrIndex { .. } | Place::ObjField { .. } => {
+                unreachable!("string elements and object fields cannot be var arguments")
             }
-            Place::Field { .. } | Place::Elem { .. } => self.make_cell(place, dst, None),
+            Place::Field { .. } | Place::Elem { .. } => {
+                unreachable!("fields and elements are lent (`Lend`)")
+            }
         }
+    }
+
+    /// `KeyEquals(A, B)` / `KeyHash(X)` into `dst` (`docs/spec/equality.md` 8.3): the one
+    /// expansion of the key equality and hash, by the kind of the arguments' type, for every
+    /// use (the generated bodies, and the built-in routines).
+    fn key(&mut self, op: KeyOp, args: &[Expr], func: Option<RoutineId>, dst: Reg) {
+        if op == KeyOp::Compare {
+            return self.key_compare(&args[0], &args[1], func, dst);
+        }
+        let kind = self.program.types.key_kind(args[0].ty);
+        match op {
+            KeyOp::Equals => self.key_equals(kind, &args[0], &args[1], func, dst),
+            KeyOp::Hash => self.key_hash(kind, &args[0], func, dst),
+            KeyOp::Compare => unreachable!("`KeyCompare` is expanded above"),
+        }
+    }
+
+    /// `KeyCompare(A, B)` into `dst` (`docs/spec/collections.md` 10.2): negative, 0 or positive
+    /// by the default order of the arguments' type; `EInvalidOperation` once the arguments are
+    /// evaluated for a type without one (an instantiation of a generic body; a call with a type
+    /// written out is E0703).
+    fn key_compare(&mut self, a: &Expr, b: &Expr, func: Option<RoutineId>, dst: Reg) {
+        let kind = self.program.types.order_kind(a.ty);
+        if kind == OrderKind::Call {
+            let f = func.expect("the analysis finds the `<cmp:…>` of a type with `LessThan`");
+            let args = [CallArg::Value(a.clone()), CallArg::Value(b.clone())];
+            self.call_routine(f, &args, Dispatch::Routine, Some(dst));
+            return;
+        }
+        let ra = self.expr_any(a);
+        let rb = self.expr_any(b);
+        match kind {
+            OrderKind::Str => self.op3(op::CMP_STR, dst, ra, rb),
+            OrderKind::Utf8 => self.op3(op::CMP_U8, dst, ra, rb),
+            OrderKind::Int | OrderKind::UInt => {
+                // (B < A) - (A < B)
+                let lt = if kind == OrderKind::UInt {
+                    op::LT_UINT
+                } else {
+                    op::LT_INT
+                };
+                let (gt, less) = (self.alloc(Ty::Boolean), self.alloc(Ty::Boolean));
+                self.op3(lt, gt, rb, ra);
+                self.op3(lt, less, ra, rb);
+                self.op3(op::SUB_INT, dst, gt, less);
+            }
+            OrderKind::Single | OrderKind::Double => {
+                // (B < A) - (A < B) - IsNaN(B) + IsNaN(A), with IsNaN(X) = 1 - (X = X): a NaN
+                // after every number, two NaNs equal, and `-0.0` = `0.0` as `<` has them
+                let (eq, lt) = if kind == OrderKind::Single {
+                    (op::EQ_F32, op::LT_F32)
+                } else {
+                    (op::EQ_F64, op::LT_F64)
+                };
+                let [a_num, b_num, gt, less] = [(); 4].map(|_| self.alloc(Ty::Boolean));
+                self.op3(eq, a_num, ra, ra);
+                self.op3(eq, b_num, rb, rb);
+                self.op3(lt, gt, rb, ra);
+                self.op3(lt, less, ra, rb);
+                let (up, down) = (self.alloc(Ty::Integer), self.alloc(Ty::Integer));
+                self.op3(op::SUB_INT, up, gt, a_num);
+                self.op3(op::SUB_INT, down, less, b_num);
+                self.op3(op::SUB_INT, dst, up, down);
+            }
+            OrderKind::Call | OrderKind::None => self.raise_no_order(a.ty),
+        }
+    }
+
+    /// `CheckDefaultOrder(X)` (`docs/spec/collections.md` 10.2, 12.1): `X` evaluated, then the
+    /// exception of `KeyCompare` when its type has no default order.
+    fn check_default_order(&mut self, value: &Expr) {
+        self.expr_any(value);
+        if self.program.types.order_kind(value.ty) == OrderKind::None {
+            self.raise_no_order(value.ty);
+        }
+    }
+
+    /// `CheckClassType(X, What)` (`docs/spec/collections.md` 9.3, 12.1): nothing once the type
+    /// of `X` is a class; any other type raises `EInvalidOperation` with `What` and its name.
+    fn check_class_type(&mut self, value: &Expr, what: &Expr) {
+        self.expr_any(value);
+        let msg = self.alloc(Ty::String);
+        self.expr(what, msg);
+        if let Ty::Class(_) = value.ty {
+            return;
+        }
+        let t = self.alloc(Ty::String);
+        let name = self.program.types.name(value.ty);
+        self.load_text(t, &format!(", but `{name}` is not a class"));
+        self.op3(op::CONCAT_STR, msg, msg, t);
+        let class = Ty::Class(TypeId(bytecode::exc::INVALID_OPERATION));
+        let x = self.alloc(class);
+        self.new_into(x, class);
+        self.obj_set(x, bytecode::EXC_SLOT_MESSAGE, msg, Ty::String, true);
+        self.terminate(Term::Raise(x));
+    }
+
+    /// Raises the `EInvalidOperation` of a type without a default order (10.2).
+    fn raise_no_order(&mut self, ty: Ty) {
+        // A new `EInvalidOperation` with the message, which `Raise` hands to the VM
+        let msg = self.alloc(Ty::String);
+        let name = self.program.types.name(ty);
+        self.load_text(
+            msg,
+            &format!("`{name}` has no default order; pass a comparer"),
+        );
+        let class = Ty::Class(TypeId(bytecode::exc::INVALID_OPERATION));
+        let x = self.alloc(class);
+        self.new_into(x, class);
+        self.obj_set(x, bytecode::EXC_SLOT_MESSAGE, msg, Ty::String, true);
+        self.terminate(Term::Raise(x));
+    }
+
+    /// The key equality of `a` and `b` (`docs/spec/equality.md` 2, 8.3).
+    fn key_equals(&mut self, kind: KeyKind, a: &Expr, b: &Expr, func: Option<RoutineId>, dst: Reg) {
+        match kind {
+            KeyKind::Call => {
+                let f = func.expect("the analysis finds the key equality of a record or an array");
+                let args = [CallArg::Value(a.clone()), CallArg::Value(b.clone())];
+                self.call_routine(f, &args, Dispatch::Routine, Some(dst));
+            }
+            KeyKind::Object => {
+                // The same handle, else `A.Equals(B)` when neither is `nil` or destroyed (2.6)
+                let ra = self.expr_any(a);
+                let rb = self.expr_any(b);
+                let done = self.new_block();
+                self.op3(op::EQ_INT, dst, ra, rb);
+                self.branch(op::JMP_IF_TRUE, dst, None, done);
+                let alive = self.alloc(Ty::Boolean);
+                for r in [ra, rb] {
+                    self.intrinsic(op::intr::OBJ_ALIVE, &[alive, r]);
+                    self.branch(op::JMP_IF_FALSE, alive, None, done);
+                }
+                let recv = self.alloc_arg(Some(a.ty));
+                let obj = self.alloc_arg(Some(Ty::Class(crate::sema::types::TOBJECT)));
+                self.op2(op::MOVE, recv, ra);
+                self.op2(op::MOVE, obj, rb);
+                let name = self.object_method_name(a.ty, bytecode::VMT_EQUALS, "TObject.Equals");
+                let callee = Operand::Virtual {
+                    index: bytecode::VMT_EQUALS,
+                    name,
+                };
+                self.call(op::CALL_VIRTUAL, Some(dst), callee, vec![recv, obj], recv);
+                self.bind(done);
+            }
+            _ => {
+                let ra = self.expr_any(a);
+                let rb = self.expr_any(b);
+                match kind {
+                    KeyKind::Single => {
+                        let (x, y) = (self.alloc(Ty::Double), self.alloc(Ty::Double));
+                        self.op2(op::F32_TO_F64, x, ra);
+                        self.op2(op::F32_TO_F64, y, rb);
+                        self.op3(op::KEY_EQ_F64, dst, x, y);
+                    }
+                    KeyKind::Double => self.op3(op::KEY_EQ_F64, dst, ra, rb),
+                    KeyKind::Str => self.op3(op::EQ_STR, dst, ra, rb),
+                    KeyKind::Utf8 => self.op3(op::EQ_U8, dst, ra, rb),
+                    KeyKind::BigSet => self.op3(op::SET_EQ, dst, ra, rb),
+                    KeyKind::Callable => self.intrinsic_pair(
+                        op::intr::CALLABLE_KEY_EQ,
+                        dst,
+                        [(ra, a.ty), (rb, b.ty)],
+                    ),
+                    _ => self.op3(op::EQ_INT, dst, ra, rb),
+                }
+            }
+        }
+    }
+
+    /// The key hash of `x` (`docs/spec/equality.md` 2, 8.3).
+    fn key_hash(&mut self, kind: KeyKind, x: &Expr, func: Option<RoutineId>, dst: Reg) {
+        match kind {
+            KeyKind::Call => {
+                let f = func.expect("the analysis finds the key hash of a record or an array");
+                // A record's own `GetHashCode` takes `Self` by reference: a copy of the value
+                // (3.2); a generated function takes it as `const`
+                let by_ref = matches!(
+                    self.program.routines[f.0 as usize]
+                        .vars
+                        .first()
+                        .map(|v| v.kind),
+                    Some(VarKind::RecordSelf)
+                );
+                let arg = if by_ref {
+                    CallArg::Temp(x.clone())
+                } else {
+                    CallArg::Value(x.clone())
+                };
+                self.call_routine(f, &[arg], Dispatch::Routine, Some(dst));
+            }
+            KeyKind::Object => {
+                // `X.GetHashCode` when not `nil` nor destroyed, else the handle's (2.6)
+                let rx = self.expr_any(x);
+                let alive = self.alloc(Ty::Boolean);
+                let (dead, done) = (self.new_block(), self.new_block());
+                self.intrinsic(op::intr::OBJ_ALIVE, &[alive, rx]);
+                self.branch(op::JMP_IF_FALSE, alive, None, dead);
+                let recv = self.alloc_arg(Some(x.ty));
+                self.op2(op::MOVE, recv, rx);
+                let name = self.object_method_name(
+                    x.ty,
+                    bytecode::VMT_GET_HASH_CODE,
+                    "TObject.GetHashCode",
+                );
+                let callee = Operand::Virtual {
+                    index: bytecode::VMT_GET_HASH_CODE,
+                    name,
+                };
+                self.call(op::CALL_VIRTUAL, Some(dst), callee, vec![recv], recv);
+                self.jump(done);
+                self.bind(dead);
+                self.op2(op::HASH_INT, dst, rx);
+                self.bind(done);
+            }
+            _ => {
+                let rx = self.expr_any(x);
+                match kind {
+                    KeyKind::Single => {
+                        let d = self.alloc(Ty::Double);
+                        self.op2(op::F32_TO_F64, d, rx);
+                        self.op2(op::HASH_F64, dst, d);
+                    }
+                    KeyKind::Double => self.op2(op::HASH_F64, dst, rx),
+                    KeyKind::Str => self.op2(op::HASH_STR, dst, rx),
+                    KeyKind::Utf8 => self.intrinsic(op::intr::HASH_UTF8, &[dst, rx]),
+                    KeyKind::BigSet => self.intrinsic(op::intr::HASH_SET_BIG, &[dst, rx]),
+                    KeyKind::Callable => self.intrinsic(op::intr::CALLABLE_HASH, &[dst, rx]),
+                    _ => self.op2(op::HASH_INT, dst, rx),
+                }
+            }
+        }
+    }
+
+    /// The name a virtual call of the entry `index` of `TObject`'s table shows: the method of
+    /// the static class's table, or `builtin` (an interface's value, or a class that does not
+    /// override it).
+    fn object_method_name(&self, ty: Ty, index: u32, builtin: &str) -> String {
+        if let Ty::Class(c) = ty
+            && let Some(crate::sema::types::VmtEntry::Func(r)) =
+                self.program.types.class_vmt(c).get(index as usize)
+        {
+            return self.ml.func_names[r.0 as usize].clone();
+        }
+        builtin.to_string()
     }
 
     /// Evaluates the arguments into consecutive temporaries (an instruction reading a register range).
@@ -3565,7 +6004,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
     fn args_range(&mut self, args: &[Expr]) -> Vec<Reg> {
         let regs: Vec<Reg> = args.iter().map(|a| self.alloc_arg(Some(a.ty))).collect();
         for (a, &r) in args.iter().zip(&regs) {
-            if a.ty.is_managed() {
+            if self.managed(a.ty) {
                 self.borrow_arg(a, r, args);
             } else {
                 self.expr(a, r);
@@ -3578,7 +6017,9 @@ impl<'m, 'a> FuncLower<'m, 'a> {
     fn builtin(&mut self, func: Builtin, args: &[Expr], ty: Ty, dst: Reg) {
         match func {
             Builtin::Length | Builtin::High => {
-                let s = self.expr_any(&args[0]);
+                // Read without counting: a counted copy held to the end of the statement would
+                // make `SetLength(A, Length(A) + 1)` copy the array (`docs/spec/types.md` 9.1)
+                let s = self.borrowed_value(&args[0]);
                 let opc = if args[0].ty.is_dyn_indexed() {
                     op::ARR_LEN
                 } else if args[0].ty == Ty::Utf8String {
@@ -3592,6 +6033,64 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 }
             }
             Builtin::Succ | Builtin::Pred => unreachable!("sema lowers `Succ` / `Pred`"),
+            Builtin::Assigned if matches!(args[0].ty, Ty::Callable(_)) => {
+                // `docs/spec/objects.md` 9.5, 14.9
+                let s = self.expr_any(&args[0]);
+                self.intrinsic(op::intr::CALLABLE_ASSIGNED, &[dst, s]);
+            }
+            Builtin::IsSameInstance => {
+                // `docs/spec/collections.md` 9.3, 12.1: the identity of two instances; the other
+                // types are only evaluated (their owners free nothing)
+                let a = self.expr_any(&args[0]);
+                let b = self.expr_any(&args[1]);
+                if let Ty::Class(_) = args[0].ty {
+                    self.op3(op::EQ_INT, dst, a, b);
+                } else {
+                    self.op1(op::LOAD_ZERO, dst);
+                }
+            }
+            Builtin::IsOverridden => {
+                // `docs/spec/collections.md` 12.1, `docs/spec/bytecode.md` 2.22: `Self` (read
+                // without counting), the entry of the table and the method's function, in
+                // consecutive registers
+                let (ExprKind::RoutineRef(routine), Some(Const::Int(k))) =
+                    (&args[2].kind, &args[1].value)
+                else {
+                    unreachable!("sema makes `IsOverridden` of `Self`, an entry and a method")
+                };
+                let recv = self.alloc_arg(Some(args[0].ty));
+                let entry = self.alloc_arg(Some(Ty::Int64));
+                let f = self.alloc_arg(Some(Ty::Int64));
+                let b = self.borrowed_value(&args[0]);
+                self.op2(op::MOVE, recv, b);
+                self.load_int(entry, i64::try_from(*k).expect("an entry of the table"));
+                self.load_func(f, self.ml.func_index[routine.0 as usize], 0);
+                self.intrinsic(op::intr::IS_OVERRIDDEN, &[dst, recv, entry, f]);
+            }
+            Builtin::ObjectClassName => {
+                // `docs/spec/collections.md` 9.3, 12.1: `ClassName` of an instance
+                // (`docs/spec/objects.md` 14.3); the other types have none
+                if let Ty::Class(_) = args[0].ty {
+                    let b = self.borrowed_value(&args[0]);
+                    self.intrinsic(op::intr::CLASS_NAME, &[dst, b]);
+                } else {
+                    self.expr_any(&args[0]);
+                    self.load_text(dst, "");
+                }
+            }
+            Builtin::IsRefCountedObject => {
+                // `docs/spec/collections.md` 9.2, 12.1: `TObject` and the reference counted
+                // classes look at the instance; a class managed by hand and the other types cannot
+                // hold one (left out by the instantiation, `docs/spec/objects.md` 4.2)
+                let s = self.expr_any(&args[0]);
+                let looks = matches!(args[0].ty, Ty::Class(_))
+                    && self.program.types.slot_kind(args[0].ty) != crate::bytecode::SLOT_PLAIN;
+                if looks {
+                    self.intrinsic(op::intr::IS_REF_OBJ, &[dst, s]);
+                } else {
+                    self.op1(op::LOAD_ZERO, dst);
+                }
+            }
             Builtin::Assigned => {
                 let s = self.expr_any(&args[0]);
                 let z = self.alloc_borrow(Ty::Int64);
@@ -3646,13 +6145,28 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                     _ => {
                         // `X * X` in the computation type (the result's type)
                         let overflow = self.current_overflow;
-                        self.int_arith(BinOp::Mul, ty, overflow, dst, x, x);
+                        let p = self.int_arith(BinOp::Mul, ty, overflow, dst, x, x);
+                        self.settle(dst, p);
                     }
                 }
             }
             Builtin::Sqrt => {
                 self.expr(&args[0], dst);
                 self.op2(op::SQRT_F64, dst, dst);
+            }
+            Builtin::HashCombine => {
+                let h = self.expr_any(&args[0]);
+                let x = self.expr_any(&args[1]);
+                self.op3(op::HASH_MIX, dst, h, x);
+            }
+            Builtin::SameInstance => {
+                let a = self.expr_any(&args[0]);
+                let b = self.expr_any(&args[1]);
+                self.op3(op::EQ_INT, dst, a, b);
+            }
+            Builtin::InstanceHash => {
+                let x = self.expr_any(&args[0]);
+                self.op2(op::HASH_INT, dst, x);
             }
             Builtin::Pi => unreachable!("sema folds `Pi`"),
             Builtin::Trunc | Builtin::Round => {
@@ -3679,16 +6193,16 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             }
             Builtin::FloatToStr => {
                 let x = self.expr_any(&args[0]);
-                let opc = if args[0].ty == Ty::Single {
-                    op::F32_TO_STR
+                let id = if args[0].ty == Ty::Single {
+                    op::intr::F32_TO_STR
                 } else {
-                    op::F64_TO_STR
+                    op::intr::F64_TO_STR
                 };
-                self.op2(opc, dst, x);
+                self.intrinsic(id, &[dst, x]);
             }
             Builtin::StrToFloat => {
                 let x = self.expr_any(&args[0]);
-                self.op2(op::STR_TO_F64, dst, x);
+                self.intrinsic(op::intr::STR_TO_F64, &[dst, x]);
             }
             Builtin::Abs => {
                 let x = &args[0];
@@ -3714,12 +6228,13 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 }
                 self.bind(skip);
             }
-            Builtin::ParamCount => self.op1(op::ARG_COUNT, dst),
-            Builtin::Eof => self.op1(op::IN_EOF, dst),
-            Builtin::Eoln => self.op1(op::IN_EOLN, dst),
+            Builtin::ParamCount => self.intrinsic(op::intr::ARG_COUNT, &[dst]),
+            Builtin::ExceptObject => self.intrinsic(op::intr::EXCEPT_OBJECT, &[dst]),
+            Builtin::Eof => self.intrinsic(op::intr::IN_EOF, &[dst]),
+            Builtin::Eoln => self.intrinsic(op::intr::IN_EOLN, &[dst]),
             Builtin::ParamStr => {
                 let i = self.expr_any(&args[0]);
-                self.op2(op::ARG_GET, dst, i);
+                self.intrinsic(op::intr::ARG_GET, &[dst, i]);
             }
             Builtin::IntToStr
             | Builtin::UIntToStr
@@ -3740,15 +6255,8 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 };
                 self.op2(opc, dst, x);
             }
-            Builtin::Default => {
-                // The default value of every type is 0 (`docs/design/lifetime.md` 3.2)
-                let opc = if self.owns(dst) {
-                    op::RELEASE
-                } else {
-                    op::LOAD_ZERO
-                };
-                self.op1(opc, dst);
-            }
+            // The default value of every type is 0 (`docs/design/lifetime.md` 3.2)
+            Builtin::Default => self.clear_value(ty, dst),
             Builtin::Low | Builtin::SizeOf => unreachable!("sema folds `Low` and `SizeOf`"),
             Builtin::Concat => unreachable!("sema lowers `Concat` to `+`"),
             Builtin::Odd => {
@@ -3763,8 +6271,8 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 self.op2(op::UP_CASE_CHAR, dst, x);
             }
             Builtin::Format => self.format(args, dst),
-            Builtin::TryStrToInt => {
-                unreachable!("sema makes `TryStrToInt` an expression of its own")
+            Builtin::TryStrToInt | Builtin::Supports => {
+                unreachable!("sema makes `TryStrToInt` and `Supports` expressions of their own")
             }
             Builtin::IntToHex => {
                 // The value as the unsigned integer of its type's width (two's complement)
@@ -3785,18 +6293,35 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                     }
                     None => x,
                 };
-                self.op3(op::INT_TO_HEX, dst, v, digits);
+                self.intrinsic_pair(
+                    op::intr::INT_TO_HEX,
+                    dst,
+                    [(v, Ty::Int64), (digits, Ty::Integer)],
+                );
             }
             Builtin::StrToBool | Builtin::TrimLeft | Builtin::TrimRight | Builtin::QuotedStr => {
                 let x = self.expr_any(&args[0]);
-                let opc = match func {
-                    Builtin::StrToBool => op::STR_TO_BOOL,
-                    Builtin::TrimLeft => op::STR_TRIM_LEFT,
-                    Builtin::TrimRight => op::STR_TRIM_RIGHT,
-                    _ => op::QUOTED_STR,
+                let id = match func {
+                    Builtin::StrToBool => op::intr::STR_TO_BOOL,
+                    Builtin::TrimLeft => op::intr::STR_TRIM_LEFT,
+                    Builtin::TrimRight => op::intr::STR_TRIM_RIGHT,
+                    _ => op::intr::QUOTED_STR,
                 };
-                self.op2(opc, dst, x);
+                self.intrinsic(id, &[dst, x]);
             }
+            Builtin::ToString if args[0].ty == Ty::Boolean => {
+                // `BoolToStr(Self, True)` (`docs/spec/objects.md` 10.7, 14.10)
+                let a = self.expr_any(&args[0]);
+                let t = self.alloc_borrow(Ty::Boolean);
+                self.load_int(t, 1);
+                self.intrinsic_pair(
+                    op::intr::BOOL_STR,
+                    dst,
+                    [(a, Ty::Boolean), (t, Ty::Boolean)],
+                );
+            }
+            // The text `Write` gives (`docs/spec/objects.md` 10.7, 14.10)
+            Builtin::ToString => self.string_value(&args[0], dst),
             Builtin::BoolToStr
             | Builtin::SameText
             | Builtin::CompareText
@@ -3804,34 +6329,37 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             | Builtin::StringOfChar => {
                 let a = self.expr_any(&args[0]);
                 let b = self.expr_any(&args[1]);
-                let opc = match func {
-                    Builtin::BoolToStr => op::BOOL_STR,
-                    Builtin::SameText => op::SAME_TEXT,
-                    Builtin::CompareText => op::COMPARE_TEXT,
-                    Builtin::CompareStr => op::CMP_STR,
-                    _ => op::STR_OF_CHAR,
+                let id = match func {
+                    Builtin::BoolToStr => op::intr::BOOL_STR,
+                    Builtin::SameText => op::intr::SAME_TEXT,
+                    Builtin::CompareText => op::intr::COMPARE_TEXT,
+                    Builtin::CompareStr => {
+                        self.op3(op::CMP_STR, dst, a, b);
+                        return;
+                    }
+                    _ => op::intr::STR_OF_CHAR,
                 };
-                self.op3(opc, dst, a, b);
+                self.intrinsic_pair(id, dst, [(a, args[0].ty), (b, args[1].ty)]);
             }
             Builtin::AnsiUpperCase | Builtin::AnsiLowerCase => {
                 let s = self.expr_any(&args[0]);
                 let mapping = self.expr_any(&args[1]);
-                let opc = if func == Builtin::AnsiUpperCase {
-                    op::STR_UPPER
+                let id = if func == Builtin::AnsiUpperCase {
+                    op::intr::STR_UPPER
                 } else {
-                    op::STR_LOWER
+                    op::intr::STR_LOWER
                 };
-                self.op3(opc, dst, s, mapping);
+                self.intrinsic_pair(id, dst, [(s, args[0].ty), (mapping, args[1].ty)]);
             }
             Builtin::StringReplace | Builtin::AnsiSameText | Builtin::AnsiCompareText => {
-                let opc = match func {
-                    Builtin::StringReplace => op::STR_REPLACE,
-                    Builtin::AnsiSameText => op::ANSI_SAME_TEXT,
-                    _ => op::ANSI_COMPARE_TEXT,
+                let id = match func {
+                    Builtin::StringReplace => op::intr::STR_REPLACE,
+                    Builtin::AnsiSameText => op::intr::ANSI_SAME_TEXT,
+                    _ => op::intr::ANSI_COMPARE_TEXT,
                 };
-                let mut operands = vec![Operand::Reg(dst)];
-                operands.extend(self.args_range(args).into_iter().map(Operand::Reg));
-                self.plain(opc, operands);
+                let mut regs = vec![dst];
+                regs.extend(self.args_range(args));
+                self.intrinsic(id, &regs);
             }
             Builtin::GetEnvironmentVariable => {
                 // The host function lets go of the name it read when it writes the value in its place
@@ -3859,7 +6387,7 @@ impl FuncLower<'_, '_> {
         self.borrow_arg(&args[0], fmt, args);
         for (a, &(kind, value)) in args[1..].iter().zip(&pairs) {
             self.load_int(kind, format_kind(a.ty));
-            if a.ty.is_managed() {
+            if self.managed(a.ty) {
                 self.borrow_arg(a, value, args);
             } else {
                 self.expr(a, value);
@@ -3909,6 +6437,31 @@ impl FuncLower<'_, '_> {
         operands.extend(regs[1..].iter().map(|r| Operand::Reg(*r)));
         self.plain(op::ARR_COPY, operands);
         self.op2(op::MOVE_REF, dst, regs[0]);
+    }
+
+    /// A new `TIndexRange` (`docs/spec/objects.md` 12.3, 14.10): the bounds are evaluated in
+    /// order, then written with `HasFirst` / `HasLast` into a default value made unique.
+    fn index_range(&mut self, first: Option<&Expr>, last: Option<&Expr>, ty: Ty, dst: Reg) {
+        let bounds: Vec<(u32, Reg)> = [(0, first), (1, last)]
+            .into_iter()
+            .filter_map(|(slot, b)| {
+                let b = b?;
+                let t = self.alloc(Ty::Integer);
+                self.expr(b, t);
+                Some((slot, t))
+            })
+            .collect();
+        self.clear_value(ty, dst);
+        self.op_table(op::UNIQUE, dst, Operand::Type(ty));
+        let flag = self.alloc(Ty::Boolean);
+        if !bounds.is_empty() {
+            self.load_int(flag, 1);
+        }
+        for (slot, value) in bounds {
+            // `First` / `Last` are slots 0 and 1, `HasFirst` / `HasLast` slots 2 and 3
+            self.set_slot(dst, &SlotRef::Field(slot), value, Ty::Integer, false);
+            self.set_slot(dst, &SlotRef::Field(slot + 2), flag, Ty::Boolean, false);
+        }
     }
 
     /// `X[L..H]` (`docs/spec/types.md` 8.7): the source and the bounds in consecutive registers,
@@ -4008,6 +6561,56 @@ impl FuncLower<'_, '_> {
     }
 }
 
+/// A `Narrow` (its width) not yet emitted for a register: the register's low bits hold the value of
+/// a `{$Q-}` operation in a narrow computation type, and its upper bits are not yet the sign or zero
+/// extension (`docs/spec/semantics.md` 3.2 narrows the result; wrapping makes it the same to narrow
+/// later, as long as only `+`, `-`, `*`, `and`, `or`, `xor`, `not`, unary `-`, the 32-bit shifts and
+/// narrowing conversions read the register before).
+type Pending = Option<i64>;
+
+/// The `Narrow` width of a narrow computation type (`Integer`, `Cardinal`); `None` for 64 bits.
+fn narrow_width(calc: Ty) -> Option<i64> {
+    match calc {
+        Ty::Int64 | Ty::UInt64 => None,
+        _ => Some(calc.width_code().unwrap_or(4) as i64),
+    }
+}
+
+/// The `Narrow` a wrapping operation in `calc` leaves pending: under `{$Q-}` a narrow computation
+/// type wraps modulo 2^width, so the result may stay unnarrowed while only operations that read its
+/// low bits use it. Under `{$Q+}` the operation is checked at once (`NarrowOvf`).
+fn arith_pending(calc: Ty, overflow: bool) -> Pending {
+    if overflow { None } else { narrow_width(calc) }
+}
+
+/// Whether `+`, `-` and `*` in `calc` are the 32-bit operations that wrap and narrow at once
+/// (`AddInt32` ...; `docs/spec/bytecode.md` 2.2): `Integer` under `{$Q-}`.
+fn wraps32(calc: Ty, overflow: bool) -> bool {
+    arith_pending(calc, overflow) == Some(4)
+}
+
+/// The pending `Narrow` an integer operation `op` in `calc` accepts on its operands: the
+/// operations that wrap (and the 32-bit shifts, which read the low 32 bits) under `{$Q-}`.
+/// Division, `mod` and comparisons read the whole value.
+fn int_op_wraps(op: BinOp, calc: Ty, overflow: bool) -> Pending {
+    match op {
+        BinOp::Add
+        | BinOp::Sub
+        | BinOp::Mul
+        | BinOp::And
+        | BinOp::Or
+        | BinOp::Xor
+        | BinOp::Shl
+        | BinOp::Shr => arith_pending(calc, overflow),
+        _ => None,
+    }
+}
+
+/// Whether a `Narrow` of width `w` reads only the low 32 bits or fewer (`docs/spec/bytecode.md` 2.2).
+fn low_bits_width(w: i64) -> bool {
+    matches!(w, 0..=5 | 8)
+}
+
 /// The kind of an element of `Format`'s `array of const` (`docs/spec/bytecode.md` 2.16).
 fn format_kind(ty: Ty) -> i64 {
     match ty {
@@ -4065,16 +6668,129 @@ fn const_as_string(c: &Const, ty: Ty, types: &TypeTable) -> Option<Vec<u16>> {
 }
 
 /// Whether a variable's register holds a reference of its managed value: a managed variable other
-/// than a `const` parameter or the `E` of `on E` (borrowed) or a `var` / `out` parameter (a
-/// reference slot).
-fn owns_value(v: &Var) -> bool {
-    v.ty.is_managed()
+/// than a `const` parameter, a value parameter that is not written or the `E` of `on E`
+/// (borrowed) or a `var` / `out` parameter (a reference slot).
+fn owns_value(v: &Var, types: &TypeTable) -> bool {
+    types.managed(v.ty)
+        && !cell_slot(v)
+        && !borrows_argument(v)
         && !matches!(
             v.kind,
             VarKind::Param(ParamMode::Const | ParamMode::Var | ParamMode::Out)
                 | VarKind::Exception
+                | VarKind::SelfParam
+                | VarKind::RecordSelf
                 | VarKind::Outer { .. }
         )
+}
+
+/// Whether a value parameter borrows its argument like a `const` one: nothing in its routine (or
+/// a nested one) writes it, and no nested routine uses it (`docs/design/lifetime.md` 3.3). The
+/// caller lends every managed value argument; a value parameter that does not borrow counts its
+/// argument when the routine is entered.
+fn borrows_argument(v: &Var) -> bool {
+    v.kind == VarKind::Param(ParamMode::Value) && !v.written && !v.captured
+}
+
+/// Whether a managed argument for a parameter of mode `mode` is lent to the call (a value or
+/// `const` parameter; `docs/design/lifetime.md` 3.3).
+fn lends_argument(mode: Option<ParamMode>) -> bool {
+    matches!(mode, Some(ParamMode::Value | ParamMode::Const))
+}
+
+/// Whether the variable's register holds a reference slot: a `var` / `out` parameter, a
+/// variable of an enclosing routine (`docs/spec/semantics.md` 4.9), or a captured variable,
+/// whose value is in its cell (`docs/spec/objects.md` 14.9).
+fn holds_ref(v: &Var) -> bool {
+    matches!(
+        v.kind,
+        VarKind::Param(ParamMode::Var | ParamMode::Out)
+            | VarKind::RecordSelf
+            | VarKind::Outer { .. }
+    ) || cell_slot(v)
+}
+
+/// Whether a captured variable's register holds a reference slot to its cell: not `Self`, a
+/// `const` parameter or `E` of `on E`, which cannot change and whose cell holds a copy.
+fn cell_slot(v: &Var) -> bool {
+    v.cell
+        && !matches!(
+            v.kind,
+            VarKind::SelfParam | VarKind::Param(ParamMode::Const) | VarKind::Exception
+        )
+}
+
+/// Whether a variable is declared inline (or by `for var`): it gets a new cell each time its
+/// declaration runs (`docs/spec/objects.md` 9.6).
+fn declared_inline(v: &Var) -> bool {
+    v.is_for_var
+        || v.decl
+            .as_ref()
+            .is_some_and(|d| d.kind() == crate::syntax::SyntaxKind::INLINE_VAR_DECL)
+}
+
+/// Whether the routine's function takes a hidden first argument: the static link, or a
+/// closure's own block (`docs/spec/objects.md` 14.9).
+fn hidden_first(r: &Routine) -> bool {
+    r.link || r.closure
+}
+
+/// Whether the register of the cell of `v` owns the cell (it was made in this routine) rather
+/// than borrowing it.
+fn owns_cell(v: &Var) -> bool {
+    !matches!(v.kind, VarKind::Outer { .. })
+}
+
+/// The routine `up` levels out of `r` (through `parent`).
+fn enclosing_of<'p>(program: &'p Program, r: &'p Routine, up: u32) -> Option<&'p Routine> {
+    let mut at = r;
+    for _ in 0..up {
+        at = &program.routines[at.parent?.0 as usize];
+    }
+    Some(at)
+}
+
+/// Whether the variable `v` of `r` has a register holding its cell (`docs/spec/objects.md`
+/// 14.9): it is captured, or `r` is a closure and took it from its block, or `r` reaches it
+/// through the static link and its routine has its cell in a register.
+fn needs_cell(program: &Program, r: &Routine, v: &Var) -> bool {
+    match v.kind {
+        _ if v.cell => true,
+        VarKind::Outer { .. } if r.closure => true,
+        VarKind::Outer { up, var } => enclosing_of(program, r, up)
+            .is_some_and(|o| needs_cell(program, o, &o.vars[var.0 as usize])),
+        _ => false,
+    }
+}
+
+/// The variables of `r` whose cells have registers, in variable order: the registers follow the
+/// named variables.
+fn cell_vars(program: &Program, r: &Routine) -> Vec<VarId> {
+    r.vars
+        .iter()
+        .enumerate()
+        .filter(|(_, v)| needs_cell(program, r, v))
+        .map(|(i, _)| VarId(i as u32))
+        .collect()
+}
+
+/// The register (without the hidden first argument) of the cell of the variable `v` of `r`.
+fn cell_index(program: &Program, r: &Routine, v: VarId) -> Option<u32> {
+    let k = cell_vars(program, r).iter().position(|c| *c == v)?;
+    Some((r.vars.len() + k) as u32)
+}
+
+/// The (uncounted, counted) opcodes reading (`get`) or writing a slot, and the operand naming the
+/// slot (a field number, or the register of an index).
+fn slot_access(slot: &SlotRef, get: bool) -> ((u8, u8), Operand) {
+    match (slot, get) {
+        (SlotRef::Field(i), true) => ((op::FIELD_GET, op::FIELD_GET_REF), Operand::Imm(*i as i64)),
+        (SlotRef::Field(i), false) => ((op::FIELD_SET, op::FIELD_SET_REF), Operand::Imm(*i as i64)),
+        (SlotRef::Elem { reg, .. }, true) => ((op::VAL_GET, op::VAL_GET_REF), Operand::Reg(*reg)),
+        (SlotRef::Elem { reg, .. }, false) => ((op::VAL_SET, op::VAL_SET_REF), Operand::Reg(*reg)),
+        (SlotRef::Dyn(reg), true) => ((op::DYN_GET, op::DYN_GET_REF), Operand::Reg(*reg)),
+        (SlotRef::Dyn(reg), false) => ((op::DYN_SET, op::DYN_SET_REF), Operand::Reg(*reg)),
+    }
 }
 
 /// Where `Exit` / `Break` / `Continue` goes (`Break` / `Continue` name the loop by its index in
@@ -4125,7 +6841,7 @@ impl WritesVar for [&Expr] {
 
 fn call_arg_writes_var(a: &CallArg, v: VarId) -> bool {
     match a {
-        CallArg::Value(e) => expr_writes_var(e, v),
+        CallArg::Value(e) | CallArg::Temp(e) => expr_writes_var(e, v),
         CallArg::Ref { place, .. } => place_root(place) == Some(v),
     }
 }
@@ -4138,6 +6854,17 @@ fn place_root(p: &Place) -> Option<VarId> {
     }
 }
 
+/// The registers and blocks of a `try..finally` being lowered ([`Lowerer::finally_begin`]).
+struct FinallyScope {
+    state: Reg,
+    exc: Reg,
+    /// The `finally` block, and the block after the statement.
+    fin: BlockId,
+    after: BlockId,
+    /// The position of the body's first block.
+    body_first: BlockId,
+}
+
 /// Whether evaluating the expression can write the local variable `v` (it is passed to a `var` /
 /// `out` parameter somewhere inside).
 fn expr_writes_var(e: &Expr, v: VarId) -> bool {
@@ -4148,22 +6875,51 @@ fn expr_writes_var(e: &Expr, v: VarId) -> bool {
         }
         ExprKind::Unary { operand, .. }
         | ExprKind::Convert { operand, .. }
-        | ExprKind::NewExc { msg: operand, .. }
-        | ExprKind::ExcMember { base: operand, .. } => expr_writes_var(operand, v),
+        | ExprKind::ExcMember { base: operand, .. }
+        | ExprKind::ObjField { base: operand, .. }
+        | ExprKind::ClassName { base: operand }
+        | ExprKind::ClassCheck { operand, .. }
+        | ExprKind::Weak(operand) => expr_writes_var(operand, v),
+        ExprKind::ClassInfo { args, .. } => args.iter().any(|a| expr_writes_var(a, v)),
+        ExprKind::ClassRefValue(_)
+        | ExprKind::RoutineRef(_)
+        | ExprKind::Anon { .. }
+        | ExprKind::NestedRef { .. } => false,
+        ExprKind::MethodRef { base, .. } | ExprKind::ToClosure(base) => expr_writes_var(base, v),
+        ExprKind::CallValue { callee, args } => {
+            expr_writes_var(callee, v) || args.iter().any(|a| call_arg_writes_var(a, v))
+        }
+        ExprKind::New { args, of, .. } => {
+            of.as_deref().is_some_and(|c| expr_writes_var(c, v))
+                || args.iter().any(|a| call_arg_writes_var(a, v))
+        }
+        ExprKind::InheritedBuiltin { msg, .. } => {
+            msg.as_deref().is_some_and(|m| expr_writes_var(m, v))
+        }
         ExprKind::StrIndex { base, index } | ExprKind::Elem { base, index } => {
             expr_writes_var(base, v) || expr_writes_var(index, v)
         }
         ExprKind::Field { base, .. } => expr_writes_var(base, v),
+        ExprKind::RecordNew { call } => expr_writes_var(call, v),
         ExprKind::Slice { base, low, high } => {
             expr_writes_var(base, v) || low.iter().chain(high.iter()).any(|b| expr_writes_var(b, v))
         }
+        ExprKind::IndexRange { first, last } => first
+            .iter()
+            .chain(last.iter())
+            .any(|b| expr_writes_var(b, v)),
         ExprKind::Call { args, .. } => args.iter().any(|a| call_arg_writes_var(a, v)),
-        ExprKind::Builtin { args, .. } | ExprKind::ArrayCtor(args) => {
+        ExprKind::Builtin { args, .. } | ExprKind::Key { args, .. } | ExprKind::ArrayCtor(args) => {
             args.iter().any(|a| expr_writes_var(a, v))
         }
         ExprKind::SetCtor(elems) => set_ctor_exprs(elems).any(|a| expr_writes_var(a, v)),
         ExprKind::TryStrToInt { s, target } => {
             expr_writes_var(s, v) || place_root(target) == Some(v)
+        }
+        ExprKind::Supports {
+            operand, target, ..
+        } => {
+            expr_writes_var(operand, v) || target.as_ref().is_some_and(|t| place_root(t) == Some(v))
         }
     }
 }
@@ -4173,6 +6929,14 @@ fn set_ctor_exprs(elems: &[SetCtorElem]) -> impl Iterator<Item = &Expr> {
     elems
         .iter()
         .flat_map(|e| std::iter::once(&e.low).chain(e.high.as_ref()))
+}
+
+/// The instance a constructor call creates (`docs/spec/objects.md` 3.1): its static class, the
+/// register it is put in, and the class reference it is created from (`NewOf`), if any.
+struct NewIn {
+    class: Ty,
+    inst: Reg,
+    of: Option<Reg>,
 }
 
 /// Whether the expression reads the variable `reg`.
@@ -4185,12 +6949,40 @@ fn expr_reads_reg(e: &Expr, reg: Reg) -> bool {
         }
         ExprKind::Unary { operand, .. }
         | ExprKind::Convert { operand, .. }
-        | ExprKind::NewExc { msg: operand, .. }
-        | ExprKind::ExcMember { base: operand, .. } => expr_reads_reg(operand, reg),
+        | ExprKind::ExcMember { base: operand, .. }
+        | ExprKind::ObjField { base: operand, .. }
+        | ExprKind::ClassName { base: operand }
+        | ExprKind::ClassCheck { operand, .. }
+        | ExprKind::Weak(operand) => expr_reads_reg(operand, reg),
+        ExprKind::ClassInfo { args, .. } => args.iter().any(|a| expr_reads_reg(a, reg)),
+        ExprKind::ClassRefValue(_) | ExprKind::RoutineRef(_) => false,
+        ExprKind::Anon { captures, .. } => captures.iter().any(|c| Reg::Var(c.0) == reg),
+        ExprKind::NestedRef { block, .. } => block.is_some_and(|b| Reg::Var(b.0) == reg),
+        ExprKind::MethodRef { base, .. } | ExprKind::ToClosure(base) => expr_reads_reg(base, reg),
+        ExprKind::CallValue { callee, args } => {
+            expr_reads_reg(callee, reg)
+                || args.iter().any(|a| match a {
+                    CallArg::Value(v) | CallArg::Temp(v) => expr_reads_reg(v, reg),
+                    CallArg::Ref { place, .. } => place_reads_reg(place, reg),
+                })
+        }
+        ExprKind::New { args, of, .. } => {
+            of.as_deref().is_some_and(|c| expr_reads_reg(c, reg))
+                || args.iter().any(|a| match a {
+                    CallArg::Value(v) | CallArg::Temp(v) => expr_reads_reg(v, reg),
+                    CallArg::Ref { place, .. } => place_reads_reg(place, reg),
+                })
+        }
+        ExprKind::InheritedBuiltin { base, msg, .. } => {
+            msg.is_some()
+                && (expr_reads_reg(base, reg)
+                    || msg.as_deref().is_some_and(|m| expr_reads_reg(m, reg)))
+        }
         ExprKind::StrIndex { base, index } | ExprKind::Elem { base, index } => {
             expr_reads_reg(base, reg) || expr_reads_reg(index, reg)
         }
         ExprKind::Field { base, .. } => expr_reads_reg(base, reg),
+        ExprKind::RecordNew { call } => expr_reads_reg(call, reg),
         ExprKind::Slice { base, low, high } => {
             expr_reads_reg(base, reg)
                 || low
@@ -4198,16 +6990,25 @@ fn expr_reads_reg(e: &Expr, reg: Reg) -> bool {
                     .chain(high.iter())
                     .any(|b| expr_reads_reg(b, reg))
         }
+        ExprKind::IndexRange { first, last } => first
+            .iter()
+            .chain(last.iter())
+            .any(|b| expr_reads_reg(b, reg)),
         ExprKind::Call { args, .. } => args.iter().any(|a| match a {
-            CallArg::Value(v) => expr_reads_reg(v, reg),
+            CallArg::Value(v) | CallArg::Temp(v) => expr_reads_reg(v, reg),
             CallArg::Ref { place, .. } => place_reads_reg(place, reg),
         }),
-        ExprKind::Builtin { args, .. } | ExprKind::ArrayCtor(args) => {
+        ExprKind::Builtin { args, .. } | ExprKind::Key { args, .. } | ExprKind::ArrayCtor(args) => {
             args.iter().any(|a| expr_reads_reg(a, reg))
         }
         ExprKind::SetCtor(elems) => set_ctor_exprs(elems).any(|a| expr_reads_reg(a, reg)),
         ExprKind::TryStrToInt { s, target } => {
             expr_reads_reg(s, reg) || place_reads_reg(target, reg)
+        }
+        ExprKind::Supports {
+            operand, target, ..
+        } => {
+            expr_reads_reg(operand, reg) || target.as_ref().is_some_and(|t| place_reads_reg(t, reg))
         }
     }
 }
@@ -4220,7 +7021,7 @@ fn place_reads_reg(p: &Place, reg: Reg) -> bool {
             place_reads_reg(base, reg) || expr_reads_reg(index, reg)
         }
         Place::Field { base, .. } => place_reads_reg(base, reg),
-        Place::ExcMember { base, .. } => expr_reads_reg(base, reg),
+        Place::ObjField { base, .. } => expr_reads_reg(base, reg),
     }
 }
 
@@ -4228,7 +7029,7 @@ fn place_reads_reg(p: &Place, reg: Reg) -> bool {
 /// any variable.
 fn expr_has_call(e: &Expr) -> bool {
     match &e.kind {
-        ExprKind::Call { .. } => true,
+        ExprKind::Call { .. } | ExprKind::Key { .. } => true,
         ExprKind::Builtin { func, args } => {
             *func == Builtin::GetEnvironmentVariable || args.iter().any(expr_has_call)
         }
@@ -4238,18 +7039,201 @@ fn expr_has_call(e: &Expr) -> bool {
         }
         ExprKind::Unary { operand, .. }
         | ExprKind::Convert { operand, .. }
-        | ExprKind::NewExc { msg: operand, .. }
-        | ExprKind::ExcMember { base: operand, .. } => expr_has_call(operand),
+        | ExprKind::ExcMember { base: operand, .. }
+        | ExprKind::ObjField { base: operand, .. }
+        | ExprKind::ClassName { base: operand }
+        | ExprKind::ClassCheck { operand, .. }
+        | ExprKind::Weak(operand) => expr_has_call(operand),
+        ExprKind::ClassInfo { args, .. } => args.iter().any(expr_has_call),
+        ExprKind::ClassRefValue(_)
+        | ExprKind::RoutineRef(_)
+        | ExprKind::Anon { .. }
+        | ExprKind::NestedRef { .. } => false,
+        ExprKind::MethodRef { base, .. } | ExprKind::ToClosure(base) => expr_has_call(base),
+        ExprKind::CallValue { .. } => true,
+        // The constructor and `AfterConstruction` are code (`docs/spec/objects.md` 3.1)
+        // (the argument of a built-in constructor is the message of `Exception.Create`)
+        ExprKind::New {
+            ctor,
+            args,
+            after,
+            of,
+            ..
+        } => {
+            ctor.is_some()
+                || *after
+                || of.is_some()
+                || args.iter().any(|a| match a {
+                    CallArg::Value(m) => expr_has_call(m),
+                    _ => true,
+                })
+        }
+        ExprKind::InheritedBuiltin { msg, .. } => msg.as_deref().is_some_and(expr_has_call),
         ExprKind::StrIndex { base, index } | ExprKind::Elem { base, index } => {
             expr_has_call(base) || expr_has_call(index)
         }
         ExprKind::Field { base, .. } => expr_has_call(base),
+        ExprKind::RecordNew { .. } => true,
         ExprKind::Slice { base, low, high } => {
             expr_has_call(base) || low.iter().chain(high.iter()).any(|b| expr_has_call(b))
+        }
+        ExprKind::IndexRange { first, last } => {
+            first.iter().chain(last.iter()).any(|b| expr_has_call(b))
         }
         ExprKind::ArrayCtor(args) => args.iter().any(expr_has_call),
         ExprKind::SetCtor(elems) => set_ctor_exprs(elems).any(expr_has_call),
         ExprKind::TryStrToInt { s, target } => expr_has_call(s) || place_has_call(target),
+        ExprKind::Supports {
+            operand, target, ..
+        } => expr_has_call(operand) || target.as_ref().is_some_and(place_has_call),
+    }
+}
+
+/// How `T := T + X1 + … + Xn` appends to its string place `T` (`Lowerer::append`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AppendKind {
+    /// A `string` (`AppendStr`).
+    Str,
+    /// A `UTF8String` with `UTF8String` operands (`AppendU8`).
+    U8,
+    /// A `UTF8String` with operands joined as a `string` (the `+` with a `string` or `Char`;
+    /// `docs/spec/types.md` 8.5), converted to `UTF8String` once (`AppendU8`).
+    U8ViaStr,
+}
+
+/// The steps `+ X1 … + Xn` when `value` is `target + X1 + … + Xn` for a string or `UTF8String`
+/// place `target` of type `ty` (the appends of `docs/spec/types.md` 9.1): the first operand reads
+/// the place itself ([`expr_is_place`]) and every step is a concatenation.
+fn append_steps<'e>(
+    target: &Place,
+    ty: Ty,
+    value: &'e Expr,
+) -> Option<(&'e [BinStep], AppendKind)> {
+    if value.value.is_some() {
+        return None;
+    }
+    let (sum, kind) = match (&value.kind, ty) {
+        (
+            ExprKind::Convert {
+                operand,
+                kind: Conversion::StrToU8,
+            },
+            Ty::Utf8String,
+        ) => (&**operand, AppendKind::U8ViaStr),
+        (_, Ty::String) => (value, AppendKind::Str),
+        (_, Ty::Utf8String) => (value, AppendKind::U8),
+        _ => return None,
+    };
+    let ExprKind::Binary { first, steps } = &sum.kind else {
+        return None;
+    };
+    let calc = match kind {
+        AppendKind::U8 => Calc::U8,
+        AppendKind::Str | AppendKind::U8ViaStr => Calc::Str,
+    };
+    if steps.iter().any(|s| s.op != BinOp::Add || s.calc != calc) {
+        return None;
+    }
+    let first = match (kind, &first.kind) {
+        (
+            AppendKind::U8ViaStr,
+            ExprKind::Convert {
+                operand,
+                kind: Conversion::U8ToStr,
+            },
+        ) => &**operand,
+        (AppendKind::U8ViaStr, _) => return None,
+        _ => &**first,
+    };
+    (!steps.is_empty() && expr_is_place(first, target)).then_some((steps, kind))
+}
+
+/// Whether reading `e` reads the place `p` itself: the same variable, global, field or element,
+/// with the same index expressions, which run no code (so evaluating them once for the place gives
+/// what evaluating them again would; [`same_pure_expr`]).
+fn expr_is_place(e: &Expr, p: &Place) -> bool {
+    if e.value.is_some() {
+        return false;
+    }
+    match (&e.kind, p) {
+        (ExprKind::Var(a), Place::Var(b, _)) => a == b,
+        (ExprKind::Global(a), Place::Global(b)) => a == b,
+        (
+            ExprKind::Field { base, index, .. },
+            Place::Field {
+                base: pb,
+                index: pi,
+                ..
+            },
+        ) => index == pi && expr_is_place(base, pb),
+        (
+            ExprKind::Elem { base, index },
+            Place::Elem {
+                base: pb,
+                index: pi,
+                ..
+            },
+        ) => same_pure_expr(index, pi) && expr_is_place(base, pb),
+        _ => false,
+    }
+}
+
+/// Whether two expressions are written the same and run no code (constants, variables, globals,
+/// fields, elements, operators and conversions of those): evaluated one after the other with
+/// nothing in between, they give the same value.
+fn same_pure_expr(a: &Expr, b: &Expr) -> bool {
+    if a.ty != b.ty {
+        return false;
+    }
+    match (&a.value, &b.value) {
+        (Some(x), Some(y)) => return x == y,
+        (None, None) => {}
+        _ => return false,
+    }
+    match (&a.kind, &b.kind) {
+        (ExprKind::Var(x), ExprKind::Var(y)) => x == y,
+        (ExprKind::Global(x), ExprKind::Global(y)) => x == y,
+        (
+            ExprKind::Field {
+                base: x, index: i, ..
+            },
+            ExprKind::Field {
+                base: y, index: j, ..
+            },
+        ) => i == j && same_pure_expr(x, y),
+        (ExprKind::Elem { base: x, index: i }, ExprKind::Elem { base: y, index: j }) => {
+            same_pure_expr(x, y) && same_pure_expr(i, j)
+        }
+        (
+            ExprKind::Binary {
+                first: f1,
+                steps: s1,
+            },
+            ExprKind::Binary {
+                first: f2,
+                steps: s2,
+            },
+        ) => {
+            same_pure_expr(f1, f2)
+                && s1.len() == s2.len()
+                && s1.iter().zip(s2).all(|(x, y)| {
+                    x.op == y.op
+                        && x.calc == y.calc
+                        && x.ty == y.ty
+                        && same_pure_expr(&x.rhs, &y.rhs)
+                })
+        }
+        (
+            ExprKind::Convert {
+                operand: x,
+                kind: k,
+            },
+            ExprKind::Convert {
+                operand: y,
+                kind: l,
+            },
+        ) => k == l && same_pure_expr(x, y),
+        _ => false,
     }
 }
 
@@ -4261,16 +7245,7 @@ fn place_has_call(p: &Place) -> bool {
             place_has_call(base) || expr_has_call(index)
         }
         Place::Field { base, .. } => place_has_call(base),
-        Place::ExcMember { base, .. } => expr_has_call(base),
-    }
-}
-
-/// The slot of an exception object a member reads (`docs/spec/exceptions.md` 6.1).
-fn exc_slot(m: ExcMember) -> u32 {
-    match m {
-        ExcMember::Message => bytecode::EXC_SLOT_MESSAGE,
-        ExcMember::InnerException => bytecode::EXC_SLOT_INNER,
-        _ => bytecode::EXC_SLOT_EXTRA,
+        Place::ObjField { base, .. } => expr_has_call(base),
     }
 }
 
@@ -4279,10 +7254,27 @@ fn is_part(p: &Place) -> bool {
     matches!(p, Place::Field { .. } | Place::Elem { .. })
 }
 
+/// Whether a `var` / `out` argument is taken out and back (`Lend`): a field or element, or a
+/// field of an instance (`docs/spec/objects.md` 2.2).
+fn is_lent(p: &Place) -> bool {
+    is_part(p) || matches!(p, Place::ObjField { .. })
+}
+
+/// The variable or global a field or element place starts from.
+fn part_root(p: &Place) -> &Place {
+    match p {
+        Place::Field { base, .. } | Place::Elem { base, .. } => part_root(base),
+        _ => p,
+    }
+}
+
 /// A field or element place with its indices evaluated (`FuncLower::eval_part`).
 struct Part<'p> {
-    /// The variable or global the place starts from.
+    /// The variable, global or instance's field the place starts from.
     root: &'p Place,
+    /// For an instance's field as the root, the handle of the instance, read before the
+    /// right-hand side (`docs/spec/objects.md` 2.2).
+    handle: Option<Reg>,
     /// From the root outward.
     steps: Vec<PartStep>,
 }
@@ -4299,6 +7291,42 @@ enum SlotRef {
     Field(u32),
     Elem { reg: Reg, check: Option<IndexCheck> },
     Dyn(Reg),
+}
+
+impl SlotRef {
+    /// The same slot without its range check (a lent place's indices were checked when the
+    /// arguments were evaluated).
+    fn copy_unchecked(&self) -> SlotRef {
+        match self {
+            SlotRef::Field(i) => SlotRef::Field(*i),
+            SlotRef::Elem { reg, .. } => SlotRef::Elem {
+                reg: *reg,
+                check: None,
+            },
+            SlotRef::Dyn(reg) => SlotRef::Dyn(*reg),
+        }
+    }
+}
+
+/// The arguments of a call laid out by `eval_args`: the call-argument temporaries in order
+/// (the frame of a call without arguments, or the lead register, first), the temporaries of the
+/// `CallArg::Temp` arguments, and whether anything was lent (`Unlend` follows the call).
+struct LaidArgs {
+    slots: Vec<Reg>,
+    temps: Vec<Reg>,
+    lent: bool,
+}
+
+/// The registers of a field or element lent to a call (`Lend`; `FuncLower::alloc_lending`).
+struct Lending {
+    /// The value taken out; the path follows it in consecutive registers.
+    value: Reg,
+    path: Vec<Reg>,
+    /// The root: a reference slot (a `var` / `out` parameter's own register), or the handle of
+    /// the instance whose field starts the path.
+    root: Reg,
+    /// The steps over the path registers, once evaluated.
+    steps: Vec<PartStep>,
 }
 
 /// The containers of a place opened for writing (`FuncLower::open_containers`).

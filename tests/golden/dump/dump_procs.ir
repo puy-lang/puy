@@ -1,0 +1,156 @@
+; puy ir 1
+.global
+  g0 C: TCompare
+  g1 N: TNotify
+  g2 R: TRun
+  g3 O: TFoo
+.func f0 DumpProcs.<main> params=0
+  .reg t0: TCompare temp
+  .reg t1: string temp
+  .reg t2: Integer temp
+  .reg t3: TCompare temp
+  .reg t4: Integer temp
+  .reg t5: Integer temp
+  .reg t6: string temp
+  .reg t7: TFoo temp
+  .reg t8: TNotify temp
+  .reg t9: TFoo temp
+  .reg t10: Int64 temp
+  .reg t11: TFoo temp
+  .reg t12: TNotify temp
+  .reg t13: - ref
+  .reg t14: TObject temp
+  .reg t15: TObject temp
+  .reg t16: Int64 temp
+  .reg t17: TRun temp
+  .reg t18: TFoo temp
+  .reg t19: Int64 temp
+  .reg t20: TFoo temp
+  .reg t21: TRun temp
+  .reg t22: - ref
+  .reg t23: TRun temp
+  .reg t24: class of TFoo temp
+  .reg t25: Int64 temp
+  .reg t26: class of TFoo temp
+  .reg t27: TRun temp
+  .reg t28: Int64 temp
+  .reg t29: string temp
+  .reg t30: Boolean temp
+  .reg t31: TRun temp
+  .reg t32: string temp
+  .reg t33: Boolean temp
+  .reg t34: TCompare temp
+  .reg t35: TCompare temp
+  .reg t36: string temp
+  .reg t37: Boolean temp
+  .reg t38: TNotify temp
+  .reg t39: TNotify temp
+  .reg t40: TNotify temp
+  .reg t41: TNotify temp
+  .reg t42: string temp
+bb0:
+  .line 47
+  LoadInt      t0, 5
+  StoreGlobal  t0, g0
+  .line 48
+  LoadGlobal   t3, g0
+  LoadInt      t4, 2
+  LoadInt      t5, 1
+  CallIndirect t2, t3(t4, t5)
+  IntToStr     t1, t2
+  LoadConst    t6, "\n"
+  ConcatStr    t1, t1, t6
+  CallHost     -, h0(t1)
+  .line 49
+  New          t7, DumpProcs.TFoo
+  StoreGlobalRef t7, g3
+  .line 50
+  LoadGlobal   t11, g3
+  Move         t9, t11
+  LoadInt      t10, 6
+  VirtualRef   t8, t9, t10
+  StoreGlobalRef t8, g1
+  .line 51
+  LoadGlobalRef t12, g1
+  LoadGlobal   t16, g3
+  AssignObj    t15, t16
+  Move         t14, t15
+  CallClosure  -, t12(t14)
+  .line 52
+  LoadGlobal   t20, g3
+  Move         t18, t20
+  LoadInt      t19, 2
+  MethodRef    t17, t18, t19
+  StoreGlobalRef t17, g2
+  .line 53
+  LoadGlobalRef t21, g2
+  CallClosure  -, t21()
+  .line 54
+  LoadInt      t26, class DumpProcs.TFoo
+  Move         t24, t26
+  LoadInt      t25, 3
+  ClassMethodRef t23, t24, t25
+  StoreGlobalRef t23, g2
+  .line 55
+  LoadInt      t28, 6
+  RoutineRef   t27, t28
+  StoreGlobalRef t27, g2
+  .line 56
+  LoadGlobalRef t31, g2
+  CallableAssigned t30, t31
+  BoolToStr    t29, t30
+  LoadGlobal   t34, g0
+  LoadInt      t35, 5
+  EqInt        t33, t34, t35
+  BoolToStr    t32, t33
+  ConcatStr    t29, t29, t32
+  LoadGlobalRef t38, g1
+  Release      t39
+  Move         t40, t38
+  Move         t41, t39
+  CallableEqual t37, t40, t41
+  NotBool      t37, t37
+  BoolToStr    t36, t37
+  ConcatStr    t29, t29, t36
+  LoadConst    t42, "\n"
+  ConcatStr    t29, t29, t42
+  CallHost     -, h0(t29)
+  .line 57
+  RetVoid
+.finally t1, t6, t7, t8, t12, t15:obj, t17, t21, t23, t27, t29, t31, t32, t36, t38, t39, t42
+.func f1 DumpProcs.TFoo.Handle params=2
+  .reg v0 Self: TFoo self
+  .reg v1 Sender: TObject param
+bb0:
+  .line 22
+  RetVoid
+.finally
+.func f2 DumpProcs.TFoo.Go params=1
+  .reg v0 Self: TFoo self
+bb0:
+  .line 26
+  RetVoid
+.finally
+.func f3 DumpProcs.TFoo.Hello params=1
+  .reg v0 Self: class of TFoo self
+bb0:
+  .line 30
+  RetVoid
+.finally
+.func f4 DumpProcs.Cmp params=2
+  .reg v0 A: Integer param
+  .reg v1 B: Integer param
+  .reg v2 Result: Integer result
+bb0:
+  .line 34
+  Move         v2, v0
+  SubInt       v2, v2, v1
+  NarrowOvf    v2, v2, 4
+  .line 35
+  Ret          v2
+.finally
+.func f5 DumpProcs.Cmp2 params=0
+bb0:
+  .line 39
+  RetVoid
+.finally

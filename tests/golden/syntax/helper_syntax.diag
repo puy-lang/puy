@@ -1,0 +1,18 @@
+error[E0400]: expected `end`, found `;`
+   --> helper_syntax.pas:26:31
+    |
+ 26 |   TBad = class helper for TFoo;
+    |                               ^
+    |                               - found here
+    |
+    = fix: insert `end`
+
+error[E0404]: expected a type
+   --> helper_syntax.pas:29:6
+    |
+ 29 |   V: class helper for TFoo procedure X; end;
+    |      ^^^^^
+    |
+    = note: declare the type in a `type` section and use its name
+
+error: aborting due to 2 errors

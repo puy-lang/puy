@@ -1,0 +1,172 @@
+error[E0753]: `IFoo` cannot have a helper
+   --> helper_errors.pas:32:35
+    |
+ 32 |   TIntfHelper = record helper for IFoo           // E0753: an interface has no helper
+    |                                   ^^^^
+    |
+    = note: a class has a `class helper`, and the other types that can have a helper have a `record helper`
+
+error[E0753]: `TFoo` cannot have a helper
+   --> helper_errors.pas:35:34
+    |
+ 35 |   TWrongKind = record helper for TFoo            // E0753: a class has a class helper (fix)
+    |                                  ^^^^
+    |
+    = note: a class has a `class helper`, and the other types that can have a helper have a `record helper`
+    = fix: use `class helper`
+
+error[E0753]: `Integer` cannot have a helper
+   --> helper_errors.pas:38:34
+    |
+ 38 |   TWrongKind2 = class helper for Integer         // E0753: other types have a record helper (fix)
+    |                                  ^^^^^^^
+    |
+    = note: a class has a `class helper`, and the other types that can have a helper have a `record helper`
+    = fix: use `record helper`
+
+error[E0753]: `TProcType` cannot have a helper
+   --> helper_errors.pas:41:35
+    |
+ 41 |   TProcHelper = record helper for TProcType      // E0753: no helper for a procedural type
+    |                                   ^^^^^^^^^
+    |
+    = note: a class has a `class helper`, and the other types that can have a helper have a `record helper`
+
+error[E0753]: helpers cannot have fields
+   --> helper_errors.pas:46:5
+    |
+ 46 |     Extra: Integer;                              // E0753: no fields
+    |     ^^^^^^^^^^^^^^^
+    |
+    = note: declare a `class var`, or add the field to the type itself
+
+error[E0753]: `constructor` is not allowed in a helper
+   --> helper_errors.pas:48:5
+    |
+ 48 |     constructor Make;                            // E0753: no constructor
+    |     ^^^^^^^^^^^
+
+error[E0753]: `virtual` is not allowed in a helper
+   --> helper_errors.pas:49:21
+    |
+ 49 |     procedure Virt; virtual;                     // E0753: no virtual methods
+    |                     ^^^^^^^
+
+error[E0753]: helper member `Run` has the same name as a member of `TFoo`
+   --> helper_errors.pas:50:15
+    |
+ 23 |     procedure Run;
+    |               --- declared here
+...
+ 50 |     procedure Run;                               // E0753: the class has `Run`
+    |               ^^^
+    |
+    = note: give the helper member another name
+    = note: or derive a class from it and declare the member in the derived class
+
+error[E0753]: helper member `Hidden` has the same name as a member of `TFoo`
+   --> helper_errors.pas:51:15
+    |
+ 20 |     procedure Hidden;
+    |               ------ declared here
+...
+ 51 |     procedure Hidden;                            // E0753: even a protected one
+    |               ^^^^^^
+    |
+    = note: give the helper member another name
+    = note: or derive a class from it and declare the member in the derived class
+
+error[E0753]: helper member `ClassName` has the same name as a member of `TFoo`
+   --> helper_errors.pas:52:14
+    |
+ 52 |     function ClassName: string;                  // E0753: a member of `TObject`
+    |              ^^^^^^^^^
+    |
+    = note: `ClassName` is a built-in member of `TObject`
+    = note: give the helper member another name
+    = note: or derive a class from it and declare the member in the derived class
+
+error[E0753]: helper `TFooHelper` is for `TFoo`, not `TPoint`
+   --> helper_errors.pas:60:26
+    |
+ 60 |   TOther = record helper(TFooHelper) for TPoint  // E0753: the parent is for `TFoo`
+    |                          ^^^^^^^^^^
+
+error[E0753]: `TPoint` is not a helper
+   --> helper_errors.pas:63:30
+    |
+ 63 |   TNotParent = record helper(TPoint) for TPoint  // E0753: not a helper
+    |                              ^^^^^^
+
+error[E0701]: `Show` is already declared in helper `TPointHelper`
+   --> helper_errors.pas:67:15
+    |
+ 57 |     procedure Show;
+    |               ---- declared here
+...
+ 67 |     procedure Show;                              // E0701: declared in the parent
+    |               ^^^^ declared again here
+
+error[E0753]: `GetEnumerator` in a helper for `TArray<Integer>` is never used by `for..in`
+   --> helper_errors.pas:71:14
+    |
+ 71 |     function GetEnumerator: Integer;             // E0753: never used by `for..in`
+    |              ^^^^^^^^^^^^^
+    |
+    = note: `for..in` iterates over arrays, strings and sets by itself, without `GetEnumerator`
+
+error[E0753]: `default` is not allowed in a helper
+   --> helper_errors.pas:73:51
+    |
+ 73 |     property Items[I: Integer]: Integer read Get; default; // E0753: no default property
+    |                                                   ^^^^^^^
+
+error[E0753]: a helper cannot be used as a type
+   --> helper_errors.pas:77:6
+    |
+ 77 |   H: TFooHelper;                                 // E0753: not a type
+    |      ^^^^^^^^^^
+
+error[E0743]: `FSecret` is private to `TFoo`
+   --> helper_errors.pas:91:11
+    |
+ 18 |     FSecret: Integer;
+    |     ------- declared here
+...
+ 91 |   WriteLn(FSecret);                              // E0743: private to `TFoo`
+    |           ^^^^^^^
+
+error[E0743]: `Hidden` is protected in `TFoo`
+   --> helper_errors.pas:92:3
+    |
+ 20 |     procedure Hidden;
+    |               ------ declared here
+...
+ 92 |   Hidden;                                        // E0743: protected in `TFoo`
+    |   ^^^^^^
+
+error[E0753]: `inherited` is not allowed in a helper
+   --> helper_errors.pas:93:3
+    |
+ 93 |   inherited Go;                                  // E0753: no `inherited`
+    |   ^^^^^^^^^^^^
+
+error[E0707]: cannot assign to `S.Length`
+    --> helper_errors.pas:118:3
+     |
+ 118 |   S.Length := 3;                                 // E0707: a read-only property
+     |   ^^^^^^^^ a read-only property
+
+error[E3200]: type helpers for built-in types are not supported yet (planned for M5)
+    --> helper_errors.pas:119:3
+     |
+ 119 |   N.Foo := 1;                                    // E3200: no helper has `Foo` (planned for M5)
+     |   ^^^^^
+
+error[E3200]: type helpers for built-in types are not supported yet (planned for M5)
+    --> helper_errors.pas:120:11
+     |
+ 120 |   WriteLn(N.ToHexString);                        // E3200
+     |           ^^^^^^^^^^^^^
+
+error: aborting due to 22 errors

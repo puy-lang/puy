@@ -1,0 +1,61 @@
+error[E0753]: `[weak]` is not allowed in a helper
+   --> attr_names.pas:24:16
+    |
+ 24 |     class var [weak] Last: TNode;
+    |                ^^^^
+
+error[E3402]: `Flag` is not an attribute class
+   --> attr_names.pas:35:4
+    |
+ 30 |   Flag: Integer;
+    |   ---- declared here
+...
+ 35 |   [Flag] TB = class
+    |    ^^^^
+    |
+    = note: an attribute class must inherit from `TCustomAttribute`
+
+error[E3402]: `PlainAttribute` is not an attribute class
+   --> attr_names.pas:37:4
+    |
+ 17 |   PlainAttribute = class
+    |   -------------- declared here
+...
+ 37 |   [Plain] TC = class
+    |    ^^^^^
+    |
+    = note: an attribute class must inherit from `TCustomAttribute`
+
+warning[W0025]: unknown attribute `Missing` (unknown-attribute)
+   --> attr_names.pas:39:4
+    |
+ 39 |   [Missing(Undeclared + 1)] TD = class
+    |    ^^^^^^^
+    |
+    = note: an attribute is a class that inherits from `TCustomAttribute`
+    = note: this attribute is ignored
+    = note: disable with `{$WARN unknown-attribute OFF}`
+
+warning[W0025]: unknown attribute `Later` (unknown-attribute)
+   --> attr_names.pas:41:4
+    |
+ 41 |   [Later] TE = class
+    |    ^^^^^
+    |
+    = note: an attribute is a class that inherits from `TCustomAttribute`
+    = note: this attribute is ignored
+    = note: disable with `{$WARN unknown-attribute OFF}`
+
+error[E3200]: `[Test]` is not supported yet (planned for M5)
+   --> attr_names.pas:48:2
+    |
+ 48 | [Test]
+    |  ^^^^
+
+error[E3200]: `[TestCase]` is not supported yet (planned for M5)
+   --> attr_names.pas:58:2
+    |
+ 58 | [TestCase(1, 2)]
+    |  ^^^^^^^^
+
+error: aborting due to 5 errors; 2 warnings emitted

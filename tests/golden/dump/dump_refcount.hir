@@ -1,0 +1,47 @@
+program DumpRefcount
+.type TBox = class(TRefObject) ref
+  .field 0 Content: TObject
+.global g0 Shared: TObject
+.routine f0 Run()
+  .var v0 B: TBox local
+  .var v1 O: TObject local
+  .var v2 P: TObject local
+  assign @23 R+
+    var v0 B
+    create TBox builtin
+  assign @24 R+
+    var v1 O
+    var v0 B: TObject
+  assign @25 R+
+    var v2 P
+    create TBox builtin
+  assign @26 R+
+    var v1 O
+    var v2 P: TObject
+  assign @27 R+
+    objfield TObject Content #0
+      var v0 B: TBox
+    var v2 P: TObject
+  assign @28 R+
+    global g0 Shared
+    objfield TObject Content #0
+      var v0 B: TBox
+  assign @29 R+
+    var v1 O
+    global g0 Shared: TObject
+  writeln @30
+    arg
+      builtin RefCount Integer
+        var v0 B: TBox
+    arg
+      builtin Assigned Boolean
+        var v1 O: TObject
+    arg
+      builtin Assigned Boolean
+        var v2 P: TObject
+.routine <main>
+  expr @34
+    call f0 Run: -
+  assign @35 R+
+    global g0 Shared
+    const TObject nil

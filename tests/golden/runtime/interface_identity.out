@@ -1,0 +1,5 @@
+IA = IB of one instance: TRUE
+IA = TObject: TRUE TRUE
+IA = class: TRUE FALSE
+other instance: FALSE TRUE TRUE
+nil: TRUE FALSE TRUE TRUE

@@ -1,0 +1,75 @@
+error[E0713]: constant expression required
+   --> key_equals_errors.pas:15:7
+    |
+ 15 |   H = KeyHash(1);
+    |       ^^^^^^^^^^
+
+error[E0763]: conflicting types `Integer` and `Double` for the type argument `T` of `KeyEquals`
+   --> key_equals_errors.pas:23:8
+    |
+ 23 |   B := KeyEquals(1, 2.5);
+    |        ^^^^^^^^^^^^^^^^^
+    |
+    = note: write the type arguments, as in `KeyEquals<T>(…)`
+
+error[E0763]: cannot infer the type argument `T` of `KeyEquals`
+   --> key_equals_errors.pas:24:8
+    |
+ 24 |   B := KeyEquals(nil, nil);
+    |        ^^^^^^^^^^^^^^^^^^^
+    |
+    = note: write the type arguments, as in `KeyEquals<T>(…)`
+
+error[E0752]: `KeyEquals` cannot be used as a procedural value
+   --> key_equals_errors.pas:25:8
+    |
+ 25 |   F := KeyEquals;
+    |        ^^^^^^^^^
+
+error[E0752]: `KeyEquals` cannot be used as a procedural value
+   --> key_equals_errors.pas:26:8
+    |
+ 26 |   R := KeyEquals<Integer>;
+    |        ^^^^^^^^^^^^^^^^^^
+    |
+    = note: wrap it in an anonymous method, as in `procedure(…) begin …(…) end`
+
+error[E0761]: `KeyEquals` expects 1 type argument, found 2
+   --> key_equals_errors.pas:27:17
+    |
+ 27 |   B := KeyEquals<Integer, Integer>(1, 2);
+    |                 ^^^^^^^^^^^^^^^^^^
+
+error[E0705]: wrong number of arguments: expected 2, found 1
+   --> key_equals_errors.pas:28:8
+    |
+ 28 |   B := KeyEquals(1);
+    |        ^^^^^^^^^^^^
+
+error[E0705]: wrong number of arguments: expected 2, found 0
+   --> key_equals_errors.pas:29:8
+    |
+ 29 |   B := KeyEquals;
+    |        ^^^^^^^^^
+
+error[E0705]: wrong number of arguments: expected 1, found 2
+   --> key_equals_errors.pas:30:11
+    |
+ 30 |   WriteLn(KeyHash(1, 2));
+    |           ^^^^^^^^^^^^^
+
+error[E0702]: type mismatch: expected `Integer`, found `string` (argument 2, parameter `B`)
+   --> key_equals_errors.pas:31:30
+    |
+ 31 |   B := KeyEquals<Integer>(1, S);
+    |                              ^
+
+error[E0761]: `KeyHash<Integer>` needs parentheses here
+   --> key_equals_errors.pas:32:11
+    |
+ 32 |   WriteLn(KeyHash<Integer> + 1);
+    |           ^^^^^^^^^^^^^^^^
+    |
+    = fix: add `()`
+
+error: aborting due to 11 errors

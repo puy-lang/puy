@@ -1,4 +1,4 @@
-; puyc format 2
+; puyc format 0
 .const
   0: str "\n"
 .type
@@ -22,70 +22,82 @@
   0007  DynSet       r13, r14, r12
   0008  MoveRef      r0, r13
   0009  StoreGlobalRef r0, g0
+  000a  Release      r0
   .line 25
-  000a  LoadInt      r11, 2
-  000b  LoadInt      r12, 3
-  000c  LoadGlobal   r13, g1
-  000d  Move         r14, r13
-  000e  Move         r15, r11
-  000f  SetLen       r14, ty65
-  0010  Move         r13, r14
-  0011  LoadZero     r16
-  0012  JmpIfLeInt   r11, r16, -> 001b
-  0013  DynGet       r17, r13, r16
-  0014  Move         r18, r17
-  0015  Move         r19, r12
-  0016  SetLen       r18, ty64
-  0017  Move         r17, r18
-  0018  DynSet       r13, r16, r17
-  0019  AddIntI      r16, r16, 1
-  001a  Jmp          -> 0012
-  001b  StoreGlobal  r13, g1
+  000b  LoadInt      r11, 2
+  000c  LoadInt      r12, 3
+  000d  LoadGlobal   r13, g1
+  000e  Move         r14, r13
+  000f  Move         r15, r11
+  0010  SetLen       r14, ty65
+  0011  Move         r13, r14
+  0012  LoadZero     r16
+  0013  JmpIfLeInt   r11, r16, -> 001c
+  0014  DynGet       r17, r13, r16
+  0015  Move         r18, r17
+  0016  Move         r19, r12
+  0017  SetLen       r18, ty64
+  0018  Move         r17, r18
+  0019  DynSet       r13, r16, r17
+  001a  AddIntI      r16, r16, 1
+  001b  Jmp          -> 0013
+  001c  StoreGlobal  r13, g1
   .line 26
-  001c  LoadInt      r11, 1
-  001d  LoadInt      r12, 2
-  001e  LoadGlobalRef r1, g0
-  001f  Move         r14, r1
-  0020  Call         r14, f1
-  0021  Move         r13, r14
-  0022  LoadGlobal   r14, g1
-  0023  DynGet       r15, r14, r11
-  0024  DynSet       r15, r12, r13
+  001d  LoadInt      r11, 1
+  001e  LoadInt      r12, 2
+  001f  LoadGlobalRef r1, g0
+  0020  Move         r14, r1
+  0021  Call         r14, f1
+  0022  Move         r13, r14
+  0023  LoadGlobal   r14, g1
+  0024  DynGet       r15, r14, r11
+  0025  DynSet       r15, r12, r13
+  0026  Release      r1
   .line 27
-  0025  LoadGlobal   r14, g1
-  0026  LoadInt      r15, 1
-  0027  DynGetRef    r3, r14, r15
-  0028  Move         r11, r3
-  0029  LoadZero     r12
-  002a  ArrLen       r13, r11
-  002b  ArrCopy      r11, ty64
-  002c  MoveRef      r2, r11
-  002d  StoreGlobalRef r2, g0
+  0027  LoadGlobal   r14, g1
+  0028  LoadInt      r15, 1
+  0029  DynGetRef    r3, r14, r15
+  002a  Move         r11, r3
+  002b  LoadZero     r12
+  002c  ArrLen       r13, r11
+  002d  ArrCopy      r11, ty64
+  002e  MoveRef      r2, r11
+  002f  StoreGlobalRef r2, g0
+  0030  Release      r3
+  0031  Release      r2
   .line 28
-  002e  LoadGlobalRef r4, g0
-  002f  LoadZero     r12
-  0030  EqInt        r11, r4, r12
-  0031  NotBool      r11, r11
-  0032  JmpIfFalse   r11, -> 003f
-  0033  LoadGlobalRef r5, g0
-  0034  Release      r6
-  0035  JmpIfEqInt   r5, r6, -> 003f
+  0032  LoadGlobalRef r4, g0
+  0033  LoadZero     r12
+  0034  EqInt        r11, r4, r12
+  0035  NotBool      r11, r11
+  0036  JmpIfFalse   r11, -> 0047
+  0037  LoadGlobalRef r5, g0
+  0038  Release      r6
+  0039  JmpIfEqInt   r5, r6, -> 0047
+  003a  Release      r6
+  003b  Release      r5
+  003c  Release      r4
   .line 29
-  0036  LoadGlobalRef r8, g0
-  0037  Move         r12, r8
-  0038  Call         r12, f1
-  0039  Move         r11, r12
-  003a  IntToStr     r7, r11
-  003b  LoadConst    r9, k0
-  003c  ConcatStr    r7, r7, r9
-  003d  CallHost     r7, h0
+  003d  LoadGlobalRef r8, g0
+  003e  Move         r12, r8
+  003f  Call         r12, f1
+  0040  Move         r11, r12
+  0041  IntToStr     r7, r11
+  0042  LoadConst    r9, k0
+  0043  ConcatStr    r7, r7, r9
+  0044  CallHost     r7, h0
+  0045  Release      r8
   .line 28
-  003e  Jmp          -> 003f
+  0046  Jmp          -> 004a
+  0047  Release      r6
+  0048  Release      r5
+  0049  Release      r4
   .line 30
-  003f  Release      r10
-  0040  StoreGlobalRef r10, g0
+  004a  Release      r10
+  004b  StoreGlobalRef r10, g0
+  004c  Release      r10
   .line 31
-  0041  RetVoid
+  004d  RetVoid
 .finally r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10
 .func 1 DumpDynArray.Total params=1 regs=7
   .local r0 A
@@ -97,17 +109,12 @@
   0001  LoadZero     r2
   0002  ArrLen       r3, r0
   0003  AddIntI      r3, r3, -1
-  0004  JmpIfLtInt   r3, r2, -> 000e
+  0004  JmpIfLtInt   r3, r2, -> 0009
   .line 17
-  0005  Move         r4, r1
-  0006  Move         r6, r2
-  0007  DynGet       r5, r0, r6
-  0008  AddInt       r4, r4, r5
-  0009  NarrowOvf    r4, r4, 4
-  000a  Move         r1, r4
+  0005  DynGet       r5, r0, r2
+  0006  AddInt       r1, r1, r5
+  0007  NarrowOvf    r1, r1, 4
   .line 16
-  000b  JmpIfEqInt   r2, r3, -> 000e
-  000c  AddIntI      r2, r2, 1
-  000d  Jmp          -> 0005
+  0008  ForLoopUp    r2, r3, -> 0005
   .line 18
-  000e  Ret          r1
+  0009  Ret          r1

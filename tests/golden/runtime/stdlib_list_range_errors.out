@@ -1,0 +1,32 @@
+empty
+ERangeError: list index 0 is out of range 0..-1
+ERangeError: the list is empty
+ERangeError: the list is empty
+ERangeError: list index 0 is out of range 0..-1
+ERangeError: list index 1 is out of range 0..0
+  list: (count 0, capacity 0)
+three items
+ERangeError: list index 3 is out of range 0..2
+ERangeError: list index -1 is out of range 0..2
+ERangeError: list index 5 is out of range 0..2
+ERangeError: list index 4 is out of range 0..3
+ERangeError: list index -1 is out of range 0..3
+ERangeError: list index 5 is out of range 0..3
+ERangeError: list index 3 is out of range 0..2
+ERangeError: list index 7 is out of range 0..2
+ERangeError: list index 3 is out of range 0..2
+ERangeError: list index -2 is out of range 0..2
+  list: 10 20 30 (count 3, capacity 4)
+DeleteRange
+ERangeError: list range 3..7 is out of range 0..4
+ERangeError: list range -1..0 is out of range 0..4
+ERangeError: list count -1 is out of range
+ERangeError: list index 5 is out of range 0..4
+ERangeError: list range 2147483647..2147483648 is out of range 0..4
+  list: 10 20 30 40 50 (count 5, capacity 8)
+  list: 10 20 30 (count 3, capacity 8)
+Count and Capacity
+ERangeError: list count -1 is out of range
+ERangeError: list capacity 2 is less than the count 3
+  list: 10 20 30 (count 3, capacity 8)
+  list: 10 20 30 (count 3, capacity 3)

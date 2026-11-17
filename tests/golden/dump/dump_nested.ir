@@ -38,6 +38,7 @@ bb0:
   AssignRef    t2, v1
   Move         t1, t2
   Call         -, f1(t1)
+  Release      t2
   .line 39
   RetVoid
 .finally v1, t2
@@ -72,6 +73,7 @@ bb0:
   .reg t1: string temp
   .reg t2: Int64 temp
   .reg t3: Integer temp
+  .reg t4: string temp
 bb0:
   .line 26
   OuterRef     v0, 1, 2
@@ -81,8 +83,10 @@ bb0:
   LoadRef      t3, v1
   Call         t2, f3(t3)
   IntToStr     t1, t2
-  ConcatStr    t0, t0, t1
-  StoreRefRef  v0, t0
+  LoadRef      t4, v0
+  AppendStr    t4, t0, t1
+  StoreRef     v0, t4
+  Release      t0
   .line 29
   RetVoid
 .finally t0, t1

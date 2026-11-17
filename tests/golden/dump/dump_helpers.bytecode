@@ -1,0 +1,102 @@
+; puyc format 0
+.const
+  0: str "ab"
+  1: str "\n"
+.type
+  64: class DumpHelpers.TCounter slots=1 parent=ty19 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+.global
+  0: int TTextMore.Calls
+  1: int C
+  2: ref S
+  3: int I
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpHelpers file="dump_helpers.pas" init=- fini=- entry=0
+.func 0 DumpHelpers.<main> params=0 regs=11
+  .line 55
+  0000  LoadInt      r9, 65
+  0001  Call         r9, f2
+  0002  Move         r8, r9
+  0003  StoreGlobal  r8, g1
+  .line 56
+  0004  CallMethod   r8, f1
+  .line 57
+  0005  LoadGlobal   r8, g1
+  0006  CallMethod   r8, f1
+  .line 58
+  0007  LoadConst    r0, k0
+  0008  StoreGlobalRef r0, g2
+  .line 59
+  0009  MakeGlobalRef r8, g2
+  000a  Call         r8, f3
+  000b  MoveRef      r1, r8
+  000c  MakeGlobalRef r9, g2
+  000d  Call         r9, f4
+  000e  Move         r8, r9
+  000f  IntToStr     r2, r8
+  0010  ConcatStr    r1, r1, r2
+  0011  LoadGlobal   r10, g1
+  0012  ObjGet       r9, r10, 0
+  0013  IntToStr     r3, r9
+  0014  ConcatStr    r1, r1, r3
+  0015  LoadGlobal   r10, g2
+  0016  StrLen       r9, r10
+  0017  IntToStr     r4, r9
+  0018  ConcatStr    r1, r1, r4
+  0019  LoadConst    r5, k1
+  001a  ConcatStr    r1, r1, r5
+  001b  CallHost     r1, h0
+  .line 60
+  001c  LoadInt      r8, 3
+  001d  StoreGlobal  r8, g3
+  .line 61
+  001e  IntToStr     r6, r8
+  001f  LoadConst    r7, k1
+  0020  ConcatStr    r6, r6, r7
+  0021  CallHost     r6, h0
+  .line 62
+  0022  LoadGlobal   r8, g1
+  0023  Free         r8
+  .line 63
+  0024  RetVoid
+.finally r0, r1, r2, r3, r4, r5, r6, r7
+.func 1 DumpHelpers.TCounterHelper.Bump params=1 regs=3
+  .local r0 Self
+  .line 31
+  0000  ObjGet       r1, r0, 0
+  0001  AddIntI      r1, r1, 1
+  0002  NarrowOvf    r1, r1, 4
+  0003  ObjSet       r0, 0, r1
+  .line 32
+  0004  RetVoid
+.func 2 DumpHelpers.TCounterHelper.Make params=1 regs=2
+  .local r0 Self
+  .local r1 Result
+  .line 36
+  0000  LoadZero     r1
+  0001  New          r1, ty64
+  .line 37
+  0002  Ret          r1
+.func 3 DumpHelpers.TTextHelper.Twice params=1 regs=3
+  .local r0 Self
+  .local r1 Result
+  .line 41
+  0000  LoadRefRef   r1, r0
+  0001  LoadRefRef   r2, r0
+  0002  ConcatStr    r1, r1, r2
+  .line 42
+  0003  Ret          r1
+.finally r1, r2
+.func 4 DumpHelpers.TTextMore.Size params=1 regs=4
+  .local r0 Self
+  .local r1 Result
+  .line 46
+  0000  LoadGlobal   r2, g0
+  0001  AddIntI      r2, r2, 1
+  0002  NarrowOvf    r2, r2, 4
+  0003  StoreGlobal  r2, g0
+  .line 47
+  0004  LoadRef      r2, r0
+  0005  StrLen       r1, r2
+  .line 48
+  0006  Ret          r1

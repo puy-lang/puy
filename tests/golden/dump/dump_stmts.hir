@@ -1,6 +1,7 @@
 program DumpStmts uses=System.SysUtils
 .global g0 G: Integer
 .global g1 S: string
+.global g2 H: Integer
 .routine f0 Square(X: Integer): Integer
   .var v0 X: Integer param
   .var v1 Result: Integer result
@@ -70,7 +71,7 @@ program DumpStmts uses=System.SysUtils
       ref
         global g0 G
       ref
-        global g0 G
+        global g2 H
       global g1 S: string
       out
         var v0 B

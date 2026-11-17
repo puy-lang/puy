@@ -1,0 +1,34 @@
+capacities: 4 4 4 4 8 8 8 8 16
+stack ToArray: 1 2 3 4 5 6 7 8 9
+stack for-in: 1 2 3 4 5 6 7 8 9
+Extract 9, Pop 8, Peek 7
+after TrimExcess: 7/7
+after Capacity := 20: 7/20
+stack ToArray: 1 2 3 4 5 6 7
+S2 Pop 30, Count 2, Capacity 3
+queue from stack (7/7): 1 2 3 4 5 6 7
+  ToArray: 1 2 3 4 5 6 7
+wrapped (4/4): 3 4 5 6
+  ToArray: 3 4 5 6
+grown (5/8): 3 4 5 6 7
+  ToArray: 3 4 5 6 7
+wrapped again (6/8): 6 7 8 9 10 11
+  ToArray: 6 7 8 9 10 11
+Capacity := 10 (6/10): 6 7 8 9 10 11
+  ToArray: 6 7 8 9 10 11
+rotated (6/10): 7 8 9 10 11 12
+  ToArray: 7 8 9 10 11 12
+TrimExcess (6/6): 7 8 9 10 11 12
+  ToArray: 7 8 9 10 11 12
+after TrimExcess (7/12): 7 8 9 10 11 12 13
+  ToArray: 7 8 9 10 11 12 13
+Clear (0/12):
+  ToArray:
+after Clear (1/12): 14
+  ToArray: 14
+Capacity := 1 (1/1): 14
+  ToArray: 14
+empty TrimExcess (0/0):
+  ToArray:
+after empty (1/4): 15
+  ToArray: 15

@@ -95,6 +95,6 @@ error[E0707]: cannot assign to `J`
  108 |   for J := 1 to 10 do
      |       - used as the loop variable here
      |
-     = note: a nested routine cannot write a variable its enclosing routine uses as a `for` loop variable
+     = note: a nested routine or an anonymous method cannot write a variable its enclosing routine uses as a `for` loop variable
 
 error: aborting due to 10 errors

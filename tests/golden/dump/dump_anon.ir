@@ -1,0 +1,152 @@
+; puy ir 1
+.global
+.func f0 DumpAnon.<main> params=0
+  .reg t0: Integer temp
+bb0:
+  .line 32
+  LoadInt      t0, 10
+  Call         -, f1(t0)
+  .line 33
+  RetVoid
+.finally
+.func f1 DumpAnon.Run params=1
+  .reg v0 N: Integer param
+  .reg v1 Total: Integer local
+  .reg v2 P: TProc local
+  .reg v3 I: Integer for var
+  .reg v4 K: Integer local
+  .reg v5 N: Integer cell v0
+  .reg v6 Total: Integer cell v1
+  .reg v7 I: Integer cell v3
+  .reg v8 K: Integer cell v4
+  .reg t0: Integer temp
+  .reg t1: Int64 temp
+  .reg t2: Integer temp
+  .reg t3: Integer temp
+  .reg t4: Int64 temp
+  .reg t5: Int64 temp
+  .reg t6: - temp
+  .reg t7: - temp
+  .reg t8: - temp
+  .reg t9: - temp
+  .reg t10: - ref
+bb0:
+  .line 9
+  NewCell      v5
+  CellSet      v5, v0
+  CellRef      v0, v5
+  NewCell      v6
+  CellRef      v1, v6
+  .line 14
+  LoadZero     t0
+  StoreRef     v1, t0
+  .line 15
+  LoadInt      t1, 1
+  LoadInt      t2, 2
+  JmpIfLtInt   t2, t1, bb5, bb1
+bb1:
+  .line 15
+  Jmp          bb2
+bb2:
+  .line 15
+  NewCell      v7
+  CellRef      v3, v7
+  StoreRef     v3, t1
+  .line 17
+  NewCell      v8
+  CellRef      v4, v8
+  .line 18
+  LoadRef      t3, v3
+  StoreRef     v4, t3
+  .line 19
+  LoadInt      t4, 2
+  LoadInt      t5, 4
+  Move         t6, v6
+  Move         t7, v7
+  Move         t8, v8
+  Move         t9, v5
+  MakeClosure  v2, t4, t5, t6, t7, t8, t9
+  .line 27
+  CallClosure  -, v2()
+  .line 15
+  Jmp          bb3
+bb3:
+  .line 15
+  JmpIfEqInt   t1, t2, bb5, bb4
+bb4:
+  .line 15
+  AddIntI      t1, t1, 1
+  Jmp          bb2
+bb5:
+  .line 29
+  RetVoid
+.finally v2, v5, v6, v7, v8
+.func f2 DumpAnon.Run.<anon1> params=1
+  .reg link
+  .reg v0 Q: TProc local
+  .reg v1 Total: Integer outer v1 up=1
+  .reg v2 I: Integer outer v3 up=1
+  .reg v3 K: Integer outer v4 up=1
+  .reg v4 N: Integer outer v0 up=1
+  .reg v5 Total: Integer capture v1
+  .reg v6 I: Integer capture v2
+  .reg v7 K: Integer capture v3
+  .reg v8 N: Integer capture v4
+  .reg t0: Integer temp
+  .reg t1: Integer temp
+  .reg t2: Integer temp
+  .reg t3: Integer temp
+  .reg t4: Int64 temp
+  .reg t5: Int64 temp
+  .reg t6: - temp
+  .reg t7: - ref
+bb0:
+  .line 19
+  CapGet       v5, link, 0
+  CellRef      v1, v5
+  CapGet       v6, link, 1
+  CellRef      v2, v6
+  CapGet       v7, link, 2
+  CellRef      v3, v7
+  CapGet       v8, link, 3
+  CellRef      v4, v8
+  .line 23
+  LoadRef      t0, v1
+  LoadRef      t1, v2
+  LoadRef      t2, v3
+  MulInt       t1, t1, t2
+  NarrowOvf    t1, t1, 4
+  AddInt       t0, t0, t1
+  NarrowOvf    t0, t0, 4
+  LoadRef      t3, v4
+  AddInt       t0, t0, t3
+  NarrowOvf    t0, t0, 4
+  StoreRef     v1, t0
+  .line 24
+  LoadInt      t4, 3
+  LoadInt      t5, 1
+  Move         t6, v5
+  MakeClosure  v0, t4, t5, t6
+  .line 25
+  CallClosure  -, v0()
+  .line 26
+  RetVoid
+.finally v0
+.func f3 DumpAnon.Run.<anon1>.<anon1> params=1
+  .reg link
+  .reg v0 Total: Integer outer v1 up=2
+  .reg v1 Total: Integer capture v0
+  .reg t0: string temp
+  .reg t1: Integer temp
+  .reg t2: string temp
+bb0:
+  .line 24
+  CapGet       v1, link, 0
+  CellRef      v0, v1
+  LoadRef      t1, v0
+  IntToStr     t0, t1
+  LoadConst    t2, "\n"
+  ConcatStr    t0, t0, t2
+  CallHost     -, h0(t0)
+  RetVoid
+.finally t0, t2

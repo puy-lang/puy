@@ -1,0 +1,31 @@
+error[E0700]: undeclared identifier `TList`
+   --> generic_decl_syntax.pas:34:12
+    |
+ 34 |     Items: TList<TList<Integer>>;
+    |            ^^^^^
+
+error[E2001]: function `TStack.Map` may return without assigning `Result`
+   --> generic_decl_syntax.pas:44:10
+    |
+ 44 | function TStack<T>.Map<U>(const Item: T): TArray<U>;
+    |          ^^^^^^^^^^^^^^^^
+ 45 | begin
+ 46 | end;
+    | --- returns here
+    |
+    = note: Puy requires `Result` to be assigned on every path that returns
+    = suggestion: add `Result := nil;` at the start of the body
+
+error[E2001]: function `Max` may return without assigning `Result`
+   --> generic_decl_syntax.pas:52:10
+    |
+ 52 | function Max<T>(const A, B: T): T;
+    |          ^^^^^^
+ 53 | begin
+ 54 | end;
+    | --- returns here
+    |
+    = note: Puy requires `Result` to be assigned on every path that returns
+    = suggestion: add `Result := Default(T);` at the start of the body
+
+error: aborting due to 3 errors

@@ -1,0 +1,3 @@
+warning: exception during Halt: Exception: dtor during Halt
+  at HaltDtorException.TBad.Destroy (halt_dtor_exception.pas:18)
+  at HaltDtorException.<main> (halt_dtor_exception.pas:35)

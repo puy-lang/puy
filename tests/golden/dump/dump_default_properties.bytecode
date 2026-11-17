@@ -1,0 +1,103 @@
+; puyc format 0
+.const
+  0: str "\n"
+.type
+  64: class DumpDefaultProperties.TSeq ref slots=0 parent=ty20 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+.global
+  0: ref S
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpDefaultProperties file="dump_default_properties.pas" init=- fini=- entry=0
+.func 0 DumpDefaultProperties.<main> params=0 regs=16
+  .line 38
+  0000  New          r0, ty64
+  0001  StoreGlobalRef r0, g0
+  .line 39
+  0002  LoadGlobalRef r1, g0
+  0003  Move         r10, r1
+  0004  LoadInt      r11, 1
+  0005  LoadGlobalRef r2, g0
+  0006  Move         r13, r2
+  0007  LoadInt      r14, 2
+  0008  CallMethod   r13, f1
+  0009  Move         r12, r13
+  000a  CallMethod   r10, f2
+  .line 40
+  000b  LoadGlobalRef r4, g0
+  000c  Move         r11, r4
+  000d  LoadInt      r13, 3
+  000e  Release      r5
+  000f  Unique       r5, ty26
+  0010  LoadInt      r14, 1
+  0011  FieldSet     r5, 0, r13
+  0012  FieldSet     r5, 2, r14
+  0013  Move         r12, r5
+  0014  CallMethod   r11, f3
+  0015  Move         r10, r11
+  0016  IntToStr     r3, r10
+  0017  LoadGlobalRef r7, g0
+  0018  Move         r12, r7
+  0019  LoadInt      r14, 4
+  001a  Release      r8
+  001b  Unique       r8, ty26
+  001c  LoadInt      r15, 1
+  001d  FieldSet     r8, 1, r14
+  001e  FieldSet     r8, 3, r15
+  001f  Move         r13, r8
+  0020  CallMethod   r12, f3
+  0021  Move         r11, r12
+  0022  IntToStr     r6, r11
+  0023  ConcatStr    r3, r3, r6
+  0024  LoadConst    r9, k0
+  0025  ConcatStr    r3, r3, r9
+  0026  CallHost     r3, h0
+  .line 41
+  0027  RetVoid
+.finally r0, r1, r2, r3, r4, r5, r6, r7, r8, r9
+.func 1 DumpDefaultProperties.TSeq.Get params=2 regs=3
+  .local r0 Self
+  .local r1 I
+  .local r2 Result
+  .line 21
+  0000  Ret          r1
+.func 2 DumpDefaultProperties.TSeq.Put params=3 regs=3
+  .local r0 Self
+  .local r1 I
+  .local r2 V
+  .line 25
+  0000  RetVoid
+.func 3 DumpDefaultProperties.TSeq.Count params=2 regs=11
+  .local r0 Self
+  .local r1 R
+  .local r2 Result
+  .local r3 F
+  .local r4 L
+  .line 31
+  0000  AssignRef    r5, r1
+  0001  LoadZero     r6
+  0002  LoadInt      r7, 9
+  0003  Move         r8, r6
+  0004  FieldGet     r10, r5, 2
+  0005  JmpIfFalse   r10, -> 0009
+  0006  FieldGet     r10, r5, 0
+  0007  JmpIfLeInt   r10, r6, -> 0009
+  0008  FieldGet     r8, r5, 0
+  0009  Move         r9, r7
+  000a  FieldGet     r10, r5, 3
+  000b  JmpIfFalse   r10, -> 000f
+  000c  FieldGet     r10, r5, 1
+  000d  JmpIfLeInt   r7, r10, -> 000f
+  000e  FieldGet     r9, r5, 1
+  000f  JmpIfLeInt   r8, r9, -> 0012
+  0010  AddIntI      r9, r8, -1
+  0011  NarrowOvf    r9, r9, 4
+  0012  Move         r3, r8
+  0013  Move         r4, r9
+  .line 32
+  0014  SubInt       r2, r4, r3
+  0015  NarrowOvf    r2, r2, 4
+  0016  AddIntI      r2, r2, 1
+  0017  NarrowOvf    r2, r2, 4
+  .line 33
+  0018  Ret          r2
+.finally r5

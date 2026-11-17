@@ -1,0 +1,15 @@
+2 1
+3 -4
+first!?
+0
+0 10
+3 7
+4 0
+destroy second
+FALSE
+destroy leaf
+FALSE
+destroy element
+FALSE
+destroy first!?
+FALSE TRUE

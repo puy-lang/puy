@@ -1,0 +1,191 @@
+program DumpForInEnum
+.type IEnum = interface(IInterface)
+  .method #0 MoveNext: Boolean
+  .method #1 GetCurrent: Integer
+  .property Current: Integer read=#1 write=-
+.type TEnum = class(TObject)
+  .method f2 MoveNext
+  .method f3 Current
+.type TCountedEnum = class(TRefObject) ref
+  .method f4 MoveNext
+  .method f5 Current
+.type TColl = class(TObject)
+  .method f6 GetEnumerator
+.type TCountedColl = class(TRefObject) ref
+  .method f7 GetEnumerator
+.type TIntfColl = class(TObject)
+  .method f8 GetEnumerator
+.global g0 G: Integer
+.global g1 C: TColl
+.routine f2 TEnum.MoveNext(): Boolean
+  .var v0 Self: TEnum self
+  .var v1 Result: Boolean result
+  assign @42 R+
+    var v1 Result
+    const Boolean False
+.routine f3 TEnum.Current(): Integer
+  .var v0 Self: TEnum self
+  .var v1 Result: Integer result
+  assign @47 R+
+    var v1 Result
+    const Integer 0
+.routine f4 TCountedEnum.MoveNext(): Boolean
+  .var v0 Self: TCountedEnum self
+  .var v1 Result: Boolean result
+  assign @52 R+
+    var v1 Result
+    const Boolean False
+.routine f5 TCountedEnum.Current(): Integer
+  .var v0 Self: TCountedEnum self
+  .var v1 Result: Integer result
+  assign @57 R+
+    var v1 Result
+    const Integer 0
+.routine f6 TColl.GetEnumerator(): TEnum
+  .var v0 Self: TColl self
+  .var v1 Result: TEnum result
+  assign @62 R+
+    var v1 Result
+    create TEnum builtin
+.routine f7 TCountedColl.GetEnumerator(): TCountedEnum
+  .var v0 Self: TCountedColl self
+  .var v1 Result: TCountedEnum result
+  assign @67 R+
+    var v1 Result
+    create TCountedEnum builtin
+.routine f8 TIntfColl.GetEnumerator(): IEnum
+  .var v0 Self: TIntfColl self
+  .var v1 Result: IEnum result
+  assign @72 R+
+    var v1 Result
+    const IEnum nil
+.routine f9 Manual(C: TColl)
+  .var v0 C: TColl param
+  .var v1 -: TColl hidden
+  .var v2 -: TEnum hidden
+  .var v3 X: Integer for var
+  for-in-enum @77 coll=v1 enum=v2
+    var v3 X
+    in
+      var v0 C: TColl
+    get-enumerator
+      method f6 TColl.GetEnumerator: TEnum
+        var v1 -: TColl
+    move-next
+      method f2 TEnum.MoveNext: Boolean
+        var v2 -: TEnum
+    current
+      method f3 TEnum.Current: Integer
+        var v2 -: TEnum
+    body
+      writeln @78
+        arg
+          var v3 X: Integer
+.routine f10 Counted(C: TCountedColl)
+  .var v0 C: TCountedColl param
+  .var v1 -: TCountedColl hidden
+  .var v2 -: TCountedEnum hidden
+  .var v3 X: Integer for var
+  for-in-enum @83 coll=v1 enum=v2
+    var v3 X
+    in
+      var v0 C: TCountedColl
+    get-enumerator
+      method f7 TCountedColl.GetEnumerator: TCountedEnum
+        var v1 -: TCountedColl
+    move-next
+      method f4 TCountedEnum.MoveNext: Boolean
+        var v2 -: TCountedEnum
+    current
+      method f5 TCountedEnum.Current: Integer
+        var v2 -: TCountedEnum
+    body
+      writeln @84
+        arg
+          var v3 X: Integer
+.routine f11 ByContents(C: TIntfColl)
+  .var v0 C: TIntfColl param
+  .var v1 -: TIntfColl hidden
+  .var v2 -: IEnum hidden
+  .var v3 X: Integer for var
+  for-in-enum @89 coll=v1 enum=v2
+    var v3 X
+    in
+      var v0 C: TIntfColl
+    get-enumerator
+      method f8 TIntfColl.GetEnumerator: IEnum
+        var v1 -: TIntfColl
+    move-next
+      intfcall IEnum.MoveNext #0: Boolean
+        var v2 -: IEnum
+    current
+      intfcall IEnum.GetCurrent #1: Integer
+        var v2 -: IEnum
+    body
+      writeln @90
+        arg
+          var v3 X: Integer
+.routine f12 Captured(C: TCountedColl)
+  .var v0 C: TCountedColl param
+  .var v1 P: TProc local
+  .var v2 -: TCountedColl hidden
+  .var v3 -: TCountedEnum hidden
+  .var v4 X: Integer for var cell
+  for-in-enum @97 coll=v2 enum=v3
+    var v4 X
+    in
+      var v0 C: TCountedColl
+    get-enumerator
+      method f7 TCountedColl.GetEnumerator: TCountedEnum
+        var v2 -: TCountedColl
+    move-next
+      method f4 TCountedEnum.MoveNext: Boolean
+        var v3 -: TCountedEnum
+    current
+      method f5 TCountedEnum.Current: Integer
+        var v3 -: TCountedEnum
+    body
+      assign @98 R+
+        var v1 P
+        anon f13
+.routine f13 Captured.<anon1>() closure
+  .var v0 X: Integer outer v4 up=1
+  .capture #0 X: Integer from v4
+  writeln @98
+    arg
+      var v0 X: Integer
+.routine <main>
+  .var v0 -: TColl hidden
+  .var v1 -: TEnum hidden
+  .var v2 -: Integer hidden
+  assign @105 R+
+    global g1 C
+    create TColl builtin
+  for-in-enum @106 coll=v0 enum=v1
+    global g0 G last=v2
+    in
+      global g1 C: TColl
+    get-enumerator
+      method f6 TColl.GetEnumerator: TEnum
+        var v0 -: TColl
+    move-next
+      method f2 TEnum.MoveNext: Boolean
+        var v1 -: TEnum
+    current
+      method f3 TEnum.Current: Integer
+        var v1 -: TEnum
+    body
+      writeln @107
+        arg
+          global g0 G: Integer
+  expr @108
+    call f9 Manual: -
+      global g1 C: TColl
+  expr @109
+    call f10 Counted: -
+      create TCountedColl builtin
+  expr @110
+    call f12 Captured: -
+      create TCountedColl builtin
+  free @111
+    global g1 C: TColl

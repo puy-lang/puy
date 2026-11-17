@@ -49,6 +49,12 @@ fn is_forward_class(p: &Parser<'_>) -> bool {
     }
 }
 
+/// Whether the `class` at the current token has no `end` (a forward declaration, a class
+/// reference type, or a declaration with only a parent).
+pub(super) fn class_has_no_end(p: &Parser<'_>) -> bool {
+    is_forward_class(p)
+}
+
 /// Statement skipping: from the opening reserved word up to the `end` that brings the depth back to 0
 /// (for forms without `end`, up to just before the first synchronizing token at depth 0).
 pub(super) fn skip_statement(p: &mut Parser<'_>) {

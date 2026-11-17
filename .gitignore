@@ -2,3 +2,4 @@
 **/*.rs.bk
 .puy/
 *.wasm
+__pycache__/

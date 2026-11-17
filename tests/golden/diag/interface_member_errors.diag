@@ -1,0 +1,179 @@
+error[E0750]: `destructor` is not allowed in an interface
+   --> interface_member_errors.pas:20:5
+    |
+ 20 |     destructor Destroy;
+    |     ^^^^^^^^^^
+
+error[E0750]: `class function` is not allowed in an interface
+   --> interface_member_errors.pas:21:5
+    |
+ 21 |     class function Make: Integer;
+    |     ^^^^^^^^^^^^^^
+
+error[E0750]: `static` is not allowed in an interface
+   --> interface_member_errors.pas:22:18
+    |
+ 22 |     procedure A; static;
+    |                  ^^^^^^
+
+error[E0750]: `abstract` is not allowed in an interface
+   --> interface_member_errors.pas:23:18
+    |
+ 23 |     procedure B; abstract;
+    |                  ^^^^^^^^
+
+error[E0750]: `dynamic` is not allowed in an interface
+   --> interface_member_errors.pas:24:18
+    |
+ 24 |     procedure C; dynamic;
+    |                  ^^^^^^^
+
+error[E0750]: `reintroduce` is not allowed in an interface
+   --> interface_member_errors.pas:25:18
+    |
+ 25 |     procedure D; reintroduce;
+    |                  ^^^^^^^^^^^
+
+error[E0750]: `final` is not allowed in an interface
+   --> interface_member_errors.pas:26:18
+    |
+ 26 |     procedure E; final;
+    |                  ^^^^^
+
+error[E0750]: `message` is not allowed in an interface
+   --> interface_member_errors.pas:27:34
+    |
+ 27 |     procedure F(var M: Integer); message 1;
+    |                                  ^^^^^^^
+
+error[E0750]: `dispid` is not allowed in an interface
+   --> interface_member_errors.pas:28:18
+    |
+ 28 |     procedure G; dispid 1;
+    |                  ^^^^^^
+
+warning[W0009]: calling convention `stdcall` is ignored (ignored-calling-convention)
+   --> interface_member_errors.pas:29:18
+    |
+ 29 |     procedure H; stdcall;
+    |                  ^^^^^^^
+    |
+    = note: disable with `{$WARN ignored-calling-convention OFF}`
+    = fix: remove `stdcall`
+
+warning[W0022]: property specifier `stored` is ignored (ignored-property-specifier)
+   --> interface_member_errors.pas:31:35
+    |
+ 31 |     property P: Integer read GetP stored False;
+    |                                   ^^^^^^^^^^^^
+    |
+    = note: disable with `{$WARN ignored-property-specifier OFF}`
+    = fix: remove `stored`
+
+error[E0750]: `procedure IRun.Run = A` is not allowed in an interface
+   --> interface_member_errors.pas:32:5
+    |
+ 32 |     procedure IRun.Run = A;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0750]: `const` is not allowed in an interface
+   --> interface_member_errors.pas:33:3
+    |
+ 33 |   const
+    |   ^^^^^
+ 34 |     K = 1;
+    | ^^^^^^^^^^
+
+error[E0750]: `type` is not allowed in an interface
+   --> interface_member_errors.pas:35:3
+    |
+ 35 |   type
+    |   ^^^^
+ 36 |     TInner = Integer;
+    | ^^^^^^^^^^^^^^^^^^^^^
+
+error[E0750]: interfaces cannot have fields
+   --> interface_member_errors.pas:37:3
+    |
+ 37 |   var
+    |   ^^^
+ 38 |     V: Integer;
+    | ^^^^^^^^^^^^^^^
+
+error[E0750]: `class var` is not allowed in an interface
+   --> interface_member_errors.pas:39:3
+    |
+ 39 |   class var
+    |   ^^^^^^^^^
+ 40 |     W: Integer;
+    | ^^^^^^^^^^^^^^^
+
+error[E0750]: `TObject` is not an interface
+   --> interface_member_errors.pas:48:15
+    |
+ 48 |     procedure TObject.Run = DoRun;
+    |               ^^^^^^^^^^^
+
+error[E0749]: `TImpl` does not implement `IRun.Run`
+   --> interface_member_errors.pas:49:26
+    |
+ 16 |     procedure Run(X: Integer);
+    |               --- declared here
+...
+ 49 |     procedure IRun.Run = DoRun;
+    |                          ^^^^^
+
+error[E0749]: `TFreeImpl` does not implement `IFree.Free`
+   --> interface_member_errors.pas:53:3
+    |
+ 44 |     procedure Free;
+    |               ---- declared here
+...
+ 53 |   TFreeImpl = class(TRefObject, IFree)
+    |   ^^^^^^^^^
+
+error[E0750]: `IRun` is not an interface implemented by `TRec`
+   --> interface_member_errors.pas:57:15
+    |
+ 57 |     procedure IRun.Run = DoRun;
+    |               ^^^^^^^^
+
+error[E3020]: `TContainedObject` is not supported in Puy
+   --> interface_member_errors.pas:61:17
+    |
+ 61 |   TCont = class(TContainedObject)
+    |                 ^^^^^^^^^^^^^^^^
+    |
+    = note: use `TRefObject` instead
+
+error[E3200]: querying with a GUID is not supported yet (planned for M5)
+   --> interface_member_errors.pas:77:20
+    |
+ 77 |   G := Supports(O, '{0F9A1B2C-3D4E-5F60-7182-93A4B5C6D7E8}');
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E3200]: `IsEqualGUID` is not supported yet (planned for M5)
+   --> interface_member_errors.pas:78:8
+    |
+ 78 |   G := IsEqualGUID(1, 2);
+    |        ^^^^^^^^^^^
+
+error[E3200]: `GUIDToString` is not supported yet (planned for M5)
+   --> interface_member_errors.pas:79:11
+    |
+ 79 |   WriteLn(GUIDToString(1));
+    |           ^^^^^^^^^^^^
+
+error[E3200]: `StringToGUID` is not supported yet (planned for M5)
+   --> interface_member_errors.pas:80:11
+    |
+ 80 |   WriteLn(StringToGUID(''));
+    |           ^^^^^^^^^^^^
+
+error[E3200]: `CreateGUID` is not supported yet (planned for M5)
+   --> interface_member_errors.pas:81:3
+    |
+ 81 |   CreateGUID(G);
+    |   ^^^^^^^^^^
+
+error: aborting due to 24 errors; 2 warnings emitted

@@ -1,0 +1,14 @@
+child speaks
+show: 42 3 7
+inner: 100 42 7
+reveal: 7 global: -1
+inner run: TInner
+nested name: TInner
+static: 8 const: 8
+class var: 5
+EAccessViolation: access to a nil reference
+who: TBase
+as ancestor: TRUE TRUE
+equals: TRUE FALSE
+inherits nil: FALSE
+weak twice: TRUE

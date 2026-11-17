@@ -1,0 +1,9 @@
+A = B: TRUE, A <> B: FALSE
+A = nil: FALSE, A <> nil: TRUE, nil = A: FALSE
+Z = nil: TRUE, Assigned(Z): FALSE
+A = Z:
+  Equal got nil
+  FALSE
+N + A = 7, N = 5: TRUE
+Inc: 3, the old one is kept by another variable: 2
+P = Q: FALSE, P = P: TRUE

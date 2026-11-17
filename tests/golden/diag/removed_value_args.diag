@@ -1,0 +1,43 @@
+error[E3004]: `Addr` is not supported in Puy
+   --> removed_value_args.pas:26:8
+    |
+ 26 |   R := Addr(Id);    // E3004 only
+    |        ^^^^
+    |
+    = note: use a class, a dynamic array or a `var` parameter instead
+
+error[E3004]: `Addr` is not supported in Puy
+   --> removed_value_args.pas:27:8
+    |
+ 27 |   R := Addr(R);     // E3004 only
+    |        ^^^^
+    |
+    = note: use a class, a dynamic array or a `var` parameter instead
+
+error[E3004]: `Dispose` is not supported in Puy
+   --> removed_value_args.pas:28:3
+    |
+ 28 |   Dispose(Run);     // E3004 only
+    |   ^^^^^^^
+    |
+    = note: use a class, a dynamic array or a `var` parameter instead
+
+error[E0700]: undeclared identifier `Undecl`
+   --> removed_value_args.pas:29:3
+    |
+ 29 |   Undecl(Id);       // E0700 only
+    |   ^^^^^^
+
+error[E0700]: undeclared identifier `Undecl2`
+   --> removed_value_args.pas:30:8
+    |
+ 30 |   R := Undecl2(R);  // E0700 only
+    |        ^^^^^^^
+
+error[E0752]: `Destroy` cannot be used as a procedural value
+   --> removed_value_args.pas:32:10
+    |
+ 32 |   E := O.Destroy;   // E0752
+    |          ^^^^^^^
+
+error: aborting due to 6 errors

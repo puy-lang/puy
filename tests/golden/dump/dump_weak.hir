@@ -1,0 +1,62 @@
+program DumpWeak
+.type TNode = class(TRefObject) ref
+  .field 0 Parent: TNode weak
+  .field 1 Next: TNode
+  .classvar g0 Last: TNode weak
+.type TLink = record
+  .field 0 Target: TNode weak
+.global g0 TNode.Last: TNode weak
+.global g1 Current: TNode weak
+.global g2 N: TNode
+.routine f0 Link(N: TNode)
+  .var v0 N: TNode param
+  .var v1 L: TLink local
+  .var v2 W: TNode local weak
+  assign @28 R+
+    var v1 L
+    builtin Default TLink
+  assign @29 R+
+    objfield TNode Parent #0
+      var v0 N: TNode
+    objfield TNode Next #1
+      var v0 N: TNode
+  assign @30 R+
+    field TNode Target #0
+      var v1 L
+    var v0 N: TNode
+  assign @31 R+
+    global g0 TNode.Last
+    var v0 N: TNode
+  assign @32 R+
+    global g1 Current
+    var v0 N: TNode
+  assign @33 R+
+    var v2 W
+    weak TNode
+      global g1 Current: TNode
+  if @34
+    cond
+      binary Boolean
+        weak TNode
+          objfield TNode Parent #0
+            weak TNode
+              var v2 W: TNode
+        <> Boolean ref
+          weak TNode
+            field TNode Target #0
+              var v1 L: TLink
+    then
+      writeln @35
+        arg
+          binary Boolean
+            weak TNode
+              global g0 TNode.Last: TNode
+            <> Boolean ref
+              const TNode nil
+.routine <main>
+  assign @41 R+
+    global g2 N
+    create TNode builtin
+  expr @42
+    call f0 Link: -
+      global g2 N: TNode

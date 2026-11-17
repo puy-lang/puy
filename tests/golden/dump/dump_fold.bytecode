@@ -1,4 +1,4 @@
-; puyc format 2
+; puyc format 0
 .const
   0: str "\n"
 .global
@@ -11,32 +11,26 @@
   0000  LoadInt      r2, 1
   0001  StoreGlobal  r2, g0
   .line 8
-  0002  LoadInt      r2, 6
-  0003  LoadGlobal   r3, g0
-  0004  AddInt       r2, r2, r3
-  0005  NarrowOvf    r2, r2, 4
-  0006  StoreGlobal  r2, g0
+  0002  LoadGlobal   r3, g0
+  0003  AddIntI      r2, r3, 6
+  0004  NarrowOvf    r2, r2, 4
+  0005  StoreGlobal  r2, g0
   .line 9
-  0007  LoadGlobal   r2, g0
-  0008  LoadInt      r3, 6
-  0009  AddInt       r2, r2, r3
-  000a  NarrowOvf    r2, r2, 4
-  000b  StoreGlobal  r2, g0
+  0006  AddIntI      r2, r2, 6
+  0007  NarrowOvf    r2, r2, 4
+  0008  StoreGlobal  r2, g0
   .line 10
-  000c  LoadInt      r2, 2
-  000d  LoadGlobal   r3, g0
-  000e  LoadInt      r4, 2
-  000f  MulInt       r3, r3, r4
-  0010  NarrowOvf    r3, r3, 4
-  0011  AddInt       r2, r2, r3
-  0012  NarrowOvf    r2, r2, 4
-  0013  StoreGlobal  r2, g0
+  0009  LoadGlobal   r3, g0
+  000a  MulIntI      r3, r3, 2
+  000b  NarrowOvf    r3, r3, 4
+  000c  AddIntI      r2, r3, 2
+  000d  NarrowOvf    r2, r2, 4
+  000e  StoreGlobal  r2, g0
   .line 11
-  0014  LoadGlobal   r2, g0
-  0015  IntToStr     r0, r2
-  0016  LoadConst    r1, k0
-  0017  ConcatStr    r0, r0, r1
-  0018  CallHost     r0, h0
+  000f  IntToStr     r0, r2
+  0010  LoadConst    r1, k0
+  0011  ConcatStr    r0, r0, r1
+  0012  CallHost     r0, h0
   .line 12
-  0019  RetVoid
+  0013  RetVoid
 .finally r0, r1

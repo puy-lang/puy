@@ -1,0 +1,191 @@
+; puy ir 1
+.global
+  g0 P: TProc
+.func f0 DumpNestedRef.<main> params=0
+  .reg t0: TProc temp
+  .reg t1: Integer temp
+  .reg t2: TProc temp
+  .reg t3: - ref
+bb0:
+  .line 43
+  LoadInt      t1, 2
+  Call         t1, f1(t1)
+  MoveRef      t0, t1
+  StoreGlobalRef t0, g0
+  .line 44
+  LoadGlobalRef t2, g0
+  CallClosure  -, t2()
+  .line 45
+  RetVoid
+.finally t0, t2
+.func f1 DumpNestedRef.Make params=1
+  .reg v0 Start: Integer param
+  .reg v1 Result: TProc result
+  .reg v2 Count: Integer local
+  .reg v3 -: TProc hidden
+  .reg v4 -: TProc hidden
+  .reg v5 -: TProc hidden
+  .reg v6 Start: Integer cell v0
+  .reg v7 Count: Integer cell v2
+  .reg v8 -: TProc cell v3
+  .reg v9 -: TProc cell v4
+  .reg t0: TProc temp
+  .reg t1: Int64 temp
+  .reg t2: Int64 temp
+  .reg t3: - temp
+  .reg t4: TProc temp
+  .reg t5: Int64 temp
+  .reg t6: Int64 temp
+  .reg t7: - temp
+  .reg t8: - temp
+  .reg t9: - temp
+  .reg t10: Int64 temp
+  .reg t11: Int64 temp
+  .reg t12: - temp
+  .reg t13: Integer temp
+  .reg t14: - temp
+  .reg t15: Int64 temp
+bb0:
+  .line 9
+  NewCell      v6
+  CellSet      v6, v0
+  CellRef      v0, v6
+  NewCell      v7
+  CellRef      v2, v7
+  NewCellRef   v8
+  CellRef      v3, v8
+  NewCellRef   v9
+  CellRef      v4, v9
+  LoadInt      t1, -1
+  LoadInt      t2, 1
+  Move         t3, v7
+  MakeClosure  t0, t1, t2, t3
+  StoreRefRef  v3, t0
+  LoadInt      t5, -1
+  LoadInt      t6, 3
+  Move         t7, v7
+  Move         t8, v6
+  Move         t9, v8
+  MakeClosure  t4, t5, t6, t7, t8, t9
+  StoreRefRef  v4, t4
+  LoadInt      t10, -1
+  LoadInt      t11, 1
+  Move         t12, v9
+  MakeClosure  v5, t10, t11, t12
+  .line 36
+  LoadZero     t13
+  StoreRef     v2, t13
+  .line 37
+  Move         t14, v5
+  LoadInt      t15, 5
+  ClosureWith  v1, t14
+  .line 38
+  Ret          v1
+.finally v1, v5, v6, v7, v8, v9, t0, t4
+.func f2 DumpNestedRef.Make.Show params=1
+  .reg link
+  .reg v0 Count: Integer outer v2 up=1
+  .reg v1 Count: Integer capture v0
+  .reg t0: string temp
+  .reg t1: Integer temp
+  .reg t2: string temp
+bb0:
+  .line 13
+  CapGet       v1, link, 0
+  CellRef      v0, v1
+  .line 15
+  LoadRef      t1, v0
+  IntToStr     t0, t1
+  LoadConst    t2, "\n"
+  ConcatStr    t0, t0, t2
+  CallHost     -, h0(t0)
+  .line 16
+  RetVoid
+.finally t0, t2
+.func f3 DumpNestedRef.Make.Step params=2
+  .reg link
+  .reg v0 K: Integer param
+  .reg v1 -: TProc hidden
+  .reg v2 Count: Integer outer v2 up=1
+  .reg v3 Start: Integer outer v0 up=1
+  .reg v4 -: TProc outer v3 up=1
+  .reg v5 Count: Integer capture v2
+  .reg v6 Start: Integer capture v3
+  .reg v7 -: TProc capture v4
+  .reg t0: Integer temp
+  .reg t1: Integer temp
+  .reg t2: - ref
+  .reg t3: Integer temp
+  .reg t4: - ref
+bb0:
+  .line 18
+  CapGet       v5, link, 0
+  CellRef      v2, v5
+  CapGet       v6, link, 1
+  CellRef      v3, v6
+  CapGet       v7, link, 2
+  CellRef      v4, v7
+  AssignRef    v1, link
+  .line 24
+  LoadRef      t0, v2
+  LoadRef      t1, v3
+  AddInt       t0, t0, t1
+  NarrowOvf    t0, t0, 4
+  StoreRef     v2, t0
+  .line 25
+  LoadRef      t2, v4
+  Call         -, f2(t2)
+  .line 26
+  LoadZero     t3
+  JmpIfLeInt   v0, t3, bb2, bb1
+bb1:
+  .line 27
+  OuterRef     t4, 0, 0
+  Call         -, f4(t4)
+  .line 26
+  Jmp          bb3
+bb2:
+  .line 26
+  Jmp          bb3
+bb3:
+  .line 28
+  RetVoid
+.finally v1
+.func f4 DumpNestedRef.Make.Step.Again params=1 outer=f3
+  .reg link
+  .reg v0 K: Integer outer v0 up=1
+  .reg v1 -: TProc outer v1 up=1
+  .reg t0: - ref
+  .reg t1: Integer temp
+  .reg t2: Integer temp
+bb0:
+  .line 19
+  OuterRef     v0, 1, 1
+  OuterRef     v1, 2, 1
+  .line 21
+  LoadRef      t1, v0
+  LoadInt      t2, 1
+  SubInt       t1, t1, t2
+  NarrowOvf    t1, t1, 4
+  LoadRef      t0, v1
+  Call         -, f3(t0, t1)
+  .line 22
+  RetVoid
+.finally
+.func f5 DumpNestedRef.Make.Run params=1
+  .reg link
+  .reg v0 -: TProc outer v4 up=1
+  .reg v1 -: TProc capture v0
+  .reg t0: - ref
+  .reg t1: Integer temp
+bb0:
+  .line 30
+  CapGet       v1, link, 0
+  CellRef      v0, v1
+  .line 32
+  LoadInt      t1, 1
+  LoadRef      t0, v0
+  Call         -, f3(t0, t1)
+  .line 33
+  RetVoid
+.finally

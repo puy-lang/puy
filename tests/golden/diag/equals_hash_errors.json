@@ -1,0 +1,346 @@
+[
+  {
+    "schema": "puy.diagnostics/1",
+    "diagnostics": [
+      {
+        "code": "E0765",
+        "severity": "error",
+        "name": null,
+        "message": "`TOnlyEquals` overrides `Equals` but not `GetHashCode`",
+        "primary": {
+          "file": "equals_hash_errors.pas",
+          "start": 573,
+          "end": 579,
+          "line": 13,
+          "column": 14,
+          "end_line": 13,
+          "end_column": 20,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "objects that are equal must have the same hash code, so override both `Equals` and `GetHashCode`"
+        ],
+        "fixes": [
+          {
+            "title": "override `GetHashCode`",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "equals_hash_errors.pas",
+                "start": 613,
+                "end": 613,
+                "line": 13,
+                "column": 54,
+                "end_line": 13,
+                "end_column": 54,
+                "original": "",
+                "replacement": "\n    function GetHashCode: Int64; override;"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E0765]: `TOnlyEquals` overrides `Equals` but not `GetHashCode`\n   --> equals_hash_errors.pas:13:14\n    |\n 13 |     function Equals(Obj: TObject): Boolean; override;\n    |              ^^^^^^\n    |\n    = note: objects that are equal must have the same hash code, so override both `Equals` and `GetHashCode`\n    = suggestion: override `GetHashCode`"
+      },
+      {
+        "code": "E0765",
+        "severity": "error",
+        "name": null,
+        "message": "`TOnlyHash` overrides `GetHashCode` but not `Equals`",
+        "primary": {
+          "file": "equals_hash_errors.pas",
+          "start": 667,
+          "end": 678,
+          "line": 17,
+          "column": 14,
+          "end_line": 17,
+          "end_column": 25,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "objects that are equal must have the same hash code, so override both `Equals` and `GetHashCode`"
+        ],
+        "fixes": [
+          {
+            "title": "override `Equals`",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "equals_hash_errors.pas",
+                "start": 696,
+                "end": 696,
+                "line": 17,
+                "column": 43,
+                "end_line": 17,
+                "end_column": 43,
+                "original": "",
+                "replacement": "\n    function Equals(Obj: TObject): Boolean; override;"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E0765]: `TOnlyHash` overrides `GetHashCode` but not `Equals`\n   --> equals_hash_errors.pas:17:14\n    |\n 17 |     function GetHashCode: Int64; override;\n    |              ^^^^^^^^^^^\n    |\n    = note: objects that are equal must have the same hash code, so override both `Equals` and `GetHashCode`\n    = suggestion: override `Equals`"
+      },
+      {
+        "code": "E0765",
+        "severity": "error",
+        "name": null,
+        "message": "`TChildEquals` overrides `Equals` but not `GetHashCode`",
+        "primary": {
+          "file": "equals_hash_errors.pas",
+          "start": 887,
+          "end": 893,
+          "line": 28,
+          "column": 14,
+          "end_line": 28,
+          "end_column": 20,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "objects that are equal must have the same hash code, so override both `Equals` and `GetHashCode`"
+        ],
+        "fixes": [
+          {
+            "title": "override `GetHashCode`",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "equals_hash_errors.pas",
+                "start": 927,
+                "end": 927,
+                "line": 28,
+                "column": 54,
+                "end_line": 28,
+                "end_column": 54,
+                "original": "",
+                "replacement": "\n    function GetHashCode: Int64; override;"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E0765]: `TChildEquals` overrides `Equals` but not `GetHashCode`\n   --> equals_hash_errors.pas:28:14\n    |\n 28 |     function Equals(Obj: TObject): Boolean; override;\n    |              ^^^^^^\n    |\n    = note: objects that are equal must have the same hash code, so override both `Equals` and `GetHashCode`\n    = suggestion: override `GetHashCode`"
+      },
+      {
+        "code": "W0021",
+        "severity": "warning",
+        "name": "hidden-virtual-method",
+        "message": "method `Equals` hides virtual method of `TObject`",
+        "primary": {
+          "file": "equals_hash_errors.pas",
+          "start": 980,
+          "end": 986,
+          "line": 33,
+          "column": 14,
+          "end_line": 33,
+          "end_column": 20,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "disable with `{$WARN hidden-virtual-method OFF}`"
+        ],
+        "fixes": [
+          {
+            "title": "add `override`",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "equals_hash_errors.pas",
+                "start": 1010,
+                "end": 1010,
+                "line": 33,
+                "column": 44,
+                "end_line": 33,
+                "end_column": 44,
+                "original": "",
+                "replacement": " override;"
+              }
+            ]
+          },
+          {
+            "title": "add `reintroduce`",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "equals_hash_errors.pas",
+                "start": 1010,
+                "end": 1010,
+                "line": 33,
+                "column": 44,
+                "end_line": 33,
+                "end_column": 44,
+                "original": "",
+                "replacement": " reintroduce;"
+              }
+            ]
+          }
+        ],
+        "rendered": "warning[W0021]: method `Equals` hides virtual method of `TObject` (hidden-virtual-method)\n   --> equals_hash_errors.pas:33:14\n    |\n 33 |     function Equals(Obj: TObject): Boolean;\n    |              ^^^^^^\n    |\n    = note: disable with `{$WARN hidden-virtual-method OFF}`\n    = suggestion: add `override`\n    = suggestion: add `reintroduce`"
+      },
+      {
+        "code": "W0021",
+        "severity": "warning",
+        "name": "hidden-virtual-method",
+        "message": "method `GetHashCode` hides virtual method of `TObject`",
+        "primary": {
+          "file": "equals_hash_errors.pas",
+          "start": 1024,
+          "end": 1035,
+          "line": 34,
+          "column": 14,
+          "end_line": 34,
+          "end_column": 25,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "disable with `{$WARN hidden-virtual-method OFF}`"
+        ],
+        "fixes": [
+          {
+            "title": "add `override`",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "equals_hash_errors.pas",
+                "start": 1043,
+                "end": 1043,
+                "line": 34,
+                "column": 33,
+                "end_line": 34,
+                "end_column": 33,
+                "original": "",
+                "replacement": " override;"
+              }
+            ]
+          },
+          {
+            "title": "add `reintroduce`",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "equals_hash_errors.pas",
+                "start": 1043,
+                "end": 1043,
+                "line": 34,
+                "column": 33,
+                "end_line": 34,
+                "end_column": 33,
+                "original": "",
+                "replacement": " reintroduce;"
+              }
+            ]
+          }
+        ],
+        "rendered": "warning[W0021]: method `GetHashCode` hides virtual method of `TObject` (hidden-virtual-method)\n   --> equals_hash_errors.pas:34:14\n    |\n 34 |     function GetHashCode: Int64;\n    |              ^^^^^^^^^^^\n    |\n    = note: disable with `{$WARN hidden-virtual-method OFF}`\n    = suggestion: add `override`\n    = suggestion: add `reintroduce`"
+      },
+      {
+        "code": "E0744",
+        "severity": "error",
+        "name": null,
+        "message": "`GetHashCode` does not override a virtual method of `TObject`",
+        "primary": {
+          "file": "equals_hash_errors.pas",
+          "start": 1152,
+          "end": 1163,
+          "line": 40,
+          "column": 14,
+          "end_line": 40,
+          "end_column": 25,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "`GetHashCode` returns `Int64` in Puy"
+        ],
+        "fixes": [
+          {
+            "title": "change the return type to `Int64`",
+            "applicability": "safe",
+            "edits": [
+              {
+                "file": "equals_hash_errors.pas",
+                "start": 1165,
+                "end": 1172,
+                "line": 40,
+                "column": 27,
+                "end_line": 40,
+                "end_column": 34,
+                "original": "Integer",
+                "replacement": "Int64"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E0744]: `GetHashCode` does not override a virtual method of `TObject`\n   --> equals_hash_errors.pas:40:14\n    |\n 40 |     function GetHashCode: Integer; override;\n    |              ^^^^^^^^^^^\n    |\n    = note: `GetHashCode` returns `Int64` in Puy\n    = fix: change the return type to `Int64`"
+      },
+      {
+        "code": "E0765",
+        "severity": "error",
+        "name": null,
+        "message": "`TOverloads` overrides `Equals` but not `GetHashCode`",
+        "primary": {
+          "file": "equals_hash_errors.pas",
+          "start": 1447,
+          "end": 1453,
+          "line": 51,
+          "column": 14,
+          "end_line": 51,
+          "end_column": 20,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "objects that are equal must have the same hash code, so override both `Equals` and `GetHashCode`"
+        ],
+        "fixes": [
+          {
+            "title": "override `GetHashCode`",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "equals_hash_errors.pas",
+                "start": 1497,
+                "end": 1497,
+                "line": 51,
+                "column": 64,
+                "end_line": 51,
+                "end_column": 64,
+                "original": "",
+                "replacement": "\n    function GetHashCode: Int64; override;"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E0765]: `TOverloads` overrides `Equals` but not `GetHashCode`\n   --> equals_hash_errors.pas:51:14\n    |\n 51 |     function Equals(Obj: TObject): Boolean; overload; override;\n    |              ^^^^^^\n    |\n    = note: objects that are equal must have the same hash code, so override both `Equals` and `GetHashCode`\n    = suggestion: override `GetHashCode`"
+      },
+      {
+        "code": "E0744",
+        "severity": "error",
+        "name": null,
+        "message": "`GetHashCode` does not override a virtual method of `TObject`",
+        "primary": {
+          "file": "equals_hash_errors.pas",
+          "start": 1604,
+          "end": 1615,
+          "line": 57,
+          "column": 14,
+          "end_line": 57,
+          "end_column": 25,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0744]: `GetHashCode` does not override a virtual method of `TObject`\n   --> equals_hash_errors.pas:57:14\n    |\n 57 |     function GetHashCode: string; override;\n    |              ^^^^^^^^^^^"
+      }
+    ],
+    "summary": {
+      "errors": 6,
+      "warnings": 2,
+      "notes": 0
+    }
+  }
+]

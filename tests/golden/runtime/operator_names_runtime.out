@@ -1,0 +1,14 @@
+/ 3.4
+div 3
+mod 2
+shl 68
+shr 4
+positive 17
+not -17
+  <= called
+<= FALSE
+  > called
+> TRUE
+  >= called
+>= TRUE
+in FALSE TRUE

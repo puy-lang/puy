@@ -48,7 +48,7 @@ program DumpSysUtils uses=System.SysUtils
         const string "-"
         const TReplaceFlags [0..1]
   raise @22
-    new Exception
+    create Exception builtin
       builtin Format string
         const string "%d"
         global g0 V: Integer

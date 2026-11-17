@@ -1,0 +1,61 @@
+error[E0741]: the same location is passed to two `var` or `out` parameters (arguments 1 and 2)
+   --> same_location_args.pas:35:11
+    |
+ 35 |   Swap(G, G);
+    |           ^
+    |        - also passed here
+    |
+    = note: Puy does not let two `var` or `out` parameters refer to the same location
+    = note: copy the value to a local variable and pass that
+
+error[E0741]: the same location is passed to two `var` or `out` parameters (arguments 1 and 2)
+   --> same_location_args.pas:36:11
+    |
+ 36 |   Swap(V, V);
+    |           ^
+    |        - also passed here
+    |
+    = note: Puy does not let two `var` or `out` parameters refer to the same location
+    = note: copy the value to a local variable and pass that
+
+error[E0741]: the same location is passed to two `var` or `out` parameters (arguments 1 and 2)
+   --> same_location_args.pas:37:14
+    |
+ 37 |   Swap(A[0], A[0]);
+    |              ^^^^
+    |        ---- also passed here
+    |
+    = note: Puy does not let two `var` or `out` parameters refer to the same location
+    = note: copy the value to a local variable and pass that, or use `Exchange` to swap two array elements
+
+error[E0741]: the same location is passed to two `var` or `out` parameters (arguments 1 and 2)
+   --> same_location_args.pas:38:14
+    |
+ 38 |   Swap(A[I], A[I]);
+    |              ^^^^
+    |        ---- also passed here
+    |
+    = note: Puy does not let two `var` or `out` parameters refer to the same location
+    = note: copy the value to a local variable and pass that, or use `Exchange` to swap two array elements
+
+error[E0741]: the same location is passed to two `var` or `out` parameters (arguments 1 and 2)
+   --> same_location_args.pas:39:14
+    |
+ 39 |   Swap(S[1], S[1]);
+    |              ^^^^
+    |        ---- also passed here
+    |
+    = note: Puy does not let two `var` or `out` parameters refer to the same location
+    = note: copy the value to a local variable and pass that, or use `Exchange` to swap two array elements
+
+error[E0741]: the same location is passed to two `var` or `out` parameters (arguments 1 and 2)
+   --> same_location_args.pas:40:13
+    |
+ 40 |   Swap(P.X, P.X);
+    |             ^^^
+    |        --- also passed here
+    |
+    = note: Puy does not let two `var` or `out` parameters refer to the same location
+    = note: copy the value to a local variable and pass that
+
+error: aborting due to 6 errors

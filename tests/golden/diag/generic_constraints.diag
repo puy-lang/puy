@@ -1,0 +1,65 @@
+error[E0758]: `Integer` cannot be used as a constraint
+   --> generic_constraints.pas:21:15
+    |
+ 21 |   TNotType<T: Integer> = class
+    |               ^^^^^^^
+
+error[E0758]: `TPoint` cannot be used as a constraint
+   --> generic_constraints.pas:23:17
+    |
+ 23 |   TNotRecord<T: TPoint> = class
+    |                 ^^^^^^
+
+error[E0758]: `T` cannot be used as a constraint
+   --> generic_constraints.pas:25:18
+    |
+ 25 |   TOfParam<T; U: T> = record
+    |                  ^
+
+error[E0758]: constraints `class` and `record` cannot be combined
+   --> generic_constraints.pas:27:26
+    |
+ 27 |   TClassRecord<T: class, record> = class
+    |                          ^^^^^^
+
+error[E0758]: constraints `record` and `constructor` cannot be combined
+   --> generic_constraints.pas:29:26
+    |
+ 29 |   TRecordCtor<T: record, constructor> = class
+    |                          ^^^^^^^^^^^
+
+error[E0758]: constraints `record` and `IHasName` cannot be combined
+   --> generic_constraints.pas:31:26
+    |
+ 31 |   TRecordIntf<T: record, IHasName> = class
+    |                          ^^^^^^^^
+
+error[E0758]: a type parameter can have only one class type constraint
+   --> generic_constraints.pas:33:25
+    |
+ 33 |   TTwoClasses<T: TBase, TOther> = class
+    |                         ^^^^^^
+
+error[E0758]: `constructor` needs a `class` or class type constraint
+   --> generic_constraints.pas:35:17
+    |
+ 35 |   TCtorAlone<T: constructor> = class
+    |                 ^^^^^^^^^^^
+    |
+    = fix: add `class`
+
+error[E0758]: constraint `class` is listed more than once
+   --> generic_constraints.pas:37:41
+    |
+ 37 |   TListedTwice<T: class, NotRefCounted, class> = class
+    |                                         ^^^^^
+    |
+    = fix: remove the second `class`
+
+error[E0758]: constraints of `TFwd` differ from its forward declaration
+   --> generic_constraints.pas:40:7
+    |
+ 40 |   TFwd<T: TBase> = class
+    |       ^^^^^^^^^^
+
+error: aborting due to 10 errors

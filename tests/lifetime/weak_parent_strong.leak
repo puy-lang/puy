@@ -1,0 +1,4 @@
+warning: 10 heap blocks were not freed
+  TArray<WeakParentStrong.TNode>: 2
+  WeakParentStrong.TNode: 4
+  string: 4

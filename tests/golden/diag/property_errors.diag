@@ -1,0 +1,289 @@
+error[E0746]: invalid property accessor `Nope`
+   --> property_errors.pas:33:36
+    |
+ 33 |     property Missing: Integer read Nope;
+    |                                    ^^^^
+    |
+    = note: expected a field of type `Integer` or `function Nope: Integer`
+
+error[E0746]: invalid property accessor `GetA`
+   --> property_errors.pas:34:37
+    |
+ 34 |     property WrongType: string read GetA;
+    |                                     ^^^^
+    |
+    = note: expected a field of type `string` or `function GetA: string`
+
+error[E0746]: invalid property accessor `GetA`
+   --> property_errors.pas:35:40
+    |
+ 35 |     property WrongWrite: Integer write GetA;
+    |                                        ^^^^
+    |
+    = note: expected a field of type `Integer` or `procedure GetA(Value: Integer)`
+
+error[E0746]: invalid property accessor `GetA`
+   --> property_errors.pas:36:53
+    |
+ 36 |     property WrongIndexed[I: Integer]: Integer read GetA write SetA;
+    |                                                     ^^^^
+    |
+    = note: expected a field of type `Integer` or `function GetA(I: Integer): Integer`
+
+error[E0746]: invalid property accessor `SetA`
+   --> property_errors.pas:36:64
+    |
+ 36 |     property WrongIndexed[I: Integer]: Integer read GetA write SetA;
+    |                                                                ^^^^
+    |
+    = note: expected a field of type `Integer` or `procedure SetA(I: Integer; Value: Integer)`
+
+error[E0746]: invalid property accessor `GetA`
+   --> property_errors.pas:37:47
+    |
+ 37 |     property WrongIndex: Integer index 1 read GetA;
+    |                                               ^^^^
+    |
+    = note: expected a field of type `Integer` or `function GetA(Index: Integer): Integer`
+
+error[E0746]: invalid property accessor `FPos.X`
+   --> property_errors.pas:38:35
+    |
+ 38 |     property Dotted: Integer read FPos.X;
+    |                                   ^^^^^^
+
+warning[W0022]: property specifier `stored` is ignored (ignored-property-specifier)
+   --> property_errors.pas:39:38
+    |
+ 39 |     property Stored: Integer read FA stored True default 0;
+    |                                      ^^^^^^^^^^^
+    |
+    = note: disable with `{$WARN ignored-property-specifier OFF}`
+    = fix: remove `stored`
+
+warning[W0022]: property specifier `default` is ignored (ignored-property-specifier)
+   --> property_errors.pas:39:50
+    |
+ 39 |     property Stored: Integer read FA stored True default 0;
+    |                                                  ^^^^^^^^^
+    |
+    = note: disable with `{$WARN ignored-property-specifier OFF}`
+    = fix: remove `default`
+
+warning[W0022]: property specifier `nodefault` is ignored (ignored-property-specifier)
+   --> property_errors.pas:40:41
+    |
+ 40 |     property NoDefault: Integer read FA nodefault;
+    |                                         ^^^^^^^^^
+    |
+    = note: disable with `{$WARN ignored-property-specifier OFF}`
+    = fix: remove `nodefault`
+
+error[E3010]: `readonly` is not supported in Puy
+   --> property_errors.pas:41:32
+    |
+ 41 |     property ReadOnly: Integer readonly;
+    |                                ^^^^^^^^
+    |
+    = note: Puy does not support COM
+
+error[E3010]: `writeonly` is not supported in Puy
+   --> property_errors.pas:42:33
+    |
+ 42 |     property WriteOnly: Integer writeonly;
+    |                                 ^^^^^^^^^
+    |
+    = note: Puy does not support COM
+
+error[E3010]: `dispid` is not supported in Puy
+   --> property_errors.pas:43:38
+    |
+ 43 |     property DispId: Integer read FA dispid 3;
+    |                                      ^^^^^^
+    |
+    = note: Puy does not support COM
+
+error[E3200]: `implements` is not supported yet (planned for a later release)
+   --> property_errors.pas:44:36
+    |
+ 44 |     property Impl: Integer read FA implements TObject;
+    |                                    ^^^^^^^^^^^^^^^^^^
+
+error[E0701]: `RO` is already declared
+   --> property_errors.pas:45:14
+    |
+ 28 |     property RO: Integer read FA;
+    |              -- declared here
+...
+ 45 |     property RO: Integer read FA;
+    |              ^^ declared again here
+
+error[E0701]: `FA` is already declared
+   --> property_errors.pas:46:14
+    |
+ 19 |     FA: Integer;
+    |     -- declared here
+...
+ 46 |     property FA: Integer read FA;
+    |              ^^ declared again here
+
+error[E0746]: the accessor of a class property must be a `class var` or a static class method
+   --> property_errors.pas:47:42
+    |
+ 47 |     class property ByField: Integer read FA;
+    |                                          ^^
+
+error[E0746]: the accessor of a class property must be a `class var` or a static class method
+   --> property_errors.pas:48:43
+    |
+ 48 |     class property ByMethod: Integer read GetA;
+    |                                           ^^^^
+
+error[E0746]: the accessor of a class property must be a `class var` or a static class method
+   --> property_errors.pas:49:48
+    |
+ 49 |     class property ByClassMethod: Integer read GetCount;
+    |                                                ^^^^^^^^
+
+error[E0746]: invalid property accessor `FCount`
+   --> property_errors.pas:50:44
+    |
+ 50 |     class property CountWrong: string read FCount;
+    |                                            ^^^^^^
+    |
+    = note: expected a `class var` of type `string` or `class function FCount: string; static`
+
+error[E3200]: `property Name;` is not supported yet (planned for a later release)
+   --> property_errors.pas:52:5
+    |
+ 52 |     property Name;
+    |     ^^^^^^^^^^^^^
+
+error[E0700]: `RO` is an instance member and cannot be used in a class method
+   --> property_errors.pas:77:11
+    |
+ 28 |     property RO: Integer read FA;
+    |              -- declared here
+...
+ 77 |   WriteLn(RO);
+    |           ^^
+
+error[E0707]: cannot assign to `O.RO`
+   --> property_errors.pas:95:3
+    |
+ 28 |     property RO: Integer read FA;
+    |              -- declared here
+...
+ 95 |   O.RO := 1;
+    |   ^^^^ a read-only property
+
+error[E0707]: cannot read `O.WO`
+   --> property_errors.pas:96:8
+    |
+ 29 |     property WO: Integer write SetA;
+    |              -- declared here
+...
+ 96 |   N := O.WO;
+    |        ^^^^ a write-only property
+
+error[E0706]: a property cannot be passed to a `var` parameter
+   --> property_errors.pas:97:8
+    |
+ 97 |   Bump(O.RO);
+    |        ^^^^
+
+error[E0706]: a property cannot be passed to an `out` parameter
+   --> property_errors.pas:98:7
+    |
+ 98 |   Put(O.RO);
+    |       ^^^^
+
+error[E0706]: a property cannot be passed to a `var` parameter
+   --> property_errors.pas:99:7
+    |
+ 99 |   Inc(O.RO);
+    |       ^^^^
+
+error[E0706]: a property cannot be passed to a `var` parameter
+    --> property_errors.pas:100:8
+     |
+ 100 |   Bump(O.Items[1]);
+     |        ^^^^^^^^^^
+
+error[E0707]: cannot assign to `O.Pos.X`
+    --> property_errors.pas:101:3
+     |
+ 101 |   O.Pos.X := 1;
+     |   ^^^^^^^ part of a property
+     |
+     = note: read the property into a variable, change it, and assign it back
+
+error[E0707]: cannot assign to `O.S[1]`
+    --> property_errors.pas:102:3
+     |
+ 102 |   O.S[1] := 'a';
+     |   ^^^^^^ part of a property
+     |
+     = note: read the property into a variable, change it, and assign it back
+
+error[E0705]: wrong number of indices: expected 1, found 0
+    --> property_errors.pas:103:8
+     |
+ 103 |   N := O.Items;
+     |        ^^^^^^^
+
+error[E0705]: wrong number of indices: expected 1, found 2
+    --> property_errors.pas:104:8
+     |
+ 104 |   N := O.Items[1, 2];
+     |        ^^^^^^^^^^^^^
+
+error[E0707]: cannot assign to `O.Items[1]`
+    --> property_errors.pas:105:3
+     |
+  32 |     property Items[I: Integer]: Integer read GetB;
+     |              ----- declared here
+...
+ 105 |   O.Items[1] := 2;
+     |   ^^^^^^^^^^ a read-only property
+
+error[E0720]: a slice cannot be taken of an indexed property
+    --> property_errors.pas:106:16
+     |
+ 106 |   N := O.Items[1..2];
+     |                ^^^^
+
+error[E0720]: a slice cannot be taken of an indexed property
+    --> property_errors.pas:107:11
+     |
+ 107 |   O.Items[1..2] := 1;
+     |           ^^^^
+
+error[E0720]: a slice cannot be taken of an indexed property
+    --> property_errors.pas:108:14
+     |
+ 108 |   O.Items[1, 2..3] := 1;
+     |              ^^^^
+
+error[E0700]: `RO` is an instance member and cannot be used through a class
+    --> property_errors.pas:109:13
+     |
+  28 |     property RO: Integer read FA;
+     |              -- declared here
+...
+ 109 |   N := TFoo.RO;
+     |             ^^
+
+error[E0402]: expected a statement
+    --> property_errors.pas:110:3
+     |
+ 110 |   O.RO;
+     |   ^^^^
+
+error[E0704]: `O.RO` is not a procedure or function
+    --> property_errors.pas:111:8
+     |
+ 111 |   N := O.RO(1);
+     |        ^^^^
+
+error: aborting due to 36 errors; 3 warnings emitted

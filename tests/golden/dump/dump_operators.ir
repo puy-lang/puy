@@ -1,0 +1,165 @@
+; puy ir 1
+.global
+  g0 V: TVec
+  g1 N: TNode
+.func f0 DumpOperators.<main> params=0
+  .reg t0: TVec temp
+  .reg t1: Integer temp
+  .reg t2: TVec temp
+  .reg t3: TVec temp
+  .reg t4: TVec temp
+  .reg t5: TVec temp
+  .reg t6: TVec temp
+  .reg t7: Integer temp
+  .reg t8: string temp
+  .reg t9: Integer temp
+  .reg t10: TVec temp
+  .reg t11: TVec temp
+  .reg t12: string temp
+  .reg t13: TNode temp
+  .reg t14: string temp
+  .reg t15: Boolean temp
+  .reg t16: TNode temp
+  .reg t17: TNode temp
+  .reg t18: TNode temp
+  .reg t19: TNode temp
+  .reg t20: string temp
+  .reg t21: string temp
+  .reg t22: Boolean temp
+  .reg t23: TNode temp
+  .reg t24: TNode temp
+  .reg t25: string temp
+bb0:
+  .line 52
+  LoadInt      t1, 1
+  Call         t1, f2(t1)
+  MoveRef      t0, t1
+  StoreGlobalRef t0, g0
+  .line 53
+  LoadGlobalRef t5, g0
+  Move         t3, t5
+  LoadInt      t7, 2
+  Call         t7, f2(t7)
+  MoveRef      t6, t7
+  Move         t4, t6
+  Call         t3, f1(t3, t4)
+  MoveRef      t2, t3
+  StoreGlobalRef t2, g0
+  Release      t5
+  .line 54
+  LoadGlobalRef t11, g0
+  Move         t10, t11
+  Call         t9, f3(t10)
+  IntToStr     t8, t9
+  LoadConst    t12, "\n"
+  ConcatStr    t8, t8, t12
+  CallHost     -, h0(t8)
+  Release      t11
+  .line 55
+  New          t13, DumpOperators.TNode
+  StoreGlobalRef t13, g1
+  .line 56
+  LoadGlobalRef t18, g1
+  Move         t16, t18
+  LoadGlobalRef t19, g1
+  Move         t17, t19
+  Call         t15, f4(t16, t17)
+  BoolToStr    t14, t15
+  LoadConst    t20, " "
+  ConcatStr    t14, t14, t20
+  LoadGlobalRef t23, g1
+  Release      t24
+  EqInt        t22, t23, t24
+  BoolToStr    t21, t22
+  ConcatStr    t14, t14, t21
+  LoadConst    t25, "\n"
+  ConcatStr    t14, t14, t25
+  CallHost     -, h0(t14)
+  .line 57
+  RetVoid
+.finally t0, t2, t5, t6, t8, t11, t12, t13, t14, t18, t19, t20, t21, t23, t24, t25
+.func f1 DumpOperators.TVec.Add params=2
+  .reg v0 A: TVec const param
+  .reg v1 B: TVec const param
+  .reg v2 Result: TVec result
+  .reg t0: Integer temp
+  .reg t1: Integer temp
+bb0:
+  .line 23
+  Release      v2
+  .line 24
+  FieldGet     t0, v0, 0
+  FieldGet     t1, v1, 0
+  AddInt       t0, t0, t1
+  NarrowOvf    t0, t0, 4
+  Unique       v2, DumpOperators.TVec
+  FieldSet     v2, 0, t0
+  .line 25
+  Ret          v2
+.finally v2
+.func f2 DumpOperators.TVec.Implicit params=1
+  .reg v0 N: Integer param
+  .reg v1 Result: TVec result
+bb0:
+  .line 29
+  Release      v1
+  .line 30
+  Unique       v1, DumpOperators.TVec
+  FieldSet     v1, 0, v0
+  .line 31
+  Ret          v1
+.finally v1
+.func f3 DumpOperators.TVec.explicit params=1
+  .reg v0 A: TVec const param
+  .reg v1 Result: Integer result
+bb0:
+  .line 35
+  FieldGet     v1, v0, 0
+  .line 36
+  Ret          v1
+.finally
+.func f4 DumpOperators.TNode.Equal params=2
+  .reg v0 A: TNode const param
+  .reg v1 B: TNode const param
+  .reg v2 Result: Boolean result
+bb0:
+  .line 40
+  LoadInt      v2, 1
+  .line 41
+  Ret          v2
+.finally
+.func f5 DumpOperators.TNode.GetHashCode params=1
+  .reg v0 Self: TNode self
+  .reg v1 Result: Int64 result
+bb0:
+  .line 45
+  LoadZero     v1
+  .line 46
+  Ret          v1
+.finally
+.func f6 DumpOperators.TNode.Equals params=2
+  .reg v0 Self: TNode self
+  .reg v1 Obj: TObject param
+  .reg v2 Result: Boolean result
+  .reg t0: Boolean temp
+  .reg t1: TNode temp
+  .reg t2: TNode temp
+  .reg t3: TNode temp
+bb0:
+  .line 17
+  Move         t0, v1
+  IsClass      t0, DumpOperators.TNode
+  Move         v2, t0
+  JmpIfFalse   v2, bb2, bb1
+bb1:
+  .line 17
+  Move         t1, v0
+  AssignObj    t3, v1
+  AsClass      t3, DumpOperators.TNode
+  Move         t2, t3
+  Call         v2, f4(t1, t2)
+  Jmp          bb2
+bb2:
+  .line 17
+  Ret          v2
+.finally t3

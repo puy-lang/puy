@@ -1,0 +1,101 @@
+error[E0700]: undeclared identifier `Size`
+   --> generic_expr_unsupported.pas:35:7
+    |
+ 35 |   K = Size<Integer>;
+    |       ^^^^
+
+error[E0761]: `Proc` is not generic
+   --> generic_expr_unsupported.pas:49:3
+    |
+ 49 |   Proc<Integer>;
+    |   ^^^^^^^^^^^^^
+    |
+    = note: to compare, write `(A < B) > (C)`
+
+error[E0761]: `Run` is not generic
+   --> generic_expr_unsupported.pas:50:5
+    |
+ 50 |   O.Run<Integer>;
+    |     ^^^^^^^^^^^^
+    |
+    = note: to compare, write `(A < B) > (C)`
+
+error[E0761]: `Get` is not generic
+   --> generic_expr_unsupported.pas:51:10
+    |
+ 51 |   X := O.Get<Integer>;
+    |          ^^^^^^^^^^^^
+    |
+    = note: to compare, write `(A < B) > (C)`
+
+error[E0761]: `Get` is not generic
+   --> generic_expr_unsupported.pas:52:10
+    |
+ 52 |   X := R.Get<Integer>(1);
+    |          ^^^^^^^^^^^^
+    |
+    = note: to compare, write `(A < B) > (C)`
+
+error[E0761]: `Get` is not generic
+   --> generic_expr_unsupported.pas:53:13
+    |
+ 53 |   X := TFoo.Get<Integer>;
+    |             ^^^^^^^^^^^^
+    |
+    = note: to compare, write `(A < B) > (C)`
+
+error[E0700]: undeclared identifier `Max`
+   --> generic_expr_unsupported.pas:54:11
+    |
+ 54 |   WriteLn(Max<Integer>(1, 2):3);
+    |           ^^^
+
+error[E0700]: undeclared identifier `TList`
+   --> generic_expr_unsupported.pas:55:12
+    |
+ 55 |   var Y := TList<Integer>.Create;
+    |            ^^^^^
+
+error[E0700]: undeclared identifier `TBar`
+   --> generic_expr_unsupported.pas:57:13
+    |
+ 57 |   B := O is TBar<Integer>;
+    |             ^^^^
+
+error[E0700]: undeclared identifier `TList`
+   --> generic_expr_unsupported.pas:58:15
+    |
+ 58 |   X := SizeOf(TList<Integer>);
+    |               ^^^^^
+
+error[E0700]: undeclared identifier `Max`
+   --> generic_expr_unsupported.pas:59:15
+    |
+ 59 |   X := System.Max<Integer>(1, 2);
+    |               ^^^
+
+error[E0700]: undeclared identifier `A`
+   --> generic_expr_unsupported.pas:60:8
+    |
+ 60 |   X := A<B>.C<D>.E;
+    |        ^
+
+error[E0700]: undeclared identifier `Undecl`
+   --> generic_expr_unsupported.pas:61:8
+    |
+ 61 |   X := Undecl(Foo).Get<Integer>;
+    |        ^^^^^^
+
+error[E0700]: undeclared identifier `Foo`
+   --> generic_expr_unsupported.pas:61:15
+    |
+ 61 |   X := Undecl(Foo).Get<Integer>;
+    |               ^^^
+
+error[E0700]: undeclared identifier `EFoo`
+   --> generic_expr_unsupported.pas:62:9
+    |
+ 62 |   raise EFoo<Integer>.Create('x');
+    |         ^^^^
+
+error: aborting due to 15 errors

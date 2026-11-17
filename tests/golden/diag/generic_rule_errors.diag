@@ -1,0 +1,204 @@
+error[E0761]: `TPlainHelper` is not generic
+   --> generic_rule_errors.pas:23:22
+    |
+ 23 |   TH1 = class helper(TPlainHelper<Integer>) for TObject
+    |                      ^^^^^^^^^^^^^^^^^^^^^
+
+error[E0753]: `TBox<Integer>` is not a helper
+   --> generic_rule_errors.pas:26:22
+    |
+ 26 |   TH2 = class helper(TBox<Integer>) for TObject
+    |                      ^^^^^^^^^^^^^
+
+error[E0701]: `TDup` is already declared
+   --> generic_rule_errors.pas:31:3
+    |
+ 29 |   TDup<T> = record
+    |   ---- declared here
+ 30 |   end;
+ 31 |   TDup<U> = record
+    |   ^^^^ declared again here
+
+error[E0757]: a virtual method cannot have type parameters
+   --> generic_rule_errors.pas:35:21
+    |
+ 35 |     procedure D<T>; dynamic;
+    |                     ^^^^^^^
+
+error[E0757]: a virtual method cannot have type parameters
+   --> generic_rule_errors.pas:36:21
+    |
+ 36 |     procedure A<T>; virtual; abstract;
+    |                     ^^^^^^^
+
+error[E0757]: a virtual method cannot have type parameters
+   --> generic_rule_errors.pas:37:35
+    |
+ 37 |     function ToString<T>: string; override;
+    |                                   ^^^^^^^^
+
+error[E0758]: constraints `record` and `TBase` cannot be combined
+   --> generic_rule_errors.pas:45:18
+    |
+ 45 |   TR1<T: record, TBase> = class
+    |                  ^^^^^
+
+error[E0758]: constraints `TBase` and `record` cannot be combined
+   --> generic_rule_errors.pas:47:17
+    |
+ 47 |   TR2<T: TBase, record> = class
+    |                 ^^^^^^
+
+error[E0759]: `Integer` does not satisfy the constraint `class` of `U` in `TClsOnly<U>`
+   --> generic_rule_errors.pas:72:23
+    |
+ 69 |   TClsOnly<U: class> = class
+    |            - type parameter declared here
+...
+ 72 |     Q: TPair<TClsOnly<Integer>, T>;
+    |                       ^^^^^^^
+
+error[E0759]: `T` does not satisfy the constraint `class` of `U` in `Pick`
+   --> generic_rule_errors.pas:90:8
+    |
+ 88 | procedure PassOn<T>(const X: T);
+    |                  - type parameter declared here
+ 89 | begin
+ 90 |   Pick<T>(X);
+    |        ^
+    |
+    = note: add the constraint `class` to `T`
+
+error[E0759]: `T` does not satisfy the constraint `class` of `U` in `Pick`
+   --> generic_rule_errors.pas:91:3
+    |
+ 88 | procedure PassOn<T>(const X: T);
+    |                  - type parameter declared here
+...
+ 91 |   Pick(X);
+    |   ^^^^^^^
+    |
+    = note: add the constraint `class` to `T`
+    = note: the type arguments were inferred from the arguments as `Pick<T>`
+
+error[E0762]: cannot take the ordinal of a value of type parameter `T`
+    --> generic_rule_errors.pas:101:8
+     |
+  75 |   TBag<T> = class
+     |        - type parameter declared here
+...
+ 101 |   case FItem of
+     |        ^^^^^
+     |
+     = note: a type parameter can only be used in ways that its constraints allow
+
+error[E0762]: cannot convert a value of type parameter `T`
+    --> generic_rule_errors.pas:104:12
+     |
+  75 |   TBag<T> = class
+     |        - type parameter declared here
+...
+ 104 |   FItem := 5;
+     |            ^
+     |
+     = note: a type parameter can only be used in ways that its constraints allow
+
+error[E3200]: `TypeInfo` is not supported yet (planned for M5)
+    --> generic_rule_errors.pas:105:11
+     |
+ 105 |   WriteLn(TypeInfo(T) = nil);
+     |           ^^^^^^^^
+
+error[E0705]: wrong number of arguments: expected 0, found 1
+    --> generic_rule_errors.pas:110:3
+     |
+ 110 |   T.Create(1);
+     |   ^^^^^^^^^^^
+
+error[E0404]: expected a type name
+    --> generic_rule_errors.pas:114:11
+     |
+ 114 |   B: TBox<array of Integer>;
+     |           ^^^^^
+     |
+     = note: declare the type in a `type` section and use its name
+
+error[E0759]: `TArray<Integer>` does not satisfy the constraint `record` of `T` in `TRec<T>`
+    --> generic_rule_errors.pas:115:12
+     |
+  58 |   TRec<T: record> = record
+     |        - type parameter declared here
+...
+ 115 |   R1: TRec<TArray<Integer>>;
+     |            ^^^^^^^^^^^^^^^
+
+error[E0759]: `TP` does not satisfy the constraint `record` of `T` in `TRec<T>`
+    --> generic_rule_errors.pas:116:12
+     |
+  58 |   TRec<T: record> = record
+     |        - type parameter declared here
+...
+ 116 |   R2: TRec<TP>;
+     |            ^^
+
+error[E0759]: `IA` does not satisfy the constraint `record` of `T` in `TRec<T>`
+    --> generic_rule_errors.pas:117:12
+     |
+  58 |   TRec<T: record> = record
+     |        - type parameter declared here
+...
+ 117 |   R3: TRec<IA>;
+     |            ^^
+
+error[E0759]: `IA` does not satisfy the constraint `class` of `T` in `TCls<T>`
+    --> generic_rule_errors.pas:118:12
+     |
+  60 |   TCls<T: class> = record
+     |        - type parameter declared here
+...
+ 118 |   C1: TCls<IA>;
+     |            ^^
+
+error[E0759]: `TClass` does not satisfy the constraint `class` of `T` in `TCls<T>`
+    --> generic_rule_errors.pas:119:12
+     |
+  60 |   TCls<T: class> = record
+     |        - type parameter declared here
+...
+ 119 |   C2: TCls<TClass>;
+     |            ^^^^^^
+
+error[E0761]: `TFunc` expects 1 or 2 or 3 or 4 or 5 type arguments, found 6
+    --> generic_rule_errors.pas:123:12
+     |
+ 123 |   F6: TFunc<Integer, Integer, Integer, Integer, Integer, string>;
+     |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0761]: `TPair` expects 2 type arguments, found 1
+    --> generic_rule_errors.pas:125:11
+     |
+ 125 |   M: TPair<Integer>;
+     |           ^^^^^^^^^
+
+error[E0702]: type mismatch: expected `TBox<TBase>`, found `TBox<TFoo>`
+    --> generic_rule_errors.pas:127:9
+     |
+ 127 |   LB := LF;
+     |         ^^
+
+error[E0761]: `Pair` expects 2 type arguments, found 1
+    --> generic_rule_errors.pas:128:15
+     |
+ 128 |   WriteLn(Pair<Integer>(1, 2));
+     |               ^^^^^^^^^
+
+error[E0702]: type mismatch: expected `TProc<Integer, string>`, found `reference to procedure(const Integer, string)`
+    --> generic_rule_errors.pas:129:9
+     |
+ 129 |   P2 := procedure(const A: Integer; B: string)
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 130 |     begin
+ 131 |     end;
+     | ^^^^^^^
+
+error: aborting due to 26 errors

@@ -1,0 +1,133 @@
+error[E0753]: `destructor` is not allowed in a helper
+   --> helper_more_errors.pas:24:5
+    |
+ 24 |     destructor Destroy;                            // E0753: no destructor
+    |     ^^^^^^^^^^
+
+error[E0753]: `dynamic` is not allowed in a helper
+   --> helper_more_errors.pas:25:18
+    |
+ 25 |     procedure A; dynamic;                          // E0753
+    |                  ^^^^^^^
+
+error[E0753]: `virtual` is not allowed in a helper
+   --> helper_more_errors.pas:26:18
+    |
+ 26 |     procedure B; virtual; abstract;                // E0753 twice
+    |                  ^^^^^^^
+
+error[E0753]: `abstract` is not allowed in a helper
+   --> helper_more_errors.pas:26:27
+    |
+ 26 |     procedure B; virtual; abstract;                // E0753 twice
+    |                           ^^^^^^^^
+
+error[E0753]: helper member `Work` has the same name as a member of `TBase`
+   --> helper_more_errors.pas:27:15
+    |
+ 15 |     procedure Work; virtual;
+    |               ---- declared here
+...
+ 27 |     procedure Work; override;                      // E0753
+    |               ^^^^
+    |
+    = note: give the helper member another name
+    = note: or derive a class from it and declare the member in the derived class
+
+error[E0753]: `override` is not allowed in a helper
+   --> helper_more_errors.pas:27:21
+    |
+ 27 |     procedure Work; override;                      // E0753
+    |                     ^^^^^^^^
+
+error[E0753]: `reintroduce` is not allowed in a helper
+   --> helper_more_errors.pas:28:18
+    |
+ 28 |     procedure C; reintroduce;                      // E0753
+    |                  ^^^^^^^^^^^
+
+error[E0753]: `final` is not allowed in a helper
+   --> helper_more_errors.pas:29:18
+    |
+ 29 |     procedure D; final;                            // E0753
+    |                  ^^^^^
+
+error[E0753]: `procedure IRun.Run = Go;` is not allowed in a helper
+   --> helper_more_errors.pas:30:5
+    |
+ 30 |     procedure IRun.Run = Go;                       // E0753: no method resolution clause
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0753]: helper member `Run` has the same name as a member of `TBase`
+   --> helper_more_errors.pas:32:15
+    |
+ 16 |     procedure Run(const S: string);
+    |               --- declared here
+...
+ 32 |     procedure Run(N: Integer); overload;           // E0753: adding an overload is the same name
+    |               ^^^
+    |
+    = note: give the helper member another name
+    = note: or derive a class from it and declare the member in the derived class
+
+error[E0753]: `TBaseClass` cannot have a helper
+   --> helper_more_errors.pas:35:38
+    |
+ 35 |   TClassRefHelper = class helper for TBaseClass    // E0753: a class reference
+    |                                      ^^^^^^^^^^
+    |
+    = note: a class has a `class helper`, and the other types that can have a helper have a `record helper`
+
+error[E0753]: `TRefProc` cannot have a helper
+   --> helper_more_errors.pas:38:34
+    |
+ 38 |   TRefHelper = record helper for TRefProc          // E0753: a method reference type
+    |                                  ^^^^^^^^
+    |
+    = note: a class has a `class helper`, and the other types that can have a helper have a `record helper`
+
+error[E0753]: `TMethodProc` cannot have a helper
+   --> helper_more_errors.pas:41:37
+    |
+ 41 |   TMethodHelper = record helper for TMethodProc    // E0753: a method pointer type
+    |                                     ^^^^^^^^^^^
+    |
+    = note: a class has a `class helper`, and the other types that can have a helper have a `record helper`
+
+error[E0753]: `GetEnumerator` in a helper for `string` is never used by `for..in`
+   --> helper_more_errors.pas:45:14
+    |
+ 45 |     function GetEnumerator: TBase;                 // E0753: `for..in` iterates over strings
+    |              ^^^^^^^^^^^^^
+    |
+    = note: `for..in` iterates over arrays, strings and sets by itself, without `GetEnumerator`
+
+error[E0753]: `GetEnumerator` in a helper for `TDigits` is never used by `for..in`
+   --> helper_more_errors.pas:52:14
+    |
+ 52 |     function GetEnumerator: TBase;                 // E0753: and over sets
+    |              ^^^^^^^^^^^^^
+    |
+    = note: `for..in` iterates over arrays, strings and sets by itself, without `GetEnumerator`
+
+error[E0753]: `GetEnumerator` in a helper for `TTriple` is never used by `for..in`
+   --> helper_more_errors.pas:56:14
+    |
+ 56 |     function GetEnumerator: TBase;                 // E0753: and over static arrays
+    |              ^^^^^^^^^^^^^
+    |
+    = note: `for..in` iterates over arrays, strings and sets by itself, without `GetEnumerator`
+
+error[E0753]: a helper cannot be used as a type
+   --> helper_more_errors.pas:86:19
+    |
+ 86 | procedure Take(H: TTextHelper);                    // E0753: not a type
+    |                   ^^^^^^^^^^^
+
+error[E0753]: a helper cannot be used as a type
+   --> helper_more_errors.pas:91:21
+    |
+ 91 |   TGive = function: TTextHelper;                   // E0753: not a type
+    |                     ^^^^^^^^^^^
+
+error: aborting due to 18 errors

@@ -1,0 +1,151 @@
+SOURCE_FILE@0..430
+  PROGRAM@0..430
+    PROGRAM_HEADER@0..26
+      PROGRAM_KW@0..7 "program"
+      WHITESPACE@7..8 " "
+      IDENT@8..25 "HintNamesAsFields"
+      SEMICOLON@25..26 ";"
+    NEWLINE@26..27 "\n"
+    NEWLINE@27..28 "\n"
+    LINE_COMMENT@28..123 "// After `class`, `platform` and `deprecated` followed by `:` are the names of fields, not hint"
+    NEWLINE@123..124 "\n"
+    LINE_COMMENT@124..218 "// directives (attributes.md 6.1): the class body is read as usual and the fields can be used."
+    NEWLINE@218..219 "\n"
+    NEWLINE@219..220 "\n"
+    TYPE_SECTION@220..294
+      TYPE_KW@220..224 "type"
+      NEWLINE@224..225 "\n"
+      WHITESPACE@225..227 "  "
+      TYPE_DECL@227..294
+        IDENT@227..231 "TFoo"
+        WHITESPACE@231..232 " "
+        EQ@232..233 "="
+        WHITESPACE@233..234 " "
+        CLASS_TYPE@234..293
+          CLASS_KW@234..239 "class"
+          NEWLINE@239..240 "\n"
+          WHITESPACE@240..244 "    "
+          CLASS_BODY@244..287
+            FIELD_DECL@244..262
+              IDENT_LIST@244..252
+                IDENT@244..252 "platform"
+              COLON@252..253 ":"
+              WHITESPACE@253..254 " "
+              TYPE_REF@254..261
+                QUALIFIED_NAME@254..261
+                  IDENT@254..261 "Integer"
+              SEMICOLON@261..262 ";"
+            NEWLINE@262..263 "\n"
+            WHITESPACE@263..267 "    "
+            FIELD_DECL@267..287
+              IDENT_LIST@267..277
+                IDENT@267..277 "deprecated"
+              COLON@277..278 ":"
+              WHITESPACE@278..279 " "
+              TYPE_REF@279..286
+                QUALIFIED_NAME@279..286
+                  IDENT@279..286 "Integer"
+              SEMICOLON@286..287 ";"
+          NEWLINE@287..288 "\n"
+          WHITESPACE@288..290 "  "
+          END_KW@290..293 "end"
+        SEMICOLON@293..294 ";"
+    NEWLINE@294..295 "\n"
+    NEWLINE@295..296 "\n"
+    VAR_SECTION@296..310
+      VAR_KW@296..299 "var"
+      NEWLINE@299..300 "\n"
+      WHITESPACE@300..302 "  "
+      VAR_DECL@302..310
+        IDENT_LIST@302..303
+          IDENT@302..303 "F"
+        COLON@303..304 ":"
+        WHITESPACE@304..305 " "
+        TYPE_REF@305..309
+          QUALIFIED_NAME@305..309
+            IDENT@305..309 "TFoo"
+        SEMICOLON@309..310 ";"
+    NEWLINE@310..311 "\n"
+    COMPOUND_STMT@311..428
+      BEGIN_KW@311..316 "begin"
+      NEWLINE@316..317 "\n"
+      WHITESPACE@317..319 "  "
+      ASSIGN_STMT@319..335
+        NAME_REF@319..320
+          IDENT@319..320 "F"
+        WHITESPACE@320..321 " "
+        ASSIGN@321..323 ":="
+        WHITESPACE@323..324 " "
+        FIELD_EXPR@324..335
+          NAME_REF@324..328
+            IDENT@324..328 "TFoo"
+          DOT@328..329 "."
+          IDENT@329..335 "Create"
+      SEMICOLON@335..336 ";"
+      NEWLINE@336..337 "\n"
+      WHITESPACE@337..339 "  "
+      ASSIGN_STMT@339..354
+        FIELD_EXPR@339..349
+          NAME_REF@339..340
+            IDENT@339..340 "F"
+          DOT@340..341 "."
+          IDENT@341..349 "platform"
+        WHITESPACE@349..350 " "
+        ASSIGN@350..352 ":="
+        WHITESPACE@352..353 " "
+        LITERAL@353..354
+          INT_LIT@353..354 "1"
+      SEMICOLON@354..355 ";"
+      NEWLINE@355..356 "\n"
+      WHITESPACE@356..358 "  "
+      ASSIGN_STMT@358..375
+        FIELD_EXPR@358..370
+          NAME_REF@358..359
+            IDENT@358..359 "F"
+          DOT@359..360 "."
+          IDENT@360..370 "deprecated"
+        WHITESPACE@370..371 " "
+        ASSIGN@371..373 ":="
+        WHITESPACE@373..374 " "
+        LITERAL@374..375
+          INT_LIT@374..375 "2"
+      SEMICOLON@375..376 ";"
+      NEWLINE@376..377 "\n"
+      WHITESPACE@377..379 "  "
+      EXPR_STMT@379..413
+        CALL_EXPR@379..413
+          NAME_REF@379..386
+            IDENT@379..386 "WriteLn"
+          ARG_LIST@386..413
+            L_PAREN@386..387 "("
+            ARG@387..412
+              BINARY_EXPR@387..412
+                FIELD_EXPR@387..397
+                  NAME_REF@387..388
+                    IDENT@387..388 "F"
+                  DOT@388..389 "."
+                  IDENT@389..397 "platform"
+                WHITESPACE@397..398 " "
+                PLUS@398..399 "+"
+                WHITESPACE@399..400 " "
+                FIELD_EXPR@400..412
+                  NAME_REF@400..401
+                    IDENT@400..401 "F"
+                  DOT@401..402 "."
+                  IDENT@402..412 "deprecated"
+            R_PAREN@412..413 ")"
+      SEMICOLON@413..414 ";"
+      NEWLINE@414..415 "\n"
+      WHITESPACE@415..417 "  "
+      EXPR_STMT@417..423
+        FIELD_EXPR@417..423
+          NAME_REF@417..418
+            IDENT@417..418 "F"
+          DOT@418..419 "."
+          IDENT@419..423 "Free"
+      SEMICOLON@423..424 ";"
+      NEWLINE@424..425 "\n"
+      END_KW@425..428 "end"
+    DOT@428..429 "."
+    NEWLINE@429..430 "\n"
+    EOF@430..430 ""

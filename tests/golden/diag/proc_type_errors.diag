@@ -1,0 +1,62 @@
+error[E0752]: a procedural type cannot have default parameter values
+   --> proc_type_errors.pas:10:35
+    |
+ 10 |   TDefault = procedure(X: Integer = 1);
+    |                                   ^^^
+
+error[E0400]: expected `;`, found `of`
+   --> proc_type_errors.pas:11:36
+    |
+ 11 |   TObjRef = reference to procedure of object;
+    |                                    ^^
+
+warning[W0009]: calling convention `stdcall` is ignored (ignored-calling-convention)
+   --> proc_type_errors.pas:12:34
+    |
+ 12 |   TConv = procedure(X: Integer); stdcall;
+    |                                  ^^^^^^^
+    |
+    = note: disable with `{$WARN ignored-calling-convention OFF}`
+    = fix: remove `stdcall`
+
+error[E3200]: a class implementing the anonymous method type `TRun` is not supported yet (planned for a later release)
+   --> proc_type_errors.pas:14:31
+    |
+ 14 |   TRunner = class(TRefObject, TRun)
+    |                               ^^^^
+    |
+    = note: make a method reference to a method of the class, or an anonymous method that calls it
+
+error[E0404]: expected a type name
+   --> proc_type_errors.pas:16:18
+    |
+ 16 |   TList = TArray<procedure>;
+    |                  ^^^^^^^^^
+    |
+    = note: declare the type in a `type` section and use its name
+
+error[E0404]: a parameter type must be a type name
+   --> proc_type_errors.pas:18:19
+    |
+ 18 | procedure Take(P: procedure);
+    |                   ^^^^^^^^^
+    |
+    = note: declare the type in a `type` section and use its name
+
+error[E0404]: a return type must be a type name
+   --> proc_type_errors.pas:22:16
+    |
+ 22 | function Give: function: Integer;
+    |                ^^^^^^^^
+    |
+    = note: declare the type in a `type` section and use its name
+
+error[E0404]: expected a type name
+   --> proc_type_errors.pas:29:14
+    |
+ 29 |   for var P: procedure in Nums do
+    |              ^^^^^^^^^
+    |
+    = note: declare the type in a `type` section and use its name
+
+error: aborting due to 7 errors; 1 warning emitted

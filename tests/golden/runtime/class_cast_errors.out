@@ -1,0 +1,26 @@
+as: EInvalidCast: invalid class typecast: `TSquare` is not `TCircle`
+as: TRUE TRUE
+cast: EInvalidCast: invalid class typecast: `TSquare` is not `TCircle`
+cast: TRUE TRUE
+class reference: EInvalidCast: invalid class typecast: `TSquare` is not `TCircle`
+class reference: TRUE TRUE
+class reference to TShape: EInvalidCast: invalid class typecast: `TShape` is not `TCircle`
+class reference to TShape: TRUE TRUE
+FALSE
+nil is: no error
+nil is: TRUE TRUE
+nil as: no error
+nil as: TRUE TRUE
+nil cast: no error
+nil cast: TRUE TRUE
+nil class reference: no error
+nil class reference: TRUE TRUE
+freed is: EAccessViolation: access to a freed object
+freed is: TRUE TRUE
+TRUE
+freed is ancestor: no error
+freed is ancestor: TRUE TRUE
+freed as: EAccessViolation: access to a freed object
+freed as: TRUE TRUE
+invalid class typecast: `TCircle` is not `TSquare`
+TRUE TCircle

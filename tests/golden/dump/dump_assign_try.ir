@@ -1,0 +1,102 @@
+; puy ir 1
+.global
+.func f0 DumpAssignTry.<main> params=0
+  .reg t0: Integer temp
+  .reg t1: Integer temp
+bb0:
+  .line 38
+  LoadInt      t0, 1
+  LoadInt      t1, 2
+  Call         -, f2(t0, t1)
+  .line 39
+  RetVoid
+.finally
+.func f1 DumpAssignTry.F params=2
+  .reg v0 A: Integer param
+  .reg v1 B: Integer param
+  .reg v2 Result: Integer result
+bb0:
+  .line 11
+  Move         v2, v0
+  SubInt       v2, v2, v1
+  NarrowOvf    v2, v2, 4
+  .line 12
+  Ret          v2
+.finally
+.func f2 DumpAssignTry.P params=2
+  .reg v0 X: Integer param
+  .reg v1 Y: Integer param
+  .reg v2 Z: Integer local
+  .reg v3 B: Boolean local
+  .reg t0: - state
+  .reg t1: Exception exception
+  .reg t2: Integer temp
+  .reg t3: Integer temp
+  .reg t4: Integer temp
+  .reg t5: Integer temp
+  .reg t6: Integer temp
+  .reg t7: Integer temp
+  .reg t8: Integer temp
+  .reg t9: Integer temp
+  .reg t10: string temp
+  .reg t11: string temp
+  .reg t12: string temp
+  .reg t13: string temp
+  .reg t14: string temp
+  .try bb1..bb3 finally bb4..bb4 t0, t1
+bb0:
+  .line 19
+  LoadZero     v2
+  .line 20
+  Jmp          bb1
+bb1:
+  .line 23
+  Move         v2, v0
+  LoadInt      t2, 1
+  AddInt32     v2, v2, t2
+  .line 25
+  Move         t3, v0
+  Move         t4, v1
+  LoadInt      t5, 1
+  AddInt32     t4, t4, t5
+  Call         v2, f1(t3, t4)
+  .line 28
+  Move         t6, v0
+  LoadInt      t7, 1
+  AddInt       t6, t6, t7
+  NarrowOvf    t6, t6, 4
+  Move         v2, t6
+  .line 30
+  Move         v3, v0
+  LoadZero     t8
+  LtInt        v3, t8, v3
+  JmpIfFalse   v3, bb3, bb2
+bb2:
+  .line 30
+  Move         v3, v1
+  LoadZero     t9
+  LtInt        v3, t9, v3
+  Jmp          bb3
+bb3:
+  .line 31
+  IntToStr     t10, v2
+  LoadConst    t11, " "
+  ConcatStr    t10, t10, t11
+  BoolToStr    t12, v3
+  ConcatStr    t10, t10, t12
+  LoadConst    t13, "\n"
+  ConcatStr    t10, t10, t13
+  CallHost     -, h0(t10)
+  .line 20
+  LoadZero     t0
+  Jmp          bb4
+bb4:
+  .line 33
+  LoadConst    t14, "done\n"
+  CallHost     -, h0(t14)
+  .line 20
+  EndFinally   t0, bb5
+bb5:
+  .line 35
+  RetVoid
+.finally t1, t10, t11, t12, t13, t14

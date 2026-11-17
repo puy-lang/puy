@@ -1,0 +1,4 @@
+destroy 7
+caught fail
+FALSE TRUE
+EAccessViolation: access to a freed object

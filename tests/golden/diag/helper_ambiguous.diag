@@ -1,0 +1,96 @@
+error[E0754]: `Name` is ambiguous: it is declared in helpers `TFooA` and `TFooB`
+   --> helper_ambiguous.pas:71:13
+    |
+ 20 |     function Name: string;
+    |              ---- candidate
+...
+ 26 |     function Name: string;
+    |              ---- candidate
+...
+ 71 |   WriteLn(F.Name);                                 // E0754 with two fixes
+    |             ^^^^
+    |
+    = note: name the helper to call, as in `TFooA.Name(X)`
+    = suggestion: call `TFooA.Name`
+    = suggestion: call `TFooB.Name`
+
+error[E0754]: `Name` is ambiguous: it is declared in helpers `TFooA` and `TFooB`
+   --> helper_ambiguous.pas:72:13
+    |
+ 20 |     function Name: string;
+    |              ---- candidate
+...
+ 26 |     function Name: string;
+    |              ---- candidate
+...
+ 72 |   WriteLn(F.Name());                               // E0754 with two fixes
+    |             ^^^^
+    |
+    = note: name the helper to call, as in `TFooA.Name(X)`
+    = suggestion: call `TFooA.Name`
+    = suggestion: call `TFooB.Name`
+
+error[E0754]: `Size` is ambiguous: it is declared in helpers `TFooA` and `TFooB`
+   --> helper_ambiguous.pas:73:13
+    |
+ 21 |     property Size: Integer read GetSize;
+    |              ---- candidate
+...
+ 27 |     property Size: Integer read GetSize;
+    |              ---- candidate
+...
+ 73 |   WriteLn(F.Size);                                 // E0754: a property, no fixes
+    |             ^^^^
+    |
+    = note: rename the property in one of the helpers; a property cannot be selected with `Helper.Name(X)`
+
+error[E0754]: `Pad` is ambiguous: it is declared in helpers `TTextA` and `TTextB`
+   --> helper_ambiguous.pas:76:13
+    |
+ 36 |     function Pad(N: Integer): string;
+    |              --- candidate
+...
+ 42 |     function Pad(const S: string): string;
+    |              --- candidate
+...
+ 76 |   WriteLn(S.Pad(3));                               // E0754: overloads in two helpers
+    |             ^^^
+    |
+    = note: name the helper to call, as in `TTextA.Pad(X)`
+    = suggestion: call `TTextA.Pad`
+    = suggestion: call `TTextB.Pad`
+
+error[E0754]: `Length` is ambiguous: it is declared in helpers `TStringHelper` and `TTextA`
+   --> helper_ambiguous.pas:77:13
+    |
+ 37 |     property Length: Integer read Len;
+    |              ------ candidate
+...
+ 77 |   WriteLn(S.Length);                               // E0754: also `TStringHelper`
+    |             ^^^^^^
+    |
+    = note: rename the property in one of the helpers; a property cannot be selected with `Helper.Name(X)`
+
+error[E0734]: ambiguous call to overloaded `TNumHelper.Add`
+   --> helper_ambiguous.pas:79:11
+    |
+ 49 |     function Add(B: Integer): Integer; overload;
+    |              --- candidate
+ 50 |     class function Add(A, B: Integer): Integer; static; overload;
+    |                    --- candidate
+...
+ 79 |   WriteLn(TNumHelper.Add(1, 2));                   // E0734: `1.Add(2)` or `Add(1, 2)`
+    |           ^^^^^^^^^^^^^^^^^^^^
+
+error[E0735]: no overload of `TNumHelper.Add` matches these arguments
+   --> helper_ambiguous.pas:80:11
+    |
+ 49 |     function Add(B: Integer): Integer; overload;
+    |              --- candidate
+ 50 |     class function Add(A, B: Integer): Integer; static; overload;
+    |                    --- candidate
+...
+ 80 |   WriteLn(TNumHelper.Add(1, 2, 3));                // E0735
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+
+error: aborting due to 7 errors

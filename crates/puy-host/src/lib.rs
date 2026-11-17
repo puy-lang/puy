@@ -184,6 +184,21 @@ pub trait Clock {
 /// fatal error.
 pub trait Random {
     fn fill(&mut self, buf: &mut [u8]) -> Result<(), HostError>;
+
+    /// The hash seed of an isolate made with `HashSeed::FromHost` (`docs/spec/equality.md` 7.1).
+    /// The seed is one per process: by default, 8 bytes taken with `fill` the first time any
+    /// `Random` is asked, and the same value every time after, so every isolate of the process
+    /// hashes alike. A failure is returned and leaves the seed to be taken by the next call.
+    fn hash_seed(&mut self) -> Result<u64, HostError> {
+        static SEED: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+        if let Some(s) = SEED.get() {
+            return Ok(*s);
+        }
+        let mut buf = [0; 8];
+        self.fill(&mut buf)?;
+        // Another thread may have set it meanwhile: its value wins, so all agree
+        Ok(*SEED.get_or_init(|| u64::from_le_bytes(buf)))
+    }
 }
 
 /// Process-wide memory usage (§5.12). Implemented by the runtime's allocator wrapper.
@@ -192,6 +207,35 @@ pub trait MemoryStats {
     fn current(&self) -> Option<usize>;
     fn peak(&self) -> Option<usize>;
     fn limit(&self) -> Option<usize>;
+}
+
+/// The mark of an allocation whose failure the caller handles (`docs/design/host-interface.md`
+/// 3.8). The VM makes its fallible allocations (`try_reserve` of the buffers of Pascal values,
+/// which fail with `EOutOfMemory`) inside [`fallible`]; a runtime's global allocator wrapper
+/// reads [`in_fallible`] when the system allocator refuses, and treats a refusal outside the mark
+/// as the fatal failure of an allocation inside Rust (F0003). An embedder's allocator may ignore
+/// the mark.
+pub mod alloc {
+    use std::cell::Cell;
+
+    thread_local! {
+        // A const initializer with no destructor: reading it from inside the global allocator
+        // allocates nothing
+        static FALLIBLE: Cell<bool> = const { Cell::new(false) };
+    }
+
+    /// Runs `f`, whose allocations may fail without ending the process, under the mark.
+    pub fn fallible<R>(f: impl FnOnce() -> R) -> R {
+        let outer = FALLIBLE.with(|m| m.replace(true));
+        let r = f();
+        FALLIBLE.with(|m| m.set(outer));
+        r
+    }
+
+    /// Whether the current thread is inside [`fallible`].
+    pub fn in_fallible() -> bool {
+        FALLIBLE.with(Cell::get)
+    }
 }
 
 /// Bundle of host capabilities (`docs/design/host-interface.md` 3.1). `None` means "no permission /
@@ -238,6 +282,28 @@ mod tests {
         unsafe { Waker::from_raw(RawWaker::new(std::ptr::null(), &VTABLE)) }
     }
 
+    /// A source that gives different bytes on every call.
+    struct Counter(u8);
+
+    impl Random for Counter {
+        fn fill(&mut self, buf: &mut [u8]) -> Result<(), HostError> {
+            self.0 = self.0.wrapping_add(1);
+            buf.fill(self.0);
+            Ok(())
+        }
+    }
+
+    // The default `hash_seed` takes the seed once per process (`docs/spec/equality.md` 7.1): asked
+    // again, or through another source whose bytes differ, it gives the same value.
+    #[test]
+    fn default_hash_seed_is_one_per_process() {
+        let mut a = Counter(0);
+        let mut b = Counter(100);
+        let first = a.hash_seed().unwrap();
+        assert_eq!(a.hash_seed().unwrap(), first);
+        assert_eq!(b.hash_seed().unwrap(), first);
+    }
+
     #[test]
     fn ready_future_completes_immediately() {
         let mut fut = ready(Ok::<i32, HostError>(42));
@@ -252,6 +318,18 @@ mod tests {
         assert_eq!(e.fixed_text(), "file not found");
         let e = HostError::other("something odd");
         assert_eq!(e.fixed_text(), "something odd");
+    }
+
+    // The mark is set only inside `fallible`, nests, and is restored afterwards.
+    #[test]
+    fn fallible_mark_nests() {
+        assert!(!alloc::in_fallible());
+        let inner = alloc::fallible(|| {
+            let nested = alloc::fallible(alloc::in_fallible);
+            (nested, alloc::in_fallible())
+        });
+        assert_eq!(inner, (true, true));
+        assert!(!alloc::in_fallible());
     }
 
     #[test]

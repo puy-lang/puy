@@ -1,0 +1,9 @@
+empty: TRUE TRUE TRUE
+fields only: TRUE 2
+other-typed Equal: TRUE TRUE
+other-typed Equal differs: FALSE
+nested Equal: TRUE TRUE
+nested Equal, other field: FALSE
+class ref nil: TRUE FALSE
+nil hashes: TRUE TRUE TRUE TRUE TRUE
+string inferred: TRUE

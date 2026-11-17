@@ -1,0 +1,19 @@
+error[E0702]: type mismatch: expected `Integer`, found `string` (argument 1, parameter `ACode`)
+   --> exception_ctor_errors.pas:25:20
+    |
+ 25 |   E := EApp.Create('xy');
+    |                    ^^^^
+
+error[E0707]: cannot assign to `E.InnerException`
+   --> exception_ctor_errors.pas:26:3
+    |
+ 26 |   E.InnerException := nil;
+    |   ^^^^^^^^^^^^^^^^ a read-only property
+
+error[E0402]: expected a statement
+   --> exception_ctor_errors.pas:27:3
+    |
+ 27 |   Exception.Create('x');
+    |   ^^^^^^^^^^^^^^^^^^^^^
+
+error: aborting due to 3 errors

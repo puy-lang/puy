@@ -1,0 +1,69 @@
+SOURCE_FILE@0..243
+  PROGRAM@0..243
+    PROGRAM_HEADER@0..26
+      PROGRAM_KW@0..7 "program"
+      WHITESPACE@7..8 " "
+      IDENT@8..25 "AttrTrailingComma"
+      SEMICOLON@25..26 ";"
+    NEWLINE@26..27 "\n"
+    NEWLINE@27..28 "\n"
+    LINE_COMMENT@28..121 "// A `,` right before the `]` of an attribute list is E0405, expecting another attribute name"
+    NEWLINE@121..122 "\n"
+    LINE_COMMENT@122..145 "// (attributes.md 1.1)."
+    NEWLINE@145..146 "\n"
+    NEWLINE@146..147 "\n"
+    TYPE_SECTION@147..230
+      TYPE_KW@147..151 "type"
+      NEWLINE@151..152 "\n"
+      WHITESPACE@152..154 "  "
+      TYPE_DECL@154..200
+        IDENT@154..167 "MarkAttribute"
+        WHITESPACE@167..168 " "
+        EQ@168..169 "="
+        WHITESPACE@169..170 " "
+        CLASS_TYPE@170..199
+          CLASS_KW@170..175 "class"
+          CLASS_PARENTS@175..193
+            L_PAREN@175..176 "("
+            TYPE_REF@176..192
+              QUALIFIED_NAME@176..192
+                IDENT@176..192 "TCustomAttribute"
+            R_PAREN@192..193 ")"
+          NEWLINE@193..194 "\n"
+          WHITESPACE@194..196 "  "
+          CLASS_BODY@196..196
+          END_KW@196..199 "end"
+        SEMICOLON@199..200 ";"
+      NEWLINE@200..201 "\n"
+      NEWLINE@201..202 "\n"
+      WHITESPACE@202..204 "  "
+      TYPE_DECL@204..230
+        ATTRIBUTE_LIST@204..212
+          L_BRACK@204..205 "["
+          ATTRIBUTE@205..209
+            QUALIFIED_NAME@205..209
+              IDENT@205..209 "Mark"
+          COMMA@209..210 ","
+          WHITESPACE@210..211 " "
+          R_BRACK@211..212 "]"
+        WHITESPACE@212..213 " "
+        IDENT@213..215 "TX"
+        WHITESPACE@215..216 " "
+        EQ@216..217 "="
+        WHITESPACE@217..218 " "
+        CLASS_TYPE@218..229
+          CLASS_KW@218..223 "class"
+          NEWLINE@223..224 "\n"
+          WHITESPACE@224..226 "  "
+          CLASS_BODY@226..226
+          END_KW@226..229 "end"
+        SEMICOLON@229..230 ";"
+    NEWLINE@230..231 "\n"
+    NEWLINE@231..232 "\n"
+    COMPOUND_STMT@232..241
+      BEGIN_KW@232..237 "begin"
+      NEWLINE@237..238 "\n"
+      END_KW@238..241 "end"
+    DOT@241..242 "."
+    NEWLINE@242..243 "\n"
+    EOF@243..243 ""

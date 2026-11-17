@@ -1,0 +1,55 @@
+program DumpInterfaceChecks uses=System.SysUtils
+.type IShape = interface(IInterface)
+  .method #0 Area: Integer
+.type TSquare = class(TRefObject) ref
+  .method f1 Area
+  .implements IInterface
+  .implements IShape #0=f1
+.global g0 O: TObject
+.global g1 S: IShape
+.global g2 Q: TSquare
+.routine f1 TSquare.Area(): Integer
+  .var v0 Self: TSquare self
+  .var v1 Result: Integer result
+  assign @23 R+
+    var v1 Result
+    const Integer 4
+.routine <main>
+  assign @31 R+
+    global g0 O
+    create TSquare builtin
+  writeln @32
+    arg
+      is IShape
+        global g0 O: TObject
+  assign @33 R+
+    global g1 S
+    as IShape
+      global g0 O: TObject
+  assign @34 R+
+    global g1 S
+    as IShape cast
+      global g0 O: TObject
+  assign @35 R+
+    global g2 Q
+    as TSquare
+      global g1 S: IShape
+  assign @36 R+
+    global g0 O
+    global g1 S: TObject
+  writeln @37
+    arg
+      supports IShape
+        global g0 O: TObject
+        out
+          global g1 S
+    arg
+      const Char #32
+    arg
+      supports IShape
+        global g1 S: IShape
+    arg
+      const Char #32
+    arg
+      supports-class IShape
+        classref TSquare

@@ -1,0 +1,60 @@
+; puy ir 1
+.global
+.func f0 DumpIncDecTry.<main> params=0
+  .reg t0: - temp
+bb0:
+  .line 29
+  Call         -, f1()
+  .line 30
+  RetVoid
+.finally
+.func f1 DumpIncDecTry.P params=0
+  .reg v0 I: Integer local
+  .reg v1 B: Byte local
+  .reg t0: - state
+  .reg t1: Exception exception
+  .reg t2: Integer temp
+  .reg t3: Byte temp
+  .reg t4: string temp
+  .reg t5: string temp
+  .reg t6: string temp
+  .reg t7: string temp
+  .try bb1..bb1 finally bb2..bb2 t0, t1
+bb0:
+  .line 12
+  LoadZero     v0
+  .line 13
+  LoadInt      v1, 5
+  .line 14
+  Jmp          bb1
+bb1:
+  .line 17
+  AddInt32I    v0, v0, 1
+  .line 20
+  AddIntI      t2, v0, 1
+  NarrowOvf    t2, t2, 4
+  Move         v0, t2
+  .line 22
+  AddIntI      t3, v1, -2
+  NarrowOvf    t3, t3, 4
+  NarrowRng    t3, t3, 1
+  Move         v1, t3
+  .line 14
+  LoadZero     t0
+  Jmp          bb2
+bb2:
+  .line 24
+  IntToStr     t4, v0
+  LoadConst    t5, " "
+  ConcatStr    t4, t4, t5
+  IntToStr     t6, v1
+  ConcatStr    t4, t4, t6
+  LoadConst    t7, "\n"
+  ConcatStr    t4, t4, t7
+  CallHost     -, h0(t4)
+  .line 14
+  EndFinally   t0, bb3
+bb3:
+  .line 26
+  RetVoid
+.finally t1, t4, t5, t6, t7

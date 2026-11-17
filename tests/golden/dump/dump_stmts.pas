@@ -6,7 +6,7 @@ uses System.SysUtils;
 
 var
   G: Integer = 10;
-  S: string;
+  S: string; H: Integer;
 
 function Square(X: Integer): Integer;
 begin
@@ -31,7 +31,7 @@ begin
   var U: UInt64 := 1;
   Inc(B, 2);
   Dec(G);
-  Swap(G, G, S, B);
+  Swap(G, H, S, B);
   if (G > 0) and (B < 3) then
     WriteLn(Square(G):5, ' ', IntToStr(U), Boolean(G), Integer(C), -G, not B)
   else if S = C then

@@ -67,6 +67,18 @@ struct Summary {
     writes: Option<Vec<bool>>,
 }
 
+/// Whether a variable of type `ty` holds an instance that its assignments keep or let go of: a
+/// reference counted class, exactly `TObject`, an interface or an anonymous method type
+/// (`docs/spec/semantics.md` 4.6).
+/// Holding it and replacing it decide when the destructor runs, so W0001 and W0002 do not report
+/// such a variable (a guard held to the end of a routine, `X := nil`).
+fn keeps_instance(types: &TypeTable, ty: Ty) -> bool {
+    (matches!(ty, Ty::Class(_) | Ty::Intf(_)) && types.managed(ty))
+        // An anonymous method holds the variables and the `Self` it captured
+        // (`docs/spec/objects.md` 9.6)
+        || types.proc_family(ty) == Some(super::types::ProcFamily::Reference)
+}
+
 struct Flow<'a> {
     r: &'a Routine,
     effects: &'a Effects,
@@ -148,7 +160,7 @@ pub fn analyze(
             let v = &r.vars[i];
             let never_read = !(f.reads[i] || v.read_by_nested)
                 && (v.kind == VarKind::Local || unused_param_on[i]);
-            never_read || f.unseen_read[i] || v.captured
+            never_read || f.unseen_read[i] || v.captured || keeps_instance(f.types, v.ty)
         })
         .collect();
     let mut diags = f.diags;
@@ -166,7 +178,12 @@ fn initial_state(r: &Routine) -> State {
             VarKind::Param(_) => true,
             VarKind::Result => false,
             VarKind::Local => false,
-            VarKind::Hidden | VarKind::Exception | VarKind::Outer { .. } => true,
+            VarKind::Hidden
+            | VarKind::Exception
+            | VarKind::SelfParam
+            | VarKind::RecordSelf
+            | VarKind::Outer { .. }
+            | VarKind::Cell { .. } => true,
         })
         .collect()
 }
@@ -293,8 +310,38 @@ fn zero_text(ty: Ty, types: &TypeTable) -> Option<String> {
         Ty::Boolean => "False".into(),
         Ty::Char => "#0".into(),
         Ty::String | Ty::Utf8String => "''".into(),
+        // A generic record's name needs type arguments (`docs/spec/generics.md` 2.3)
+        Ty::Record(id) if types.is_generic(id) => return None,
+        // An instantiation of a type nested in a generic type with the outer type's type
+        // parameters (`TOuter<T>.TPair<Integer>`) cannot be written by its name
+        // (`docs/spec/generics.md` 2.5)
+        Ty::Record(_) | Ty::Array(_) if types.has_param(ty) => return None,
         Ty::Record(id) | Ty::Array(id) => format!("Default({})", types.get(id).name.as_ref()?),
-        Ty::DynArray(_) | Ty::Exception(_) => "nil".into(),
+        // `docs/spec/generics.md` 6.1
+        Ty::Param(id) => format!("Default({})", types.get(id).name.as_ref()?),
+        Ty::DynArray(_)
+        | Ty::Class(_)
+        | Ty::ClassRef(_)
+        | Ty::Intf(_)
+        | Ty::Weak(_)
+        | Ty::Proc(_)
+        | Ty::Callable(_) => "nil".into(),
+        // `docs/spec/types.md` 8.3
+        Ty::Set(_) | Ty::BigSet(_) => "[]".into(),
+        // The lowest value, since an ordinal `0` may not be one of its values
+        Ty::Enum(_) | Ty::Subrange(_) => {
+            let (low, _) = types.ord_range(ty)?;
+            let base = types.base(ty);
+            let named = match base {
+                Ty::Enum(id) => types.get(id).name.as_ref(),
+                _ => None,
+            };
+            match (types.enum_values(base).iter().find(|v| v.ord == low), named) {
+                (Some(v), Some(t)) => format!("{t}.{}", v.name),
+                (Some(v), None) => v.name.clone(),
+                (None, _) => types.bound_text(ty, low),
+            }
+        }
         _ => "0".into(),
     })
 }
@@ -324,21 +371,10 @@ impl<'a> Flow<'a> {
     /// A call of a nested routine: its reads and assignments of the target's variables
     /// (`docs/spec/semantics.md` 4.9).
     fn call_effect(&mut self, routine: RoutineId, at: TextRange, cur: &mut Cursor) {
+        self.effect_reads(routine, at, "read by this call", cur);
         let Some(e) = self.effects.get(&routine) else {
             return;
         };
-        for &v in &e.reads {
-            if self.summary.is_some() {
-                let slot = self.target_slot(v);
-                if !cur.state[slot]
-                    && let Some(s) = &mut self.summary
-                {
-                    s.reads[v.0 as usize] = true;
-                }
-            } else {
-                self.read_as(v, at, "read by this call", cur);
-            }
-        }
         match &e.writes {
             Some(writes) => {
                 for &v in writes {
@@ -351,6 +387,32 @@ impl<'a> Flow<'a> {
                 for st in &mut cur.state[start..] {
                     *st = true;
                 }
+            }
+        }
+    }
+
+    /// The variables the routine `routine` may read before assigning them, read at `at` (by a
+    /// call, or by making an anonymous method: `docs/spec/objects.md` 9.6).
+    fn effect_reads(
+        &mut self,
+        routine: RoutineId,
+        at: TextRange,
+        label: &'static str,
+        cur: &mut Cursor,
+    ) {
+        let Some(e) = self.effects.get(&routine) else {
+            return;
+        };
+        for &v in &e.reads {
+            if self.summary.is_some() {
+                let slot = self.target_slot(v);
+                if !cur.state[slot]
+                    && let Some(s) = &mut self.summary
+                {
+                    s.reads[v.0 as usize] = true;
+                }
+            } else {
+                self.read_as(v, at, label, cur);
             }
         }
     }
@@ -414,7 +476,15 @@ impl<'a> Flow<'a> {
                 }
             }
             StmtKind::Block(list) => self.stmts(list, cur),
-            StmtKind::Expr(e) => self.expr(e, cur),
+            StmtKind::Declare(_) => {}
+            StmtKind::Expr(e) | StmtKind::PropertySet { call: e, .. } => self.expr(e, cur),
+            StmtKind::Free { target, .. }
+            | StmtKind::FreeIfClass { value: target }
+            | StmtKind::CheckDefaultOrder { value: target } => self.expr(target, cur),
+            StmtKind::CheckClassType { value, what } => {
+                self.expr(value, cur);
+                self.expr(what, cur);
+            }
             StmtKind::If {
                 branches,
                 else_body,
@@ -588,6 +658,33 @@ impl<'a> Flow<'a> {
                     self.mark_assigned(*id, cur);
                 }
             }
+            StmtKind::Exchange {
+                target,
+                first,
+                second,
+                ..
+            } => {
+                self.place_read(target, cur);
+                self.expr(first, cur);
+                self.expr(second, cur);
+            }
+            StmtKind::ArrayMoveRange {
+                target,
+                from,
+                to,
+                count,
+            } => {
+                self.place_read(target, cur);
+                self.expr(from, cur);
+                self.expr(to, cur);
+                self.expr(count, cur);
+            }
+            StmtKind::FreeAndNil { target } => {
+                self.place_read(target, cur);
+                if let Place::Var(id, _) = target {
+                    self.mark_assigned(*id, cur);
+                }
+            }
             StmtKind::Delete {
                 target,
                 index,
@@ -713,6 +810,22 @@ impl<'a> Flow<'a> {
         }
     }
 
+    /// The arguments of a call, in order: values read, `var` places read and `out` places written.
+    fn call_args(&mut self, args: &[CallArg], cur: &mut Cursor) {
+        for a in args {
+            match a {
+                CallArg::Value(v) | CallArg::Temp(v) => self.expr(v, cur),
+                CallArg::Ref { place, is_out } => {
+                    if *is_out {
+                        self.place_write(place, cur);
+                    } else {
+                        self.place_read(place, cur);
+                    }
+                }
+            }
+        }
+    }
+
     fn expr(&mut self, e: &Expr, cur: &mut Cursor) {
         match &e.kind {
             ExprKind::Const | ExprKind::Global(_) => {}
@@ -735,39 +848,78 @@ impl<'a> Flow<'a> {
                 self.expr(index, cur);
             }
             ExprKind::Field { base, .. } => self.expr(base, cur),
+            ExprKind::RecordNew { call } => self.expr(call, cur),
             ExprKind::Slice { base, low, high } => {
                 self.expr(base, cur);
                 for b in low.iter().chain(high.iter()) {
                     self.expr(b, cur);
                 }
             }
-            ExprKind::Call { routine, args } => {
-                for a in args {
-                    match a {
-                        CallArg::Value(v) => self.expr(v, cur),
-                        CallArg::Ref { place, is_out } => {
-                            if *is_out {
-                                self.place_write(place, cur);
-                            } else {
-                                self.place_read(place, cur);
-                            }
-                        }
-                    }
+            ExprKind::IndexRange { first, last } => {
+                for b in first.iter().chain(last.iter()) {
+                    self.expr(b, cur);
                 }
+            }
+            ExprKind::Call { routine, args, .. } => {
+                self.call_args(args, cur);
                 self.call_effect(*routine, e.span, cur);
             }
-            ExprKind::Builtin { args, .. } | ExprKind::ArrayCtor(args) => {
+            // Its body's assignments are not of this flow: it may run later, or never
+            ExprKind::Anon { func, .. } => self.effect_reads(*func, e.span, "captured here", cur),
+            ExprKind::NestedRef { func, .. } => {
+                self.effect_reads(*func, e.span, "captured here", cur)
+            }
+            ExprKind::Builtin { args, .. }
+            | ExprKind::Key { args, .. }
+            | ExprKind::ArrayCtor(args) => {
                 for a in args {
                     self.expr(a, cur);
                 }
             }
-            ExprKind::Convert { operand, .. } | ExprKind::NewExc { msg: operand, .. } => {
-                self.expr(operand, cur)
+            ExprKind::Convert { operand, .. } => self.expr(operand, cur),
+            ExprKind::ExcMember { base, .. }
+            | ExprKind::ObjField { base, .. }
+            | ExprKind::ClassName { base }
+            | ExprKind::ClassCheck { operand: base, .. }
+            | ExprKind::Weak(base) => self.expr(base, cur),
+            ExprKind::ClassInfo { args, .. } => {
+                for a in args {
+                    self.expr(a, cur);
+                }
             }
-            ExprKind::ExcMember { base, .. } => self.expr(base, cur),
+            ExprKind::ClassRefValue(_) | ExprKind::RoutineRef(_) => {}
+            ExprKind::MethodRef { base, .. } | ExprKind::ToClosure(base) => self.expr(base, cur),
+            ExprKind::CallValue { callee, args } => {
+                // The callee is evaluated first (`docs/spec/objects.md` 9.4)
+                self.expr(callee, cur);
+                self.call_args(args, cur);
+            }
+            ExprKind::New { ctor, args, of, .. } => {
+                if let Some(c) = of {
+                    self.expr(c, cur);
+                }
+                self.call_args(args, cur);
+                if let Some(r) = ctor {
+                    self.call_effect(*r, e.span, cur);
+                }
+            }
+            ExprKind::InheritedBuiltin { base, msg, .. } => {
+                self.expr(base, cur);
+                if let Some(m) = msg {
+                    self.expr(m, cur);
+                }
+            }
             ExprKind::TryStrToInt { s, target } => {
                 self.expr(s, cur);
                 self.place_write(target, cur);
+            }
+            ExprKind::Supports {
+                operand, target, ..
+            } => {
+                self.expr(operand, cur);
+                if let Some(t) = target {
+                    self.place_write(t, cur);
+                }
             }
             ExprKind::SetCtor(elems) => {
                 for el in elems {
@@ -829,7 +981,7 @@ impl<'a> Flow<'a> {
                 self.place_read(base, cur);
             }
             Place::Field { base, .. } => self.place_read(base, cur),
-            Place::ExcMember { base, .. } => self.expr(base, cur),
+            Place::ObjField { base, .. } => self.expr(base, cur),
         }
     }
 
@@ -849,7 +1001,7 @@ impl<'a> Flow<'a> {
                 self.place_read(base, cur);
             }
             Place::Field { base, .. } => self.place_read(base, cur),
-            Place::ExcMember { base, .. } => self.expr(base, cur),
+            Place::ObjField { base, .. } => self.expr(base, cur),
         }
     }
 
@@ -1082,6 +1234,7 @@ impl<'a> Flow<'a> {
                 || v.is_for_var
                 || self.reads[i]
                 || v.read_by_nested
+                || keeps_instance(self.types, v.ty)
             {
                 continue;
             }

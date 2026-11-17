@@ -1,0 +1,32 @@
+program DumpExceptionClass
+.type ECoded = class(Exception) ref
+  .field 2 Code: Integer
+  .method f0 Create constructor
+.routine f0 ECoded.Create(const Msg: string; ACode: Integer)
+  .var v0 Self: ECoded self
+  .var v1 Msg: string const param
+  .var v2 ACode: Integer param
+  expr @17
+    inherited builtin Exception.Create: -
+      self ECoded
+      var v1 Msg: string
+  assign @18 R+
+    objfield Integer Code #2
+      self ECoded
+    var v2 ACode: Integer
+.routine <main>
+  .var v0 E: ECoded exception
+  try @22
+    body
+      raise @23
+        create ECoded f0
+          const string "x"
+          const Integer 1
+    on v0 E: ECoded
+      writeln @26
+        arg
+          objfield string FMessage #0
+            builtin ExceptObject Exception
+        arg
+          objfield Integer Code #2
+            var v0 E: ECoded

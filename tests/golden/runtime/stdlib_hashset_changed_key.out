@@ -1,0 +1,26 @@
+b changed to x
+  EInvalidOperation: the key of entry #1 in `THashSet<StdlibHashSetChangedKey.TKey>` was changed after it was added
+  x: FALSE
+  a: TRUE
+  items: a
+  EInvalidOperation: the key of entry #1 in `THashSet<StdlibHashSetChangedKey.TKey>` was changed after it was added
+  EInvalidOperation: the key of entry #1 in `THashSet<StdlibHashSetChangedKey.TKey>` was changed after it was added
+removing
+  EInvalidOperation: the key of entry #1 in `THashSet<StdlibHashSetChangedKey.TKey>` was changed after it was added
+  remove c: TRUE, count 2
+growing places the items again
+  add n1: TRUE, count 3
+  EInvalidOperation: the key of entry #1 in `THashSet<StdlibHashSetChangedKey.TKey>` was changed after it was added
+  EInvalidOperation: the key of entry #1 in `THashSet<StdlibHashSetChangedKey.TKey>` was changed after it was added
+  EInvalidOperation: the key of entry #1 in `THashSet<StdlibHashSetChangedKey.TKey>` was changed after it was added
+  count 3, capacity 4
+Clear always works
+  count 0
+  x: TRUE
+set operations
+  EInvalidOperation: the key of entry #0 in `THashSet<StdlibHashSetChangedKey.TKey>` was changed after it was added
+  count 2 after UnionWith
+  EInvalidOperation: the key of entry #0 in `THashSet<StdlibHashSetChangedKey.TKey>` was changed after it was added
+  count 31 after ExceptWith
+  EInvalidOperation: the key of entry #0 in `THashSet<StdlibHashSetChangedKey.TKey>` was changed after it was added
+  count 31 after IntersectWith

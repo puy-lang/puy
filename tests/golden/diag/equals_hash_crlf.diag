@@ -1,0 +1,10 @@
+error[E0765]: `TOnlyEquals` overrides `Equals` but not `GetHashCode`
+  --> equals_hash_crlf.pas:9:14
+   |
+ 9 |     function Equals(Obj: TObject): Boolean; override;
+   |              ^^^^^^
+   |
+   = note: objects that are equal must have the same hash code, so override both `Equals` and `GetHashCode`
+   = suggestion: override `GetHashCode`
+
+error: aborting due to 1 error

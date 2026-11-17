@@ -1,0 +1,126 @@
+error[E0767]: `[ValueEquality]` can only be applied to a class
+   --> value_equality_positions.pas:16:4
+    |
+ 16 |   [ValueEquality]
+    |    ^^^^^^^^^^^^^
+    |
+    = fix: remove `[ValueEquality]`
+
+error[E0767]: `[ValueEquality]` can only be applied to a class
+   --> value_equality_positions.pas:22:6
+    |
+ 22 |     [ValueEquality] F: Integer;
+    |      ^^^^^^^^^^^^^
+    |
+    = fix: remove `[ValueEquality]`
+
+error[E0767]: `[ValueEquality]` can only be applied to a class
+   --> value_equality_positions.pas:23:6
+    |
+ 23 |     [ValueEquality] procedure M;
+    |      ^^^^^^^^^^^^^
+    |
+    = fix: remove `[ValueEquality]`
+
+error[E0767]: `[EqualityMember]` can only be applied to a field of a class with `[ValueEquality]`
+   --> value_equality_positions.pas:30:6
+    |
+ 30 |     [EqualityMember] procedure M;
+    |      ^^^^^^^^^^^^^^
+    |
+    = fix: remove `[EqualityMember]`
+
+error[E0767]: `[ValueEquality]` can only be applied to a class
+   --> value_equality_positions.pas:33:4
+    |
+ 33 |   [ValueEquality, Tag]
+    |    ^^^^^^^^^^^^^
+    |
+    = note: records are already compared field by field
+    = fix: remove `[ValueEquality]`
+
+error[E0765]: `[ValueEquality]` cannot be used with operator `Equal`
+   --> value_equality_positions.pas:43:20
+    |
+ 38 |   [ValueEquality]
+    |    ------------- `[ValueEquality]` written here
+...
+ 43 |     class operator Equal(const A, B: TBoth): Boolean;
+    |                    ^^^^^
+
+error[E0765]: `TOnly` has `[ValueEquality]`, so `Equals` and `GetHashCode` are generated and cannot be overridden
+   --> value_equality_positions.pas:49:14
+    |
+ 46 |   [ValueEquality]
+    |    ------------- `[ValueEquality]` written here
+...
+ 49 |     function GetHashCode: Int64; override;
+    |              ^^^^^^^^^^^
+
+error[E0765]: `[ValueEquality]` cannot be used with operator `Equal`
+   --> value_equality_positions.pas:55:20
+    |
+ 52 |   [ValueEquality]
+    |    ------------- `[ValueEquality]` written here
+...
+ 55 |     class operator Equal(const A, B: TRc): Boolean;
+    |                    ^^^^^
+
+error[E0765]: `TOneSide` overrides `Equals` but not `GetHashCode`
+   --> value_equality_positions.pas:64:14
+    |
+ 64 |     function Equals(Obj: TObject): Boolean; override;
+    |              ^^^^^^
+    |
+    = note: objects that are equal must have the same hash code, so override both `Equals` and `GetHashCode`
+    = suggestion: override `GetHashCode`
+
+error[E0767]: `[EqualityMember]` can only be applied to a field of a class with `[ValueEquality]`
+   --> value_equality_positions.pas:68:11
+    |
+ 68 |     [Tag, EqualityMember] W: Integer;
+    |           ^^^^^^^^^^^^^^
+    |
+    = fix: remove `[EqualityMember]`
+
+error[E0705]: wrong number of arguments: expected 0, found 1
+   --> value_equality_positions.pas:73:17
+    |
+ 73 |   [ValueEquality(1)]
+    |                 ^^^
+
+error[E0765]: `GetHashCode` of a record must be declared as `function GetHashCode: Int64`
+   --> value_equality_positions.pas:81:14
+    |
+ 80 |     class operator Equal(const A, B: TR): Boolean;
+    |                    ----- operator `Equal` declared here
+ 81 |     function GetHashCode(X: Integer): Int64;
+    |              ^^^^^^^^^^^
+
+error[E0713]: constant expression required
+   --> value_equality_positions.pas:95:8
+    |
+ 95 |   C1 = HashCombine(1, 2);
+    |        ^^^^^^^^^^^^^^^^^
+
+error[E0713]: constant expression required
+   --> value_equality_positions.pas:96:8
+    |
+ 96 |   C2 = KeyEquals(1, 1);
+    |        ^^^^^^^^^^^^^^^
+
+error[E0752]: `HashCombine` cannot be used as a procedural value
+    --> value_equality_positions.pas:170:8
+     |
+ 170 |   F := HashCombine;
+     |        ^^^^^^^^^^^
+
+error[E0761]: `HashCombine` is not generic
+    --> value_equality_positions.pas:171:11
+     |
+ 171 |   WriteLn(HashCombine<Integer>(1, 2));
+     |           ^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: to compare, write `(A < B) > (C)`
+
+error: aborting due to 16 errors

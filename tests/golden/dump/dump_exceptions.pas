@@ -1,8 +1,8 @@
 program DumpExceptions;
 
-// The dumps of exception classes (semantics.md 9.1, bytecode.md 5.1, 5.2): `.type … = class(…)`,
-// `new`, `member`, `raise`, the `exception` entries of `.type` with their parents, `NewExc`,
-// `ExcGet`, `ExcSet`, `ExcInfo` and `Raise` (also for `Assert`).
+// The dumps of exception classes (semantics.md chapter 9, bytecode.md 5.1, 5.2): `.type … = class(…)`,
+// `create … builtin`, `objfield`, `raise`, the `class … ref` entries of `.type` (M3-35), `New` with
+// `ObjSetRef`, `ObjGetRef`, `ExcInfo` and `Raise` (also for `Assert`).
 
 type
   EAppError = class(Exception);

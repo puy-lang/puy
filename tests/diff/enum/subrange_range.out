@@ -1,0 +1,11 @@
+assigned 0
+assigned 9
+range error for 10
+range error for -1
+Inc range error, D = 9
+parameter range error
+index range error
+100
+percent range error, P = 100
+byte: ERangeError
+7

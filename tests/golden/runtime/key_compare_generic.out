@@ -1,0 +1,13 @@
+7 pear 2.5
+5
+comparing
+EInvalidOperation: `TPlain` has no default order; pass a comparer
+comparing
+EInvalidOperation: `TObject` has no default order; pass a comparer
+comparing
+EInvalidOperation: `TNumbers` has no default order; pass a comparer
+comparing
+EInvalidOperation: `TObject` has no default order; pass a comparer
+argument evaluated
+argument evaluated
+`TObject` has no default order; pass a comparer

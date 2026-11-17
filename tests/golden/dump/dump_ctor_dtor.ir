@@ -1,0 +1,96 @@
+; puy ir 1
+.global
+  g0 N: TNamed
+.func f0 DumpCtorDtor.<main> params=0
+  .reg t0: TNamed temp
+  .reg t1: TNamed temp
+  .reg t2: TNamed temp
+  .reg t3: string temp
+  .reg t4: string temp
+  .reg t5: - state
+  .reg t6: Exception exception
+  .reg t7: TNamed temp
+  .reg t8: Integer temp
+  .reg t9: TNamed temp
+  .try bb1..bb1 finally bb2..bb4 t5, t6
+bb0:
+  .line 38
+  LoadConst    t4, "dump"
+  Move         t3, t4
+  LoadZero     t1
+  New          t1, DumpCtorDtor.TNamed
+  Jmp          bb1
+bb1:
+  .line 38
+  Move         t2, t1
+  CallMethod   -, f1(t2, t3)
+  Move         t7, t1
+  CallVirtual  -, DumpCtorDtor.TNamed.AfterConstruction[1](t7)
+  LoadZero     t5
+  Jmp          bb2
+bb2:
+  .line 38
+  LoadInt      t8, 1
+  JmpIfNeInt   t5, t8, bb4, bb3
+bb3:
+  .line 38
+  DestroyFailed t1
+  Jmp          bb4
+bb4:
+  .line 38
+  EndFinally   t5, bb5
+bb5:
+  .line 38
+  Move         t0, t1
+  StoreGlobal  t0, g0
+  .line 39
+  LoadGlobal   t9, g0
+  Free         t9
+  .line 40
+  RetVoid
+.finally t4, t6
+.func f1 DumpCtorDtor.TNamed.Create params=2
+  .reg v0 Self: TNamed self
+  .reg v1 AName: string const param
+bb0:
+  .line 21
+  ObjSetRef    v0, 0, v1
+  .line 22
+  RetVoid
+.finally
+.func f2 DumpCtorDtor.TNamed.Destroy params=1
+  .reg v0 Self: TNamed self
+  .reg t0: Integer temp
+  .reg t1: string temp
+  .reg t2: string temp
+  .reg t3: string temp
+bb0:
+  .line 24
+  LoadInt      t0, DumpCtorDtor.TNamed
+  DtorEnter    v0, t0
+  .line 26
+  LoadConst    t1, "bye "
+  ObjGetRef    t2, v0, 0
+  ConcatStr    t1, t1, t2
+  LoadConst    t3, "\n"
+  ConcatStr    t1, t1, t3
+  CallHost     -, h0(t1)
+  .line 28
+  RetVoid
+.finally t1, t2, t3
+.func f3 DumpCtorDtor.TNamed.AfterConstruction params=1
+  .reg v0 Self: TNamed self
+  .reg t0: string temp
+  .reg t1: string temp
+  .reg t2: string temp
+bb0:
+  .line 32
+  LoadConst    t0, "hello "
+  ObjGetRef    t1, v0, 0
+  ConcatStr    t0, t0, t1
+  LoadConst    t2, "\n"
+  ConcatStr    t0, t0, t2
+  CallHost     -, h0(t0)
+  .line 33
+  RetVoid
+.finally t0, t1, t2

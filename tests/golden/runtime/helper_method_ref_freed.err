@@ -1,0 +1,2 @@
+error: uncaught exception EAccessViolation: access to a freed object
+  at HelperMethodRefFreed.<main> (helper_method_ref_freed.pas:31)

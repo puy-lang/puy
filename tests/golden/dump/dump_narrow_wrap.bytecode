@@ -1,0 +1,395 @@
+; puyc format 0
+.const
+  0: int 2000000000
+  1: int 1500000000
+  2: int 4000000000
+  3: int 3000000000
+  4: str "\n"
+  5: int 1000000000
+  6: str "negative\n"
+  7: int -294967296
+.global
+  0: int A
+  1: int B
+  2: int X
+  3: int C
+  4: int D
+  5: int By
+  6: int Ch
+  7: int L
+  8: int U
+  9: int R
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpNarrowWrap file="dump_narrow_wrap.pas" init=- fini=- entry=0
+.func 0 DumpNarrowWrap.<main> params=0 regs=62
+  .line 22
+  0000  LoadConst    r57, k0
+  0001  StoreGlobal  r57, g0
+  .line 23
+  0002  LoadConst    r57, k1
+  0003  StoreGlobal  r57, g1
+  .line 24
+  0004  LoadConst    r57, k2
+  0005  StoreGlobal  r57, g3
+  .line 25
+  0006  LoadConst    r57, k3
+  0007  StoreGlobal  r57, g4
+  .line 27
+  0008  LoadGlobal   r57, g0
+  0009  MulInt32I    r57, r57, 3
+  000a  LoadGlobal   r59, g1
+  000b  AddInt32     r57, r57, r59
+  000c  AddInt32I    r57, r57, -7
+  000d  StoreGlobal  r57, g2
+  .line 28
+  000e  IntToStr     r0, r57
+  000f  LoadConst    r1, k4
+  0010  ConcatStr    r0, r0, r1
+  0011  CallHost     r0, h0
+  .line 30
+  0012  LoadGlobal   r57, g0
+  0013  LoadGlobal   r58, g1
+  0014  AddInt32     r57, r57, r58
+  0015  XorIntI      r57, r57, 5
+  0016  OrIntI       r57, r57, 1
+  0017  StoreGlobal  r57, g2
+  .line 31
+  0018  IntToStr     r2, r57
+  0019  LoadConst    r3, k4
+  001a  ConcatStr    r2, r2, r3
+  001b  CallHost     r2, h0
+  .line 33
+  001c  LoadGlobal   r57, g0
+  001d  LoadGlobal   r58, g1
+  001e  AddInt32     r57, r57, r58
+  001f  DivIntI      r57, r57, 7
+  0020  Narrow       r57, r57, 4
+  0021  StoreGlobal  r57, g2
+  .line 34
+  0022  IntToStr     r4, r57
+  0023  LoadConst    r5, k4
+  0024  ConcatStr    r4, r4, r5
+  0025  CallHost     r4, h0
+  .line 35
+  0026  LoadGlobal   r57, g0
+  0027  MulInt32I    r57, r57, 3
+  0028  LoadInt      r58, 1000
+  0029  ModInt       r57, r57, r58
+  002a  StoreGlobal  r57, g2
+  .line 36
+  002b  IntToStr     r6, r57
+  002c  LoadConst    r7, k4
+  002d  ConcatStr    r6, r6, r7
+  002e  CallHost     r6, h0
+  .line 37
+  002f  LoadConst    r57, k5
+  0030  LoadGlobal   r58, g0
+  0031  LoadGlobal   r59, g1
+  0032  AddInt32     r58, r58, r59
+  0033  DivInt       r57, r57, r58
+  0034  Narrow       r57, r57, 4
+  0035  StoreGlobal  r57, g2
+  .line 38
+  0036  IntToStr     r8, r57
+  0037  LoadConst    r9, k4
+  0038  ConcatStr    r8, r8, r9
+  0039  CallHost     r8, h0
+  .line 40
+  003a  LoadGlobal   r57, g0
+  003b  LoadGlobal   r58, g1
+  003c  AddInt32     r57, r57, r58
+  003d  DivIntI      r57, r57, 2
+  003e  LoadGlobal   r59, g0
+  003f  AddInt32     r57, r57, r59
+  0040  StoreGlobal  r57, g2
+  .line 41
+  0041  IntToStr     r10, r57
+  0042  LoadConst    r11, k4
+  0043  ConcatStr    r10, r10, r11
+  0044  CallHost     r10, h0
+  .line 43
+  0045  LoadGlobal   r57, g0
+  0046  LoadGlobal   r58, g1
+  0047  AddInt32     r57, r57, r58
+  0048  JmpIfGeIntI  r57, 0, -> 004b
+  .line 44
+  0049  LoadConst    r12, k6
+  004a  CallHost     r12, h0
+  .line 45
+  004b  LoadGlobal   r57, g0
+  004c  MulInt32I    r57, r57, 2
+  004d  LoadConst    r59, k7
+  004e  EqInt        r57, r57, r59
+  004f  BoolToStr    r13, r57
+  0050  LoadConst    r14, k4
+  0051  ConcatStr    r13, r13, r14
+  0052  CallHost     r13, h0
+  .line 47
+  0053  LoadGlobal   r57, g0
+  0054  LoadGlobal   r58, g1
+  0055  AddInt32     r57, r57, r58
+  0056  ShrInt32I    r57, r57, 4
+  0057  StoreGlobal  r57, g2
+  .line 48
+  0058  IntToStr     r15, r57
+  0059  LoadConst    r16, k4
+  005a  ConcatStr    r15, r15, r16
+  005b  CallHost     r15, h0
+  .line 49
+  005c  LoadGlobal   r57, g0
+  005d  LoadGlobal   r58, g1
+  005e  AddInt32     r57, r57, r58
+  005f  ShlInt32I    r57, r57, 1
+  0060  AddInt32I    r57, r57, 1
+  0061  StoreGlobal  r57, g2
+  .line 50
+  0062  IntToStr     r17, r57
+  0063  LoadConst    r18, k4
+  0064  ConcatStr    r17, r17, r18
+  0065  CallHost     r17, h0
+  .line 52
+  0066  LoadInt      r57, 1
+  0067  LoadGlobal   r58, g0
+  0068  LoadGlobal   r59, g1
+  0069  AddInt32     r58, r58, r59
+  006a  AddInt32I    r58, r58, 3
+  006b  ShlInt32     r57, r57, r58
+  006c  StoreGlobal  r57, g2
+  .line 53
+  006d  IntToStr     r19, r57
+  006e  LoadConst    r20, k4
+  006f  ConcatStr    r19, r19, r20
+  0070  CallHost     r19, h0
+  .line 55
+  0071  LoadGlobal   r57, g3
+  0072  LoadGlobal   r58, g4
+  0073  AddInt       r57, r57, r58
+  0074  Narrow       r57, r57, 5
+  0075  IntToStr     r21, r57
+  0076  LoadConst    r22, k4
+  0077  ConcatStr    r21, r21, r22
+  0078  CallHost     r21, h0
+  .line 56
+  0079  LoadGlobal   r57, g3
+  007a  LoadGlobal   r58, g4
+  007b  AddInt       r57, r57, r58
+  007c  Narrow       r57, r57, 5
+  007d  DivIntI      r57, r57, 3
+  007e  Narrow       r57, r57, 5
+  007f  IntToStr     r23, r57
+  0080  LoadConst    r24, k4
+  0081  ConcatStr    r23, r23, r24
+  0082  CallHost     r23, h0
+  .line 57
+  0083  LoadGlobal   r57, g3
+  0084  ShlInt32I    r57, r57, 4
+  0085  Narrow       r57, r57, 5
+  0086  DivIntI      r57, r57, 3
+  0087  Narrow       r57, r57, 5
+  0088  IntToStr     r25, r57
+  0089  LoadConst    r26, k4
+  008a  ConcatStr    r25, r25, r26
+  008b  CallHost     r25, h0
+  .line 58
+  008c  LoadGlobal   r57, g3
+  008d  ShlInt32I    r57, r57, 4
+  008e  LoadGlobal   r58, g4
+  008f  AddInt       r57, r57, r58
+  0090  Narrow       r57, r57, 5
+  0091  LoadGlobal   r59, g3
+  0092  LtInt        r57, r59, r57
+  0093  BoolToStr    r27, r57
+  0094  LoadConst    r28, k4
+  0095  ConcatStr    r27, r27, r28
+  0096  CallHost     r27, h0
+  .line 60
+  0097  LoadGlobal   r57, g0
+  0098  LoadGlobal   r58, g1
+  0099  AddInt32     r57, r57, r58
+  009a  NegInt       r57, r57
+  009b  Narrow       r57, r57, 4
+  009c  DivIntI      r57, r57, 3
+  009d  Narrow       r57, r57, 4
+  009e  StoreGlobal  r57, g2
+  .line 61
+  009f  IntToStr     r29, r57
+  00a0  LoadConst    r30, k4
+  00a1  ConcatStr    r29, r29, r30
+  00a2  CallHost     r29, h0
+  .line 62
+  00a3  LoadGlobal   r57, g0
+  00a4  LoadGlobal   r58, g1
+  00a5  AddInt32     r57, r57, r58
+  00a6  NotInt       r57, r57
+  00a7  Narrow       r57, r57, 4
+  00a8  DivIntI      r57, r57, 3
+  00a9  Narrow       r57, r57, 4
+  00aa  StoreGlobal  r57, g2
+  .line 63
+  00ab  IntToStr     r31, r57
+  00ac  LoadConst    r32, k4
+  00ad  ConcatStr    r31, r31, r32
+  00ae  CallHost     r31, h0
+  .line 65
+  00af  LoadGlobal   r57, g3
+  00b0  LoadGlobal   r58, g4
+  00b1  AddInt       r57, r57, r58
+  00b2  Narrow       r57, r57, 5
+  00b3  NegInt       r57, r57
+  00b4  StoreGlobal  r57, g7
+  .line 66
+  00b5  IntToStr     r33, r57
+  00b6  LoadConst    r34, k4
+  00b7  ConcatStr    r33, r33, r34
+  00b8  CallHost     r33, h0
+  .line 68
+  00b9  LoadGlobal   r57, g0
+  00ba  LoadGlobal   r58, g1
+  00bb  AddInt32     r57, r57, r58
+  00bc  AddInt32I    r57, r57, 7
+  00bd  Narrow       r57, r57, 1
+  00be  StoreGlobal  r57, g5
+  .line 69
+  00bf  IntToStr     r35, r57
+  00c0  LoadConst    r36, k4
+  00c1  ConcatStr    r35, r35, r36
+  00c2  CallHost     r35, h0
+  .line 70
+  00c3  LoadGlobal   r57, g0
+  00c4  LoadGlobal   r58, g1
+  00c5  AddInt32     r57, r57, r58
+  00c6  AddInt32I    r57, r57, 65
+  00c7  Narrow       r57, r57, 3
+  00c8  StoreGlobal  r57, g6
+  .line 71
+  00c9  IntToStr     r37, r57
+  00ca  LoadConst    r38, k4
+  00cb  ConcatStr    r37, r37, r38
+  00cc  CallHost     r37, h0
+  .line 72
+  00cd  LoadGlobal   r57, g5
+  00ce  LoadGlobal   r58, g0
+  00cf  AddInt32     r57, r57, r58
+  00d0  Narrow       r57, r57, 1
+  00d1  StoreGlobal  r57, g5
+  .line 73
+  00d2  IntToStr     r39, r57
+  00d3  LoadConst    r40, k4
+  00d4  ConcatStr    r39, r39, r40
+  00d5  CallHost     r39, h0
+  .line 75
+  00d6  LoadGlobal   r57, g0
+  00d7  LoadGlobal   r58, g1
+  00d8  AddInt32     r57, r57, r58
+  00d9  StoreGlobal  r57, g7
+  .line 76
+  00da  IntToStr     r41, r57
+  00db  LoadConst    r42, k4
+  00dc  ConcatStr    r41, r41, r42
+  00dd  CallHost     r41, h0
+  .line 77
+  00de  LoadGlobal   r57, g0
+  00df  LoadGlobal   r58, g1
+  00e0  AddInt32     r57, r57, r58
+  00e1  MulIntI      r57, r57, 2
+  00e2  StoreGlobal  r57, g7
+  .line 78
+  00e3  IntToStr     r43, r57
+  00e4  LoadConst    r44, k4
+  00e5  ConcatStr    r43, r43, r44
+  00e6  CallHost     r43, h0
+  .line 79
+  00e7  LoadGlobal   r57, g7
+  00e8  LoadGlobal   r58, g0
+  00e9  LoadGlobal   r59, g1
+  00ea  AddInt32     r58, r58, r59
+  00eb  AddInt       r57, r57, r58
+  00ec  StoreGlobal  r57, g7
+  .line 80
+  00ed  IntToStr     r45, r57
+  00ee  LoadConst    r46, k4
+  00ef  ConcatStr    r45, r45, r46
+  00f0  CallHost     r45, h0
+  .line 81
+  00f1  LoadGlobal   r57, g0
+  00f2  LoadGlobal   r58, g1
+  00f3  AddInt32     r57, r57, r58
+  00f4  Narrow       r57, r57, 7
+  00f5  StoreGlobal  r57, g8
+  .line 82
+  00f6  UIntToStr    r47, r57
+  00f7  LoadConst    r48, k4
+  00f8  ConcatStr    r47, r47, r48
+  00f9  CallHost     r47, h0
+  .line 83
+  00fa  LoadGlobal   r57, g0
+  00fb  LoadGlobal   r58, g1
+  00fc  AddInt32     r57, r57, r58
+  00fd  IntToF64     r57, r57
+  00fe  StoreGlobal  r57, g9
+  .line 84
+  00ff  LoadInt      r58, 1
+  0100  Move         r59, r57
+  0101  Move         r60, r58
+  0102  F64ToFixed   r49, r59
+  0103  LoadZero     r61
+  0104  StrPadLeft   r49, r49, r61
+  0105  LoadConst    r50, k4
+  0106  ConcatStr    r49, r49, r50
+  0107  CallHost     r49, h0
+  .line 86
+  0108  LoadGlobal   r57, g0
+  0109  LoadGlobal   r58, g1
+  010a  AddInt32     r57, r57, r58
+  010b  Call         r57, f1
+  .line 87
+  010c  LoadGlobal   r57, g0
+  010d  LoadGlobal   r58, g1
+  010e  AddInt32     r57, r57, r58
+  010f  JmpIfGeIntI  r57, 0, -> 0112
+  0110  NegInt       r57, r57
+  0111  Narrow       r57, r57, 4
+  0112  IntToStr     r51, r57
+  0113  LoadConst    r52, k4
+  0114  ConcatStr    r51, r51, r52
+  0115  CallHost     r51, h0
+  .line 88
+  0116  LoadGlobal   r58, g0
+  0117  LoadGlobal   r59, g1
+  0118  AddInt32     r58, r58, r59
+  0119  MulInt32     r57, r58, r58
+  011a  DivIntI      r57, r57, 2
+  011b  Narrow       r57, r57, 4
+  011c  IntToStr     r53, r57
+  011d  LoadConst    r54, k4
+  011e  ConcatStr    r53, r53, r54
+  011f  CallHost     r53, h0
+  .line 91
+  0120  LoadGlobal   r57, g0
+  0121  LoadInt      r58, 1000
+  0122  DivInt       r57, r57, r58
+  0123  NarrowOvf    r57, r57, 4
+  0124  MulIntI      r57, r57, 3
+  0125  NarrowOvf    r57, r57, 4
+  0126  AddIntI      r57, r57, 1
+  0127  NarrowOvf    r57, r57, 4
+  0128  StoreGlobal  r57, g2
+  .line 92
+  0129  IntToStr     r55, r57
+  012a  LoadConst    r56, k4
+  012b  ConcatStr    r55, r55, r56
+  012c  CallHost     r55, h0
+  .line 93
+  012d  RetVoid
+.finally r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16, r17, r18, r19, r20, r21, r22, r23, r24, r25, r26, r27, r28, r29, r30, r31, r32, r33, r34, r35, r36, r37, r38, r39, r40, r41, r42, r43, r44, r45, r46, r47, r48, r49, r50, r51, r52, r53, r54, r55, r56
+.func 1 DumpNarrowWrap.Show params=1 regs=3
+  .local r0 N
+  .line 18
+  0000  IntToStr     r1, r0
+  0001  LoadConst    r2, k4
+  0002  ConcatStr    r1, r1, r2
+  0003  CallHost     r1, h0
+  .line 19
+  0004  RetVoid
+.finally r1, r2

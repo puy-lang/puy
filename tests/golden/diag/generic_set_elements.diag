@@ -1,0 +1,100 @@
+error[E0762]: cannot use a value of type parameter `T` as a set element
+   --> generic_set_elements.pas:18:9
+    |
+  9 |   TBag<T> = class
+    |        - type parameter declared here
+...
+ 18 |   S := [FItem];
+    |         ^^^^^
+    |
+    = note: a type parameter can only be used in ways that its constraints allow
+
+error[E0762]: cannot use a value of type parameter `T` as a set element
+   --> generic_set_elements.pas:19:12
+    |
+  9 |   TBag<T> = class
+    |        - type parameter declared here
+...
+ 19 |   S := [1, FItem..FItem];
+    |            ^^^^^
+    |
+    = note: a type parameter can only be used in ways that its constraints allow
+
+error[E0762]: cannot use a value of type parameter `T` as a set element
+   --> generic_set_elements.pas:19:19
+    |
+  9 |   TBag<T> = class
+    |        - type parameter declared here
+...
+ 19 |   S := [1, FItem..FItem];
+    |                   ^^^^^
+    |
+    = note: a type parameter can only be used in ways that its constraints allow
+
+error[E0762]: cannot use a value of type parameter `T` as a set element
+   --> generic_set_elements.pas:20:14
+    |
+  9 |   TBag<T> = class
+    |        - type parameter declared here
+...
+ 20 |   Include(S, FItem);
+    |              ^^^^^
+    |
+    = note: a type parameter can only be used in ways that its constraints allow
+
+error[E0762]: cannot use a value of type parameter `T` as a set element
+   --> generic_set_elements.pas:21:14
+    |
+  9 |   TBag<T> = class
+    |        - type parameter declared here
+...
+ 21 |   Exclude(S, FItem);
+    |              ^^^^^
+    |
+    = note: a type parameter can only be used in ways that its constraints allow
+
+error[E0762]: cannot apply operator `in` to a value of type parameter `T`
+   --> generic_set_elements.pas:22:6
+    |
+  9 |   TBag<T> = class
+    |        - type parameter declared here
+...
+ 22 |   if FItem in S then
+    |      ^^^^^^^^^^
+    |
+    = note: a type parameter can only be used in ways that its constraints allow
+
+error[E0762]: cannot apply operator `in` to a value of type parameter `T`
+   --> generic_set_elements.pas:24:6
+    |
+  9 |   TBag<T> = class
+    |        - type parameter declared here
+...
+ 24 |   if FItem in [FItem, 1] then
+    |      ^^^^^^^^^^^^^^^^^^^
+    |
+    = note: a type parameter can only be used in ways that its constraints allow
+
+error[E0762]: cannot use a value of type parameter `T` as a set element
+   --> generic_set_elements.pas:26:16
+    |
+  9 |   TBag<T> = class
+    |        - type parameter declared here
+...
+ 26 |   WriteLn(S = [FItem]);
+    |                ^^^^^
+    |
+    = note: a type parameter can only be used in ways that its constraints allow
+
+error[E0762]: cannot use a value of type parameter `T` as a set element
+   --> generic_set_elements.pas:33:14
+    |
+ 29 | procedure Show<T>(const X: T);
+    |                - type parameter declared here
+...
+ 33 |   S := ['a', X];
+    |              ^
+    |
+    = note: a type parameter can only be used in ways that its constraints allow
+
+error: aborting due to 9 errors

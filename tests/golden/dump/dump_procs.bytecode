@@ -1,0 +1,109 @@
+; puyc format 0
+.const
+  0: str "\n"
+.type
+  64: class DumpProcs.TFoo ref slots=0 parent=ty20 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4,f1
+.global
+  0: int C
+  1: ref N
+  2: ref R
+  3: ref O
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpProcs file="dump_procs.pas" init=- fini=- entry=0
+.func 0 DumpProcs.<main> params=0 regs=22
+  .line 47
+  0000  LoadInt      r17, 5
+  0001  StoreGlobal  r17, g0
+  .line 48
+  0002  Move         r18, r17
+  0003  LoadInt      r19, 2
+  0004  LoadInt      r20, 1
+  0005  CallIndirect r19, r18
+  0006  Move         r17, r19
+  0007  IntToStr     r0, r17
+  0008  LoadConst    r1, k0
+  0009  ConcatStr    r0, r0, r1
+  000a  CallHost     r0, h0
+  .line 49
+  000b  New          r2, ty64
+  000c  StoreGlobalRef r2, g3
+  .line 50
+  000d  LoadGlobal   r19, g3
+  000e  Move         r17, r19
+  000f  LoadInt      r18, 6
+  0010  VirtualRef   r3, r17
+  0011  StoreGlobalRef r3, g1
+  .line 51
+  0012  LoadGlobalRef r4, g1
+  0013  LoadGlobal   r19, g3
+  0014  AssignObj    r5, r19
+  0015  Move         r18, r5
+  0016  CallClosure  r17, r4
+  .line 52
+  0017  LoadGlobal   r19, g3
+  0018  Move         r17, r19
+  0019  LoadInt      r18, 2
+  001a  MethodRef    r6, r17
+  001b  StoreGlobalRef r6, g2
+  .line 53
+  001c  LoadGlobalRef r7, g2
+  001d  CallClosure  r17, r7
+  .line 54
+  001e  LoadInt      r19, 65
+  001f  Move         r17, r19
+  0020  LoadInt      r18, 3
+  0021  ClassMethodRef r8, r17
+  0022  StoreGlobalRef r8, g2
+  .line 55
+  0023  LoadInt      r17, 6
+  0024  RoutineRef   r9, r17
+  0025  StoreGlobalRef r9, g2
+  .line 56
+  0026  LoadGlobalRef r11, g2
+  0027  CallableAssigned r17, r11
+  0028  BoolToStr    r10, r17
+  0029  LoadGlobal   r19, g0
+  002a  LoadInt      r20, 5
+  002b  EqInt        r18, r19, r20
+  002c  BoolToStr    r12, r18
+  002d  ConcatStr    r10, r10, r12
+  002e  LoadGlobalRef r14, g1
+  002f  Release      r15
+  0030  Move         r20, r14
+  0031  Move         r21, r15
+  0032  CallableEqual r19, r20
+  0033  NotBool      r19, r19
+  0034  BoolToStr    r13, r19
+  0035  ConcatStr    r10, r10, r13
+  0036  LoadConst    r16, k0
+  0037  ConcatStr    r10, r10, r16
+  0038  CallHost     r10, h0
+  .line 57
+  0039  RetVoid
+.finally r0, r1, r2, r3, r4, r5:obj, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16
+.func 1 DumpProcs.TFoo.Handle params=2 regs=2
+  .local r0 Self
+  .local r1 Sender
+  .line 22
+  0000  RetVoid
+.func 2 DumpProcs.TFoo.Go params=1 regs=1
+  .local r0 Self
+  .line 26
+  0000  RetVoid
+.func 3 DumpProcs.TFoo.Hello params=1 regs=1
+  .local r0 Self
+  .line 30
+  0000  RetVoid
+.func 4 DumpProcs.Cmp params=2 regs=3
+  .local r0 A
+  .local r1 B
+  .local r2 Result
+  .line 34
+  0000  SubInt       r2, r0, r1
+  0001  NarrowOvf    r2, r2, 4
+  .line 35
+  0002  Ret          r2
+.func 5 DumpProcs.Cmp2 params=0 regs=1
+  .line 39
+  0000  RetVoid

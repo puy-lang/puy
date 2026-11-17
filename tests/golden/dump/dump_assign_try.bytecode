@@ -1,0 +1,69 @@
+; puyc format 0
+.const
+  0: str " "
+  1: str "\n"
+  2: str "done\n"
+.global
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpAssignTry file="dump_assign_try.pas" init=- fini=- entry=0
+.func 0 DumpAssignTry.<main> params=0 regs=2
+  .line 38
+  0000  LoadInt      r0, 1
+  0001  LoadInt      r1, 2
+  0002  Call         r0, f2
+  .line 39
+  0003  RetVoid
+.func 1 DumpAssignTry.F params=2 regs=3
+  .local r0 A
+  .local r1 B
+  .local r2 Result
+  .line 11
+  0000  SubInt       r2, r0, r1
+  0001  NarrowOvf    r2, r2, 4
+  .line 12
+  0002  Ret          r2
+.func 2 DumpAssignTry.P params=2 regs=14
+  .local r0 X
+  .local r1 Y
+  .local r2 Z
+  .local r3 B
+  .try 0001..0017 finally 0017..0019 r4
+  .line 19
+  0000  LoadZero     r2
+  .line 23
+  0001  AddInt32I    r2, r0, 1
+  .line 25
+  0002  Move         r11, r0
+  0003  AddInt32I    r12, r1, 1
+  0004  Call         r11, f1
+  0005  Move         r2, r11
+  .line 28
+  0006  AddIntI      r11, r0, 1
+  0007  NarrowOvf    r11, r11, 4
+  0008  Move         r2, r11
+  .line 30
+  0009  LoadZero     r11
+  000a  LtInt        r3, r11, r0
+  000b  JmpIfFalse   r3, -> 000e
+  000c  LoadZero     r11
+  000d  LtInt        r3, r11, r1
+  .line 31
+  000e  IntToStr     r6, r2
+  000f  LoadConst    r7, k0
+  0010  ConcatStr    r6, r6, r7
+  0011  BoolToStr    r8, r3
+  0012  ConcatStr    r6, r6, r8
+  0013  LoadConst    r9, k1
+  0014  ConcatStr    r6, r6, r9
+  0015  CallHost     r6, h0
+  .line 20
+  0016  LoadZero     r4
+  .line 33
+  0017  LoadConst    r10, k2
+  0018  CallHost     r10, h0
+  .line 20
+  0019  EndFinally   r4, 0
+  .line 35
+  001a  RetVoid
+.finally r5, r6, r7, r8, r9, r10

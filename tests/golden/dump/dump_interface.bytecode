@@ -1,0 +1,73 @@
+; puyc format 0
+.const
+  0: str " "
+  1: str "\n"
+  2: str "shape"
+.type
+  64: interface DumpInterface.IShape parent=ty24 methods=2 guid={6B29FC40-CA47-1067-B31D-00DD010662DA}
+  65: interface DumpInterface.IShape2 parent=ty64 methods=3
+  66: class DumpInterface.TBase ref abstract slots=0 parent=ty20 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4,abstract:TBase.Area intf=ty24:;ty64:abstract,f1;ty65:abstract,f1,f2
+  67: class DumpInterface.TSquare ref slots=0 parent=ty66 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4,f3 intf=ty24:;ty64:f3,f1;ty65:f3,f1,f2
+.intfcall
+  0: ty65 #2
+  1: ty65 #1
+  2: ty65 #0
+.global
+  0: obj S
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpInterface file="dump_interface.pas" init=- fini=- entry=0
+.func 0 DumpInterface.<main> params=0 regs=11
+  .line 49
+  0000  New          r0, ty67
+  0001  LoadGlobal   r8, g0
+  0002  AddRefObj    r0
+  0003  StoreGlobal  r0, g0
+  0004  ReleaseObj   r8
+  .line 50
+  0005  LoadGlobal   r10, g0
+  0006  AssignObj    r1, r10
+  0007  Move         r8, r1
+  0008  LoadInt      r9, 2
+  0009  CallIntf     r8, ic0
+  .line 51
+  000a  LoadGlobal   r9, g0
+  000b  AssignObj    r3, r9
+  000c  Move         r8, r3
+  000d  CallIntf     r8, ic1
+  000e  MoveRef      r2, r8
+  000f  LoadConst    r4, k0
+  0010  ConcatStr    r2, r2, r4
+  0011  LoadGlobal   r10, g0
+  0012  AssignObj    r6, r10
+  0013  Move         r9, r6
+  0014  CallIntf     r9, ic2
+  0015  Move         r8, r9
+  0016  IntToStr     r5, r8
+  0017  ConcatStr    r2, r2, r5
+  0018  LoadConst    r7, k1
+  0019  ConcatStr    r2, r2, r7
+  001a  CallHost     r2, h0
+  .line 52
+  001b  RetVoid
+.finally r0:obj, r1:obj, r2, r3:obj, r4, r5, r6:obj, r7
+.func 1 DumpInterface.TBase.GetName params=1 regs=2
+  .local r0 Self
+  .local r1 Result
+  .line 34
+  0000  LoadConst    r1, k2
+  .line 35
+  0001  Ret          r1
+.finally r1
+.func 2 DumpInterface.TBase.Scale params=2 regs=2
+  .local r0 Self
+  .local r1 F
+  .line 39
+  0000  RetVoid
+.func 3 DumpInterface.TSquare.Area params=1 regs=2
+  .local r0 Self
+  .local r1 Result
+  .line 43
+  0000  LoadInt      r1, 4
+  .line 44
+  0001  Ret          r1

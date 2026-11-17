@@ -1,0 +1,94 @@
+; puy ir 1
+.global
+.func f0 DumpExceptionClass.<main> params=0
+  .reg v0 E: ECoded exception
+  .reg t0: Exception exception
+  .reg t1: ECoded temp
+  .reg t2: ECoded temp
+  .reg t3: ECoded temp
+  .reg t4: string temp
+  .reg t5: Integer temp
+  .reg t6: string temp
+  .reg t7: - state
+  .reg t8: Exception exception
+  .reg t9: Integer temp
+  .reg t10: Boolean temp
+  .reg t11: string temp
+  .reg t12: Exception temp
+  .reg t13: string temp
+  .reg t14: Integer temp
+  .reg t15: string temp
+  .try bb1..bb1 finally bb2..bb4 t7, t8
+  .try bb0..bb6 except bb7..bb9 t0
+bb0:
+  .line 23
+  LoadConst    t6, "x"
+  Move         t4, t6
+  LoadInt      t5, 1
+  LoadZero     t2
+  New          t2, DumpExceptionClass.ECoded
+  Jmp          bb1
+bb1:
+  .line 23
+  Move         t3, t2
+  CallMethod   -, f1(t3, t4, t5)
+  LoadZero     t7
+  Jmp          bb2
+bb2:
+  .line 23
+  LoadInt      t9, 1
+  JmpIfNeInt   t7, t9, bb4, bb3
+bb3:
+  .line 23
+  DestroyFailed t2
+  Jmp          bb4
+bb4:
+  .line 23
+  EndFinally   t7, bb5
+bb5:
+  .line 23
+  MoveRef      t1, t2
+  Raise        t1
+bb6:
+  .line 22
+  Jmp          bb10
+bb7:
+  .line 25
+  Move         t10, t0
+  IsClass      t10, DumpExceptionClass.ECoded
+  JmpIfFalse   t10, bb9, bb8
+bb8:
+  .line 25
+  Move         v0, t0
+  .line 26
+  ExceptObject t12
+  ObjGetRef    t11, t12, 0
+  ObjGet       t14, v0, 2
+  IntToStr     t13, t14
+  ConcatStr    t11, t11, t13
+  LoadConst    t15, "\n"
+  ConcatStr    t11, t11, t15
+  CallHost     -, h0(t11)
+  .line 22
+  Release      t0
+  Jmp          bb10
+bb9:
+  .line 22
+  Raise        t0
+bb10:
+  .line 28
+  RetVoid
+.finally t0, t1, t6, t8, t11, t12, t13, t15
+.func f1 DumpExceptionClass.ECoded.Create params=3
+  .reg v0 Self: ECoded self
+  .reg v1 Msg: string const param
+  .reg v2 ACode: Integer param
+  .reg t0: Integer temp
+bb0:
+  .line 17
+  ObjSetRef    v0, 0, v1
+  .line 18
+  ObjSet       v0, 2, v2
+  .line 19
+  RetVoid
+.finally

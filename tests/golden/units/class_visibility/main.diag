@@ -1,0 +1,46 @@
+error[E0701]: `FSize` is already declared
+   --> main.pas:12:5
+    |
+ 12 |     FSize: Integer;
+    |     ^^^^^ declared again here
+   ::: src/Shapes.pas:12:5
+ 12 |     FSize: Integer;
+    |     ----- declared here
+
+error[E0701]: `Kind` is already declared
+   --> main.pas:13:5
+    |
+ 13 |     Kind: string;
+    |     ^^^^ declared again here
+   ::: src/Shapes.pas:14:5
+ 14 |     Kind: Integer;
+    |     ---- declared here
+
+error[E0743]: `FName` is private to `TShape`
+   --> main.pas:21:13
+    |
+ 21 |   WriteLn(S.FName);
+    |             ^^^^^
+   ::: src/Shapes.pas:8:5
+  8 |     FName: string;
+    |     ----- declared here
+
+error[E0743]: `FSize` is protected in `TShape`
+   --> main.pas:22:13
+    |
+ 22 |   WriteLn(S.FSize);
+    |             ^^^^^
+   ::: src/Shapes.pas:12:5
+ 12 |     FSize: Integer;
+    |     ----- declared here
+
+error[E0743]: `FSecret` is private to `TShape`
+   --> main.pas:23:13
+    |
+ 23 |   WriteLn(S.FSecret);
+    |             ^^^^^^^
+   ::: src/Shapes.pas:10:5
+ 10 |     FSecret: Integer;
+    |     ------- declared here
+
+error: aborting due to 5 errors

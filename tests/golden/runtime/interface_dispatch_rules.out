@@ -1,0 +1,13 @@
+TA.Run
+TC.Run
+TC.Go
+TC.Run
+TA
+plain TObject
+Put Integer 1
+Put string one
+nested: 5
+TC.Run
+TA.Run
+TC.Run
+local: TRUE

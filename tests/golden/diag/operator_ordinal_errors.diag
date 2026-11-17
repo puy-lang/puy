@@ -1,0 +1,25 @@
+error[E0713]: constant expression required
+   --> operator_ordinal_errors.pas:40:9
+    |
+ 40 |   Two = Zero + Zero;                               // E0713
+    |         ^^^^^^^^^^^
+
+error[E0739]: case selector must be an ordinal type or `string`, found `TV`
+   --> operator_ordinal_errors.pas:46:8
+    |
+ 46 |   case A of                                        // E0739
+    |        ^
+
+error[E0718]: cannot write a value of type `TV`
+   --> operator_ordinal_errors.pas:49:11
+    |
+ 49 |   WriteLn(A);                                      // E0718
+    |           ^
+
+error[E0722]: loop variable must be a local variable of an ordinal type
+   --> operator_ordinal_errors.pas:50:7
+    |
+ 50 |   for A := 1 to 3 do                               // E0722
+    |       ^
+
+error: aborting due to 4 errors

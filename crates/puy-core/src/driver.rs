@@ -58,7 +58,8 @@ pub struct CompileOutput {
     /// The passed file is a unit (no module is built).
     pub is_unit: bool,
     /// The source files checked, in file order (`docs/spec/units.md` 8.1): the passed file, then
-    /// the units (not the included files).
+    /// the units (not the included files, nor the units of the standard library, which
+    /// `puy fix` does not rewrite).
     pub files: Vec<FileId>,
 }
 
@@ -74,14 +75,14 @@ pub struct Stages {
 }
 
 /// One file after lexing, directives and parsing.
-struct Front {
+pub(crate) struct Front {
     file: FileId,
-    dir: DirectiveOutput,
-    root: SyntaxNode,
+    pub(crate) dir: DirectiveOutput,
+    pub(crate) root: SyntaxNode,
     invalid_utf8: bool,
 }
 
-fn front(
+pub(crate) fn front(
     file: FileId,
     sources: &mut SourceMap,
     provider: &mut dyn SourceProvider,
@@ -228,6 +229,9 @@ struct UnitEntry {
     broken: bool,
     /// Index into `ModuleState::units` once analyzed.
     iface: Option<usize>,
+    /// The source of a unit of the standard library (`docs/spec/collections.md` 1.2); `None` for
+    /// a unit of the package, read through the provider.
+    stdlib: Option<&'static str>,
 }
 
 /// What an item of `uses` was found to be.
@@ -240,11 +244,17 @@ enum Found {
 
 struct Units<'p> {
     provider: &'p mut dyn SourceProvider,
+    /// Units read as units of the standard library before the table of `puy-stdlib` (only the
+    /// tests pass any; [`compile_with_stdlib`]).
+    extra_stdlib: &'p [puy_stdlib::Unit],
     build: BuildConfig,
     /// The prefix that reaches the root from the passed file (`None` without a root).
     prefix: Option<String>,
     entries: Vec<UnitEntry>,
+    /// The units of the package by lowercase name.
     by_name: HashMap<String, usize>,
+    /// The units of the standard library named so far, by lowercase name.
+    stdlib_by_name: HashMap<String, usize>,
     /// What each item of `uses` names, per file.
     found: HashMap<FileId, Vec<(TextRange, Found)>>,
     /// Units being read (for cycles), innermost last.
@@ -253,6 +263,8 @@ struct Units<'p> {
     post: Vec<usize>,
     /// Source files in file order.
     files: Vec<FileId>,
+    /// The files of the units of the standard library.
+    stdlib_files: Vec<FileId>,
     /// Units that cannot be used, with the E2500 to report at their first item in file order
     /// (`docs/spec/units.md` 3.4, 8.1): a file that cannot be read or is not a unit.
     unusable: HashMap<usize, String>,
@@ -287,6 +299,7 @@ impl Units<'_> {
                         visit: Visit::NotRead,
                         broken: false,
                         iface: None,
+                        stdlib: None,
                     });
                 }
             }
@@ -296,6 +309,43 @@ impl Units<'_> {
     /// The display path of a file under the root (`docs/spec/units.md` 8.2).
     fn display(&self, rel: &str) -> String {
         format!("{}{rel}", self.prefix.as_deref().unwrap_or(""))
+    }
+
+    /// The display path of the unit `idx`: a unit of the standard library is shown as
+    /// `<stdlib>/Name.pas` (`docs/spec/collections.md` 1.2).
+    fn unit_path(&self, idx: usize) -> String {
+        let e = &self.entries[idx];
+        match e.stdlib {
+            Some(_) => e.rel.clone(),
+            None => self.display(&e.rel),
+        }
+    }
+
+    /// The unit of the standard library named `lower`, added to the table the first time it is
+    /// named. Found after the units of the package (`docs/spec/collections.md` 1.2).
+    fn stdlib_unit(&mut self, lower: &str) -> Option<usize> {
+        if let Some(&i) = self.stdlib_by_name.get(lower) {
+            return Some(i);
+        }
+        let unit = self
+            .extra_stdlib
+            .iter()
+            .find(|u| u.name.eq_ignore_ascii_case(lower))
+            .or_else(|| puy_stdlib::find(lower))?;
+        let rel = format!("<stdlib>/{}.pas", unit.name);
+        let idx = self.entries.len();
+        self.entries.push(UnitEntry {
+            name: unit.name.to_string(),
+            rel: rel.clone(),
+            files: vec![rel],
+            front: None,
+            visit: Visit::NotRead,
+            broken: false,
+            iface: None,
+            stdlib: Some(unit.source),
+        });
+        self.stdlib_by_name.insert(lower.to_string(), idx);
+        Some(idx)
     }
 
     /// Reads the units named in the `uses` of a file, depth first (`docs/spec/units.md` 8.1).
@@ -308,14 +358,18 @@ impl Units<'_> {
     ) {
         let mut found: Vec<(TextRange, Found)> = Vec::new();
         for item in uses_items(root) {
-            if self.prefix.is_none() {
-                continue;
-            }
             let lower = item.name.to_ascii_lowercase();
-            if matches!(lower.as_str(), "system" | "system.sysutils" | "sysutils") {
+            // `System` is always used; `SysUtils` is E2501 in the analysis
+            if matches!(lower.as_str(), "system" | "sysutils") {
                 continue;
             }
-            let Some(&idx) = self.by_name.get(&lower) else {
+            // The package first, then the standard library (`docs/spec/collections.md` 1.2)
+            let package = self
+                .prefix
+                .is_some()
+                .then(|| self.by_name.get(&lower).copied())
+                .flatten();
+            let Some(idx) = package.or_else(|| self.stdlib_unit(&lower)) else {
                 continue;
             };
             let span = Span::new(file, item.range);
@@ -342,7 +396,9 @@ impl Units<'_> {
                 Visit::Done => {}
                 Visit::NotRead => self.read(idx, sources, sink),
             }
-            if let Some(in_path) = &item.in_path {
+            if let Some(in_path) = &item.in_path
+                && self.entries[idx].stdlib.is_none()
+            {
                 self.check_in_path(file, idx, in_path, sources, sink);
             }
             found.push((item.range, Found::Unit(idx)));
@@ -378,12 +434,16 @@ impl Units<'_> {
 
     /// Reads, parses and visits a unit first named at `at`.
     fn read(&mut self, idx: usize, sources: &mut SourceMap, sink: &mut DiagnosticSink) {
-        let path = self.display(&self.entries[idx].rel);
+        let path = self.unit_path(idx);
         let name = self.entries[idx].name.clone();
-        let bytes = match self.provider.read(&path) {
-            Ok(b) if b.len() as u64 > MAX_SOURCE_SIZE => Err(TOO_LARGE_MESSAGE.to_string()),
-            Ok(b) => Ok(b),
-            Err(e) => Err(e.fixed_text().to_string()),
+        let stdlib = self.entries[idx].stdlib;
+        let bytes = match stdlib {
+            Some(src) => Ok(src.as_bytes().to_vec()),
+            None => match self.provider.read(&path) {
+                Ok(b) if b.len() as u64 > MAX_SOURCE_SIZE => Err(TOO_LARGE_MESSAGE.to_string()),
+                Ok(b) => Ok(b),
+                Err(e) => Err(e.fixed_text().to_string()),
+            },
         };
         let bytes = match bytes {
             Ok(b) => b,
@@ -397,6 +457,9 @@ impl Units<'_> {
         };
         let file = sources.add(SourceFile::new(path, bytes));
         self.files.push(file);
+        if stdlib.is_some() {
+            self.stdlib_files.push(file);
+        }
         let fr = front(file, sources, self.provider, &self.build, sink);
         if fr.invalid_utf8 {
             // E0001 in the file; no E2500 on the item
@@ -412,7 +475,7 @@ impl Units<'_> {
             self.entries[idx].front = Some(fr);
             return;
         };
-        check_unit_name(file, &unit, &name, sources, sink);
+        check_unit_name(file, &unit, &name, stdlib.is_some(), sources, sink);
         let root = fr.root.clone();
         self.entries[idx].front = Some(fr);
         self.entries[idx].visit = Visit::Visiting;
@@ -456,7 +519,7 @@ impl Units<'_> {
         let (written, range) = in_path;
         let using = sources.get(file).path.clone();
         let joined = directives::resolve_include_path(&using, written);
-        let found = self.display(&self.entries[idx].rel);
+        let found = self.unit_path(idx);
         if normalize_path(&joined) == normalize_path(&found) {
             return;
         }
@@ -477,12 +540,13 @@ impl Units<'_> {
     }
 }
 
-/// E2503: the name in the heading of a unit differs from the name of its path, or the name is
-/// reserved for the standard library (`docs/spec/units.md` 2.2).
+/// E2503: the name in the heading of a unit differs from the name of its path, or the name of a
+/// unit of the package is reserved for the standard library (`docs/spec/units.md` 2.2).
 fn check_unit_name(
     file: FileId,
     unit: &SyntaxNode,
     path_name: &str,
+    stdlib: bool,
     sources: &SourceMap,
     sink: &mut DiagnosticSink,
 ) {
@@ -500,7 +564,7 @@ fn check_unit_name(
     let written = String::from_utf8_lossy(sources.get(file).text(range)).into_owned();
     let path_lower = path_name.to_ascii_lowercase();
     for prefix in ["System.", "Puy.", "Xml."] {
-        if path_lower.starts_with(&prefix.to_ascii_lowercase()) {
+        if !stdlib && path_lower.starts_with(&prefix.to_ascii_lowercase()) {
             let d = Diagnostic::error(
                 Code::E(2503),
                 format!(
@@ -598,6 +662,19 @@ pub fn compile(
     provider: &mut dyn SourceProvider,
     opts: &CompileOptions,
 ) -> CompileOutput {
+    compile_with_stdlib(path, bytes, provider, opts, &[])
+}
+
+/// [`compile`], with `extra_stdlib` read as units of the standard library ahead of the table of
+/// `puy-stdlib`: the tests compile sources that see the built-ins only the standard library uses
+/// (`docs/spec/collections.md` 12.1) without adding them to the table.
+pub(crate) fn compile_with_stdlib(
+    path: &str,
+    bytes: Vec<u8>,
+    provider: &mut dyn SourceProvider,
+    opts: &CompileOptions,
+    extra_stdlib: &[puy_stdlib::Unit],
+) -> CompileOutput {
     let mut sources = SourceMap::new();
     let file = sources.add(SourceFile::new(path, bytes));
     for (p, b) in &opts.extra_files {
@@ -618,14 +695,17 @@ pub fn compile(
     // The units of the package (`docs/spec/units.md` 2)
     let mut units = Units {
         provider,
+        extra_stdlib,
         build: opts.build.clone(),
         prefix: opts.package.as_ref().map(|p| root_prefix(path, p.levels)),
         entries: Vec::new(),
         by_name: HashMap::new(),
+        stdlib_by_name: HashMap::new(),
         found: HashMap::new(),
         stack: Vec::new(),
         post: Vec::new(),
         files: vec![file],
+        stdlib_files: Vec::new(),
         unusable: HashMap::new(),
     };
     units.list();
@@ -640,7 +720,7 @@ pub fn compile(
         .and_then(|n| units.by_name.get(&n.to_ascii_lowercase()).copied());
     if let (Some(idx), Some(unit)) = (main_entry, &main_unit) {
         let name = units.entries[idx].name.clone();
-        check_unit_name(file, unit, &name, &sources, &mut sink);
+        check_unit_name(file, unit, &name, false, &sources, &mut sink);
         units.entries[idx].visit = Visit::Visiting;
         units.stack.push(idx);
     }
@@ -678,45 +758,69 @@ pub fn compile(
         .clone()
         .unwrap_or_else(|| "Script".to_string());
     let has_root = opts.package.is_some();
-    let mut state = sema::ModuleState::new();
     let post = std::mem::take(&mut units.post);
-    for &idx in &post {
-        let e = &units.entries[idx];
-        let fr = e.front.as_ref().expect("a visited unit was parsed");
-        let resolutions = resolutions_for(&units, fr.file);
-        sema::analyze(
-            &sema::SemaInput {
-                file: fr.file,
-                root: &fr.root,
-                bytes: &sources.get(fr.file).bytes,
-                directives: &fr.dir,
-                script_name: &script_name,
-                uses: &resolutions,
-                has_root,
-            },
-            &mut state,
-            &mut sink,
-        );
-        units.entries[idx].iface = Some(state.units.len() - 1);
-    }
+    // Whether a nested routine is compiled as a closure is known only once the routine it is
+    // nested in is analyzed: when the analysis finds closure-form routines it was not given, it
+    // runs again with them, its first diagnostics dropped (`docs/spec/objects.md` 9.13)
+    let sema_from = sink.len();
+    let mut plan = sema::ClosurePlan::default();
+    let state = loop {
+        let mut state = sema::ModuleState::with_plan(std::mem::take(&mut plan));
+        for &idx in &post {
+            let e = &units.entries[idx];
+            let fr = e.front.as_ref().expect("a visited unit was parsed");
+            let resolutions = resolutions_for(&units, fr.file);
+            sema::analyze(
+                &sema::SemaInput {
+                    file: fr.file,
+                    root: &fr.root,
+                    bytes: &sources.get(fr.file).bytes,
+                    directives: &fr.dir,
+                    script_name: &script_name,
+                    uses: &resolutions,
+                    has_root,
+                    stdlib: e.stdlib.is_some(),
+                },
+                &mut state,
+                &mut sink,
+            );
+            units.entries[idx].iface = Some(state.units.len() - 1);
+        }
+        if !main.invalid_utf8 {
+            let resolutions = resolutions_for(&units, file);
+            sema::analyze(
+                &sema::SemaInput {
+                    file,
+                    root: &main.root,
+                    bytes: &sources.get(file).bytes,
+                    directives: &main.dir,
+                    script_name: &script_name,
+                    uses: &resolutions,
+                    has_root,
+                    stdlib: false,
+                },
+                &mut state,
+                &mut sink,
+            );
+        }
+        let found = state.closure_plan();
+        if !state.plan().is_empty() {
+            // The second run finds the plan it was given: the calls and the values that decide
+            // it do not depend on it, and the routines (whose order numbers the groups) are
+            // declared in the same order
+            debug_assert_eq!(&found, state.plan(), "the closure plan is stable");
+            break state;
+        }
+        if found.is_empty() {
+            break state;
+        }
+        sink.truncate(sema_from);
+        plan = found;
+    };
     let program = if main.invalid_utf8 {
         None
     } else {
-        let resolutions = resolutions_for(&units, file);
-        sema::analyze(
-            &sema::SemaInput {
-                file,
-                root: &main.root,
-                bytes: &sources.get(file).bytes,
-                directives: &main.dir,
-                script_name: &script_name,
-                uses: &resolutions,
-                has_root,
-            },
-            &mut state,
-            &mut sink,
-        );
-        Some(sema::finish(state))
+        Some(sema::finish(state, &mut sink))
     };
 
     // Warning post-processing: `{$WARN}` state and the `disable with` hint
@@ -762,7 +866,13 @@ pub fn compile(
                     }
                 })
                 .collect();
-            Some(crate::ir::lower::lower(p, &files, &paths))
+            // The distinct types are erased first (`docs/spec/types.md` 1.3)
+            let erased = sema::erase::erase(p);
+            Some(crate::ir::lower::lower(
+                erased.as_ref().unwrap_or(p),
+                &files,
+                &paths,
+            ))
         }
         _ => None,
     };
@@ -783,7 +893,12 @@ pub fn compile(
         sources,
         stages,
         is_unit,
-        files: units.files.clone(),
+        files: units
+            .files
+            .iter()
+            .copied()
+            .filter(|f| !units.stdlib_files.contains(f))
+            .collect(),
     }
 }
 

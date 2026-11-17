@@ -1,0 +1,8 @@
+root/mid/leaf
+root/other
+root count: 1
+destroy root; parent of first child is nil: TRUE
+destroy mid; parent of first child is nil: TRUE
+destroy leaf; parent is nil: TRUE
+destroy other; parent is nil: TRUE
+end

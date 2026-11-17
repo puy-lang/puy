@@ -1,0 +1,126 @@
+program DumpGenericConstraintOps
+.type TNode = class(TRefObject) ref
+  .method f0 Equal operator
+  .method f1 GetHashCode override 5
+  .method f2 Equals override 4
+.type TPair<T: class, constructor> = class(TObject)
+  .field 0 FA: T
+  .field 1 FB: T
+  .method - Same
+  .method - HasA
+  .method - Make
+.global g0 P: TPair<TNode>
+.routine f0 TNode.Equal(const A: TNode; const B: TNode): Boolean
+  .var v0 A: TNode const param
+  .var v1 B: TNode const param
+  .var v2 Result: Boolean result
+  assign @25 R+
+    var v2 Result
+    const Boolean True
+.routine f1 TNode.GetHashCode(): Int64
+  .var v0 Self: TNode self
+  .var v1 Result: Int64 result
+  assign @30 R+
+    var v1 Result
+    const Int64 0
+.routine f2 TNode.Equals(Obj: TObject): Boolean
+  .var v0 Self: TNode self
+  .var v1 Obj: TObject param
+  .var v2 Result: Boolean result
+  assign @12 R-
+    var v2 Result
+    binary Boolean
+      is TNode
+        var v1 Obj: TObject
+      and Boolean bool
+        operator f0 TNode.Equal: Boolean
+          self TNode
+          as TNode cast
+            var v1 Obj: TObject
+.routine - TPair<T>.Same(): Boolean
+  .var v0 Self: TPair<T> self
+  .var v1 Result: Boolean result
+  assign @35 R+
+    var v1 Result
+    binary Boolean
+      objfield T FA #0
+        self TPair<T>
+      = Boolean ref
+        objfield T FB #1
+          self TPair<T>
+.routine - TPair<T>.HasA(): Boolean
+  .var v0 Self: TPair<T> self
+  .var v1 Result: Boolean result
+  assign @40 R+
+    var v1 Result
+    binary Boolean
+      objfield T FA #0
+        self TPair<T>
+      <> Boolean ref
+        const T nil
+.routine - TPair<T>.Make(): T
+  .var v0 Self: TPair<T> self
+  .var v1 Result: T result
+  assign @45 R+
+    var v1 Result
+    create T -
+.instance TPair<TNode>
+.routine f8 TPair<TNode>.Make(): TNode
+  .var v0 Self: TPair<TNode> self
+  .var v1 Result: TNode result
+  assign @45 R+
+    var v1 Result
+    create TNode builtin
+.routine f6 TPair<TNode>.Same(): Boolean
+  .var v0 Self: TPair<TNode> self
+  .var v1 Result: Boolean result
+  assign @35 R+
+    var v1 Result
+    binary Boolean
+      objfield TNode FA #0
+        self TPair<TNode>
+      = Boolean ref
+        objfield TNode FB #1
+          self TPair<TNode>
+.routine f7 TPair<TNode>.HasA(): Boolean
+  .var v0 Self: TPair<TNode> self
+  .var v1 Result: Boolean result
+  assign @40 R+
+    var v1 Result
+    binary Boolean
+      objfield TNode FA #0
+        self TPair<TNode>
+      <> Boolean ref
+        const TNode nil
+.routine <main>
+  assign @51 R+
+    global g0 P
+    create TPair<TNode> builtin
+  assign @52 R+
+    objfield TNode FA #0
+      global g0 P: TPair<TNode>
+    method f8 TPair<TNode>.Make: TNode
+      global g0 P: TPair<TNode>
+  assign @53 R+
+    objfield TNode FB #1
+      global g0 P: TPair<TNode>
+    create TNode builtin
+  writeln @54
+    arg
+      operator f0 TNode.Equal: Boolean
+        objfield TNode FA #0
+          global g0 P: TPair<TNode>
+        objfield TNode FB #1
+          global g0 P: TPair<TNode>
+    arg
+      const Char #32
+    arg
+      method f6 TPair<TNode>.Same: Boolean
+        global g0 P: TPair<TNode>
+    arg
+      const Char #32
+    arg
+      method f7 TPair<TNode>.HasA: Boolean
+        global g0 P: TPair<TNode>
+  free @55
+    global g0 P: TPair<TNode>

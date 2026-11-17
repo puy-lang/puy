@@ -1,0 +1,13 @@
+other field: 0
+read: an object field is passed to a var parameter of a call in progress
+write: an object field is passed to a var parameter of a call in progress
+after: 5
+self: an object field is passed to a var parameter of a call in progress
+after: 6
+twice: an object field is passed to two var parameters
+after: 6
+freed: access to a freed object
+given back: 10
+nil: access to a nil reference
+owner's part: FALSE
+part: FALSE

@@ -1,0 +1,261 @@
+; puyc format 0
+.const
+  0: str "`TDigits` (0..2)"
+.type
+  64: class DumpValueEquality.TShape slots=4 refs=0,1,2 objs=3 parent=ty19 vmt=builtin0,builtin0,builtin0,builtin1,f1,f2
+.global
+.host
+.unit DumpValueEquality file="dump_value_equality.pas" init=- fini=- entry=0
+.func 0 DumpValueEquality.<main> params=0 regs=1
+  .line 31
+  0000  RetVoid
+.func 1 DumpValueEquality.TShape.Equals params=2 regs=16
+  .local r0 Self
+  .local r1 Obj
+  .local r2 Result
+  .local r3 O
+  .line 22
+  0000  Move         r13, r1
+  0001  IsClass      r13, ty64
+  0002  Move         r2, r13
+  0003  JmpIfFalse   r2, -> 0007
+  0004  ClassType    r13, r1
+  0005  ClassType    r14, r0
+  0006  EqInt        r2, r13, r14
+  0007  JmpIfFalse   r2, -> 0034
+  0008  AssignObj    r4, r1
+  0009  AsClass      r4, ty64
+  000a  Move         r3, r4
+  000b  ObjGetRef    r5, r0, 0
+  000c  Move         r13, r5
+  000d  ObjGetRef    r6, r3, 0
+  000e  Move         r14, r6
+  000f  Call         r13, f3
+  0010  Move         r2, r13
+  0011  JmpIfFalse   r2, -> 0018
+  0012  ObjGetRef    r7, r0, 1
+  0013  Move         r13, r7
+  0014  ObjGetRef    r8, r3, 1
+  0015  Move         r14, r8
+  0016  Call         r13, f4
+  0017  Move         r2, r13
+  0018  JmpIfFalse   r2, -> 001f
+  0019  ObjGetRef    r9, r0, 2
+  001a  Move         r13, r9
+  001b  ObjGetRef    r10, r3, 2
+  001c  Move         r14, r10
+  001d  Call         r13, f5
+  001e  Move         r2, r13
+  001f  JmpIfFalse   r2, -> 002e
+  0020  ObjGet       r13, r0, 3
+  0021  AssignObj    r11, r13
+  0022  ObjGet       r13, r3, 3
+  0023  AssignObj    r12, r13
+  0024  EqInt        r2, r11, r12
+  0025  JmpIfTrue    r2, -> 002e
+  0026  ObjAlive     r13, r11
+  0027  JmpIfFalse   r13, -> 002e
+  0028  ObjAlive     r13, r12
+  0029  JmpIfFalse   r13, -> 002e
+  002a  Move         r14, r11
+  002b  Move         r15, r12
+  002c  CallVirtual  r14, 4
+  002d  Move         r2, r14
+  002e  Release      r10
+  002f  Release      r9
+  0030  Release      r8
+  0031  Release      r7
+  0032  Release      r6
+  0033  Release      r5
+  0034  Ret          r2
+.finally r4:obj, r5, r6, r7, r8, r9, r10, r11:obj, r12:obj
+.func 2 DumpValueEquality.TShape.GetHashCode params=1 regs=10
+  .local r0 Self
+  .local r1 Result
+  .line 22
+  0000  LoadInt      r6, 4
+  0001  HashInt      r1, r6
+  0002  ObjGetRef    r2, r0, 0
+  0003  Move         r8, r2
+  0004  Call         r8, f7
+  0005  HashMix      r1, r1, r8
+  0006  Release      r2
+  0007  ObjGetRef    r3, r0, 1
+  0008  Move         r8, r3
+  0009  Call         r8, f8
+  000a  HashMix      r1, r1, r8
+  000b  Release      r3
+  000c  ObjGetRef    r4, r0, 2
+  000d  Move         r8, r4
+  000e  Call         r8, f9
+  000f  HashMix      r1, r1, r8
+  0010  Release      r4
+  0011  ObjGet       r8, r0, 3
+  0012  AssignObj    r5, r8
+  0013  ObjAlive     r8, r5
+  0014  JmpIfFalse   r8, -> 0019
+  0015  Move         r9, r5
+  0016  CallVirtual  r9, 5
+  0017  Move         r7, r9
+  0018  Jmp          -> 001a
+  0019  HashInt      r7, r5
+  001a  HashMix      r1, r1, r7
+  001b  Ret          r1
+.finally r2, r3, r4, r5:obj
+.func 3 <eq:DumpValueEquality.TPoint> params=2 regs=7
+  .local r0 A
+  .local r1 B
+  .local r2 Result
+  .line 14
+  0000  FieldGet     r5, r0, 0
+  0001  FieldGet     r6, r1, 0
+  0002  EqInt        r2, r5, r6
+  0003  JmpIfFalse   r2, -> 000a
+  0004  FieldGetRef  r3, r0, 1
+  0005  Move         r5, r3
+  0006  FieldGetRef  r4, r1, 1
+  0007  Move         r6, r4
+  0008  Call         r5, f6
+  0009  Move         r2, r5
+  000a  Release      r4
+  000b  Release      r3
+  000c  Ret          r2
+.finally r3, r4
+.func 4 <eq:array of DumpValueEquality.TPoint> params=2 regs=11
+  .local r0 A
+  .local r1 B
+  .local r2 Result
+  .local r3 I
+  .line 22
+  0000  LoadZero     r2
+  0001  ArrLen       r6, r0
+  0002  ArrLen       r7, r1
+  0003  JmpIfNeInt   r6, r7, -> 0016
+  0004  LoadZero     r3
+  0005  ArrLen       r6, r0
+  0006  AddIntI      r6, r6, -1
+  0007  JmpIfLtInt   r6, r3, -> 0015
+  0008  DynGetRef    r4, r0, r3
+  0009  Move         r8, r4
+  000a  DynGetRef    r5, r1, r3
+  000b  Move         r9, r5
+  000c  Call         r8, f3
+  000d  JmpIfTrue    r8, -> 0012
+  000e  Release      r5
+  000f  Release      r4
+  0010  Ret          r2
+  0011  Jmp          -> 0014
+  0012  Release      r5
+  0013  Release      r4
+  0014  ForLoopUp    r3, r6, -> 0008
+  0015  LoadInt      r2, 1
+  0016  Ret          r2
+.finally r4, r5
+.func 5 <eq:DumpValueEquality.TDigits> params=2 regs=10
+  .local r0 A
+  .local r1 B
+  .local r2 Result
+  .local r3 I
+  .line 22
+  0000  LoadZero     r2
+  0001  LoadZero     r3
+  0002  LoadInt      r4, 2
+  0003  JmpIfLtInt   r4, r3, -> 0010
+  0004  Move         r7, r3
+  0005  LoadInt      r8, 3
+  0006  ChkIndex     r7, r8, k0
+  0007  ValGet       r6, r0, r7
+  0008  Move         r8, r3
+  0009  LoadInt      r9, 3
+  000a  ChkIndex     r8, r9, k0
+  000b  ValGet       r7, r1, r8
+  000c  EqInt        r5, r6, r7
+  000d  JmpIfTrue    r5, -> 000f
+  000e  Ret          r2
+  000f  ForLoopUp    r3, r4, -> 0004
+  0010  LoadInt      r2, 1
+  0011  Ret          r2
+.func 6 <eq:DumpValueEquality.TInner> params=2 regs=9
+  .local r0 A
+  .local r1 B
+  .local r2 Result
+  .line 9
+  0000  FieldGetRef  r3, r0, 0
+  0001  FieldGetRef  r4, r1, 0
+  0002  EqStr        r2, r3, r4
+  0003  JmpIfFalse   r2, -> 0009
+  0004  FieldGet     r5, r0, 1
+  0005  FieldGet     r6, r1, 1
+  0006  F32ToF64     r7, r5
+  0007  F32ToF64     r8, r6
+  0008  KeyEqF64     r2, r7, r8
+  0009  Ret          r2
+.finally r3, r4
+.func 7 <hash:DumpValueEquality.TPoint> params=1 regs=6
+  .local r0 X
+  .local r1 Result
+  .line 14
+  0000  LoadInt      r3, 2
+  0001  HashInt      r1, r3
+  0002  FieldGet     r5, r0, 0
+  0003  HashInt      r4, r5
+  0004  HashMix      r1, r1, r4
+  0005  FieldGetRef  r2, r0, 1
+  0006  Move         r5, r2
+  0007  Call         r5, f10
+  0008  HashMix      r1, r1, r5
+  0009  Release      r2
+  000a  Ret          r1
+.finally r2
+.func 8 <hash:array of DumpValueEquality.TPoint> params=1 regs=9
+  .local r0 X
+  .local r1 Result
+  .local r2 I
+  .line 22
+  0000  ArrLen       r4, r0
+  0001  HashInt      r1, r4
+  0002  LoadZero     r2
+  0003  ArrLen       r4, r0
+  0004  AddIntI      r4, r4, -1
+  0005  JmpIfLtInt   r4, r2, -> 000c
+  0006  DynGetRef    r3, r0, r2
+  0007  Move         r7, r3
+  0008  Call         r7, f7
+  0009  HashMix      r1, r1, r7
+  000a  Release      r3
+  000b  ForLoopUp    r2, r4, -> 0006
+  000c  Ret          r1
+.finally r3
+.func 9 <hash:DumpValueEquality.TDigits> params=1 regs=9
+  .local r0 X
+  .local r1 Result
+  .local r2 I
+  .line 22
+  0000  LoadInt      r3, 3
+  0001  HashInt      r1, r3
+  0002  LoadZero     r2
+  0003  LoadInt      r3, 2
+  0004  JmpIfLtInt   r3, r2, -> 000c
+  0005  Move         r7, r2
+  0006  LoadInt      r8, 3
+  0007  ChkIndex     r7, r8, k0
+  0008  ValGet       r6, r0, r7
+  0009  HashInt      r5, r6
+  000a  HashMix      r1, r1, r5
+  000b  ForLoopUp    r2, r3, -> 0005
+  000c  Ret          r1
+.func 10 <hash:DumpValueEquality.TInner> params=1 regs=7
+  .local r0 X
+  .local r1 Result
+  .line 9
+  0000  LoadInt      r3, 2
+  0001  HashInt      r1, r3
+  0002  FieldGetRef  r2, r0, 0
+  0003  HashStr      r4, r2
+  0004  HashMix      r1, r1, r4
+  0005  FieldGet     r5, r0, 1
+  0006  F32ToF64     r6, r5
+  0007  HashF64      r4, r6
+  0008  HashMix      r1, r1, r4
+  0009  Ret          r1
+.finally r2

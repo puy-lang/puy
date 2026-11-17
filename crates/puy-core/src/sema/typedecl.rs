@@ -4,12 +4,13 @@
 
 use super::hir::*;
 use super::types::{
-    Const, DynWritten, EnumValueDef, Field, MAX_ARRAY_LEN, Ty, TypeDef, TypeId, TypeKind,
-    bound_text,
+    ClassField, Const, DynWritten, EnumValueDef, Field, MAX_ARRAY_LEN, ProcFamily, ProcParam, Ty,
+    TypeDef, TypeId, TypeKind, Visibility, bound_text,
 };
 use super::{GSym, LSym, Sema, builtins};
 use crate::diagnostics::{Code, Diagnostic, Stage};
 use crate::source::TextRange;
+use crate::syntax::SyntaxKind;
 use crate::syntax::ast::{self, AstNode};
 
 /// An alias (`type X = Y`) of the section being declared, resolved on first use so that it may
@@ -36,15 +37,34 @@ enum AliasState {
 enum Pending {
     Record(TypeId, ast::RecordType),
     Array(TypeId, ast::ArrayType),
-    /// `EFoo = class(Parent)` (`docs/spec/exceptions.md` chapter 3).
-    Class(TypeId, ast::ClassType),
+    /// `TFoo = class(…) … end` (`docs/spec/objects.md` chapter 1), with its parent when it was
+    /// resolved in the first pass (a name not declared in the same section).
+    Object(TypeId, ast::ClassType, Option<Ty>),
+    /// `IFoo = interface(…) … end` (`docs/spec/objects.md` 7.1), with its parent when it was
+    /// resolved in the first pass.
+    Interface(TypeId, ast::InterfaceType, Option<Ty>),
+    /// `THelper = class helper for T … end` (`docs/spec/objects.md` 10.1): defined in the second
+    /// pass (its type and parent may be declared later in the section).
+    Helper(TypeId, ast::HelperType),
     /// `TDigit = 0..9`: defined in the second pass, after the enumerations of the section.
     Subrange(TypeId, ast::SubrangeType),
+    /// `TF = function(…): T`, `TE = procedure of object`, `TR = reference to procedure`
+    /// (`docs/spec/objects.md` 9.1): defined in the second pass.
+    Proc(TypeId, ast::TypeSpec),
     Alias(usize),
-    /// `type X = array of T` / `TArray<T>`: resolved like an alias (it names the dynamic array of
-    /// its element type).
-    DynArray(usize),
+    /// `type X = array of T` / `TArray<T>` / `set of T` / `class of T`: resolved like an alias
+    /// (it names the dynamic array, set or class reference of its element type, base type or
+    /// class), and it defines that type.
+    Defines(usize),
     Nothing,
+}
+
+/// What a name written with type arguments in a type position names.
+enum GenericRef {
+    /// A generic type of the program or of `System` (or `Ty::Error` once reported).
+    Type(Ty),
+    /// The built-in `TArray<T>`: its element type, `None` once reported.
+    TArray(Option<Ty>),
 }
 
 impl<'a, 's> Sema<'a, 's> {
@@ -87,7 +107,20 @@ impl<'a, 's> Sema<'a, 's> {
                 self.define_array(id, &a);
                 Ty::Array(id)
             }
-            Some(ast::TypeSpec::Class(_)) => Ty::Error,
+            // Only a type declaration has these forms (the parser reads them there)
+            Some(
+                ast::TypeSpec::Class(_)
+                | ast::TypeSpec::Interface(_)
+                | ast::TypeSpec::Helper(_)
+                | ast::TypeSpec::Distinct(_),
+            ) => Ty::Error,
+            Some(ast::TypeSpec::ClassRef(r)) => self.class_ref_type(
+                &r,
+                DynWritten::Anonymous {
+                    generic: false,
+                    span: ast::trimmed_range(r.syntax()),
+                },
+            ),
             Some(ast::TypeSpec::Enum(e)) => {
                 // An enumeration needs a name to qualify its values (`docs/spec/types.md` 8.1)
                 let range = ast::trimmed_range(e.syntax());
@@ -125,20 +158,38 @@ impl<'a, 's> Sema<'a, 's> {
                     },
                 )
             }
+            Some(t @ (ast::TypeSpec::Proc(_) | ast::TypeSpec::Reference(_))) => {
+                let span = ast::trimmed_range(t.syntax());
+                let (id, ty) = self.add_proc_type(None, &t, span);
+                self.define_proc_type(id, &t);
+                ty
+            }
             Some(ast::TypeSpec::Generic(g)) => {
                 let span = g.syntax().text_range();
-                match self.generic_elem(&g) {
-                    Some(elem) => self.dyn_array_of(
+                match self.generic_type_ref(&g) {
+                    GenericRef::Type(t) => t,
+                    GenericRef::TArray(Some(elem)) => self.dyn_array_of(
                         elem,
                         DynWritten::Anonymous {
                             generic: true,
                             span,
                         },
                     ),
-                    None => Ty::Error,
+                    GenericRef::TArray(None) => Ty::Error,
                 }
             }
         }
+    }
+
+    /// A generic dynamic array type (`TRow<T> = array of T`, `TRow<T> = TArray<T>`;
+    /// `docs/spec/generics.md` 2.1): its element type, with the type parameters in scope.
+    fn define_generic_dyn(&mut self, id: TypeId, t: &ast::TypeSpec) {
+        let (elem, generic) = self.with_type_params(id, |s| match t {
+            ast::TypeSpec::Array(a) => (s.resolve_type(a.element()), false),
+            ast::TypeSpec::Generic(g) => (s.resolve_type(g.arg()), true),
+            _ => (Ty::Error, false),
+        });
+        self.types.get_mut(id).kind = TypeKind::DynArray { elem, generic };
     }
 
     /// The set of a base type (`docs/spec/types.md` 8.3): an ordinal type whose ordinals are all
@@ -147,7 +198,7 @@ impl<'a, 's> Sema<'a, 's> {
         if base.is_error() {
             return Ty::Error;
         }
-        let ok = base.is_ordinal()
+        let ok = self.types.root(base).is_ordinal()
             && self
                 .types
                 .ord_range(base)
@@ -177,18 +228,181 @@ impl<'a, 's> Sema<'a, 's> {
         self.types.dyn_array(elem, written)
     }
 
-    /// The element type of `TArray<T>`. A `TArray` declared by the program hides the built-in one,
-    /// so `<` cannot follow it (E0400; `docs/spec/types.md` chapter 1).
-    fn generic_elem(&mut self, g: &ast::GenericTypeRef) -> Option<Ty> {
-        if let Some(Some(_) | None) = self.lookup_type_symbol("tarray") {
-            let lt = g
-                .lt_token()
-                .map_or(g.syntax().text_range(), |t| t.text_range());
-            self.error(Code::E(400), "expected `;`, found `<`", lt);
-            return None;
+    /// A generic type written with type arguments in a type position (`TBox<Integer>`,
+    /// `Unit.TBox<Integer>`; `docs/spec/generics.md` 1.3), or the built-in `TArray<T>` (also
+    /// written `System.TArray<T>`; 6.2) when no generic type of the program has the name.
+    fn generic_type_ref(&mut self, g: &ast::GenericTypeRef) -> GenericRef {
+        let Some(q) = g.name() else {
+            return GenericRef::TArray(self.generic_elem(g));
+        };
+        let idents: Vec<_> = q.idents().collect();
+        let Some(last) = idents.last() else {
+            return GenericRef::TArray(self.generic_elem(g));
+        };
+        let name = last.text().to_string();
+        let name_range = last.text_range();
+        let scope = if idents.len() > 1 {
+            let unit: Vec<String> = idents[..idents.len() - 1]
+                .iter()
+                .map(|t| t.text().to_string())
+                .collect();
+            let lower = unit.join(".").to_ascii_lowercase();
+            match self.unit_named(&lower) {
+                Some(u) => super::generics::GenericScope::Unit(u),
+                // `System.TProc<…>`, `System.TArray<…>` (`docs/spec/generics.md` 6.2)
+                None if let Some(u) = self.builtin_unit_named(&lower) => {
+                    super::generics::GenericScope::Unit(u)
+                }
+                // A generic type nested in a class or a record (`TOuter.TInner<…>`;
+                // `docs/spec/generics.md` 2.5)
+                None if let Some(c) = self.dry_run(|s| s.class_named(&unit.join("."))) => {
+                    super::generics::GenericScope::Type(c)
+                }
+                None => {
+                    let text = q.text();
+                    self.error(
+                        Code::E(700),
+                        format!("undeclared identifier `{text}`"),
+                        q.syntax().text_range(),
+                    );
+                    return GenericRef::Type(Ty::Error);
+                }
+            }
+        } else {
+            super::generics::GenericScope::Visible
+        };
+        let args_range = g.args_range().unwrap_or(g.syntax().text_range());
+        if g.syntax()
+            .children()
+            .any(|n| n.kind() == SyntaxKind::ERROR_NODE)
+        {
+            // A type argument the parser rejected (an anonymous type: E0404): the arguments are
+            // not counted and the name is not resolved either (the parser's error is enough)
+            return GenericRef::Type(Ty::Error);
         }
+        let args: Vec<ast::TypeSpec> = g.args().collect();
+        // A qualified name that is not generic: a type of the unit or a nested type, or nothing
+        let qualified_type = match &scope {
+            super::generics::GenericScope::Type(c) => Some(matches!(
+                self.find_static(*c, &name).map(|(_, s)| s.kind),
+                Some(super::types::StaticKind::Type(_))
+            )),
+            super::generics::GenericScope::Unit(u) => {
+                let u = *u;
+                Some(matches!(
+                    self.dry_run(|s| s.resolve_in_unit(u, &name, name_range)),
+                    super::Resolved::Type(_)
+                ))
+            }
+            super::generics::GenericScope::Visible => None,
+        };
+        let count = args.len();
+        if let Some(t) = self.generic_type_with_args(&name, name_range, args, args_range, scope) {
+            return GenericRef::Type(t);
+        }
+        if name.eq_ignore_ascii_case("tarray") {
+            match scope {
+                super::generics::GenericScope::Visible => {
+                    return GenericRef::TArray(self.generic_elem(g));
+                }
+                super::generics::GenericScope::Unit(super::UnitRef::System) => {
+                    // The parser takes any number of type arguments after a qualified name
+                    if count != 1 {
+                        self.tarray_arity_error(count, args_range);
+                        return GenericRef::Type(Ty::Error);
+                    }
+                    return GenericRef::TArray(self.generic_elem(g));
+                }
+                _ => {}
+            }
+        }
+        // A type that is not generic, or an undeclared name (`docs/spec/generics.md` 2.3)
+        if let Some(is_type) = qualified_type {
+            if is_type {
+                let text = q.text();
+                self.error(
+                    Code::E(761),
+                    format!("`{text}` is not generic"),
+                    g.syntax().text_range(),
+                );
+            } else {
+                let text = q.text();
+                self.error(
+                    Code::E(700),
+                    format!("undeclared identifier `{text}`"),
+                    q.syntax().text_range(),
+                );
+            }
+            return GenericRef::Type(Ty::Error);
+        }
+        self.not_generic_name(&name, name_range, g.syntax().text_range());
+        GenericRef::Type(Ty::Error)
+    }
+
+    /// E0761 for the built-in `TArray` written with other than one type argument
+    /// (`System.TArray<A, B>`; `docs/spec/generics.md` 6.2), in a type and in an expression.
+    pub(super) fn tarray_arity_error(&mut self, count: usize, args_range: TextRange) {
+        self.error(
+            Code::E(761),
+            format!("`TArray` expects 1 type argument, found {count}"),
+            args_range,
+        );
+    }
+
+    /// A name written with type arguments that names no generic type (`docs/spec/generics.md`
+    /// 2.3): E0761 `is not generic` at `args_range` for a type, E0708 for a name that is not a
+    /// type, and the E0700 of `resolve_ident` for an undeclared name. Shared by the type position
+    /// and the type of a body's heading (`procedure TPlain<T>.Run;`).
+    pub(super) fn not_generic_name(
+        &mut self,
+        name: &str,
+        name_range: TextRange,
+        args_range: TextRange,
+    ) {
+        let lower = name.to_ascii_lowercase();
+        let is_type = Ty::from_name(&lower).is_some()
+            || matches!(self.lookup_type_symbol(&lower), Some(Some(_)))
+            || matches!(
+                self.dry_run(|s| s.resolve_ident(name, name_range)),
+                super::Resolved::Type(_)
+            );
+        if is_type {
+            self.error(Code::E(761), format!("`{name}` is not generic"), args_range);
+        } else if !matches!(self.resolve_ident(name, name_range), super::Resolved::Error) {
+            self.error(Code::E(708), format!("`{name}` is not a type"), name_range);
+        }
+    }
+
+    /// The element type of the built-in `TArray<T>`, written `TArray<T>` or `System.TArray<T>`. A
+    /// `TArray` without type parameters declared by the program is another name and does not
+    /// hide it (`docs/spec/generics.md` 2.3, 6.2).
+    fn generic_elem(&mut self, g: &ast::GenericTypeRef) -> Option<Ty> {
         let elem = self.resolve_type(g.arg());
         (!elem.is_error()).then_some(elem)
+    }
+
+    /// E3200 for the generic forms of a heading not implemented yet
+    /// (`docs/spec/generics.md` chapter 10).
+    pub(super) fn generics_not_supported(&mut self, range: TextRange) {
+        self.error(
+            Code::E(3200),
+            "generics are not supported yet (planned for M4)",
+            range,
+        );
+    }
+
+    /// An interface's method declared with type parameters is E0757 and is not declared
+    /// (`docs/spec/generics.md` 2.1: an interface's methods use a table like the virtual ones).
+    pub(super) fn generic_interface_method(&mut self, m: &ast::MethodDecl) -> bool {
+        let Some(tp) = m.header().and_then(|h| h.type_params()) else {
+            return false;
+        };
+        self.error(
+            Code::E(757),
+            "a virtual method cannot have type parameters",
+            tp.syntax().text_range(),
+        );
+        true
     }
 
     /// An open array parameter `array of T` (`docs/spec/types.md` 2.4).
@@ -210,7 +424,80 @@ impl<'a, 's> Sema<'a, 's> {
         }
     }
 
-    fn add_type(&mut self, name: Option<String>, span: TextRange) -> TypeId {
+    /// A new procedural type (`docs/spec/objects.md` 9.1) for a `ProcType` / `RefType`, not yet
+    /// defined: its id and its type (the family is known from the syntax).
+    fn add_proc_type(
+        &mut self,
+        name: Option<String>,
+        t: &ast::TypeSpec,
+        span: TextRange,
+    ) -> (TypeId, Ty) {
+        let id = self.add_type(name, span);
+        let plain = matches!(t, ast::TypeSpec::Proc(p) if !p.of_object());
+        (
+            id,
+            if plain {
+                Ty::Proc(id)
+            } else {
+                Ty::Callable(id)
+            },
+        )
+    }
+
+    /// Defines a procedural type (`docs/spec/objects.md` 9.1): its parameters (no default values:
+    /// E0752) and return type, and the calling conventions (W0009).
+    fn define_proc_type(&mut self, id: TypeId, t: &ast::TypeSpec) {
+        let (family, p) = match t {
+            ast::TypeSpec::Proc(p) if p.of_object() => (ProcFamily::Method, Some(p.clone())),
+            ast::TypeSpec::Proc(p) => (ProcFamily::Plain, Some(p.clone())),
+            ast::TypeSpec::Reference(r) => (ProcFamily::Reference, r.proc_type()),
+            _ => return,
+        };
+        let mut params = Vec::new();
+        let mut ret = None;
+        if let Some(p) = p {
+            for group in p.params() {
+                let ty = match group.type_ref() {
+                    // `array of T` in a parameter is an open array (`docs/spec/types.md` 2.4)
+                    Some(ast::TypeSpec::Array(a)) if !a.has_brackets() => self.open_array_of(&a),
+                    t => self.resolve_type(t),
+                };
+                if let Some(d) = group.default_node() {
+                    self.error(
+                        Code::E(752),
+                        "a procedural type cannot have default parameter values",
+                        ast::trimmed_range(&d),
+                    );
+                }
+                for n in group.names() {
+                    params.push(ProcParam {
+                        name: self.text(&n).to_string(),
+                        ty,
+                        mode: group.mode(),
+                    });
+                }
+            }
+            if p.is_function() {
+                ret = Some(match p.return_type() {
+                    Some(r) => self.resolve_type(Some(r)),
+                    None => Ty::Error,
+                });
+            }
+            for d in p.directives() {
+                if let (Some(kind), Some(kw)) = (d.kind(), d.keyword()) {
+                    let del = super::semicolon_with_directive(d.syntax());
+                    self.routine_directive_at(kind, &kw, del);
+                }
+            }
+        }
+        self.types.get_mut(id).kind = TypeKind::Proc {
+            family,
+            params,
+            ret,
+        };
+    }
+
+    pub(super) fn add_type(&mut self, name: Option<String>, span: TextRange) -> TypeId {
         let full_name = name.as_ref().map(|n| self.qualified_type_name(n));
         self.types.add(TypeDef {
             name,
@@ -220,8 +507,12 @@ impl<'a, 's> Sema<'a, 's> {
         })
     }
 
-    /// `Hello.TPoint` for a type of the program, `Hello.Routine.TPoint` for a local type.
+    /// `Hello.TPoint` for a type of the program, `Hello.Routine.TPoint` for a local type,
+    /// `Hello.TFoo.TItem` for a nested type (`docs/spec/bytecode.md` 3.2).
     fn qualified_type_name(&self, name: &str) -> String {
+        if let Some(c) = self.class_scope() {
+            return format!("{}.{name}", self.types.full_name(Ty::Class(c)));
+        }
         match &self.cur {
             Some(c) if !c.is_main => format!("{}.{}.{name}", self.program_name, c.qual_name),
             _ => format!("{}.{name}", self.program_name),
@@ -231,10 +522,31 @@ impl<'a, 's> Sema<'a, 's> {
     /// Looks a name up as a type: `Some(Some(ty))` for a declared type, `Some(None)` for a name
     /// declared as something else, `None` if no declaration has the name.
     pub(super) fn lookup_type_symbol(&mut self, lower: &str) -> Option<Option<Ty>> {
+        if let Some(p) = self.routine_type_param(lower) {
+            return Some(Some(Ty::Param(p)));
+        }
         let mut found: Option<Option<Ty>> = self.lookup_scopes(lower).map(|(_, sym)| match sym {
             LSym::Type { ty, .. } => Some(ty),
             _ => None,
         });
+        if found.is_none()
+            && let Some(t) = self.scoped_param(lower)
+        {
+            return Some(Some(t));
+        }
+        if found.is_none()
+            && let Some((_, st)) = self.scoped_static(lower)
+        {
+            // A type parameter is not an alias of the section, even one of the same name
+            // (`docs/spec/generics.md` 2.2)
+            if let super::types::StaticKind::Type(t @ Ty::Param(_)) = st.kind {
+                return Some(Some(t));
+            }
+            found = Some(match st.kind {
+                super::types::StaticKind::Type(t) => Some(t),
+                _ => None,
+            });
+        }
         if found.is_none() {
             found = self
                 .global_scope
@@ -255,6 +567,30 @@ impl<'a, 's> Sema<'a, 's> {
         found
     }
 
+    /// The name declaring the type [`Sema::lookup_type_symbol`] finds for `lower`, recorded as
+    /// used at `range` (`docs/spec/attributes.md` 6.2).
+    pub(super) fn type_symbol_use(&mut self, lower: &str, range: TextRange) {
+        let decl = match self.lookup_scopes(lower) {
+            Some((up, sym @ LSym::Type { .. })) => Some(self.span(self.lsym_span(up, &sym))),
+            Some(_) => None,
+            None => match self.scoped_static(lower) {
+                Some((owner, st)) => self.static_decl_span(owner, &st),
+                None => self
+                    .global_scope
+                    .iter()
+                    .rev()
+                    .find(|(n, _)| n == lower)
+                    .and_then(|(_, sym)| match sym {
+                        GSym::Type { span, .. } => Some(self.span(*span)),
+                        _ => None,
+                    }),
+            },
+        };
+        if let Some(d) = decl {
+            self.hint_use(d, range);
+        }
+    }
+
     fn resolve_alias(&mut self, i: usize) -> Ty {
         match self.pending_aliases[i].state {
             AliasState::Done(ty) => ty,
@@ -271,13 +607,18 @@ impl<'a, 's> Sema<'a, 's> {
                 let target = self.pending_aliases[i].target.clone();
                 let ty = match &target {
                     ast::TypeSpec::Ref(r) => self.resolve_type_ref(r),
+                    // Declared with `Pending::Proc`, never as an alias
+                    ast::TypeSpec::Proc(_) | ast::TypeSpec::Reference(_) => Ty::Error,
                     ast::TypeSpec::Array(a) => {
                         let elem = self.resolve_type(a.element());
                         self.named_dyn_array(i, elem)
                     }
-                    ast::TypeSpec::Generic(g) => match self.generic_elem(g) {
-                        Some(elem) => self.named_dyn_array(i, elem),
-                        None => Ty::Error,
+                    // An instantiation (`TIntBox = TBox<Integer>`; `docs/spec/generics.md` 1.3),
+                    // or `TArray<T>`
+                    ast::TypeSpec::Generic(g) => match self.generic_type_ref(g) {
+                        GenericRef::Type(t) => t,
+                        GenericRef::TArray(Some(elem)) => self.named_dyn_array(i, elem),
+                        GenericRef::TArray(None) => Ty::Error,
                     },
                     ast::TypeSpec::Set(st) => {
                         let base = self.resolve_type(st.base());
@@ -294,8 +635,24 @@ impl<'a, 's> Sema<'a, 's> {
                             },
                         )
                     }
+                    ast::TypeSpec::ClassRef(r) => {
+                        let name = self.pending_aliases[i].name.clone();
+                        let full_name = self.qualified_type_name(&name);
+                        let span = self.pending_aliases[i].span;
+                        self.class_ref_type(
+                            r,
+                            DynWritten::Named {
+                                name,
+                                full_name,
+                                span,
+                            },
+                        )
+                    }
+                    ast::TypeSpec::Distinct(d) => self.distinct_type(i, d),
                     ast::TypeSpec::Record(_)
                     | ast::TypeSpec::Class(_)
+                    | ast::TypeSpec::Interface(_)
+                    | ast::TypeSpec::Helper(_)
                     | ast::TypeSpec::Enum(_)
                     | ast::TypeSpec::Subrange(_) => Ty::Error,
                 };
@@ -308,6 +665,79 @@ impl<'a, 's> Sema<'a, 's> {
                 }
             }
         }
+    }
+
+    /// The distinct type `type X = type Y` declares (`docs/spec/types.md` 1.3): E0769 unless the
+    /// root of `Y` is one of the simple types.
+    fn distinct_type(&mut self, i: usize, d: &ast::DistinctType) -> Ty {
+        let base = match d.target() {
+            Some(ast::TypeSpec::Ref(r)) => self.resolve_type_ref(&r),
+            Some(ast::TypeSpec::Generic(g)) => match self.generic_type_ref(&g) {
+                GenericRef::Type(t) => t,
+                GenericRef::TArray(Some(elem)) => self.dyn_array_of(
+                    elem,
+                    DynWritten::Anonymous {
+                        generic: true,
+                        span: ast::trimmed_range(g.syntax()),
+                    },
+                ),
+                GenericRef::TArray(None) => Ty::Error,
+            },
+            _ => Ty::Error,
+        };
+        if base.is_error() {
+            return Ty::Error;
+        }
+        let root = self.types.root(base);
+        if !Self::distinct_root(root) {
+            let target = d
+                .target()
+                .map(|t| ast::trimmed_range(t.syntax()))
+                .unwrap_or(d.syntax().text_range());
+            let d_err = self.error(
+                Code::E(769),
+                format!("cannot declare a distinct type of `{}`", self.tn(base)),
+                target,
+            );
+            d_err.notes.push(
+                "a distinct type can be declared for integer, floating-point, `Currency`, `Char`, `Boolean`, `string` and `UTF8String` types"
+                    .into(),
+            );
+            if let Some(kw) = d.type_token() {
+                // `type X = type Y` → `type X = Y`
+                let edit = TextRange::new(kw.text_range().start(), target.start());
+                let fix = crate::diagnostics::Fix::suggestion(
+                    "remove `type` to declare an alias".to_string(),
+                    vec![crate::diagnostics::TextEdit::replace(
+                        self.input.file,
+                        edit,
+                        String::new(),
+                    )],
+                );
+                self.last_mut().fixes.push(fix);
+            }
+            return Ty::Error;
+        }
+        let name = self.pending_aliases[i].name.clone();
+        let span = self.pending_aliases[i].span;
+        let id = self.add_type(Some(name), span);
+        self.types.get_mut(id).kind = TypeKind::Distinct { base };
+        Ty::Distinct(id)
+    }
+
+    /// Whether a distinct type can have `root` as its root type (`docs/spec/types.md` 1.3).
+    pub(super) fn distinct_root(root: Ty) -> bool {
+        root.is_integer()
+            || matches!(
+                root,
+                Ty::Single
+                    | Ty::Double
+                    | Ty::Currency
+                    | Ty::Char
+                    | Ty::Boolean
+                    | Ty::String
+                    | Ty::Utf8String
+            )
     }
 
     /// The dynamic array a `type` declaration names (`type TInts = array of Integer`).
@@ -328,7 +758,21 @@ impl<'a, 's> Sema<'a, 's> {
     /// A `type` section (`docs/spec/types.md` chapter 1). All names are declared first, so a type
     /// may refer to a type declared later in the same section.
     pub(super) fn declare_types(&mut self, section: &ast::TypeSection) {
+        // A section nested in a class body keeps the enclosing section's pending aliases, and
+        // its classes get their methods with the enclosing section's (`docs/spec/objects.md` 2.2)
+        let alias_base = self.pending_aliases.len();
+        let nested = self.class_scope().is_some();
         let mut items: Vec<(String, TextRange, Ty, Pending)> = Vec::new();
+        // The generic dynamic array types, defined once every name of the section is declared
+        let mut generic_dyns: Vec<(TypeId, ast::TypeSpec)> = Vec::new();
+        let classes = self.section_classes(section);
+        // The constraints of the instantiations written in the section are checked once its
+        // classes have their parents, interfaces and methods (`docs/spec/generics.md` 4.2)
+        let deferred = (!nested).then(|| self.begin_deferred_checks());
+        if !nested {
+            // The attribute classes wait for the methods of the section's classes
+            self.attr_defer += 1;
+        }
         for decl in section.decls() {
             let Some(name_tok) = decl.name() else {
                 continue;
@@ -336,12 +780,81 @@ impl<'a, 's> Sema<'a, 's> {
             let name = self.text(&name_tok).to_string();
             let lower = name.to_ascii_lowercase();
             let range = name_tok.text_range();
+            if let Some(tp) = decl.type_params() {
+                // A generic type (`docs/spec/generics.md` 1.1, 2.1). Its name, found by the
+                // number of type parameters, is another name than one without them (2.3), so it
+                // neither collides with nor hides a declaration without them
+                let Some(ty) = self.declare_generic_type(&decl, &tp, section, &name, range) else {
+                    continue;
+                };
+                let pending = match (ty, decl.type_spec()) {
+                    (Ty::Class(id), Some(ast::TypeSpec::Class(c))) => Pending::Object(id, c, None),
+                    (Ty::Record(id), Some(ast::TypeSpec::Record(r))) => Pending::Record(id, r),
+                    (Ty::Intf(id), Some(ast::TypeSpec::Interface(it))) => {
+                        Pending::Interface(id, it, None)
+                    }
+                    (Ty::Proc(id) | Ty::Callable(id), Some(t)) => Pending::Proc(id, t),
+                    (Ty::Array(id), Some(ast::TypeSpec::Array(a))) => Pending::Array(id, a),
+                    (Ty::DynArray(id), Some(t)) => {
+                        generic_dyns.push((id, t));
+                        Pending::Nothing
+                    }
+                    _ => unreachable!("a generic type is declared with the form of its type"),
+                };
+                items.push((name, range, ty, pending));
+                continue;
+            }
             if decl.type_spec().is_none() {
                 // A type the parser reported (a class, M3; `object`, removed): the name is known,
                 // so uses of it do not pile on E0700, and a later full declaration of a
                 // forward-declared class is not E0701
                 if self.find_declared(&lower).is_none() {
                     self.bind_type(lower, Ty::Error, range);
+                }
+                continue;
+            }
+            if let Some(ast::TypeSpec::Class(c)) = decl.type_spec()
+                && c.is_forward()
+            {
+                // A forward declaration: the full declaration later in the section declares the
+                // name (`docs/spec/objects.md` chapter 1)
+                if !classes
+                    .iter()
+                    .any(|(n, c, r)| *n == lower && !c.is_forward() && r.start() > range.start())
+                {
+                    let d = Diagnostic::error(
+                        Code::E(723),
+                        format!("forward declaration of class `{name}` has no body"),
+                        Stage::Sema,
+                    )
+                    .with_primary(self.span(range), "");
+                    self.push(d);
+                    if !self.check_duplicate(&lower, range) {
+                        self.bind_type(lower, Ty::Error, range);
+                    }
+                }
+                continue;
+            }
+            if let Some(ast::TypeSpec::Interface(it)) = decl.type_spec()
+                && it.is_forward()
+            {
+                // `docs/spec/objects.md` 7.1, as for a class
+                let later = section.decls().any(|d| {
+                    d.name().is_some_and(|n| {
+                        n.text().eq_ignore_ascii_case(&name) && n.text_range().start() > range.start()
+                    }) && matches!(d.type_spec(), Some(ast::TypeSpec::Interface(i)) if !i.is_forward())
+                });
+                if !later {
+                    let d = Diagnostic::error(
+                        Code::E(723),
+                        format!("forward declaration of interface `{name}` has no body"),
+                        Stage::Sema,
+                    )
+                    .with_primary(self.span(range), "");
+                    self.push(d);
+                    if !self.check_duplicate(&lower, range) {
+                        self.bind_type(lower, Ty::Error, range);
+                    }
                 }
                 continue;
             }
@@ -359,7 +872,40 @@ impl<'a, 's> Sema<'a, 's> {
                 }
                 Some(ast::TypeSpec::Class(c)) => {
                     let id = self.add_type(Some(name.clone()), range);
-                    (Ty::Exception(id), Pending::Class(id, c))
+                    // A parent declared outside the section is resolved now, once
+                    let generic_parent = c.parent_list().is_some_and(|l| {
+                        l.children()
+                            .any(|n| n.kind() == SyntaxKind::GENERIC_TYPE_REF)
+                    });
+                    let parent = c
+                        .parent()
+                        .filter(|p| !generic_parent && !Self::names_section_type(section, p))
+                        .map(|p| self.resolve_type_ref(&p));
+                    (Ty::Class(id), Pending::Object(id, c, parent))
+                }
+                Some(ast::TypeSpec::Interface(it)) => {
+                    let id = self.add_type(Some(name.clone()), range);
+                    let parent = it
+                        .parent()
+                        .filter(|p| !Self::names_section_type(section, p))
+                        .map(|p| self.resolve_type_ref(&p));
+                    (Ty::Intf(id), Pending::Interface(id, it, parent))
+                }
+                Some(t @ ast::TypeSpec::ClassRef(_)) => {
+                    // Resolved like an alias (it names the class reference of its class, which
+                    // may be declared later in the section)
+                    self.pending_aliases.push(PendingAlias {
+                        lower: lower.clone(),
+                        target: t,
+                        name: name.clone(),
+                        span: range,
+                        state: AliasState::Unresolved,
+                    });
+                    (Ty::Error, Pending::Defines(self.pending_aliases.len() - 1))
+                }
+                Some(ast::TypeSpec::Helper(h)) => {
+                    let id = self.add_type(Some(name.clone()), range);
+                    (Ty::Helper(id), Pending::Helper(id, h))
                 }
                 Some(ast::TypeSpec::Enum(e)) => {
                     let id = self.add_type(Some(name.clone()), range);
@@ -370,11 +916,18 @@ impl<'a, 's> Sema<'a, 's> {
                     let id = self.add_type(Some(name.clone()), range);
                     (Ty::Subrange(id), Pending::Subrange(id, r))
                 }
+                Some(t @ (ast::TypeSpec::Proc(_) | ast::TypeSpec::Reference(_))) => {
+                    // Its parameters may name types declared later in the section (an event
+                    // type before its class), so it is defined in the second pass
+                    let (id, ty) = self.add_proc_type(Some(name.clone()), &t, range);
+                    (ty, Pending::Proc(id, t))
+                }
                 Some(
                     t @ (ast::TypeSpec::Ref(_)
                     | ast::TypeSpec::Array(_)
                     | ast::TypeSpec::Generic(_)
-                    | ast::TypeSpec::Set(_)),
+                    | ast::TypeSpec::Set(_)
+                    | ast::TypeSpec::Distinct(_)),
                 ) => {
                     // A name, or a dynamic array (whose type is found by its element type)
                     let defines = !matches!(t, ast::TypeSpec::Ref(_));
@@ -389,7 +942,7 @@ impl<'a, 's> Sema<'a, 's> {
                     (
                         Ty::Error,
                         if defines {
-                            Pending::DynArray(i)
+                            Pending::Defines(i)
                         } else {
                             Pending::Alias(i)
                         },
@@ -397,18 +950,34 @@ impl<'a, 's> Sema<'a, 's> {
                 }
                 None => (Ty::Error, Pending::Nothing),
             };
+            self.nest_in_generic(ty);
             self.bind_type(lower, ty, range);
             items.push((name, range, ty, pending));
         }
+        for (id, t) in generic_dyns {
+            self.define_generic_dyn(id, &t);
+        }
+        // The attributes of the declarations see every name of the section (`docs/spec/attributes.md` 2)
+        for decl in section.decls() {
+            self.type_decl_attributes(&decl, section);
+        }
+        // A class's fields are numbered after its parent's, so the parent must be complete
+        self.incomplete_classes
+            .extend(items.iter().filter_map(|(_, _, _, p)| match p {
+                Pending::Object(id, _, _) => Some(*id),
+                _ => None,
+            }));
         let mut defined = Vec::new();
-        for (name, _range, ty, pending) in items {
-            let is_dyn = matches!(pending, Pending::DynArray(_));
+        for (name, range, ty, pending) in items {
+            let is_dyn = matches!(pending, Pending::Defines(_));
             let generic = match pending {
-                Pending::DynArray(i) => {
+                Pending::Defines(i) => {
                     matches!(self.pending_aliases[i].target, ast::TypeSpec::Generic(_))
                 }
                 _ => false,
             };
+            // The type's own declaration is inside it (`docs/spec/attributes.md` 6.2)
+            self.push_hint_scope(self.span(range));
             let (ty, defines) = match pending {
                 Pending::Record(id, r) => {
                     self.define_record(id, &r);
@@ -416,12 +985,20 @@ impl<'a, 's> Sema<'a, 's> {
                     (ty, true)
                 }
                 Pending::Array(id, a) => {
-                    self.define_array(id, &a);
+                    self.with_type_params(id, |s| s.define_array(id, &a));
                     defined.push(id);
                     (ty, true)
                 }
-                Pending::Class(id, c) => {
-                    self.define_class(id, &c);
+                Pending::Object(id, c, parent) => {
+                    self.define_object(id, &c, parent);
+                    (ty, true)
+                }
+                Pending::Interface(id, it, parent) => {
+                    self.with_type_params(id, |s| s.define_interface(id, &it, parent));
+                    (ty, true)
+                }
+                Pending::Helper(id, h) => {
+                    self.define_helper(id, &h);
                     (ty, true)
                 }
                 Pending::Subrange(id, r) => match self.subrange_kind(&r) {
@@ -434,33 +1011,115 @@ impl<'a, 's> Sema<'a, 's> {
                         (Ty::Error, true)
                     }
                 },
-                Pending::Alias(i) | Pending::DynArray(i) => {
+                Pending::Proc(id, t) => {
+                    self.with_type_params(id, |s| s.define_proc_type(id, &t));
+                    (ty, true)
+                }
+                Pending::Alias(i) | Pending::Defines(i) => {
                     let t = self.resolve_alias(i);
                     let lower = self.pending_aliases[i].lower.clone();
                     self.rebind_type(&lower, t);
-                    (t, is_dyn)
+                    // `TIntBox = TBox<Integer>` names an instantiation (`docs/spec/generics.md` 1.3)
+                    (t, is_dyn && (!generic || matches!(t, Ty::DynArray(_))))
                 }
-                Pending::Nothing => (ty, matches!(ty, Ty::Enum(_))),
+                Pending::Nothing => (ty, matches!(ty, Ty::Enum(_) | Ty::DynArray(_))),
             };
+            self.pop_hint_scope();
             let routine = self
                 .cur
                 .as_ref()
                 .filter(|c| !c.is_main)
                 .map(|c| c.qual_name.clone());
+            // A generic type is shown with its type parameters (`docs/spec/generics.md` 8)
+            let name = match ty.type_id().filter(|id| self.types.is_generic(*id)) {
+                Some(id) => self.generic_decl_text(id, &name),
+                None => name,
+            };
+            // A nested type is shown with its class (`TFoo.TItem`)
+            let name = match self.class_scope() {
+                Some(_) => {
+                    let full = self.qualified_type_name(&name);
+                    full.strip_prefix(&format!("{}.", self.program_name))
+                        .unwrap_or(&full)
+                        .to_string()
+                }
+                None => name,
+            };
             self.type_decls.push(TypeDeclInfo {
                 unit: self.unit_index,
                 routine,
                 name,
                 ty,
                 defines,
-                generic,
+                generic: generic && defines,
+                span: range,
             });
         }
-        self.pending_aliases.clear();
+        self.pending_aliases.truncate(alias_base);
         self.check_cycles(&defined);
+        if let Some(d) = deferred {
+            self.define_pending_methods();
+            self.end_deferred_checks(d);
+            self.generics_declared();
+            self.attr_defer -= 1;
+            self.flush_attribute_checks();
+        }
+    }
+
+    /// The attributes of a type declaration (`docs/spec/attributes.md` 1.2): those of a forward
+    /// declaration of a class or an interface are E3401, pointing at the full declaration.
+    fn type_decl_attributes(&mut self, decl: &ast::TypeDecl, section: &ast::TypeSection) {
+        let forward = match decl.type_spec() {
+            Some(ast::TypeSpec::Class(c)) => c.is_forward(),
+            Some(ast::TypeSpec::Interface(i)) => i.is_forward(),
+            _ => false,
+        };
+        let Some(name_tok) = decl.name().filter(|_| forward) else {
+            self.decl_attributes(decl.syntax(), super::attrs::AttrSite::Other, Ty::Error);
+            if let Some(n) = decl.name() {
+                let name = self.member_display_name(n.text());
+                self.declare_hints(decl.syntax(), n.text_range(), name);
+            }
+            return;
+        };
+        let range = name_tok.text_range();
+        let full = section.decls().find_map(|d| {
+            let n = d.name()?;
+            let full = match d.type_spec()? {
+                ast::TypeSpec::Class(c) => !c.is_forward(),
+                ast::TypeSpec::Interface(i) => !i.is_forward(),
+                _ => false,
+            };
+            (full
+                && n.text().eq_ignore_ascii_case(name_tok.text())
+                && n.text_range().start() > range.start())
+            .then(|| n.text_range())
+        });
+        let name = name_tok.text().to_string();
+        self.attributes_on_forward(decl.syntax(), &name, full.map(|r| self.span(r)), true);
+        self.read_hints(decl.syntax());
+        self.hints_on_forward(decl.syntax(), &name, full.map(|r| self.span(r)), true);
+    }
+
+    /// The name a declaration in the class body being declared is shown with in the warnings
+    /// of `docs/spec/attributes.md` 6.2 (`TFoo.Bar`), or `name` outside a class body.
+    pub(super) fn member_display_name(&self, name: &str) -> String {
+        match self.class_scope() {
+            Some(c) => match &self.types.get(c).name {
+                Some(owner) => format!("{owner}.{name}"),
+                None => name.to_string(),
+            },
+            None => name.to_string(),
+        }
     }
 
     fn bind_type(&mut self, lower: String, ty: Ty, span: TextRange) {
+        if self.class_scope().is_some() {
+            // A nested type (`docs/spec/objects.md` 2.2), under its name as written
+            let name = self.src(span);
+            self.bind_nested_type(name, ty, span);
+            return;
+        }
         match &mut self.cur {
             Some(c) if !c.is_main => {
                 c.scopes
@@ -474,6 +1133,9 @@ impl<'a, 's> Sema<'a, 's> {
 
     /// Sets the type an alias of the section denotes once it is resolved.
     fn rebind_type(&mut self, lower: &str, ty: Ty) {
+        if self.rebind_nested_type(lower, ty) {
+            return;
+        }
         if let Some(c) = &mut self.cur
             && let Some(scope) = c.scopes.last_mut()
             && let Some((_, LSym::Type { ty: t, .. })) =
@@ -489,45 +1151,362 @@ impl<'a, 's> Sema<'a, 's> {
         }
     }
 
-    /// The parent of an exception class (`docs/spec/exceptions.md` chapter 3): an exception class
-    /// (E0733 otherwise), without a cycle (the E0727 variant). On an error the parent is `Exception`,
-    /// so the class stays usable.
-    fn define_class(&mut self, id: TypeId, c: &ast::ClassType) {
-        let root = Some(super::types::EXCEPTION);
-        let parent = match c.parent() {
-            Some(p) => {
-                let ty = self.resolve_type_ref(&p);
+    /// `class of T` (`docs/spec/objects.md` 2.8): the class reference of the class `T` (E0733
+    /// when `T` is not a class).
+    fn class_ref_type(&mut self, r: &ast::ClassRefType, written: DynWritten) -> Ty {
+        // A name, or a name with type arguments (`docs/spec/generics.md` 1.3)
+        let Some(target) = r.syntax().children().find_map(ast::TypeSpec::cast) else {
+            return Ty::Error;
+        };
+        match self.resolve_type(Some(target.clone())) {
+            Ty::Class(c) => self.types.class_ref(c, written),
+            Ty::Error => Ty::Error,
+            other => {
+                let t = self.tn(other);
+                self.error(
+                    Code::E(733),
+                    format!("`{t}` is not a class"),
+                    target.syntax().text_range(),
+                );
+                Ty::Error
+            }
+        }
+    }
+
+    /// The class declarations of a section: (lowercase name, the type, name position).
+    fn section_classes(
+        &self,
+        section: &ast::TypeSection,
+    ) -> Vec<(String, ast::ClassType, TextRange)> {
+        section
+            .decls()
+            .filter(|d| d.type_params().is_none())
+            .filter_map(|d| {
+                let n = d.name()?;
+                match d.type_spec()? {
+                    ast::TypeSpec::Class(c) => {
+                        Some((self.text(&n).to_ascii_lowercase(), c, n.text_range()))
+                    }
+                    _ => None,
+                }
+            })
+            .collect()
+    }
+
+    /// Whether a name (unqualified) is declared in the section.
+    fn names_section_type(section: &ast::TypeSection, r: &ast::TypeRef) -> bool {
+        let Some(q) = r.name() else { return false };
+        let lower = q.text().to_ascii_lowercase();
+        !lower.contains('.')
+            && section.decls().any(|d| {
+                d.name()
+                    .is_some_and(|n| n.text().eq_ignore_ascii_case(&lower))
+            })
+    }
+
+    /// A class (`docs/spec/objects.md` chapters 1 and 2): its parent (`TObject` when none is
+    /// written or on an error), its fields after the parent's, and its members.
+    fn define_object(&mut self, id: TypeId, c: &ast::ClassType, parent: Option<Ty>) {
+        let parents = c.parent_specs();
+        // `class(T)` (`docs/spec/generics.md` 2.4)
+        let param_parent = parents.first().and_then(|p| {
+            let n = p.as_ref()?.name()?;
+            let text = n.text();
+            self.types
+                .type_params(id)
+                .iter()
+                .any(|t| {
+                    self.types
+                        .get(*t)
+                        .name
+                        .as_deref()
+                        .is_some_and(|x| x.eq_ignore_ascii_case(&text))
+                })
+                .then(|| (text, p.syntax().text_range()))
+        });
+        if let Some((text, range)) = &param_parent {
+            self.error(
+                Code::E(757),
+                format!("cannot inherit from type parameter `{text}`"),
+                *range,
+            );
+        }
+        let parent_ty = match (parent, parents.first()) {
+            (_, Some(_)) if param_parent.is_some() => Some(Ty::Error),
+            (Some(t), _) => Some(t),
+            // The parent may use the class's type parameters (`TSorted<T> = class(TBase<T>)`)
+            (None, Some(p)) => Some(self.with_param_scope(id, |s| s.resolve_type(Some(p.clone())))),
+            (None, None) => None,
+        };
+        let root = super::types::TOBJECT;
+        // A declaration without a body is the form of an exception class (`EA = class(EB);`), so
+        // a parent that cannot be used falls back to `Exception`, as in M2
+        // (`docs/spec/objects.md` 8.6)
+        let fallback = if c.body().is_none() {
+            super::types::EXCEPTION
+        } else {
+            root
+        };
+        let parent_id = match (parent_ty, parents.first()) {
+            (Some(Ty::Class(pid)), Some(p)) if self.types.is_descendant(pid, id) => {
+                let name = self.types.name(Ty::Class(id));
+                let span = self.types.get(id).span;
                 let range = p.syntax().text_range();
-                match ty {
-                    Ty::Exception(pid) if self.types.is_descendant(pid, id) => {
-                        let name = self.types.name(Ty::Exception(id));
-                        let span = self.types.get(id).span;
+                let d = Diagnostic::error(
+                    Code::E(727),
+                    format!("type `{name}` inherits from itself"),
+                    Stage::Sema,
+                )
+                .with_primary(self.span(span), "")
+                .with_secondary(self.span(range), "part of the cycle");
+                self.push(d);
+                fallback
+            }
+            (Some(Ty::Class(pid)), Some(p))
+                if self.incomplete_classes.contains(&self.types.layout(pid)) =>
+            {
+                // Declared later in the section, only forward-declared, or the class enclosing
+                // this one (`docs/spec/objects.md` chapter 1)
+                let pname = self.types.name(Ty::Class(pid));
+                let pspan = self.types.get(self.types.layout(pid)).span;
+                let range = p.syntax().text_range();
+                let d = Diagnostic::error(
+                    Code::E(723),
+                    format!("cannot inherit from `{pname}` before its declaration is complete"),
+                    Stage::Sema,
+                )
+                .with_primary(self.span(range), "")
+                .with_secondary(self.span(pspan), "declared here");
+                self.push(d);
+                fallback
+            }
+            (Some(Ty::Class(pid)), _) => pid,
+            // `class(IFoo)`: the parent is `TObject` and the name is an interface the class
+            // implements (`docs/spec/objects.md` 7.1)
+            (Some(Ty::Error | Ty::Intf(_)) | None, _) => root,
+            (Some(other), Some(p)) => {
+                let t = self.tn(other);
+                let range = p.syntax().text_range();
+                self.error(Code::E(733), format!("`{t}` is not a class"), range);
+                root
+            }
+            (Some(_), None) => root,
+        };
+        // An instantiation whose definition is in the same section has the definition's layout
+        let layout = self.types.layout(parent_id);
+        let ref_counted = match &self.types.get(layout).kind {
+            TypeKind::Class { ref_counted, .. } => *ref_counted,
+            _ => false,
+        };
+        // The fields are filled in below; the kind is set first so that a field of the class's
+        // own type sees a class
+        // The modifiers (`docs/spec/objects.md` 2.4)
+        let mut is_abstract = false;
+        let mut sealed = false;
+        for m in c.modifiers() {
+            let both = match m.kind() {
+                crate::syntax::SyntaxKind::ABSTRACT_KW => {
+                    is_abstract = true;
+                    sealed
+                }
+                _ => {
+                    sealed = true;
+                    is_abstract
+                }
+            };
+            if both {
+                self.error(
+                    Code::E(745),
+                    "a class cannot be both `sealed` and `abstract`",
+                    m.text_range(),
+                );
+            }
+        }
+        if let (Some(p), TypeKind::Class { sealed: true, .. }) =
+            (parents.first(), &self.types.get(layout).kind)
+        {
+            let pname = self.types.name(Ty::Class(parent_id));
+            let pspan = self.types.get(parent_id).span;
+            let punit = self.types.class_unit(parent_id);
+            let mut d = Diagnostic::error(
+                Code::E(745),
+                format!("cannot inherit from sealed class `{pname}`"),
+                Stage::Sema,
+            )
+            .with_primary(self.span(p.syntax().text_range()), "");
+            if let Some(u) = punit {
+                d = d.with_secondary(
+                    crate::source::Span::new(self.unit_file(u), pspan),
+                    "declared here",
+                );
+            }
+            self.push(d);
+        }
+        self.types.get_mut(id).kind = TypeKind::Class {
+            parent: Some(parent_id),
+            fields: Vec::new(),
+            unit: Some(self.unit_index),
+            ref_counted,
+            methods: Vec::new(),
+            vmt: Vec::new(),
+            is_abstract,
+            sealed,
+            statics: Vec::new(),
+            properties: Vec::new(),
+            intfs: Vec::new(),
+        };
+        // The interfaces in parentheses (`docs/spec/objects.md` 7.3)
+        let first_intf = usize::from(!matches!(parent_ty, Some(Ty::Intf(_))));
+        let listed = self.with_param_scope(id, |s| {
+            s.listed_interfaces(&parents[first_intf.min(parents.len())..])
+        });
+        let mut next = self.types.class_slot_count(layout);
+        let inherited: Vec<(String, crate::source::Span, Visibility, Option<u32>)> = self
+            .types
+            .class_fields(layout)
+            .iter()
+            .map(|(owner, f)| {
+                let unit = match &self.types.get(*owner).kind {
+                    TypeKind::Class { unit, .. } => *unit,
+                    _ => None,
+                };
+                let file = self.unit_file(unit.unwrap_or(self.unit_index));
+                (
+                    f.name.to_ascii_lowercase(),
+                    crate::source::Span::new(file, f.span),
+                    f.vis,
+                    unit,
+                )
+            })
+            .collect();
+        let mut fields: Vec<ClassField> = Vec::new();
+        let mut methods = Vec::new();
+        let mut properties = Vec::new();
+        let mut resolutions = Vec::new();
+        let mut vis = Visibility::Public;
+        let members: Vec<ast::ClassMember> =
+            c.body().map(|b| b.members().collect()).unwrap_or_default();
+        // The members after the class's own constants and nested types see them (2.2)
+        if let Some(outer) = self.class_scope() {
+            self.lexical_outer.insert(id, outer);
+        }
+        self.class_scopes.push(super::statics::ClassScope {
+            class: id,
+            vis: Visibility::Public,
+            names: Vec::new(),
+        });
+        self.enter_type_params(id);
+        for m in members {
+            let decls: Vec<ast::FieldDecl> = match m {
+                ast::ClassMember::Visibility(v) => {
+                    vis = match v.keyword().map(|k| k.kind()) {
+                        Some(crate::syntax::SyntaxKind::PRIVATE_KW) if v.is_strict() => {
+                            Visibility::StrictPrivate
+                        }
+                        Some(crate::syntax::SyntaxKind::PRIVATE_KW) => Visibility::Private,
+                        Some(crate::syntax::SyntaxKind::PROTECTED_KW) if v.is_strict() => {
+                            Visibility::StrictProtected
+                        }
+                        Some(crate::syntax::SyntaxKind::PROTECTED_KW) => Visibility::Protected,
+                        _ => Visibility::Public,
+                    };
+                    if let Some(scope) = self.class_scopes.last_mut() {
+                        scope.vis = vis;
+                    }
+                    continue;
+                }
+                ast::ClassMember::Method(m) => {
+                    methods.push((m, vis));
+                    continue;
+                }
+                ast::ClassMember::Property(p) => {
+                    properties.push((p, vis));
+                    continue;
+                }
+                ast::ClassMember::Resolution(r) => {
+                    resolutions.push(r);
+                    continue;
+                }
+                ast::ClassMember::Var(v) if v.is_class() => {
+                    self.declare_class_vars(&v);
+                    continue;
+                }
+                ast::ClassMember::Const(cs) => {
+                    self.declare_class_consts(&cs);
+                    continue;
+                }
+                ast::ClassMember::Type(ts) => {
+                    self.declare_types(&ts);
+                    continue;
+                }
+                ast::ClassMember::Field(f) => vec![f],
+                ast::ClassMember::Var(v) => v.fields().collect(),
+            };
+            for fd in decls {
+                let scope = self.declare_member_hints(fd.syntax(), &fd.names());
+                self.begin_names_hints(scope);
+                let ty = self.resolve_type(fd.type_spec());
+                self.end_names_hints(scope);
+                let ty = self.decl_attributes(fd.syntax(), super::attrs::AttrSite::Field, ty);
+                for n in fd.names() {
+                    let name = self.text(&n).to_string();
+                    let lower = name.to_ascii_lowercase();
+                    let span = n.text_range();
+                    let prev = fields
+                        .iter()
+                        .find(|f| f.name.eq_ignore_ascii_case(&name))
+                        .map(|f| self.span(f.span))
+                        .or_else(|| {
+                            // An ancestor's field the class's declaration can see (2.2)
+                            inherited
+                                .iter()
+                                .rev()
+                                .find(|(n, _, v, u)| {
+                                    *n == lower
+                                        && match v {
+                                            Visibility::StrictPrivate => false,
+                                            Visibility::Private => *u == Some(self.unit_index),
+                                            _ => true,
+                                        }
+                                })
+                                .map(|(_, s, _, _)| *s)
+                        });
+                    if let Some(prev) = prev {
                         let d = Diagnostic::error(
-                            Code::E(727),
-                            format!("type `{name}` inherits from itself"),
+                            Code::E(701),
+                            format!("`{name}` is already declared"),
                             Stage::Sema,
                         )
-                        .with_primary(self.span(span), "")
-                        .with_secondary(self.span(range), "part of the cycle");
+                        .with_primary(self.span(span), "declared again here")
+                        .with_secondary(prev, "declared here");
                         self.push(d);
-                        root
+                        continue;
                     }
-                    Ty::Exception(pid) => Some(pid),
-                    Ty::Error => root,
-                    other => {
-                        let t = self.tn(other);
-                        self.error(
-                            Code::E(733),
-                            format!("`{t}` is not an exception class"),
-                            range,
-                        );
-                        root
+                    if self.class_duplicate(&lower, span) {
+                        continue;
                     }
+                    fields.push(ClassField {
+                        name,
+                        ty,
+                        span,
+                        vis,
+                        slot: next,
+                    });
+                    next += 1;
                 }
             }
-            None => root,
-        };
-        self.types.get_mut(id).kind = TypeKind::Exception { parent };
+        }
+        self.class_scopes.pop();
+        if let TypeKind::Class { fields: f, .. } = &mut self.types.get_mut(id).kind {
+            *f = fields;
+        }
+        self.incomplete_classes.remove(&id);
+        self.pending_classes.push((id, methods, properties));
+        self.pending_impls.push(super::interfaces::PendingImpl {
+            class: id,
+            listed,
+            resolutions,
+        });
     }
 
     /// The values of an enumeration (`docs/spec/types.md` 8.1): ordinals from 0, or as written
@@ -594,6 +1573,8 @@ impl<'a, 's> Sema<'a, 's> {
         let lo = lo_e.map(|e| self.lower_expr(&e));
         let hi = hi_e.map(|e| self.lower_expr(&e));
         let (lo, hi) = (lo?, hi?);
+        // A bound of a distinct type is a value of its root (`docs/spec/types.md` 1.3)
+        let (lo, hi) = (self.rooted(lo), self.rooted(hi));
         if lo.ty.is_error() || hi.ty.is_error() {
             return None;
         }
@@ -647,31 +1628,156 @@ impl<'a, 's> Sema<'a, 's> {
         })
     }
 
+    /// A record (`docs/spec/types.md` 2.1) and its members (`docs/spec/objects.md` chapter 6):
+    /// the fields in declaration order, the `class var`s, constants and nested types, and the
+    /// methods and properties (defined with the classes of the section). What a record cannot
+    /// have is E0744.
     fn define_record(&mut self, id: TypeId, r: &ast::RecordType) {
+        self.types.get_mut(id).kind = TypeKind::Record {
+            fields: Vec::new(),
+            unit: Some(self.unit_index),
+            methods: Vec::new(),
+            statics: Vec::new(),
+            properties: Vec::new(),
+        };
+        if let Some(p) = r.parents() {
+            self.error(
+                Code::E(744),
+                "records cannot inherit from another type",
+                ast::trimmed_range(&p),
+            );
+        }
+        if let Some(m) = r.modifiers().next() {
+            self.error(
+                Code::E(744),
+                "a record cannot be `abstract` or `sealed`",
+                m.text_range(),
+            );
+        }
+        let anonymous = self.types.get(id).name.is_none();
         let mut fields: Vec<Field> = Vec::new();
-        let mut seen: std::collections::HashMap<String, TextRange> =
-            std::collections::HashMap::new();
-        for fd in r.fields() {
-            let ty = self.resolve_type(fd.type_spec());
-            for n in fd.names() {
-                let name = self.text(&n).to_string();
-                let span = n.text_range();
-                if let Some(prev) = seen.get(&name.to_ascii_lowercase()) {
-                    let d = Diagnostic::error(
-                        Code::E(701),
-                        format!("`{name}` is already declared"),
-                        Stage::Sema,
-                    )
-                    .with_primary(self.span(span), "declared again here")
-                    .with_secondary(self.span(*prev), "declared here");
-                    self.push(d);
+        let mut methods = Vec::new();
+        let mut properties = Vec::new();
+        let mut vis = Visibility::Public;
+        if let Some(outer) = self.class_scope() {
+            self.lexical_outer.insert(id, outer);
+        }
+        self.class_scopes.push(super::statics::ClassScope {
+            class: id,
+            vis: Visibility::Public,
+            names: Vec::new(),
+        });
+        self.enter_type_params(id);
+        for m in r.members() {
+            let decls: Vec<ast::FieldDecl> = match m {
+                ast::ClassMember::Visibility(v) => {
+                    let kw = v.keyword();
+                    vis = match kw.as_ref().map(|k| k.kind()) {
+                        Some(crate::syntax::SyntaxKind::PRIVATE_KW) if v.is_strict() => {
+                            Visibility::StrictPrivate
+                        }
+                        Some(crate::syntax::SyntaxKind::PRIVATE_KW) => Visibility::Private,
+                        Some(
+                            crate::syntax::SyntaxKind::PROTECTED_KW
+                            | crate::syntax::SyntaxKind::PUBLISHED_KW,
+                        ) => {
+                            // No descendants: `protected` means nothing (chapter 6)
+                            let range = ast::trimmed_range(v.syntax());
+                            let src = self.src(range).to_ascii_lowercase();
+                            let words: Vec<&str> = src.split_whitespace().collect();
+                            self.error(
+                                Code::E(744),
+                                format!("`{}` is not allowed in a record", words.join(" ")),
+                                range,
+                            );
+                            Visibility::Public
+                        }
+                        _ => Visibility::Public,
+                    };
+                    if let Some(scope) = self.class_scopes.last_mut() {
+                        scope.vis = vis;
+                    }
                     continue;
                 }
-                seen.insert(name.to_ascii_lowercase(), span);
-                fields.push(Field { name, ty, span });
+                ast::ClassMember::Method(m) => {
+                    methods.push((m, vis));
+                    continue;
+                }
+                ast::ClassMember::Property(p) => {
+                    properties.push((p, vis));
+                    continue;
+                }
+                ast::ClassMember::Resolution(r) => {
+                    // A record implements no interface (`docs/spec/objects.md` 7.1)
+                    self.resolution_not_implemented(&r, id);
+                    continue;
+                }
+                ast::ClassMember::Var(v) if v.is_class() => {
+                    self.declare_class_vars(&v);
+                    continue;
+                }
+                ast::ClassMember::Const(cs) => {
+                    self.declare_class_consts(&cs);
+                    continue;
+                }
+                ast::ClassMember::Type(ts) => {
+                    self.declare_types(&ts);
+                    continue;
+                }
+                ast::ClassMember::Field(f) => vec![f],
+                ast::ClassMember::Var(v) => v.fields().collect(),
+            };
+            for fd in decls {
+                let scope = self.declare_member_hints(fd.syntax(), &fd.names());
+                self.begin_names_hints(scope);
+                let ty = self.resolve_type(fd.type_spec());
+                self.end_names_hints(scope);
+                let ty = self.decl_attributes(fd.syntax(), super::attrs::AttrSite::Field, ty);
+                for n in fd.names() {
+                    let name = self.text(&n).to_string();
+                    let span = n.text_range();
+                    if self.class_duplicate(&name.to_ascii_lowercase(), span) {
+                        continue;
+                    }
+                    fields.push(Field {
+                        name,
+                        ty,
+                        span,
+                        vis,
+                    });
+                }
             }
         }
-        self.types.get_mut(id).kind = TypeKind::Record { fields };
+        self.class_scopes.pop();
+        if let TypeKind::Record { fields: f, .. } = &mut self.types.get_mut(id).kind {
+            *f = fields;
+        }
+        if anonymous {
+            // A method of a record without a name could not be given a body
+            if let Some((m, _)) = methods.first() {
+                let r = m
+                    .header()
+                    .and_then(|h| h.name())
+                    .map(|n| n.syntax().text_range())
+                    .unwrap_or_else(|| ast::trimmed_range(m.syntax()));
+                self.error(
+                    Code::E(744),
+                    "a record type with methods must be declared in a `type` section",
+                    r,
+                );
+            } else if let Some((p, _)) = properties.first() {
+                let r = ast::trimmed_range(p.syntax());
+                self.error(
+                    Code::E(744),
+                    "a record type with methods must be declared in a `type` section",
+                    r,
+                );
+            }
+            return;
+        }
+        if !methods.is_empty() || !properties.is_empty() {
+            self.pending_classes.push((id, methods, properties));
+        }
     }
 
     fn define_array(&mut self, id: TypeId, a: &ast::ArrayType) {
@@ -723,7 +1829,11 @@ impl<'a, 's> Sema<'a, 's> {
             if ty.is_error() {
                 return None;
             }
-            let Some((lo, hi)) = self.types.ord_range(ty).filter(|_| ty.is_ordinal()) else {
+            let Some((lo, hi)) = self
+                .types
+                .ord_range(ty)
+                .filter(|_| self.types.root(ty).is_ordinal())
+            else {
                 let t = self.tn(ty);
                 self.error(
                     Code::E(702),
@@ -736,10 +1846,13 @@ impl<'a, 's> Sema<'a, 's> {
                 self.error(Code::E(728), "array type is too large", range);
                 return None;
             }
-            return Some((self.types.base(ty), lo, hi));
+            // A distinct type indexes as its root (`docs/spec/types.md` 1.3)
+            return Some((self.types.base(self.types.root(ty)), lo, hi));
         }
         let lo = lo_e.map(|e| self.lower_expr(&e))?;
         let hi = hi_e.map(|e| self.lower_expr(&e))?;
+        // A bound of a distinct type is a value of its root (`docs/spec/types.md` 1.3)
+        let (lo, hi) = (self.rooted(lo), self.rooted(hi));
         if lo.ty.is_error() || hi.ty.is_error() {
             return None;
         }
@@ -810,13 +1923,19 @@ impl<'a, 's> Sema<'a, 's> {
             self.push(d);
             let (owner, slot, _) = path[0];
             match &mut self.types.get_mut(owner).kind {
-                TypeKind::Record { fields } => fields[slot].ty = Ty::Error,
+                TypeKind::Record { fields, .. } => fields[slot].ty = Ty::Error,
                 TypeKind::Array { elem, .. } => *elem = Ty::Error,
                 TypeKind::DynArray { .. }
-                | TypeKind::Exception { .. }
+                | TypeKind::Class { .. }
+                | TypeKind::Interface { .. }
+                | TypeKind::ClassRef { .. }
                 | TypeKind::Enum { .. }
                 | TypeKind::Subrange { .. }
                 | TypeKind::Set { .. }
+                | TypeKind::Proc { .. }
+                | TypeKind::Helper { .. }
+                | TypeKind::Param { .. }
+                | TypeKind::Distinct { .. }
                 | TypeKind::Pending => {}
             }
         }
@@ -837,17 +1956,23 @@ impl<'a, 's> Sema<'a, 's> {
         visited.push(from);
         let def = self.types.get(from);
         let steps: Vec<(usize, Ty, TextRange)> = match &def.kind {
-            TypeKind::Record { fields } => fields
+            TypeKind::Record { fields, .. } => fields
                 .iter()
                 .enumerate()
                 .map(|(i, f)| (i, f.ty, f.span))
                 .collect(),
             TypeKind::Array { elem, .. } => vec![(0, *elem, def.span)],
             TypeKind::DynArray { .. }
-            | TypeKind::Exception { .. }
+            | TypeKind::Class { .. }
+            | TypeKind::Interface { .. }
+            | TypeKind::ClassRef { .. }
             | TypeKind::Enum { .. }
             | TypeKind::Subrange { .. }
             | TypeKind::Set { .. }
+            | TypeKind::Proc { .. }
+            | TypeKind::Helper { .. }
+            | TypeKind::Param { .. }
+            | TypeKind::Distinct { .. }
             | TypeKind::Pending => Vec::new(),
         };
         for (slot, ty, span) in steps {
@@ -872,10 +1997,47 @@ impl<'a, 's> Sema<'a, 's> {
                 if n.is_string_keyword() {
                     return Some(Ty::String);
                 }
+                if let Some(args) = n.type_args() {
+                    // A generic type with its type arguments (`Default(TBox<Integer>)`;
+                    // `docs/spec/generics.md` 1.4): reported where it is written
+                    let tok = n.token()?;
+                    let lower = tok.text().to_ascii_lowercase();
+                    let generic = !self
+                        .generic_types_named(&lower, &super::generics::GenericScope::Visible)
+                        .is_empty();
+                    if !generic && lower != "tarray" {
+                        return None;
+                    }
+                    return match self
+                        .type_args_in_expr(&tok, &args, super::generics::GenericScope::Visible)
+                        .0
+                    {
+                        super::Resolved::Type(t) => Some(t),
+                        _ => Some(Ty::Error),
+                    };
+                }
                 let lower = n.text().to_ascii_lowercase();
                 match self.lookup_type_symbol(&lower) {
                     Some(t) => t,
-                    None => self.unit_type(&lower).or_else(|| Ty::from_name(&lower)),
+                    None => self
+                        .unit_type(&lower)
+                        .or_else(|| Ty::from_name(&lower))
+                        .or_else(|| match builtins::lookup_system(&lower) {
+                            // The built-in types of `System` (`TObject`, `TIndexRange`, `TProc`, …)
+                            Some(builtins::SystemName::Type(t)) if !matches!(t, Ty::Helper(_)) => {
+                                Some(t)
+                            }
+                            _ => None,
+                        }),
+                }
+            }
+            ast::Expr::Field(f) if f.type_args().is_some() => {
+                // A qualified generic type (`Default(THolder.TBox<Integer>)`,
+                // `Default(Unit.TBox<Integer>)`; `docs/spec/generics.md` 1.4, 2.5)
+                match self.resolve_name_expr(e)?.0 {
+                    super::Resolved::Type(t) => Some(t),
+                    super::Resolved::Error => Some(Ty::Error),
+                    _ => None,
                 }
             }
             ast::Expr::Field(f) => {
@@ -898,6 +2060,19 @@ impl<'a, 's> Sema<'a, 's> {
 
     /// A type written as a name (`TypeRef`).
     pub(super) fn resolve_type_ref(&mut self, t: &ast::TypeRef) -> Ty {
+        match self.resolve_type_name(t) {
+            Ty::Helper(_) => {
+                // Only the name of a helper has this type (`docs/spec/objects.md` 10.2)
+                let range = t.syntax().text_range();
+                self.error(Code::E(753), "a helper cannot be used as a type", range);
+                Ty::Error
+            }
+            ty => ty,
+        }
+    }
+
+    /// A type name, which may name a helper (`resolve_type_ref` reports that as E0753).
+    pub(super) fn resolve_type_name(&mut self, t: &ast::TypeRef) -> Ty {
         if t.string_token().is_some() {
             return Ty::String;
         }
@@ -908,7 +2083,10 @@ impl<'a, 's> Sema<'a, 's> {
         // A declared type comes first (it may hide a type of `System`; `docs/spec/types.md` 1.1)
         if !lower.contains('.') {
             match self.lookup_type_symbol(&lower) {
-                Some(Some(ty)) => return ty,
+                Some(Some(ty)) => {
+                    self.type_symbol_use(&lower, range);
+                    return ty;
+                }
                 Some(None) => {
                     self.error(Code::E(708), format!("`{text}` is not a type"), range);
                     return Ty::Error;
@@ -931,7 +2109,29 @@ impl<'a, 's> Sema<'a, 's> {
                 .idents()
                 .map(|t| (t.text().to_string(), t.text_range()))
                 .collect();
-            if let Some((u, n)) = self.unit_prefix(&chain) {
+            // A nested type (`TOuter.TInner`, `Unit.TOuter.TInner`; `docs/spec/objects.md` 2.2)
+            let unit = self.unit_prefix(&chain);
+            let start = unit.map_or(0, |(_, n)| n);
+            if start + 1 < chain.len() {
+                let (first, r) = chain[start].clone();
+                let base = match unit {
+                    Some((u, _)) => match self.dry_run(|s| s.resolve_in_unit(u, &first, r)) {
+                        super::Resolved::Type(t @ Ty::Class(_)) => Some(t),
+                        _ => None,
+                    },
+                    None => match self.lookup_type_symbol(&first.to_ascii_lowercase()) {
+                        Some(Some(t @ Ty::Class(_))) => {
+                            self.type_symbol_use(&first.to_ascii_lowercase(), r);
+                            Some(t)
+                        }
+                        _ => None,
+                    },
+                };
+                if let Some(base) = base {
+                    return self.nested_type(base, &chain[start + 1..], range);
+                }
+            }
+            if let Some((u, n)) = unit {
                 if n + 1 == chain.len() {
                     let (name, r) = chain[n].clone();
                     return match self.resolve_in_unit(u, &name, r) {
@@ -949,6 +2149,22 @@ impl<'a, 's> Sema<'a, 's> {
                 }
             }
         }
+        // A type of the part of `System.SysUtils` written in Pascal (`System.SysUtils.EListError`;
+        // `docs/spec/collections.md` 1.1)
+        if let Some((u, last)) = lower.rsplit_once('.')
+            && self.builtin_unit_named(u) == Some(super::UnitRef::SysUtils)
+            && self.sysutils_part_declares(last)
+        {
+            let name = &text[text.len() - last.len()..];
+            return match self.resolve_in_unit(super::UnitRef::SysUtils, name, range) {
+                super::Resolved::Type(ty) => ty,
+                super::Resolved::Error => Ty::Error,
+                _ => {
+                    self.error(Code::E(708), format!("`{text}` is not a type"), range);
+                    Ty::Error
+                }
+            };
+        }
         // A qualified name such as `System.Integer`
         let unqualified = lower.strip_prefix("system.").unwrap_or(&lower).to_string();
         if let Some(ty) = Ty::from_name(&unqualified) {
@@ -956,6 +2172,19 @@ impl<'a, 's> Sema<'a, 's> {
         }
         if let Some(ty) =
             builtins::builtin_exception(&unqualified).or_else(|| self.sysutils_exception(&lower))
+        {
+            return ty;
+        }
+        if let Some(builtins::SystemName::Type(ty)) = builtins::lookup_system(&unqualified)
+            && matches!(
+                ty,
+                Ty::Class(_)
+                    | Ty::ClassRef(_)
+                    | Ty::Intf(_)
+                    | Ty::Callable(_)
+                    | Ty::Helper(_)
+                    | Ty::Record(_)
+            )
         {
             return ty;
         }
@@ -967,7 +2196,7 @@ impl<'a, 's> Sema<'a, 's> {
         };
         if matches!(
             builtins::lookup_sysutils(last),
-            Some(n) if !matches!(n, builtins::SysUtilsName::Func(_))
+            Some(n) if !matches!(n, builtins::SysUtilsName::Func(_) | builtins::SysUtilsName::Proc(_))
         ) {
             let name = &text[text.len() - last.len()..];
             let resolved = match unit {
@@ -1023,23 +2252,17 @@ impl<'a, 's> Sema<'a, 's> {
             Some(_) => {
                 self.error(Code::E(708), format!("`{text}` is not a type"), range);
             }
+            None if lower == "notrefcounted" => self.not_ref_counted_misplaced(range),
+            None if self.generic_needs_args(&text, range) => {}
             None => {
-                if lower == "reference" {
-                    self.error(
-                        Code::E(3200),
-                        "`reference to` is not supported yet (planned for M3)",
-                        range,
-                    );
-                } else {
-                    let d = Diagnostic::error(
-                        Code::E(700),
-                        format!("undeclared identifier `{text}`"),
-                        Stage::Sema,
-                    )
-                    .with_primary(self.span(range), "");
-                    let d = self.with_uses_unit_fix(d, &lower);
-                    self.push(d);
-                }
+                let d = Diagnostic::error(
+                    Code::E(700),
+                    format!("undeclared identifier `{text}`"),
+                    Stage::Sema,
+                )
+                .with_primary(self.span(range), "");
+                let d = self.with_uses_unit_fix(d, &lower);
+                self.push(d);
             }
         }
         Ty::Error
@@ -1179,7 +2402,8 @@ impl<'a, 's> Sema<'a, 's> {
                 // One error per constant: the fields after it are out of step
                 break;
             }
-            let fty = expected.map_or(Ty::Error, |x| x.ty);
+            // A `[weak]` field takes the values of its class type (`docs/spec/objects.md` 4.4)
+            let fty = expected.map_or(Ty::Error, |x| self.types.strong(x.ty));
             match f.value().and_then(|v| self.shape_element(&v, fty)) {
                 Some(v) => items.push(v),
                 None => failed = true,

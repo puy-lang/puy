@@ -25,7 +25,7 @@ error[E0707]: cannot assign to `B`
  19 |   B := nil;                             // E0707: open array parameter
     |   ^ an open array parameter
 
-error[E3200]: `out` open array parameters are not supported yet
+error[E3200]: `out` open array parameters are not supported yet (planned for a later release)
    --> dyn_array_errors.pas:27:22
     |
  27 | procedure Bad(out A: array of Integer); // E3200: out open array
@@ -33,10 +33,10 @@ error[E3200]: `out` open array parameters are not supported yet
     |
     = note: use a `var` parameter
 
-error[E3200]: `array of const` parameters are not supported yet (planned for M3)
+error[E3200]: `array of const` parameters are not supported yet (planned for M5)
    --> dyn_array_errors.pas:31:25
     |
- 31 | procedure Args(const A: array of const); // E3200: array of const (M3)
+ 31 | procedure Args(const A: array of const); // E3200: array of const (M5)
     |                         ^^^^^
 
 warning[W0001]: unused variable `X` (unused-variable)
@@ -169,16 +169,18 @@ error[E0705]: wrong number of arguments: expected 1 to 3, found 4
  59 |   I := Copy(A, 1, 2, 3)[0];             // E0705
     |        ^^^^^^^^^^^^^^^^
 
-error[E3200]: `nil` without a dynamic array type is not supported yet (planned for M3)
-   --> dyn_array_errors.pas:60:12
+error[E0702]: type mismatch: expected a dynamic array, a class, a class reference or an interface, found `nil`
+   --> dyn_array_errors.pas:60:6
     |
- 60 |   if nil = nil then;                    // E3200: nil without a dynamic array
-    |            ^^^
+ 60 |   if nil = nil then;                    // E0702: nil without a type
+    |      ^^^
+    |
+    = note: `nil` takes its type from the variable or the operand it is used with
 
 warning[W0018]: empty statement after `then` (empty-statement)
    --> dyn_array_errors.pas:60:20
     |
- 60 |   if nil = nil then;                    // E3200: nil without a dynamic array
+ 60 |   if nil = nil then;                    // E0702: nil without a type
     |                    ^
     |
     = note: write a statement after `then`, or `begin end` if the body is meant to be empty

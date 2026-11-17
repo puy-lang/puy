@@ -1,7 +1,8 @@
 program RecordParams;
 
 // Records and static arrays as value, const, var and out parameters; a field of a var
-// parameter passed on to another var parameter (a cell whose root is a cell; lifetime.md 3.7);
+// parameter passed on to another var parameter (lent from the location the first parameter
+// refers to; lifetime.md 3.7);
 // local types and aliases (types.md 1.1).
 
 type

@@ -1,0 +1,72 @@
+error[E0765]: `TOnlyEquals` overrides `Equals` but not `GetHashCode`
+   --> equals_hash_errors.pas:13:14
+    |
+ 13 |     function Equals(Obj: TObject): Boolean; override;
+    |              ^^^^^^
+    |
+    = note: objects that are equal must have the same hash code, so override both `Equals` and `GetHashCode`
+    = suggestion: override `GetHashCode`
+
+error[E0765]: `TOnlyHash` overrides `GetHashCode` but not `Equals`
+   --> equals_hash_errors.pas:17:14
+    |
+ 17 |     function GetHashCode: Int64; override;
+    |              ^^^^^^^^^^^
+    |
+    = note: objects that are equal must have the same hash code, so override both `Equals` and `GetHashCode`
+    = suggestion: override `Equals`
+
+error[E0765]: `TChildEquals` overrides `Equals` but not `GetHashCode`
+   --> equals_hash_errors.pas:28:14
+    |
+ 28 |     function Equals(Obj: TObject): Boolean; override;
+    |              ^^^^^^
+    |
+    = note: objects that are equal must have the same hash code, so override both `Equals` and `GetHashCode`
+    = suggestion: override `GetHashCode`
+
+warning[W0021]: method `Equals` hides virtual method of `TObject` (hidden-virtual-method)
+   --> equals_hash_errors.pas:33:14
+    |
+ 33 |     function Equals(Obj: TObject): Boolean;
+    |              ^^^^^^
+    |
+    = note: disable with `{$WARN hidden-virtual-method OFF}`
+    = suggestion: add `override`
+    = suggestion: add `reintroduce`
+
+warning[W0021]: method `GetHashCode` hides virtual method of `TObject` (hidden-virtual-method)
+   --> equals_hash_errors.pas:34:14
+    |
+ 34 |     function GetHashCode: Int64;
+    |              ^^^^^^^^^^^
+    |
+    = note: disable with `{$WARN hidden-virtual-method OFF}`
+    = suggestion: add `override`
+    = suggestion: add `reintroduce`
+
+error[E0744]: `GetHashCode` does not override a virtual method of `TObject`
+   --> equals_hash_errors.pas:40:14
+    |
+ 40 |     function GetHashCode: Integer; override;
+    |              ^^^^^^^^^^^
+    |
+    = note: `GetHashCode` returns `Int64` in Puy
+    = fix: change the return type to `Int64`
+
+error[E0765]: `TOverloads` overrides `Equals` but not `GetHashCode`
+   --> equals_hash_errors.pas:51:14
+    |
+ 51 |     function Equals(Obj: TObject): Boolean; overload; override;
+    |              ^^^^^^
+    |
+    = note: objects that are equal must have the same hash code, so override both `Equals` and `GetHashCode`
+    = suggestion: override `GetHashCode`
+
+error[E0744]: `GetHashCode` does not override a virtual method of `TObject`
+   --> equals_hash_errors.pas:57:14
+    |
+ 57 |     function GetHashCode: string; override;
+    |              ^^^^^^^^^^^
+
+error: aborting due to 6 errors; 2 warnings emitted

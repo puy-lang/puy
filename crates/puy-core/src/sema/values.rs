@@ -198,6 +198,7 @@ impl Values<'_> {
     fn stmt(&mut self, s: &Stmt, cur: &mut Cursor) {
         self.may_raise(cur);
         match &s.kind {
+            StmtKind::Declare(_) => {}
             StmtKind::Assign {
                 target,
                 value,
@@ -216,7 +217,15 @@ impl Values<'_> {
                 }
             }
             StmtKind::Block(list) => self.stmts(list, cur),
-            StmtKind::Expr(e) => self.expr(e, cur),
+            StmtKind::Expr(e)
+            | StmtKind::Free { target: e, .. }
+            | StmtKind::FreeIfClass { value: e }
+            | StmtKind::CheckDefaultOrder { value: e }
+            | StmtKind::PropertySet { call: e, .. } => self.expr(e, cur),
+            StmtKind::CheckClassType { value, what } => {
+                self.expr(value, cur);
+                self.expr(what, cur);
+            }
             StmtKind::If {
                 branches,
                 else_body,
@@ -387,6 +396,28 @@ impl Values<'_> {
                 self.place_read(target, cur);
                 self.expr(index, cur);
             }
+            StmtKind::Exchange {
+                target,
+                first,
+                second,
+                ..
+            } => {
+                self.place_read(target, cur);
+                self.expr(first, cur);
+                self.expr(second, cur);
+            }
+            StmtKind::ArrayMoveRange {
+                target,
+                from,
+                to,
+                count,
+            } => {
+                self.place_read(target, cur);
+                self.expr(from, cur);
+                self.expr(to, cur);
+                self.expr(count, cur);
+            }
+            StmtKind::FreeAndNil { target } => self.place_read(target, cur),
             StmtKind::Delete {
                 target,
                 index,
@@ -652,6 +683,22 @@ impl Values<'_> {
         }
     }
 
+    /// The arguments of a call, in order: values read, `var` places read and `out` places written.
+    fn call_args(&mut self, args: &[CallArg], cur: &mut Cursor) {
+        for a in args {
+            match a {
+                CallArg::Value(v) | CallArg::Temp(v) => self.expr(v, cur),
+                CallArg::Ref { place, is_out } => {
+                    if *is_out {
+                        self.place_write(place, cur);
+                    } else {
+                        self.place_read(place, cur);
+                    }
+                }
+            }
+        }
+    }
+
     fn expr(&mut self, e: &Expr, cur: &mut Cursor) {
         match &e.kind {
             ExprKind::Const | ExprKind::Global(_) => {}
@@ -676,38 +723,72 @@ impl Values<'_> {
                 self.expr(index, cur);
             }
             ExprKind::Field { base, .. } => self.expr(base, cur),
+            ExprKind::RecordNew { call } => self.expr(call, cur),
             ExprKind::Slice { base, low, high } => {
                 self.expr(base, cur);
                 for b in low.iter().chain(high.iter()) {
                     self.expr(b, cur);
                 }
             }
-            ExprKind::Call { args, .. } => {
-                for a in args {
-                    match a {
-                        CallArg::Value(v) => self.expr(v, cur),
-                        CallArg::Ref { place, is_out } => {
-                            if *is_out {
-                                self.place_write(place, cur);
-                            } else {
-                                self.place_read(place, cur);
-                            }
-                        }
-                    }
+            ExprKind::IndexRange { first, last } => {
+                for b in first.iter().chain(last.iter()) {
+                    self.expr(b, cur);
                 }
             }
-            ExprKind::Builtin { args, .. } | ExprKind::ArrayCtor(args) => {
+            ExprKind::Call { args, .. } => {
+                self.call_args(args, cur);
+            }
+            ExprKind::Builtin { args, .. }
+            | ExprKind::Key { args, .. }
+            | ExprKind::ArrayCtor(args) => {
                 for a in args {
                     self.expr(a, cur);
                 }
             }
-            ExprKind::Convert { operand, .. } | ExprKind::NewExc { msg: operand, .. } => {
-                self.expr(operand, cur)
+            ExprKind::Convert { operand, .. } => self.expr(operand, cur),
+            ExprKind::ExcMember { base, .. }
+            | ExprKind::ObjField { base, .. }
+            | ExprKind::ClassName { base }
+            | ExprKind::ClassCheck { operand: base, .. }
+            | ExprKind::Weak(base) => self.expr(base, cur),
+            ExprKind::ClassInfo { args, .. } => {
+                for a in args {
+                    self.expr(a, cur);
+                }
             }
-            ExprKind::ExcMember { base, .. } => self.expr(base, cur),
+            ExprKind::ClassRefValue(_)
+            | ExprKind::RoutineRef(_)
+            | ExprKind::Anon { .. }
+            | ExprKind::NestedRef { .. } => {}
+            ExprKind::MethodRef { base, .. } | ExprKind::ToClosure(base) => self.expr(base, cur),
+            ExprKind::CallValue { callee, args } => {
+                // The callee is evaluated first (`docs/spec/objects.md` 9.4)
+                self.expr(callee, cur);
+                self.call_args(args, cur);
+            }
+            ExprKind::New { args, of, .. } => {
+                if let Some(c) = of {
+                    self.expr(c, cur);
+                }
+                self.call_args(args, cur);
+            }
+            ExprKind::InheritedBuiltin { base, msg, .. } => {
+                self.expr(base, cur);
+                if let Some(m) = msg {
+                    self.expr(m, cur);
+                }
+            }
             ExprKind::TryStrToInt { s, target } => {
                 self.expr(s, cur);
                 self.place_write(target, cur);
+            }
+            ExprKind::Supports {
+                operand, target, ..
+            } => {
+                self.expr(operand, cur);
+                if let Some(t) = target {
+                    self.place_write(t, cur);
+                }
             }
             ExprKind::SetCtor(elems) => {
                 for el in elems {
@@ -729,7 +810,7 @@ impl Values<'_> {
                 self.place_read(base, cur);
             }
             Place::Field { base, .. } => self.place_read(base, cur),
-            Place::ExcMember { base, .. } => self.expr(base, cur),
+            Place::ObjField { base, .. } => self.expr(base, cur),
         }
     }
 

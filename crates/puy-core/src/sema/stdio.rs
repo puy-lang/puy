@@ -121,25 +121,62 @@ impl Sema<'_, '_> {
     fn write_arg(&mut self, a: &ast::Arg, checks: Checks) -> Option<WriteArg> {
         let exprs = a.exprs();
         let v = exprs.first()?;
-        let value = self.lower_expr(v);
+        if matches!(super::overload::strip_parens(v), ast::Expr::Nil(_)) {
+            // `nil` has no type to write (`docs/spec/semantics.md` 6.1)
+            self.error(
+                Code::E(718),
+                "cannot write a value of type `nil`",
+                ast::trimmed_range(v.syntax()),
+            );
+            return None;
+        }
+        // A procedural value is written as its result when it is a function without parameters,
+        // and is not written otherwise (E0718; `docs/spec/objects.md` 9.4, 9.5)
+        let value = self.lower_value(v);
+        let callable = self
+            .types
+            .proc_sig(value.ty)
+            .is_none_or(|(_, params, ret)| params.is_empty() && ret.is_some());
+        let value = if callable {
+            self.call_bare_value(v, value)
+        } else {
+            value
+        };
         if value.ty.is_error() {
             return None;
         }
+        // A distinct type is written as its root type (`docs/spec/types.md` 1.3)
+        let value = self.rooted(value);
         // A `UTF8String` is written as its text (`docs/spec/semantics.md` 6.1)
         let value = if value.ty == Ty::Utf8String {
             self.convert_u8(value, Ty::String)
         } else {
             value
         };
+        if let Ty::Param(p) = value.ty {
+            // `docs/spec/generics.md` 3.3
+            self.param_misuse(p, super::generics::ParamOp::Write, value.span);
+            return None;
+        }
         if !(value.ty.is_number()
             || matches!(value.ty, Ty::Boolean | Ty::Char | Ty::String | Ty::Enum(_)))
         {
             let r = value.span;
-            self.error(
+            let d = self.error(
                 Code::E(718),
                 format!("cannot write a value of type `{}`", self.tn(value.ty)),
                 r,
             );
+            if let Ty::Class(_) = value.ty {
+                // `docs/spec/objects.md` 2.7
+                d.notes.push(
+                    "call `ToString` to write an object, as in `WriteLn(Obj.ToString)`".into(),
+                );
+            } else if let Ty::Intf(_) = value.ty {
+                // `docs/spec/objects.md` 7.4
+                d.notes
+                    .push("call a method of the interface that returns a string".into());
+            }
             return None;
         }
         let mut failed = false;
@@ -268,6 +305,8 @@ impl Sema<'_, '_> {
         if ty.is_error() {
             return None;
         }
+        // A distinct type is read as its root type (`docs/spec/types.md` 1.3)
+        let ty = self.types.root(ty);
         if !(ty.is_integer()
             || ty.is_real()
             || matches!(ty, Ty::String | Ty::Utf8String | Ty::Currency | Ty::Char))

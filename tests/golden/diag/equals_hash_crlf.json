@@ -1,0 +1,52 @@
+[
+  {
+    "schema": "puy.diagnostics/1",
+    "diagnostics": [
+      {
+        "code": "E0765",
+        "severity": "error",
+        "name": null,
+        "message": "`TOnlyEquals` overrides `Equals` but not `GetHashCode`",
+        "primary": {
+          "file": "equals_hash_crlf.pas",
+          "start": 195,
+          "end": 201,
+          "line": 9,
+          "column": 14,
+          "end_line": 9,
+          "end_column": 20,
+          "label": ""
+        },
+        "secondary": [],
+        "notes": [
+          "objects that are equal must have the same hash code, so override both `Equals` and `GetHashCode`"
+        ],
+        "fixes": [
+          {
+            "title": "override `GetHashCode`",
+            "applicability": "suggestion",
+            "edits": [
+              {
+                "file": "equals_hash_crlf.pas",
+                "start": 235,
+                "end": 235,
+                "line": 9,
+                "column": 54,
+                "end_line": 9,
+                "end_column": 54,
+                "original": "",
+                "replacement": "\r\n    function GetHashCode: Int64; override;"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E0765]: `TOnlyEquals` overrides `Equals` but not `GetHashCode`\n  --> equals_hash_crlf.pas:9:14\n   |\n 9 |     function Equals(Obj: TObject): Boolean; override;\n   |              ^^^^^^\n   |\n   = note: objects that are equal must have the same hash code, so override both `Equals` and `GetHashCode`\n   = suggestion: override `GetHashCode`"
+      }
+    ],
+    "summary": {
+      "errors": 1,
+      "warnings": 0,
+      "notes": 0
+    }
+  }
+]

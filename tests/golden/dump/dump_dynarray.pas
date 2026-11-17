@@ -1,6 +1,6 @@
 program DumpDynArray;
 
-// The `hir` and `bytecode` dumps of dynamic arrays (semantics.md 9.1, bytecode.md 5.2):
+// The `hir` and `bytecode` dumps of dynamic arrays (semantics.md chapter 9, bytecode.md 5.2):
 // constructors, `nil`, elements, `SetLength` with two lengths, `Copy`, `High`, `Assigned`
 // and an open array parameter.
 

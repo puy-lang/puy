@@ -1,0 +1,22 @@
+counted 1
+counted 2
+destroy counted enumerator
+after the loop
+destroy collection
+---
+kept 1
+kept 2
+after the loop, kept 3
+destroy collection
+destroy counted enumerator
+---
+manual 1
+destroy manual enumerator
+after the loop, assigned TRUE
+---
+record 1
+destroy record enumerator field
+after the loop
+---
+destroy bad enumerator
+from the destructor, suppressed: from the body

@@ -58,11 +58,11 @@ error[E3008]: `assembler` is not supported in Puy
    |
    = note: Puy runs on a virtual machine and cannot execute assembly
 
-error[E3200]: methods are not supported yet (planned for M3)
+error[E0700]: undeclared identifier `Method`
   --> removed_features.pas:7:11
    |
  7 | procedure Method.Click; begin end;
-   |           ^^^^^^^^^^^^
+   |           ^^^^^^
 
 error[E3001]: `label` is not supported in Puy
   --> removed_features.pas:9:1

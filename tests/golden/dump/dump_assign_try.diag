@@ -1,0 +1,28 @@
+warning[W0002]: value assigned to `Z` is never read (unused-value)
+   --> dump_assign_try.pas:19:3
+    |
+ 19 |   Z := 0;
+    |   ^
+    |
+    = note: remove the assignment if the value is not needed
+    = note: disable with `{$WARN unused-value OFF}`
+
+warning[W0002]: value assigned to `Z` is never read (unused-value)
+   --> dump_assign_try.pas:23:5
+    |
+ 23 |     Z := X + 1;
+    |     ^
+    |
+    = note: remove the assignment if the value is not needed
+    = note: disable with `{$WARN unused-value OFF}`
+
+warning[W0002]: value assigned to `Z` is never read (unused-value)
+   --> dump_assign_try.pas:25:5
+    |
+ 25 |     Z := F(X, Y + 1);
+    |     ^
+    |
+    = note: remove the assignment if the value is not needed
+    = note: disable with `{$WARN unused-value OFF}`
+
+warning: 3 warnings emitted

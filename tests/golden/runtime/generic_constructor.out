@@ -1,0 +1,9 @@
+TObject
+7 seven
+after construction of TAfter
+TBase: base
+TInherits: base+derived
+made a TCounted
+after construction of TAfter
+after construction of TBox<Integer>
+TBox<Integer>

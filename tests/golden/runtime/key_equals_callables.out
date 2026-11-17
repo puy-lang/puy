@@ -1,0 +1,8 @@
+procedural: TRUE FALSE TRUE
+procedural nil: TRUE FALSE
+method reference: TRUE TRUE
+other method: FALSE
+other instance: FALSE
+anonymous method, copied: TRUE TRUE
+anonymous method, evaluated twice: FALSE
+destroyed: TRUE FALSE TRUE TRUE

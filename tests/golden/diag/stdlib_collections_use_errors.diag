@@ -1,0 +1,19 @@
+error[E0761]: `TPair` expects 2 type arguments, found 1
+  --> stdlib_collections_use_errors.pas:9:11
+   |
+ 9 |   P: TPair<Integer>;
+   |           ^^^^^^^^^
+
+error[E0761]: `TEnumerable` expects 1 type argument, found 2
+   --> stdlib_collections_use_errors.pas:11:17
+    |
+ 11 |   E: TEnumerable<Integer, string>;
+    |                 ^^^^^^^^^^^^^^^^^
+
+error[E0702]: type mismatch: expected `string`, found `Integer` (argument 1, parameter `AKey`)
+   --> stdlib_collections_use_errors.pas:13:38
+    |
+ 13 |   Q := TPair<string, Integer>.Create(1, 2);
+    |                                      ^
+
+error: aborting due to 3 errors

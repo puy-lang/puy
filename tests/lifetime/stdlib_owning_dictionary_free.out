@@ -1,0 +1,77 @@
+-- removing
+free k2
+free v2
+free k2 probe
+count 2
+-- clearing
+free k1
+free v1
+free k3
+free v3
+count 0
+-- freeing
+free k1
+free v1
+free k2
+free v2
+free k3
+free v3
+-- writing over
+free v1
+free k1 again
+-- same key instance
+free v2
+-- same value instance
+k1 = v1 new
+k2 = v2 new
+free k1
+free v1 new
+free k2
+free v2 new
+-- taking out
+free k1 probe
+extracted k1 v1
+free k1
+free v1
+try add FALSE
+EListError: duplicate key in `TObjectDictionary<StdlibOwningDictionaryFree.TItem,StdlibOwningDictionaryFree.TItem>`
+free k2 dup
+free v2 dup
+free k2
+free v2
+-- owning one side
+free v1
+free k1 again
+free v1 new
+free k1
+-- keys left
+k2
+free v2
+free k2
+owns keys TRUE, owns values FALSE
+free k1
+free v1
+-- string keys
+free a
+free a2
+free b
+-- through the parent type
+free k1
+free v1
+free k1 probe
+free v2
+free k2 again
+free k2
+free v2 new
+free k3
+free v3
+-- a destructor raises
+free k1
+free v1
+free k2
+free v2
+free k3
+free v3
+Exception: k2 failed
+  suppressed Exception: v1 failed
+count 0

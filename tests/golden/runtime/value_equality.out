@@ -1,0 +1,37 @@
+marked fields: TRUE TRUE TRUE
+marked field differs: FALSE FALSE TRUE
+nil: FALSE
+self: TRUE TRUE TRUE
+child, unmarked field differs: TRUE TRUE TRUE
+child, marked field differs: FALSE FALSE TRUE
+parent and child: FALSE FALSE TRUE
+0.0 and -0.0: TRUE TRUE TRUE
+NaN and NaN: TRUE TRUE TRUE
+NaN and 1: FALSE FALSE TRUE
+inherited: TRUE TRUE TRUE
+inherited, own field differs: FALSE FALSE TRUE
+shape and circle: FALSE FALSE TRUE
+user Equals: TRUE
+below the user override: TRUE TRUE TRUE
+written again: FALSE FALSE TRUE
+written again, same: TRUE TRUE TRUE
+every kind: TRUE TRUE TRUE
+array element differs: FALSE FALSE TRUE
+array length differs: FALSE FALSE TRUE
+static array element differs: FALSE FALSE TRUE
+owners equal by Equals: TRUE TRUE TRUE
+owners not equal: FALSE FALSE TRUE
+routine differs: FALSE FALSE TRUE
+method reference differs: FALSE FALSE TRUE
+back to equal: TRUE TRUE TRUE
+destroyed owner, same handle: TRUE TRUE TRUE
+destroyed owner and a live one: FALSE FALSE TRUE
+linked: TRUE TRUE TRUE
+linked, tail differs: FALSE FALSE TRUE
+instantiation: TRUE TRUE TRUE
+instantiation, record field differs: FALSE FALSE TRUE
+instantiation, interface field differs: FALSE FALSE TRUE
+another instantiation: TRUE TRUE TRUE
+different instantiations: FALSE FALSE TRUE
+exception: TRUE TRUE TRUE
+exception, message differs: FALSE FALSE TRUE

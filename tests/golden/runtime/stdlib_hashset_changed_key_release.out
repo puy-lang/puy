@@ -1,0 +1,25 @@
+b changed to x
+  b: FALSE
+  x: FALSE
+  a: TRUE
+  items: a x c
+  ToArray: 3
+removing
+  remove b: FALSE, count 3
+  remove c: TRUE, count 2
+growing places the items again
+  add n1: TRUE, count 3
+  EInvalidOperation: the key of entry #1 in `THashSet<StdlibHashSetChangedKeyRelease.TKey>` was changed after it was added
+  EInvalidOperation: the key of entry #1 in `THashSet<StdlibHashSetChangedKeyRelease.TKey>` was changed after it was added
+  EInvalidOperation: the key of entry #1 in `THashSet<StdlibHashSetChangedKeyRelease.TKey>` was changed after it was added
+  count 3, capacity 4
+Clear always works
+  count 0
+  x: TRUE
+set operations
+  EInvalidOperation: the key of entry #0 in `THashSet<StdlibHashSetChangedKeyRelease.TKey>` was changed after it was added
+  count 2 after UnionWith
+  EInvalidOperation: the key of entry #0 in `THashSet<StdlibHashSetChangedKeyRelease.TKey>` was changed after it was added
+  count 31 after ExceptWith
+  EInvalidOperation: the key of entry #0 in `THashSet<StdlibHashSetChangedKeyRelease.TKey>` was changed after it was added
+  count 31 after IntersectWith

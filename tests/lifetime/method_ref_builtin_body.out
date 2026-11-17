@@ -1,0 +1,8 @@
+TItem
+TItem
+set to nil
+destroy TItem
+assigned: FALSE
+boom
+assigned: FALSE
+end

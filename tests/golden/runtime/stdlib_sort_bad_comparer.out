@@ -1,0 +1,7 @@
+raised: comparer gave up after 21 calls
+raising comparer: count 40, same items: TRUE
+always less: count 40, same items: TRUE
+flipping: count 40, same items: TRUE
+TArray raised: comparer gave up
+TArray after the raise: count 11, same items: TRUE
+TArray flipping: count 11, same items: TRUE

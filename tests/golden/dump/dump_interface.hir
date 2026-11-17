@@ -1,0 +1,52 @@
+program DumpInterface
+.type IShape = interface(IInterface) guid={6B29FC40-CA47-1067-B31D-00DD010662DA}
+  .method #0 Area: Integer
+  .method #1 GetName: string
+  .property Name: string read=#1 write=-
+.type IShape2 = interface(IShape)
+  .method #2 Scale(Integer)
+.type TBase = class(TRefObject) ref abstract
+  .method f3 GetName
+  .method - Area virtual 6
+  .method f5 Scale
+  .implements IInterface
+  .implements IShape #0=- #1=f3
+  .implements IShape2 #0=- #1=f3 #2=f5
+.type TSquare = class(TBase) ref
+  .method f6 Area override 6
+  .implements IInterface
+  .implements IShape #0=virtual 6 #1=f3
+  .implements IShape2 #0=virtual 6 #1=f3 #2=f5
+.global g0 S: IShape2
+.routine f3 TBase.GetName(): string
+  .var v0 Self: TBase self
+  .var v1 Result: string result
+  assign @34 R+
+    var v1 Result
+    const string "shape"
+.routine f5 TBase.Scale(F: Integer)
+  .var v0 Self: TBase self
+  .var v1 F: Integer param
+.routine f6 TSquare.Area(): Integer
+  .var v0 Self: TSquare self
+  .var v1 Result: Integer result
+  assign @43 R+
+    var v1 Result
+    const Integer 4
+.routine <main>
+  assign @49 R+
+    global g0 S
+    create TSquare builtin
+  expr @50
+    intfcall IShape2.Scale #2: -
+      global g0 S: IShape2
+      const Integer 2
+  writeln @51
+    arg
+      intfcall IShape2.GetName #1: string
+        global g0 S: IShape2
+    arg
+      const Char #32
+    arg
+      intfcall IShape2.Area #0: Integer
+        global g0 S: IShape2

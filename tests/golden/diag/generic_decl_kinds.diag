@@ -1,0 +1,85 @@
+error[E0757]: a generic type must be a class, record, interface, procedural type or array type
+   --> generic_decl_kinds.pas:13:9
+    |
+ 13 |   TAlias<T> = TBase;
+    |         ^^^
+
+error[E0757]: a generic type must be a class, record, interface, procedural type or array type
+   --> generic_decl_kinds.pas:14:9
+    |
+ 14 |   TColor<T> = (Red, Green);
+    |         ^^^
+
+error[E0757]: a generic type must be a class, record, interface, procedural type or array type
+   --> generic_decl_kinds.pas:15:9
+    |
+ 15 |   TDigit<T> = 0..9;
+    |         ^^^
+
+error[E0757]: a generic type must be a class, record, interface, procedural type or array type
+   --> generic_decl_kinds.pas:16:8
+    |
+ 16 |   TBits<T> = set of Byte;
+    |        ^^^
+
+error[E0757]: a generic type must be a class, record, interface, procedural type or array type
+   --> generic_decl_kinds.pas:17:13
+    |
+ 17 |   TBaseClass<T> = class of TBase;
+    |             ^^^
+
+error[E0757]: a generic type must be a class, record, interface, procedural type or array type
+   --> generic_decl_kinds.pas:18:14
+    |
+ 18 |   TBaseHelper<T> = class helper for TBase
+    |              ^^^
+
+error[E0757]: cannot inherit from type parameter `T`
+   --> generic_decl_kinds.pas:20:21
+    |
+ 20 |   TWrong<T> = class(T)
+    |                     ^
+
+error[E0757]: type parameters of `TNode` must be written as in its declaration: `<T>`
+   --> generic_decl_kinds.pas:23:8
+    |
+ 23 |   TNode<U> = class
+    |        ^^^
+
+error[E0723]: forward declaration of class `TLonely` has no body
+   --> generic_decl_kinds.pas:25:3
+    |
+ 25 |   TLonely<T> = class;
+    |   ^^^^^^^
+
+error[E0757]: type parameters of `TBox` must be written as in its declaration: `<T>`
+   --> generic_decl_kinds.pas:32:15
+    |
+ 32 | procedure TBox<U>.Renamed;
+    |               ^^^
+    |
+    = fix: write `<T>`
+
+error[E0757]: type parameters of `TBox` must be written as in its declaration: `<T>`
+   --> generic_decl_kinds.pas:36:15
+    |
+ 36 | procedure TBox<T, U>.Fewer;
+    |               ^^^^^^
+    |
+    = fix: write `<T>`
+
+error[E0757]: constraints are written only in the first declaration of `TBox`
+   --> generic_decl_kinds.pas:40:17
+    |
+ 40 | procedure TBox<T: class>.Constrained;
+    |                 ^^^^^^^
+    |
+    = fix: remove the constraints
+
+error[E0757]: a generic type cannot be declared inside a routine
+   --> generic_decl_kinds.pas:46:9
+    |
+ 46 |   TLocal<T> = record
+    |         ^^^
+
+error: aborting due to 13 errors

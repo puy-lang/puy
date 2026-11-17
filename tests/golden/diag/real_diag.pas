@@ -4,7 +4,7 @@ program RealDiag;
 // (E0702 with `Trunc` / `Round` in the notes), no explicit one (E0724), `div` / `mod` / bitwise
 // operators (E0703 with a note), `X:W:D` on other types (E0717) and its `D` (E0702), Currency
 // constants outside the range (E0714, also from folding), a Currency constant divided by 0
-// (E0715), operators reals do not have, and `ReadLn` into a real (planned for M2).
+// (E0715), operators reals do not have, and `ReadLn` into a real, which is accepted (semantics.md 6.2).
 
 const
   Big: Currency = 1E20;

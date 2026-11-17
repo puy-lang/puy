@@ -1,0 +1,33 @@
+error[E0725]: procedure `P` has no value
+   --> paren_call_stmt.pas:20:4
+    |
+ 20 |   (P)();                                 // E0725: `(P)` calls P, which has no value
+    |    ^
+
+error[E0704]: expression is not a procedure or function
+   --> paren_call_stmt.pas:21:3
+    |
+ 21 |   (G)();                                 // E0704: `(G)` is an Integer
+    |   ^^^
+
+error[E0729]: cannot infer the type of an anonymous method
+   --> paren_call_stmt.pas:22:4
+    |
+ 22 |   (procedure begin WriteLn('a') end)();  // E0729
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: give the anonymous method a type, as in `var P: TProc := procedure begin … end`
+
+error[E0725]: procedure `WriteLn` has no value
+   --> paren_call_stmt.pas:23:4
+    |
+ 23 |   (WriteLn)();                           // E0725
+    |    ^^^^^^^
+
+error[E0704]: expression is not a procedure or function
+   --> paren_call_stmt.pas:24:3
+    |
+ 24 |   (N)();                                 // E0704
+    |   ^^^
+
+error: aborting due to 5 errors
