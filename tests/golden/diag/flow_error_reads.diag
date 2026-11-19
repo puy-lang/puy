@@ -40,7 +40,7 @@ error[E2000]: variable `R` may be read before it is assigned
     |              ^ read here
     |
     = note: Puy requires every local variable to be assigned before it is read
-    = fix: add an initial value: `var R: Integer = 0;`
+    = fix: add `R := 0;` at the start of the body
 
 error[E0702]: type mismatch: expected `Integer`, found `Char`
    --> flow_error_reads.pas:26:8

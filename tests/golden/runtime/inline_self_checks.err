@@ -1,0 +1,3 @@
+error: uncaught exception EAccessViolation: access to a freed object
+  at InlineSelfChecks.TBox.GetThenFree (inline_self_checks.pas:29)
+  at InlineSelfChecks.<main> (inline_self_checks.pas:163)

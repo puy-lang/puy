@@ -8,8 +8,9 @@ implementation
 
 procedure Hello;
 var
-  S: string = '';
+  S: string;
 begin
+  S := '';
   S := S + 'Hello';
   WriteLn(S);
 end;

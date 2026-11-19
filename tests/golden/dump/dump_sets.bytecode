@@ -29,48 +29,48 @@
   0005  OrIntI       r19, r20, 0
   0006  SetRange     r20, r18, r18
   0007  OrInt        r19, r19, r20
-  0008  Move         r16, r19
-  0009  StoreGlobal  r16, g0
+  0008  StoreGlobal  r19, g0
   .line 29
-  000a  LoadInt      r16, 122
-  000b  StoreGlobal  r16, g5
+  0009  LoadInt      r16, 122
+  000a  StoreGlobal  r16, g5
   .line 30
-  000c  LoadConst    r2, k0
-  000d  LoadInt      r16, 120
-  000e  LoadGlobal   r17, g5
-  000f  LoadZero     r18
-  0010  Unique       r18, ty64
-  0011  SetIncl      r18, r16, r17
-  0012  MoveRef      r3, r18
-  0013  Unique       r2, ty64
-  0014  SetUnion     r2, r3
-  0015  StoreGlobalRef r2, g1
+  000b  LoadConst    r2, k0
+  000c  LoadInt      r16, 120
+  000d  LoadGlobal   r17, g5
+  000e  LoadZero     r18
+  000f  Unique       r18, ty64
+  0010  SetIncl      r18, r16, r17
+  0011  MoveRef      r3, r18
+  0012  Unique       r2, ty64
+  0013  SetUnion     r2, r3
+  0014  StoreGlobalRef r2, g1
   .line 31
-  0016  LoadInt      r16, 200
-  0017  StoreGlobal  r16, g4
+  0015  LoadInt      r16, 200
+  0016  StoreGlobal  r16, g4
   .line 32
-  0018  Move         r17, r16
-  0019  LoadInt      r18, 256
-  001a  ChkRange     r17, r18, k1
-  001b  LoadGlobalRef r4, g2
-  001c  Unique       r4, ty65
-  001d  SetIncl      r4, r16, r16
-  001e  StoreGlobalRef r4, g2
+  0017  Move         r17, r16
+  0018  LoadInt      r18, 256
+  0019  ChkRange     r17, r18, k1
+  001a  LoadGlobalRef r4, g2
+  001b  Unique       r4, ty65
+  001c  SetIncl      r4, r16, r16
+  001d  StoreGlobalRef r4, g2
   .line 33
-  001f  LoadGlobalRef r5, g1
-  0020  LoadConst    r6, k0
-  0021  Unique       r5, ty64
-  0022  SetUnion     r5, r6
-  0023  StoreGlobalRef r5, g1
+  001e  LoadGlobalRef r5, g1
+  001f  LoadConst    r6, k0
+  0020  Unique       r5, ty64
+  0021  SetUnion     r5, r6
+  0022  StoreGlobalRef r5, g1
   .line 34
-  0024  LoadGlobal   r16, g3
-  0025  LoadGlobal   r17, g0
-  0026  SetIn        r16, r16, r17
-  0027  JmpIfFalse   r16, -> 003c
-  0028  LoadInt      r16, 121
-  0029  LoadGlobalRef r7, g1
-  002a  SetInBig     r16, r16, r7
-  002b  JmpIfFalse   r16, -> 003c
+  0023  LoadGlobal   r16, g3
+  0024  LoadGlobal   r17, g0
+  0025  SetIn        r16, r16, r17
+  0026  JmpIfFalse   r16, -> 003d
+  0027  LoadInt      r16, 121
+  0028  LoadGlobalRef r7, g1
+  0029  SetInBig     r16, r16, r7
+  002a  JmpIfFalse   r16, -> 003d
+  002b  Release      r7
   .line 35
   002c  LoadGlobal   r0, g0
   002d  LoadInt      r1, -1
@@ -90,24 +90,28 @@
   0039  Jmp          -> 002e
   003a  JmpIfLtInt   r1, r17, -> 003c
   003b  StoreGlobal  r1, g3
+  .line 34
+  003c  Jmp          -> 003e
+  003d  Release      r7
   .line 37
-  003c  LoadGlobal   r16, g0
-  003d  LoadInt      r17, 7
-  003e  NotInt       r18, r17
-  003f  AndInt       r18, r16, r18
-  0040  LoadZero     r19
-  0041  EqInt        r16, r18, r19
-  0042  BoolToStr    r10, r16
-  0043  LoadConst    r11, k3
-  0044  ConcatStr    r10, r10, r11
-  0045  LoadGlobalRef r13, g1
-  0046  LoadConst    r14, k0
-  0047  SetEq        r17, r13, r14
-  0048  BoolToStr    r12, r17
-  0049  ConcatStr    r10, r10, r12
-  004a  LoadConst    r15, k2
-  004b  ConcatStr    r10, r10, r15
-  004c  CallHost     r10, h0
+  003e  LoadGlobal   r16, g0
+  003f  LoadInt      r17, 7
+  0040  NotInt       r18, r17
+  0041  AndInt       r18, r16, r18
+  0042  LoadZero     r19
+  0043  EqInt        r16, r18, r19
+  0044  BoolToStr    r10, r16
+  0045  LoadConst    r11, k3
+  0046  ConcatStr    r10, r10, r11
+  0047  LoadGlobalRef r13, g1
+  0048  LoadConst    r14, k0
+  0049  SetEq        r17, r13, r14
+  004a  BoolToStr    r12, r17
+  004b  ConcatStr    r10, r10, r12
+  004c  LoadConst    r15, k2
+  004d  ConcatStr    r10, r10, r15
+  004e  CallHost     r10, h0
+  004f  Release      r13
   .line 38
-  004d  RetVoid
+  0050  RetVoid
 .finally r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15

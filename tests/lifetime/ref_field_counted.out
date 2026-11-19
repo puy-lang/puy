@@ -1,0 +1,8 @@
+ab a b a
+copy
+free a
+free a-any
+ab! ab 1 b
+free b
+free b-any
+end

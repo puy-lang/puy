@@ -14,7 +14,7 @@
 .host
   0: Console.Write params=1 ret=0
 .unit Hello file="dump_distinct.pas" init=- fini=- entry=0
-.func 0 Hello.<main> params=0 regs=9
+.func 0 Hello.<main> params=0 regs=11
   .line 28
   0000  LoadZero     r6
   0001  New          r6, ty64
@@ -30,10 +30,14 @@
   .line 31
   0009  LoadGlobal   r6, g1
   000a  LoadGlobal   r8, g0
-  000b  CallMethod   r8, f1
-  000c  Move         r7, r8
+  000b  ClassType    r10, r8
+  .inline f1 Hello.TBox<T>.Get line=31
+  .line 19
+  000c  ObjGet       r9, r8, 0
+  .endinline
+  .line 31
   000d  LoadInt      r8, 1
-  000e  AddIntChk    r7, r7, r8
+  000e  AddIntChk    r7, r9, r8
   000f  ObjSet       r6, 0, r7
   .line 32
   0010  LoadInt      r6, 200
@@ -45,14 +49,22 @@
   0015  StoreGlobal  r6, g2
   .line 34
   0016  LoadGlobal   r7, g0
-  0017  CallMethod   r7, f1
-  0018  Move         r6, r7
+  0017  ClassType    r9, r7
+  .inline f1 Hello.TBox<T>.Get line=34
+  .line 19
+  0018  ObjGet       r6, r7, 0
+  .endinline
+  .line 34
   0019  IntToStr     r0, r6
   001a  LoadConst    r1, k1
   001b  ConcatStr    r0, r0, r1
   001c  LoadGlobal   r8, g1
-  001d  CallMethod   r8, f1
-  001e  Move         r7, r8
+  001d  ClassType    r10, r8
+  .inline f1 Hello.TBox<T>.Get line=34
+  .line 19
+  001e  ObjGet       r7, r8, 0
+  .endinline
+  .line 34
   001f  IntToStr     r2, r7
   0020  ConcatStr    r0, r0, r2
   0021  LoadConst    r3, k1

@@ -11,10 +11,10 @@
   .reg t6: Exception temp
   .reg t7: string temp
   .reg t8: string temp
-  .reg t9: TArray<Exception> temp
-  .reg t10: Exception temp
-  .reg t11: Int64 temp
-  .reg t12: Exception temp
+  .reg t9: Exception temp
+  .reg t10: TArray<Exception> temp
+  .reg t11: Exception temp
+  .reg t12: Int64 temp
   .reg t13: string temp
   .try bb0..bb0 except bb1..bb3 t0
 bb0:
@@ -39,15 +39,18 @@ bb2:
   ConcatStr    t3, t3, t5
   LoadConst    t7, " "
   ConcatStr    t3, t3, t7
-  ObjGet       t10, v0, 1
-  ExcInfo      t9, t10, 1
-  LoadZero     t11
-  DynGet       t12, t9, t11
-  ObjGetRef    t8, t12, 0
+  ObjGet       t11, v0, 1
+  ExcInfo      t10, t11, 1
+  LoadZero     t12
+  DynGet       t9, t10, t12
+  ObjGetRef    t8, t9, 0
   ConcatStr    t3, t3, t8
   LoadConst    t13, "\n"
   ConcatStr    t3, t3, t13
   CallHost     -, h0(t3)
+  Release      t8
+  Release      t5
+  Release      t3
   .line 34
   Release      t0
   Jmp          bb4
@@ -57,7 +60,7 @@ bb3:
 bb4:
   .line 40
   RetVoid
-.finally t0, t3, t4, t5, t7, t8, t9, t13
+.finally t0, t3, t4, t5, t7, t8, t10, t13
 .func f1 SuppressedRelease.Layers params=0
   .reg t0: - state
   .reg t1: Exception exception

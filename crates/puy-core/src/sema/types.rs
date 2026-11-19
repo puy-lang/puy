@@ -1,7 +1,7 @@
 //! Types and constant values (`docs/spec/semantics.md` chapter 2, `docs/spec/types.md`).
 
 use crate::sema::hir::GlobalId;
-use crate::source::TextRange;
+use crate::source::{FileId, TextRange};
 use crate::syntax::ast::ParamMode;
 
 /// Index of a declared or anonymous type in the [`TypeTable`].
@@ -470,8 +470,65 @@ impl Const {
     }
 }
 
+/// How [`TypeTable`] writes a type name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NameForm {
+    /// As in diagnostics and dumps ([`TypeTable::name`]).
+    Short,
+    /// Declared types by their fully qualified name ([`TypeTable::full_name`]).
+    Full,
+    /// As `Short`, with each anonymous record marked ([`TypeTable::marked_name`]).
+    Marked,
+}
+
+/// The characters around the type number in the mark of an anonymous record (private use code
+/// points, which no type name holds).
+const MARK_OPEN: char = '\u{E000}';
+const MARK_CLOSE: char = '\u{E001}';
+
+/// The name of an anonymous record in a diagnostic's text: `record` followed by a mark of its type,
+/// taken out by [`take_anon_record_marks`].
+fn mark_anon_record(id: TypeId) -> String {
+    format!("record{MARK_OPEN}{}{MARK_CLOSE}", id.0)
+}
+
+/// Takes the marks of [`mark_anon_record`] out of `text`, adding the types they name to `found`
+/// (in order, each once). Text that only looks like a mark is left as written.
+pub fn take_anon_record_marks(text: &mut String, found: &mut Vec<TypeId>) {
+    if !text.contains(MARK_OPEN) {
+        return;
+    }
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text.as_str();
+    while let Some(at) = rest.find(MARK_OPEN) {
+        out.push_str(&rest[..at]);
+        let after = &rest[at + MARK_OPEN.len_utf8()..];
+        let id = after
+            .split_once(MARK_CLOSE)
+            .and_then(|(digits, tail)| Some((digits.parse::<u32>().ok()?, tail)));
+        match id {
+            Some((n, tail)) => {
+                if !found.contains(&TypeId(n)) {
+                    found.push(TypeId(n));
+                }
+                rest = tail;
+            }
+            None => {
+                out.push(MARK_OPEN);
+                rest = after;
+            }
+        }
+    }
+    out.push_str(rest);
+    *text = out;
+}
+
 /// Maximum string length (in code units; 3.5).
 pub const MAX_STRING_LEN: usize = i32::MAX as usize;
+
+/// The most slots a record or static array laid out flat in its containers takes
+/// (`docs/design/records.md` 3.2; the bytecode allows up to 16, `docs/spec/bytecode.md` 3.3).
+pub const MAX_FLAT_WIDTH: u64 = 16;
 
 /// A field of a record.
 #[derive(Debug, Clone)]
@@ -862,6 +919,10 @@ pub struct TypeTable {
     /// The generic types declared inside a class or a record (`TFoo.TBox<T>`), found by the
     /// owner, the name and the number of their own type parameters (2.3).
     pub nested_generics: Vec<NestedGeneric>,
+    /// The types declared in the body of a generic routine or of a method of a generic type
+    /// (`docs/spec/generics.md` 2.6): generic definitions with the type parameters of the body,
+    /// and how their instantiations are named.
+    pub generic_local: std::collections::HashMap<TypeId, LocalGeneric>,
     /// The anonymous types with type parameters in them, replaced (by the type and the type
     /// arguments of the replacement).
     pub subst_cache: std::collections::HashMap<(TypeId, Vec<Ty>), TypeId>,
@@ -872,6 +933,10 @@ pub struct TypeTable {
     /// The fields marked `[EqualityMember]` (`docs/spec/equality.md` 3.4): (the class declaring
     /// it, its slot). An instantiation's are its definition's.
     pub equality_members: std::collections::HashSet<(TypeId, u32)>,
+    /// The file of each anonymous record written in a declaration (`docs/spec/types.md` 1.2):
+    /// where the `record type declared here` of a diagnostic naming it points
+    /// (`docs/spec/diagnostics.md` 2.2).
+    pub anon_record_files: std::collections::HashMap<TypeId, FileId>,
 }
 
 /// The type's own `Equal` among its methods: the operator both of whose operands are of the
@@ -943,6 +1008,27 @@ pub struct NestedGeneric {
     pub arity: usize,
     pub id: TypeId,
     pub span: TextRange,
+}
+
+/// A type declared in the body of a generic routine or of a method of a generic type
+/// (`docs/spec/generics.md` 2.6). Its instantiation is named after the routine's:
+/// `Hello.Find<Integer>.TLoc` (`Find<Integer>.TLoc` in diagnostics),
+/// `Hello.TBox<Integer>.Get.TLoc`.
+#[derive(Debug, Clone)]
+pub struct LocalGeneric {
+    /// The generic type of the method the body belongs to: its type parameters come first, and
+    /// its instantiation is written before `head`.
+    pub class: Option<TypeId>,
+    /// The name of the routine (with the class for a method of a type that is not generic;
+    /// only the method's for a method of `class`).
+    pub head: String,
+    /// The program's or unit's name, before `head` in the full name when there is no `class`.
+    pub unit: String,
+    /// The number of the routine's own type parameters (after the class's), written after
+    /// `head`.
+    pub own: usize,
+    /// The enclosing routines after the generic one, and the type's name (`.Inner.TLoc`).
+    pub tail: String,
 }
 
 /// An instantiation of a generic type (`docs/spec/generics.md` 4.1, `docs/design/generics.md`
@@ -1267,10 +1353,12 @@ impl TypeTable {
             system_generics: Default::default(),
             generic_outer: Default::default(),
             nested_generics: Vec::new(),
+            generic_local: Default::default(),
             instance_index: Default::default(),
             subst_cache: std::collections::HashMap::new(),
             value_equality: Default::default(),
             equality_members: Default::default(),
+            anon_record_files: Default::default(),
         };
         let exceptions = crate::bytecode::BUILTIN_EXCEPTIONS;
         let root = |name: &str, parent: Option<TypeId>, ref_counted: bool| TypeDef {
@@ -1468,7 +1556,7 @@ impl TypeTable {
 
     /// The class and its ancestors, the class first. Stops on a cycle (E0727).
     pub fn class_chain(&self, id: TypeId) -> Vec<TypeId> {
-        let mut chain = Vec::new();
+        let mut chain = Vec::with_capacity(8);
         let mut cur = Some(id);
         while let Some(c) = cur {
             if chain.contains(&c) || chain.len() > self.defs.len() {
@@ -1984,28 +2072,115 @@ impl TypeTable {
         }
     }
 
+    // ---- Flat layout (`docs/design/records.md` 3.2, 3.3; `docs/spec/bytecode.md` 1.5) ----
+
+    /// The number of slots a value of `ty` takes in a container (a field, an element, an
+    /// instance's field): the slots of a record or static array laid out flat
+    /// ([`TypeTable::flat_width`]), 1 for any other value (a block among them).
+    pub fn slot_width(&self, ty: Ty) -> u32 {
+        self.flat_width(ty).unwrap_or(1)
+    }
+
+    /// The number of slots of a record or static array laid out flat in its containers: its
+    /// [`TypeTable::agg_width`] when that is 1 to [`MAX_FLAT_WIDTH`]. `None` for an aggregate
+    /// kept as a block in its containers, and for any other type.
+    pub fn flat_width(&self, ty: Ty) -> Option<u32> {
+        self.agg_width(ty)
+            .filter(|w| (1..=MAX_FLAT_WIDTH).contains(w))
+            .map(|w| w as u32)
+    }
+
+    /// The number of slots of the block of a record or static array: the slot widths of its
+    /// fields, or of its elements times their number. `None` for any other type.
+    pub fn agg_width(&self, ty: Ty) -> Option<u64> {
+        match ty {
+            Ty::Record(_) => Some(
+                self.fields(ty)
+                    .iter()
+                    .map(|f| u64::from(self.slot_width(f.ty)))
+                    .sum(),
+            ),
+            Ty::Array(_) => {
+                let (_, lo, hi, elem) = self.array(ty)?;
+                let n = u64::try_from((hi - lo + 1).max(0)).unwrap_or(u64::MAX);
+                Some(n.saturating_mul(u64::from(self.slot_width(elem))))
+            }
+            _ => None,
+        }
+    }
+
+    /// The first slot of field `index` of the record `rec` in its block or flat place.
+    pub fn field_offset(&self, rec: Ty, index: u32) -> u32 {
+        self.fields(rec)
+            .iter()
+            .take(index as usize)
+            .map(|f| self.slot_width(f.ty))
+            .sum()
+    }
+
+    /// The first slot of the field at `slot` (its number among the fields of the class and its
+    /// ancestors, [`ClassField::slot`]) in an instance of the class `id`.
+    pub fn class_field_offset(&self, id: TypeId, slot: u32) -> u32 {
+        self.class_fields(id)
+            .iter()
+            .take(slot as usize)
+            .map(|(_, f)| self.slot_width(f.ty))
+            .sum()
+    }
+
+    /// The slot kinds ([`TypeTable::slot_kind`]) of a value of `ty` in a container: those of its
+    /// slots in order when it is laid out flat, else its own kind.
+    pub fn flat_kinds(&self, ty: Ty, out: &mut Vec<u8>) {
+        if self.flat_width(ty).is_none() {
+            out.push(self.slot_kind(ty));
+            return;
+        }
+        match ty {
+            Ty::Record(_) => {
+                for f in self.fields(ty) {
+                    self.flat_kinds(f.ty, out);
+                }
+            }
+            _ => {
+                let (_, lo, hi, elem) = self.array(ty).expect("a flat value is an aggregate");
+                for _ in lo..=hi {
+                    self.flat_kinds(elem, out);
+                }
+            }
+        }
+    }
+
     /// The type name in diagnostics and dumps (`docs/spec/types.md` 1.2): the declared name, or
     /// `record` / `array[L..H] of T` for an anonymous type.
     pub fn name(&self, ty: Ty) -> String {
-        self.name_with(ty, false)
+        self.name_with(ty, NameForm::Short)
     }
 
     /// The name in the bytecode type section, the `ir` dump and the leak report: declared types by
     /// their fully qualified name, anonymous types written out with qualified names inside.
     pub fn full_name(&self, ty: Ty) -> String {
-        self.name_with(ty, true)
+        self.name_with(ty, NameForm::Full)
     }
 
-    fn name_with(&self, ty: Ty, full: bool) -> String {
+    /// [`TypeTable::name`] with each anonymous record in it followed by a mark of its type (see
+    /// [`mark_anon_record`]), for the text of a diagnostic: the marks are taken out with
+    /// [`take_anon_record_marks`] when the diagnostics of the file are complete, and become its
+    /// `record type declared here` (`docs/spec/diagnostics.md` 2.2).
+    pub fn marked_name(&self, ty: Ty) -> String {
+        self.name_with(ty, NameForm::Marked)
+    }
+
+    fn name_with(&self, ty: Ty, form: NameForm) -> String {
+        let full = form == NameForm::Full;
         if let Ty::Weak(c) = ty {
-            return self.name_with(self.strong(Ty::Weak(c)), full);
+            return self.name_with(self.strong(Ty::Weak(c)), form);
         }
         let Some(id) = ty.type_id() else {
             return ty.builtin_name().to_string();
         };
         let def = self.get(id);
         if let (Ty::OpenArray(_), TypeKind::DynArray { elem, .. }) = (ty, &def.kind) {
-            return format!("array of {}", self.name_with(*elem, full));
+            return format!("array of {}", self.name_with(*elem, form));
         }
         if let (true, Some(n)) = (full, &def.full_name) {
             return n.clone();
@@ -2014,18 +2189,19 @@ impl TypeTable {
             return n.clone();
         }
         match &def.kind {
+            TypeKind::Record { .. } if form == NameForm::Marked => mark_anon_record(id),
             TypeKind::Record { .. } | TypeKind::Pending => "record".to_string(),
             TypeKind::Class { .. } => "class".to_string(),
             TypeKind::Interface { .. } => "interface".to_string(),
             TypeKind::Helper { .. } => "helper".to_string(),
             TypeKind::ClassRef { class } => {
-                format!("class of {}", self.name_with(Ty::Class(*class), full))
+                format!("class of {}", self.name_with(Ty::Class(*class), form))
             }
             TypeKind::Enum { .. } => "enumeration".to_string(),
             TypeKind::Subrange { base, low, high } => {
                 format!("{}..{}", bound_text(*base, *low), bound_text(*base, *high))
             }
-            TypeKind::Set { base, .. } => format!("set of {}", self.name_with(*base, full)),
+            TypeKind::Set { base, .. } => format!("set of {}", self.name_with(*base, form)),
             TypeKind::Array {
                 index,
                 low,
@@ -2035,19 +2211,19 @@ impl TypeTable {
                 "array[{}..{}] of {}",
                 bound_text(*index, *low),
                 bound_text(*index, *high),
-                self.name_with(*elem, full)
+                self.name_with(*elem, form)
             ),
             TypeKind::DynArray { elem, generic } => {
-                let e = self.name_with(*elem, full);
+                let e = self.name_with(*elem, form);
                 if *generic {
                     format!("TArray<{e}>")
                 } else {
                     format!("array of {e}")
                 }
             }
-            TypeKind::Proc { .. } => self.proc_text(id, full, false),
+            TypeKind::Proc { .. } => self.proc_text(id, form, false),
             TypeKind::Param { .. } => "<type>".to_string(),
-            TypeKind::Distinct { base } => self.name_with(*base, full),
+            TypeKind::Distinct { base } => self.name_with(*base, form),
         }
     }
 
@@ -2193,9 +2369,13 @@ impl TypeTable {
     }
 
     /// The type parameters a generic definition declares itself (those after its outer type's,
-    /// for a type nested in a generic type; `docs/spec/generics.md` 2.5).
+    /// for a type nested in a generic type; `docs/spec/generics.md` 2.5). None for a type declared
+    /// in a generic body, whose type parameters are all the body's (2.6).
     pub fn own_type_params(&self, id: TypeId) -> &[TypeId] {
         let all = self.type_params(id);
+        if self.generic_local.contains_key(&id) {
+            return &[];
+        }
         let outer = self
             .generic_outer
             .get(&id)
@@ -2450,7 +2630,7 @@ impl TypeTable {
     /// A procedural type written out (`docs/spec/objects.md` 16.2): `procedure(Integer) of
     /// object`, `reference to function(const string): Boolean`. With `names`, the parameters
     /// have their names (`function(A: Integer; B: Integer): Integer`; the `hir` dump, 15.5).
-    pub fn proc_text(&self, id: TypeId, full: bool, names: bool) -> String {
+    pub fn proc_text(&self, id: TypeId, form: NameForm, names: bool) -> String {
         let TypeKind::Proc {
             family,
             params,
@@ -2463,7 +2643,7 @@ impl TypeTable {
             .iter()
             .map(|p| (names.then_some(p.name.as_str()), p.ty, p.mode))
             .collect();
-        self.signature_text(*family, &list, *ret, full)
+        self.signature_text(*family, &list, *ret, form)
     }
 
     /// A signature written out as a procedural type of `family` (the type of a routine or
@@ -2474,7 +2654,7 @@ impl TypeTable {
         family: ProcFamily,
         params: &[(Option<&str>, Ty, ParamMode)],
         ret: Option<Ty>,
-        full: bool,
+        form: NameForm,
     ) -> String {
         let named = params.iter().any(|p| p.0.is_some());
         let list: Vec<String> = params
@@ -2486,7 +2666,7 @@ impl TypeTable {
                     ParamMode::Var => "var ",
                     ParamMode::Out => "out ",
                 };
-                let t = self.name_with(*ty, full);
+                let t = self.name_with(*ty, form);
                 match name {
                     Some(n) => format!("{mode}{n}: {t}"),
                     None => format!("{mode}{t}"),
@@ -2506,7 +2686,7 @@ impl TypeTable {
             out.push_str(&format!("({})", list.join(if named { "; " } else { ", " })));
         }
         if let Some(r) = ret {
-            out.push_str(&format!(": {}", self.name_with(r, full)));
+            out.push_str(&format!(": {}", self.name_with(r, form)));
         }
         if family == ProcFamily::Method {
             out.push_str(" of object");
@@ -2619,3 +2799,43 @@ pub fn bound_text(index: Ty, v: i128) -> String {
 
 /// Maximum number of elements of a static array (`docs/spec/types.md` 2.2).
 pub const MAX_ARRAY_LEN: i128 = i32::MAX as i128;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The marks of anonymous records are taken out of a diagnostic's text, each type found once in
+    // the order named; the text keeps no trace of them.
+    #[test]
+    fn anon_record_marks_are_taken_out() {
+        let mut text = format!(
+            "expected `{}`, found `array[0..1] of {}` and `{}`",
+            mark_anon_record(TypeId(7)),
+            mark_anon_record(TypeId(3)),
+            mark_anon_record(TypeId(7))
+        );
+        let mut found = Vec::new();
+        take_anon_record_marks(&mut text, &mut found);
+        assert_eq!(
+            text,
+            "expected `record`, found `array[0..1] of record` and `record`"
+        );
+        assert_eq!(found, vec![TypeId(7), TypeId(3)]);
+    }
+
+    // A private use character that does not start a whole mark (a string constant shown in a
+    // message) is left as written.
+    #[test]
+    fn text_like_a_mark_is_kept() {
+        for (idx, s) in ["'\u{E000}'", "'\u{E000}12'", "'\u{E000}x\u{E001}'"]
+            .into_iter()
+            .enumerate()
+        {
+            let mut text = s.to_string();
+            let mut found = Vec::new();
+            take_anon_record_marks(&mut text, &mut found);
+            assert_eq!(text, s, "{idx}");
+            assert!(found.is_empty(), "{idx}");
+        }
+    }
+}

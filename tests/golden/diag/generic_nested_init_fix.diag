@@ -34,7 +34,7 @@ error[E2000]: variable `B` may be read before it is assigned
     |   ^ read here
     |
     = note: Puy requires every local variable to be assigned before it is read
-    = fix: add an initial value: `var B: THolder.TBox<Integer> = Default(THolder.TBox<Integer>);`
+    = fix: add `B := Default(THolder.TBox<Integer>);` at the start of the body
 
 error[E2000]: variable `B` may be read before it is assigned
    --> generic_nested_init_fix.pas:40:10
@@ -46,7 +46,7 @@ error[E2000]: variable `B` may be read before it is assigned
     |          ^ read here
     |
     = note: Puy requires every local variable to be assigned before it is read
-    = fix: add an initial value: `var B: THolder.TBox<Integer> = Default(THolder.TBox<Integer>);`
+    = fix: add `B := Default(THolder.TBox<Integer>);` at the start of the body
 
 error[E2000]: variable `B` may be read before it is assigned
    --> generic_nested_init_fix.pas:41:11
@@ -58,6 +58,6 @@ error[E2000]: variable `B` may be read before it is assigned
     |           ^ read here
     |
     = note: Puy requires every local variable to be assigned before it is read
-    = fix: add an initial value: `var B: THolder.TBox<Integer> = Default(THolder.TBox<Integer>);`
+    = fix: add `B := Default(THolder.TBox<Integer>);` at the start of the body
 
 error: aborting due to 5 errors

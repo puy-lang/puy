@@ -12,14 +12,14 @@ program DumpAttrMembers
     .attr DumpAttrMembers.MarkAttribute builtin
 .type TV = record
   .field 0 X: Integer
-  .method f3 Add operator
+  .method f0 Add operator
     .attr DumpAttrMembers.MarkAttribute builtin
 .type TIntHelper = record helper for Integer
-  .method f4 Twice
+  .method f1 Twice
     .attr DumpAttrMembers.MarkAttribute builtin
 .global g0 A: TV
 .global g1 B: TV
-.routine f3 TV.Add(const A: TV; const B: TV): TV
+.routine f0 TV.Add(const A: TV; const B: TV): TV
   .var v0 A: TV const param
   .var v1 B: TV const param
   .var v2 Result: TV result
@@ -35,7 +35,7 @@ program DumpAttrMembers
       + Integer int:Integer
         field Integer X #0
           var v1 B: TV
-.routine f4 TIntHelper.Twice(): Integer
+.routine f1 TIntHelper.Twice(): Integer
   .var v0 Self: Integer var self
   .var v1 Result: Integer result
   assign @39 R+
@@ -56,12 +56,12 @@ program DumpAttrMembers
   writeln @47
     arg
       field Integer X #0
-        operator f3 TV.Add: TV
+        operator f0 TV.Add: TV
           global g0 A: TV
           global g1 B: TV
     arg
       const Char #32
     arg
-      helper-call f4 TIntHelper.Twice: Integer
+      helper-call f1 TIntHelper.Twice: Integer
         temp
           const Integer 3

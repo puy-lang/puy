@@ -20,7 +20,7 @@ fn err_expr(span: TextRange) -> Expr {
 
 fn const_expr(value: Const, ty: Ty, span: TextRange) -> Expr {
     Expr {
-        kind: ExprKind::Const,
+        kind: ExprKind::Const { explicit: false },
         ty,
         value: Some(value),
         span,

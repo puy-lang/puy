@@ -37,20 +37,21 @@
   0010  LoadConst    r8, k2
   0011  ConcatStr    r2, r2, r8
   0012  CallHost     r2, h0
+  0013  Release      r3
   .line 26
-  0013  LoadGlobalRef r9, g0
-  0014  Release      r10
-  0015  JmpIfNeInt   r9, r10, -> 001a
-  0016  LoadConst    r11, k3
-  0017  New          r12, ty7
-  0018  ObjSetRef    r12, 0, r11
-  0019  Raise        r12
+  0014  LoadGlobalRef r9, g0
+  0015  Release      r10
+  0016  JmpIfNeInt   r9, r10, -> 001b
+  0017  LoadConst    r11, k3
+  0018  New          r12, ty7
+  0019  ObjSetRef    r12, 0, r11
+  001a  Raise        r12
   .line 27
-  001a  LoadConst    r13, k4
-  001b  Move         r14, r13
-  001c  Call         r14, f1
+  001b  LoadConst    r13, k4
+  001c  Move         r14, r13
+  001d  Call         r14, f1
   .line 28
-  001d  RetVoid
+  001e  RetVoid
 .finally r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13
 .func 1 DumpExceptions.Fail params=1 regs=9
   .local r0 Why
@@ -72,9 +73,10 @@
   000b  LoadConst    r7, k2
   000c  ConcatStr    r4, r4, r7
   000d  CallHost     r4, h0
+  000e  Release      r6
   .line 18
-  000e  AssignRef    r8, r1
-  000f  Raise        r8
+  000f  AssignRef    r8, r1
+  0010  Raise        r8
   .line 19
-  0010  RetVoid
+  0011  RetVoid
 .finally r1, r2, r3, r4, r5, r6, r7, r8

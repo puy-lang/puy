@@ -1,3 +1,2 @@
-warning: 2 heap blocks were not freed
-  NodeCycle.TNode: 1
+warning: 1 heap block was not freed
   array of NodeCycle.TNode: 1

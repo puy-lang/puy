@@ -355,6 +355,7 @@ impl<'a, 's> Sema<'a, 's> {
             file: self.input.file,
             interface: self.in_interface_part,
             parent: None,
+            scope: self.cur.as_ref().and_then(|c| c.routine),
             calls: vec![op],
             method_of: Some(id),
             self_kind: SelfKind::Instance,

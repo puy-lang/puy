@@ -16,7 +16,7 @@ program DumpKeyEquals
       var v0 A: T
       var v1 B: T
 .instance Same<Integer>
-.routine f1 Same<Integer>(const A: Integer; const B: Integer): Boolean
+.routine f0 Same<Integer>(const A: Integer; const B: Integer): Boolean
   .var v0 A: Integer const param
   .var v1 B: Integer const param
   .var v2 Result: Boolean result
@@ -26,7 +26,7 @@ program DumpKeyEquals
       var v0 A: Integer
       var v1 B: Integer
 .generated <eq:DumpKeyEquals.TPoint>
-.routine f2 <eq:DumpKeyEquals.TPoint>(const A: TPoint; const B: TPoint): Boolean
+.routine f1 <eq:DumpKeyEquals.TPoint>(const A: TPoint; const B: TPoint): Boolean
   .var v0 A: TPoint const param
   .var v1 B: TPoint const param
   .var v2 Result: Boolean result
@@ -45,7 +45,7 @@ program DumpKeyEquals
           field Integer Y #1
             var v1 B: TPoint
 .generated <hash:DumpKeyEquals.TPoint>
-.routine f3 <hash:DumpKeyEquals.TPoint>(const X: TPoint): Int64
+.routine f2 <hash:DumpKeyEquals.TPoint>(const X: TPoint): Int64
   .var v0 X: TPoint const param
   .var v1 Result: Int64 result
   assign @9 R-
@@ -69,12 +69,12 @@ program DumpKeyEquals
 .routine <main>
   assign @23 R+
     global g2 B
-    call KeyEquals<TPoint> via f2: Boolean
+    call KeyEquals<TPoint> via f1: Boolean
       global g0 P: TPoint
       global g1 Q: TPoint
   assign @24 R+
     global g3 H
-    call KeyHash<TPoint> via f3: Int64
+    call KeyHash<TPoint> via f2: Int64
       global g0 P: TPoint
   assign @25 R+
     global g2 B
@@ -83,6 +83,6 @@ program DumpKeyEquals
       const Char #98
   assign @26 R+
     global g2 B
-    call f1 Same<Integer>: Boolean
+    call f0 Same<Integer>: Boolean
       const Integer 1
       const Integer 2

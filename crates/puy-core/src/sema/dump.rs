@@ -6,6 +6,7 @@ use super::hir::*;
 use super::types::{Const, Ty, TypeKind, TypeTable, bound_text};
 use crate::source::{SourceFile, TextRange};
 use crate::syntax::ast::ParamMode;
+use std::collections::HashMap;
 use std::fmt::Write;
 
 /// Builds the `hir` dump. Each line ends with a single newline.
@@ -15,6 +16,7 @@ pub fn dump_hir(program: &Program, src: &SourceFile) -> String {
         program,
         src,
         vars: &[],
+        funcs: FuncNumbers::new(program),
     };
     d.program();
     d.out
@@ -48,6 +50,94 @@ struct Dumper<'a> {
     src: &'a SourceFile,
     /// Variables of the routine being dumped (names of the form `var vN`).
     vars: &'a [Var],
+    /// The numbers of the functions in the dump (`fN`).
+    funcs: FuncNumbers,
+}
+
+/// The function numbers of the dump (`docs/spec/semantics.md` chapter 9): the routines whose
+/// headings the dump shows are numbered from `f0` in the order of their headings, and the
+/// routines it only refers to continue the numbers in the order of their first reference. The
+/// routines of the units the file uses do not shift the numbers.
+///
+/// A reference is written as a placeholder (`f`) and numbered when its line is emitted
+/// (`resolve`), so that the order of first reference is the order of the lines in the dump even
+/// where the text of several lines is built before they are emitted (the members of a type).
+struct FuncNumbers {
+    numbers: HashMap<RoutineId, u32>,
+}
+
+/// Encloses the routine id of a placeholder written by `FuncNumbers::f`.
+const FUNC_MARK: char = '\u{0}';
+
+impl FuncNumbers {
+    /// Numbers the routines whose headings the dump shows, in the order `Dumper::program` shows them.
+    fn new(p: &Program) -> Self {
+        let unit = p.units.len().saturating_sub(1) as u32;
+        let shown = file_routines(p, unit)
+            .chain(file_instances(p, unit).flat_map(|inst| instance_routines(p, inst).copied()))
+            .chain(file_generated(p, unit).map(|g| g.routine));
+        let mut numbers = HashMap::new();
+        for r in shown {
+            // A generic body has no function (`docs/spec/generics.md` 8)
+            if !p.routines[r.0 as usize].generic {
+                let next = numbers.len() as u32;
+                numbers.entry(r).or_insert(next);
+            }
+        }
+        FuncNumbers { numbers }
+    }
+
+    /// The placeholder of `fN` for a routine, numbered by `resolve` when its line is emitted.
+    fn f(&self, r: RoutineId) -> String {
+        format!("{FUNC_MARK}{}{FUNC_MARK}", r.0)
+    }
+
+    /// Replaces the placeholders of a line with `fN`; a routine the dump has not numbered yet
+    /// takes the next number.
+    fn resolve(&mut self, text: &str) -> String {
+        let mut out = String::with_capacity(text.len());
+        let mut parts = text.split(FUNC_MARK);
+        out.push_str(parts.next().unwrap_or_default());
+        while let (Some(id), Some(rest)) = (parts.next(), parts.next()) {
+            let id: u32 = id.parse().expect("a placeholder holds a routine id");
+            let next = self.numbers.len() as u32;
+            let n = self.numbers.entry(RoutineId(id)).or_insert(next);
+            let _ = write!(out, "f{n}");
+            out.push_str(rest);
+        }
+        out
+    }
+}
+
+/// The routines of the file `unit` the dump shows before the instantiations: an abstract method
+/// has no body (`docs/spec/objects.md` 15.1), and the routines of the instantiations are shown
+/// under them.
+fn file_routines(p: &Program, unit: u32) -> impl Iterator<Item = RoutineId> + '_ {
+    p.routines
+        .iter()
+        .enumerate()
+        .filter(move |(_, r)| r.unit == unit && !r.is_abstract && r.instance.is_none())
+        .map(|(i, _)| RoutineId(i as u32))
+}
+
+/// The instantiations the file `unit` asked for first (`docs/spec/generics.md` 8).
+fn file_instances(p: &Program, unit: u32) -> impl Iterator<Item = &InstanceInfo> {
+    p.instances.iter().filter(move |i| i.unit == unit)
+}
+
+/// The routines of an instantiation the dump shows under it (those with a body).
+fn instance_routines<'p>(
+    p: &'p Program,
+    inst: &'p InstanceInfo,
+) -> impl Iterator<Item = &'p RoutineId> {
+    inst.routines
+        .iter()
+        .filter(|r| !p.routines[r.0 as usize].is_abstract)
+}
+
+/// The generated functions the file `unit` asked for first (`docs/spec/equality.md` 9).
+fn file_generated(p: &Program, unit: u32) -> impl Iterator<Item = &GeneratedInfo> {
+    p.generated.iter().filter(move |g| g.unit == unit)
 }
 
 impl<'a> Dumper<'a> {
@@ -55,7 +145,8 @@ impl<'a> Dumper<'a> {
         for _ in 0..depth {
             self.out.push_str("  ");
         }
-        self.out.push_str(text);
+        let text = self.funcs.resolve(text);
+        self.out.push_str(&text);
         self.out.push('\n');
     }
 
@@ -69,9 +160,7 @@ impl<'a> Dumper<'a> {
             .iter()
             .filter(|a| a.unit == unit && a.decl == decl)
         {
-            let ctor = a
-                .ctor
-                .map_or("builtin".to_string(), |r| format!("f{}", r.0));
+            let ctor = a.ctor.map_or("builtin".to_string(), |r| self.funcs.f(r));
             self.line(depth, &format!(".attr {} {ctor}", a.class));
             for e in &a.args {
                 self.expr(e, depth + 1);
@@ -154,26 +243,16 @@ impl<'a> Dumper<'a> {
                 }
             }
         }
-        for (i, r) in p.routines.iter().enumerate() {
-            // An abstract method has no body (`docs/spec/objects.md` 15.1); the routines of the
-            // instantiations are shown under them
-            if r.unit == unit && !r.is_abstract && r.instance.is_none() {
-                self.routine(r, Some(i));
-            }
+        for r in file_routines(p, unit) {
+            self.routine(&p.routines[r.0 as usize], Some(r.0 as usize));
         }
-        // The instantiations the file asked for first, and their bodies
-        // (`docs/spec/generics.md` 8)
-        for inst in p.instances.iter().filter(|i| i.unit == unit) {
+        for inst in file_instances(p, unit) {
             self.line(0, &format!(".instance {}", inst.name));
-            for r in &inst.routines {
-                let routine = &p.routines[r.0 as usize];
-                if !routine.is_abstract {
-                    self.routine(routine, Some(r.0 as usize));
-                }
+            for r in instance_routines(p, inst) {
+                self.routine(&p.routines[r.0 as usize], Some(r.0 as usize));
             }
         }
-        // The generated functions the file asked for first (`docs/spec/equality.md` 9)
-        for g in p.generated.iter().filter(|g| g.unit == unit) {
+        for g in file_generated(p, unit) {
             let routine = &p.routines[g.routine.0 as usize];
             let name = routine.instance.as_deref().unwrap_or(&routine.name);
             self.line(0, &format!(".generated {name}"));
@@ -203,7 +282,7 @@ impl<'a> Dumper<'a> {
             if r.generic {
                 head.push_str("- ");
             } else {
-                let _ = write!(head, "f{i} ");
+                let _ = write!(head, "{} ", self.funcs.f(RoutineId(i as u32)));
             }
         }
         head.push_str(&r.name);
@@ -247,8 +326,8 @@ impl<'a> Dumper<'a> {
         if index.is_some() && !r.name.contains('.') {
             self.attr_lines(r.name_span, 1);
         }
-        if index.is_some() {
-            self.type_decls(Some(&r.name));
+        if let Some(i) = index {
+            self.type_decls(Some(RoutineId(i as u32)));
         }
         for (i, v) in r.vars.iter().enumerate() {
             let kind = var_kind_text(v.kind, v.is_for_var);
@@ -310,15 +389,14 @@ impl<'a> Dumper<'a> {
 
     /// The `type` declarations of the program (`routine` is `None`) or of a routine
     /// (`docs/spec/semantics.md` chapter 9).
-    fn type_decls(&mut self, routine: Option<&str>) {
+    fn type_decls(&mut self, routine: Option<RoutineId>) {
         let depth = usize::from(routine.is_some());
         let decls: Vec<TypeDeclInfo> = self
             .program
             .type_decls
             .iter()
             .filter(|d| {
-                d.routine.as_deref() == routine
-                    && d.unit as usize + 1 == self.program.units.len().max(1)
+                d.routine == routine && d.unit as usize + 1 == self.program.units.len().max(1)
             })
             .cloned()
             .collect();
@@ -356,7 +434,7 @@ impl<'a> Dumper<'a> {
                         )
                     })
                     .collect();
-                fields.extend(member_lines(types, &self.program.routines, id));
+                fields.extend(member_lines(types, &self.program.routines, &self.funcs, id));
                 self.member_block(depth + 1, fields);
             }
             Ty::Class(id) => {
@@ -389,8 +467,8 @@ impl<'a> Dumper<'a> {
                         .collect(),
                     _ => Vec::new(),
                 };
-                lines.extend(member_lines(types, &self.program.routines, id));
-                lines.extend(implements_lines(types, id));
+                lines.extend(member_lines(types, &self.program.routines, &self.funcs, id));
+                lines.extend(implements_lines(types, &self.funcs, id));
                 self.member_block(depth + 1, lines);
             }
             Ty::Intf(id) => {
@@ -430,12 +508,12 @@ impl<'a> Dumper<'a> {
                     ),
                 );
                 self.attr_lines(d.span, depth + 1);
-                let lines = member_lines(types, &self.program.routines, id);
+                let lines = member_lines(types, &self.program.routines, &self.funcs, id);
                 self.member_block(depth + 1, lines);
             }
             // `docs/spec/objects.md` 15.5
             Ty::Proc(id) | Ty::Callable(id) => {
-                let text = types.proc_text(id, false, true);
+                let text = types.proc_text(id, super::types::NameForm::Short, true);
                 self.line(depth, &format!(".type {} = {text}", d.name));
             }
             Ty::ClassRef(_) => {
@@ -514,7 +592,10 @@ impl<'a> Dumper<'a> {
                 let ExprKind::Call { routine, args, .. } = &call.kind else {
                     unreachable!("PropertySet always holds the call of the write method");
                 };
-                self.line(depth + 1, &format!("property {name} f{}", routine.0));
+                self.line(
+                    depth + 1,
+                    &format!("property {name} {}", self.funcs.f(*routine)),
+                );
                 let (value, rest) = args.split_last().expect("the value is an argument");
                 for a in rest {
                     if let CallArg::Value(e) = a {
@@ -842,6 +923,28 @@ impl<'a> Dumper<'a> {
                 self.expr(to, depth + 1);
                 self.expr(count, depth + 1);
             }
+            StmtKind::ArraySortRange {
+                target,
+                index,
+                count,
+            } => {
+                self.line(depth, &format!("array-sort-range {at}"));
+                self.place(target, depth + 1);
+                self.expr(index, depth + 1);
+                self.expr(count, depth + 1);
+            }
+            StmtKind::HashRelink {
+                buckets,
+                hashes,
+                next,
+                count,
+            } => {
+                self.line(depth, &format!("hash-relink {at}"));
+                self.place(buckets, depth + 1);
+                self.expr(hashes, depth + 1);
+                self.place(next, depth + 1);
+                self.expr(count, depth + 1);
+            }
             StmtKind::FreeIfClass { value } => {
                 self.line(depth, &format!("free-if-class {at}"));
                 self.expr(value, depth + 1);
@@ -937,7 +1040,7 @@ impl<'a> Dumper<'a> {
         }
         let folded = "";
         match &e.kind {
-            ExprKind::Const => self.line(depth, &format!("const {ty} -")),
+            ExprKind::Const { .. } => self.line(depth, &format!("const {ty} -")),
             ExprKind::Var(v)
                 if matches!(
                     self.vars[v.0 as usize].kind,
@@ -1059,17 +1162,19 @@ impl<'a> Dumper<'a> {
                         let last = name.rsplit('.').next().unwrap_or(&name);
                         let conv = super::operators::is_conversion(last);
                         let word = if conv { "convert-op" } else { "operator" };
-                        format!("{word} f{}", routine.0)
+                        format!("{word} {}", self.funcs.f(*routine))
                     }
                     Dispatch::Routine | Dispatch::Method if r.helper => {
-                        format!("helper-call f{}", routine.0)
+                        format!("helper-call {}", self.funcs.f(*routine))
                     }
-                    Dispatch::Routine => format!("call f{}", routine.0),
+                    Dispatch::Routine => format!("call {}", self.funcs.f(*routine)),
                     // `docs/spec/objects.md` 15.5
-                    Dispatch::Group(b) => format!("call f{} block {}", routine.0, block_name(*b)),
-                    Dispatch::Method => format!("method f{}", routine.0),
+                    Dispatch::Group(b) => {
+                        format!("call {} block {}", self.funcs.f(*routine), block_name(*b))
+                    }
+                    Dispatch::Method => format!("method {}", self.funcs.f(*routine)),
                     Dispatch::Virtual(k) => format!("virtual {k}"),
-                    Dispatch::Inherited => format!("inherited f{}", routine.0),
+                    Dispatch::Inherited => format!("inherited {}", self.funcs.f(*routine)),
                     Dispatch::VirtualClass(k) => format!("class virtual {k}"),
                     Dispatch::Intf(intf, k) => {
                         // `docs/spec/objects.md` 15.4: the interface the receiver's type names
@@ -1098,7 +1203,7 @@ impl<'a> Dumper<'a> {
                     KeyOp::Compare => "KeyCompare",
                 };
                 let arg = args.first().map_or_else(String::new, |a| self.t(a.ty));
-                let via = func.map_or_else(String::new, |f| format!(" via f{}", f.0));
+                let via = func.map_or_else(String::new, |f| format!(" via {}", self.funcs.f(f)));
                 self.line(depth, &format!("call {name}<{arg}>{via}: {ty}{folded}"));
                 for a in args {
                     self.expr(a, depth + 1);
@@ -1178,14 +1283,16 @@ impl<'a> Dumper<'a> {
             // `docs/spec/objects.md` 15.5
             ExprKind::RoutineRef(r) => {
                 let name = self.program.routines[r.0 as usize].name.clone();
-                self.line(depth, &format!("routine-ref f{} {name}", r.0));
+                self.line(depth, &format!("routine-ref {} {name}", self.funcs.f(*r)));
             }
             ExprKind::MethodRef { base, routine, how } => {
                 let name = self.program.routines[routine.0 as usize].name.clone();
                 let head = match how {
-                    MethodRefHow::Method => format!("method-ref f{} {name}", routine.0),
+                    MethodRefHow::Method => format!("method-ref {} {name}", self.funcs.f(*routine)),
                     MethodRefHow::Virtual(k) => format!("method-ref virtual {k} {name}"),
-                    MethodRefHow::Class => format!("class-method-ref f{} {name}", routine.0),
+                    MethodRefHow::Class => {
+                        format!("class-method-ref {} {name}", self.funcs.f(*routine))
+                    }
                     MethodRefHow::ClassVirtual(k) => {
                         format!("class-method-ref virtual {k} {name}")
                     }
@@ -1197,11 +1304,16 @@ impl<'a> Dumper<'a> {
                 self.line(depth, &format!("to-closure {ty}"));
                 self.expr(x, depth + 1);
             }
-            ExprKind::Anon { func, .. } => self.line(depth, &format!("anon f{}", func.0)),
+            ExprKind::Anon { func, .. } => {
+                self.line(depth, &format!("anon {}", self.funcs.f(*func)))
+            }
             ExprKind::NestedRef { func, block } => {
                 let name = self.program.routines[func.0 as usize].name.clone();
                 let b = block_name(*block);
-                self.line(depth, &format!("nested-ref f{} {name} block {b}", func.0));
+                self.line(
+                    depth,
+                    &format!("nested-ref {} {name} block {b}", self.funcs.f(*func)),
+                );
             }
             ExprKind::CallValue { callee, args } => {
                 let head = if matches!(callee.ty, Ty::Proc(_)) {
@@ -1233,7 +1345,7 @@ impl<'a> Dumper<'a> {
                 let f = match (ctor, dispatch) {
                     _ if matches!(class, Ty::Param(_)) => "-".to_string(),
                     (_, Dispatch::Virtual(k)) => format!("virtual {k}"),
-                    (Some(r), _) => format!("f{}", r.0),
+                    (Some(r), _) => self.funcs.f(*r),
                     (None, _) => "builtin".to_string(),
                 };
                 let what = if of.is_some() { "create-of" } else { "create" };
@@ -1248,7 +1360,7 @@ impl<'a> Dumper<'a> {
             ExprKind::RecordNew { call } => {
                 // `docs/spec/objects.md` 15.1: the constructor's arguments after `Self`
                 if let ExprKind::Call { routine, args, .. } = &call.kind {
-                    self.line(depth, &format!("create {ty} f{}", routine.0));
+                    self.line(depth, &format!("create {ty} {}", self.funcs.f(*routine)));
                     for a in args.iter().skip(1) {
                         self.call_arg(a, depth + 1);
                     }
@@ -1398,6 +1510,10 @@ fn builtin_text(b: Builtin) -> &'static str {
         Builtin::IsSameInstance => "SameInstance",
         Builtin::ObjectClassName => "ObjectClassName",
         Builtin::IsOverridden => "IsOverridden",
+        Builtin::HashFind => "HashFind",
+        Builtin::HashLookup => "HashLookup",
+        Builtin::IsPlainKey => "IsPlainKey",
+        Builtin::IsPlainOrder => "IsPlainOrder",
         Builtin::Succ => "Succ",
         Builtin::Pred => "Pred",
         Builtin::Sqrt => "Sqrt",
@@ -1608,6 +1724,7 @@ fn intf_member_lines(
 /// #1=virtual 4`, `-` for an abstract method.
 fn implements_lines(
     types: &super::types::TypeTable,
+    funcs: &FuncNumbers,
     id: super::types::TypeId,
 ) -> Vec<(String, Option<TextRange>)> {
     let vmt = types.class_vmt(id);
@@ -1620,7 +1737,7 @@ fn implements_lines(
                 let f = match x {
                     // A generic type's methods have no function (`docs/spec/generics.md` 8)
                     super::types::IntfEntry::Func(_) if types.is_generic(id) => "-".to_string(),
-                    super::types::IntfEntry::Func(r) => format!("f{}", r.0),
+                    super::types::IntfEntry::Func(r) => funcs.f(*r),
                     super::types::IntfEntry::Virtual(v)
                         if vmt.get(*v as usize) == Some(&super::types::VmtEntry::Abstract) =>
                     {
@@ -1649,6 +1766,7 @@ fn mode_prefix(mode: crate::syntax::ast::ParamMode) -> &'static str {
 fn member_lines(
     types: &super::types::TypeTable,
     routines: &[Routine],
+    funcs: &FuncNumbers,
     id: super::types::TypeId,
 ) -> Vec<(String, Option<TextRange>)> {
     let mut lines = Vec::new();
@@ -1674,7 +1792,7 @@ fn member_lines(
             Some(r)
                 if !m.is_abstract && !types.is_generic(id) && !routines[r.0 as usize].generic =>
             {
-                format!("f{}", r.0)
+                funcs.f(r)
             }
             _ => "-".to_string(),
         };
@@ -1710,7 +1828,7 @@ fn member_lines(
         let acc = |a: &Option<super::types::Accessor>| match a {
             Some(super::types::Accessor::Field { slot, .. }) => format!("#{slot}"),
             Some(super::types::Accessor::ClassVar(g)) => format!("g{}", g.0),
-            Some(super::types::Accessor::Method(r)) => format!("f{}", r.0),
+            Some(super::types::Accessor::Method(r)) => funcs.f(*r),
             None => "-".to_string(),
         };
         let mut line = String::from(".property ");

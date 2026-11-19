@@ -645,7 +645,7 @@ impl<'a, 's> Sema<'a, 's> {
         let mut out = Vec::new();
         if let Some(n) = p.index {
             out.push(Expr {
-                kind: ExprKind::Const,
+                kind: ExprKind::Const { explicit: false },
                 ty: Ty::Integer,
                 value: Some(Const::Int(n)),
                 span,
@@ -707,10 +707,13 @@ impl<'a, 's> Sema<'a, 's> {
         }
     }
 
-    /// The property an expression names (`O.P`, `P` inside a method), without reporting
-    /// anything.
+    /// The property an expression names (`O.P`, `P` inside a method, `inherited P`), without
+    /// reporting anything.
     fn named_property(&mut self, e: &ast::Expr) -> Option<ClassProperty> {
-        if !matches!(e, ast::Expr::Field(_) | ast::Expr::NameRef(_)) {
+        if !matches!(
+            e,
+            ast::Expr::Field(_) | ast::Expr::NameRef(_) | ast::Expr::Inherited(_)
+        ) {
             return None;
         }
         self.dry_run(|s| match s.resolve_name_expr(e) {

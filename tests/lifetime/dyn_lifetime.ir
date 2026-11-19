@@ -67,6 +67,7 @@ bb0:
   DynGetRef    t11, t12, t13
   LoadGlobal   t14, g0
   DynSetRef    t14, t10, t11
+  Release      t11
   .line 31
   LoadInt      t19, 1
   Move         t16, t19
@@ -94,6 +95,7 @@ bb0:
   ConcatStr    t20, t20, t31
   CallHost     -, h0(t20)
   Release      t30
+  Release      t20
   .line 33
   RetVoid
 .finally t0, t1, t2, t3, t11, t20, t23, t26, t27, t30, t31

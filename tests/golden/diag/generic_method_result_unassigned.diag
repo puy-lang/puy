@@ -1,0 +1,24 @@
+error[E2001]: function `TVec<T>.Make` may return without assigning `Result`
+   --> generic_method_result_unassigned.pas:15:16
+    |
+ 15 | class function TVec<T>.Make(B: Boolean): TVec<T>;
+    |                ^^^^^^^^^^^^
+...
+ 19 | end;
+    | --- returns here
+    |
+    = note: Puy requires `Result` to be assigned on every path that returns
+
+error[E2001]: function `TBox<K, V>.Get` may return without assigning `Result`
+   --> generic_method_result_unassigned.pas:21:10
+    |
+ 21 | function TBox<K, V>.Get(B: Boolean): V;
+    |          ^^^^^^^^^^^^^^
+...
+ 25 | end;
+    | --- returns here
+    |
+    = note: Puy requires `Result` to be assigned on every path that returns
+    = suggestion: add `Result := Default(V);` at the start of the body
+
+error: aborting due to 2 errors

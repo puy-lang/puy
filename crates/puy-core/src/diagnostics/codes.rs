@@ -1,7 +1,9 @@
 //! Registry of error codes (`docs/spec/diagnostics.md` chapters 4–5).
 //!
-//! Holds the same list as the tables in the spec and checks it against them in tests. Message templates are held by
-//! the code that creates the diagnostics in each stage (`lexer`, `parser`, `sema`, etc.).
+//! Holds the same list as the tables in the spec and checks it against them in tests. Message templates, labels and
+//! notes are held by the code that creates the diagnostics in each stage (`lexer`, `parser`, `sema`, etc.); the labels
+//! and notes in the expectations under `tests/` are checked against the spec by `puy-testsuite`
+//! (`tests/diagnostic_vocabulary.rs`).
 
 use super::Code;
 
@@ -284,31 +286,6 @@ pub fn delphi_warning_name(name: &str) -> Option<&'static str> {
 pub fn warning_names() -> impl Iterator<Item = &'static str> {
     CODES.iter().filter_map(|c| c.name)
 }
-
-/// Label vocabulary (2.2).
-pub const LABELS: &[&str] = &[
-    "",
-    "declared here",
-    "declared again here",
-    "read here",
-    "returns here",
-    "assigned by this loop",
-    "found here",
-    "block starts here",
-    "starts here",
-    "never closed",
-    "text before the closing quotes",
-    "shallower than the closing quotes",
-    "a constant",
-    "the loop variable",
-    "a `const` parameter",
-    "not a variable",
-    "included from here",
-    "first `uses` here",
-    "project manifest here",
-    "abstract method declared here",
-    "Self",
-];
 
 /// Similar names (2.1): measures the case-insensitive edit distance and picks the smallest among those within 1/3 of the
 /// name's length (at most 2). `None` if two or more candidates tie at the same distance.

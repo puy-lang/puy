@@ -52,8 +52,16 @@ pub fn render_diagnostic(d: &Diagnostic, sources: &SourceMap) -> String {
     }
     for fid in other_files {
         let f = sources.get(fid);
-        let first = d.secondary.iter().find(|s| s.span.file == fid).unwrap();
-        let lc = f.line_col(first.span.range.start());
+        // The earliest position in this file: the excerpt below starts there
+        // (lines in ascending order), not at the first label added.
+        let first = d
+            .secondary
+            .iter()
+            .filter(|s| s.span.file == fid)
+            .map(|s| s.span.range.start())
+            .min()
+            .expect("other_files holds only files with a secondary label");
+        let lc = f.line_col(first);
         out.push('\n');
         out.push_str(&format!("{pad} ::: {}:{}:{}", f.path, lc.line, lc.column));
         render_excerpt(&mut out, f, fid, None, &d.secondary, w);
@@ -436,6 +444,28 @@ error[E0700]: x
         assert_eq!(
             r,
             "error[E0210]: include file must contain only directives and comments\n  --> inc.inc:1:1\n   |\n 1 | var X: Integer;\n   | ^^^\n  ::: main.pas:1:1\n 1 | a;\n   | - included from here"
+        );
+    }
+
+    #[test]
+    fn other_file_marker_points_at_earliest_secondary() {
+        // `:::` names the first excerpt line of the other file even when the
+        // later line's secondary was added first (excerpts are in line order).
+        let m = {
+            let mut m = SourceMap::new();
+            m.add(SourceFile::new("main.pas", b"a;\n".to_vec()));
+            m.add(SourceFile::new("lib.pas", b"x;\ny;\nz;\n".to_vec()));
+            m
+        };
+        let lib = |s: u32, e: u32| Span::new(FileId(1), TextRange::new(s.into(), e.into()));
+        let d = Diagnostic::error(Code::E(734), "ambiguous call", Stage::Sema)
+            .with_primary(span(0, 1), "")
+            .with_secondary(lib(6, 7), "candidate")
+            .with_secondary(lib(0, 1), "candidate");
+        let r = render_diagnostic(&d, &m);
+        assert_eq!(
+            r,
+            "error[E0734]: ambiguous call\n  --> main.pas:1:1\n   |\n 1 | a;\n   | ^\n  ::: lib.pas:1:1\n 1 | x;\n   | - candidate\n 2 | y;\n 3 | z;\n   | - candidate"
         );
     }
 

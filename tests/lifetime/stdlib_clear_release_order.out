@@ -1,0 +1,44 @@
+Clear (3 of capacity 4)
+  destroy a
+  destroy a.inner
+  destroy b
+  destroy b.inner
+  destroy c
+  destroy c.inner
+Capacity 4, Count 0
+Clear (2 of capacity 16)
+  destroy d
+  destroy d.inner
+  destroy e
+  destroy e.inner
+Capacity 16, Count 0
+Free
+  destroy f
+  destroy f.inner
+  destroy g
+  destroy g.inner
+end of Lists
+Clear
+  destroy h
+  destroy h.inner
+  destroy i
+  destroy i.inner
+Count 0
+  destroy j
+  destroy j.inner
+Free
+  destroy k
+  destroy k.inner
+  destroy l
+  destroy l.inner
+end of Dictionaries
+Clear (3 of capacity 4)
+  watcher: list count 0
+  watcher: list count 0
+  watcher: list count 0
+Clear (1 of capacity 16)
+  watcher: list count 0
+Clear
+  watcher: dictionary count 0, has 1: FALSE
+  watcher: dictionary count 0, has 1: FALSE
+end of Watched

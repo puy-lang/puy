@@ -1,0 +1,4 @@
+error: uncaught exception Exception: from B
+  at LocalTypeMethodTrace.B.TLoc.S (local_type_method_trace.pas:30)
+  at LocalTypeMethodTrace.B (local_type_method_trace.pas:35)
+  at LocalTypeMethodTrace.<main> (local_type_method_trace.pas:40)

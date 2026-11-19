@@ -1,0 +1,209 @@
+; puyc format 0
+.const
+  0: str "\n"
+.type
+  64: class DumpInlineSelfChecks.TBox slots=1 parent=ty19 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+.global
+  0: int B
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpInlineSelfChecks file="dump_inline_self_checks.pas" init=- fini=- entry=0
+.func 0 DumpInlineSelfChecks.<main> params=0 regs=10
+  .line 67
+  0000  LoadZero     r2
+  0001  New          r2, ty64
+  0002  StoreGlobal  r2, g0
+  .line 68
+  0003  LoadInt      r3, 3
+  0004  ObjSet       r2, 0, r3
+  .line 69
+  0005  LoadGlobal   r2, g0
+  0006  Call         r2, f3
+  .line 70
+  0007  LoadGlobal   r3, g0
+  0008  ClassType    r9, r3
+  .inline f2 DumpInlineSelfChecks.TBox.Sum line=70
+  .line 23
+  0009  ClassType    r7, r3
+  .inline f1 DumpInlineSelfChecks.TBox.Get line=23
+  .line 18
+  000a  ObjGet       r6, r3, 0
+  .endinline
+  .line 23
+  000b  ClassType    r8, r3
+  .inline f1 DumpInlineSelfChecks.TBox.Get line=23
+  .line 18
+  000c  ObjGet       r7, r3, 0
+  .endinline
+  .line 23
+  000d  AddInt32     r2, r6, r7
+  .endinline
+  .line 70
+  000e  IntToStr     r0, r2
+  000f  LoadConst    r1, k0
+  0010  ConcatStr    r0, r0, r1
+  0011  CallHost     r0, h0
+  .line 71
+  0012  LoadGlobal   r2, g0
+  0013  LoadInt      r3, 2
+  0014  Call         r2, f6
+  .line 72
+  0015  LoadGlobal   r2, g0
+  0016  Call         r2, f4
+  .line 73
+  0017  LoadGlobal   r2, g0
+  0018  Free         r2
+  .line 74
+  0019  RetVoid
+.finally r0, r1
+.func 1 DumpInlineSelfChecks.TBox.Get params=1 regs=2
+  .local r0 Self
+  .local r1 Result
+  .line 18
+  0000  ObjGet       r1, r0, 0
+  .line 19
+  0001  Ret          r1
+.func 2 DumpInlineSelfChecks.TBox.Sum params=1 regs=6
+  .local r0 Self
+  .local r1 Result
+  .inline f1 DumpInlineSelfChecks.TBox.Get line=23
+  .line 18
+  0000  ObjGet       r3, r0, 0
+  .line 19
+  0001  Move         r1, r3
+  .endinline
+  .inline f1 DumpInlineSelfChecks.TBox.Get line=23
+  .line 18
+  0002  ObjGet       r4, r0, 0
+  .endinline
+  .line 23
+  0003  AddInt32     r1, r1, r4
+  .line 24
+  0004  Ret          r1
+.func 3 DumpInlineSelfChecks.Twice params=1 regs=8
+  .local r0 B
+  .line 28
+  0000  ClassType    r6, r0
+  .inline f1 DumpInlineSelfChecks.TBox.Get line=28
+  .line 18
+  0001  ObjGet       r5, r0, 0
+  .line 19
+  0002  Move         r3, r5
+  .endinline
+  .inline f1 DumpInlineSelfChecks.TBox.Get line=28
+  .line 18
+  0003  ObjGet       r6, r0, 0
+  .endinline
+  .line 28
+  0004  AddInt32     r3, r3, r6
+  0005  IntToStr     r1, r3
+  0006  LoadConst    r2, k0
+  0007  ConcatStr    r1, r1, r2
+  0008  CallHost     r1, h0
+  .line 29
+  0009  RetVoid
+.finally r1, r2
+.func 4 DumpInlineSelfChecks.AfterCall params=1 regs=11
+  .local r0 B
+  .local r1 X
+  .line 35
+  0000  ClassType    r8, r0
+  .inline f1 DumpInlineSelfChecks.TBox.Get line=35
+  .line 18
+  0001  ObjGet       r7, r0, 0
+  .line 19
+  0002  Move         r1, r7
+  .endinline
+  .line 36
+  0003  IntToStr     r2, r1
+  0004  LoadConst    r3, k0
+  0005  ConcatStr    r2, r2, r3
+  0006  CallHost     r2, h0
+  .line 37
+  0007  Move         r6, r1
+  0008  ClassType    r10, r0
+  .inline f1 DumpInlineSelfChecks.TBox.Get line=37
+  .line 18
+  0009  ObjGet       r9, r0, 0
+  .endinline
+  .line 37
+  000a  AddInt32     r6, r6, r9
+  000b  IntToStr     r4, r6
+  000c  LoadConst    r5, k0
+  000d  ConcatStr    r4, r4, r5
+  000e  CallHost     r4, h0
+  .line 38
+  000f  RetVoid
+.finally r2, r3, r4, r5
+.func 5 DumpInlineSelfChecks.AfterFree params=1 regs=9
+  .local r0 B
+  .local r1 X
+  .line 45
+  0000  ClassType    r6, r0
+  .inline f1 DumpInlineSelfChecks.TBox.Get line=45
+  .line 18
+  0001  ObjGet       r5, r0, 0
+  .line 19
+  0002  Move         r1, r5
+  .endinline
+  .line 46
+  0003  Free         r0
+  .line 47
+  0004  Move         r4, r1
+  0005  ClassType    r8, r0
+  .inline f1 DumpInlineSelfChecks.TBox.Get line=47
+  .line 18
+  0006  ObjGet       r7, r0, 0
+  .endinline
+  .line 47
+  0007  AddInt32     r4, r4, r7
+  0008  IntToStr     r2, r4
+  0009  LoadConst    r3, k0
+  000a  ConcatStr    r2, r2, r3
+  000b  CallHost     r2, h0
+  .line 48
+  000c  RetVoid
+.finally r2, r3
+.func 6 DumpInlineSelfChecks.Loops params=2 regs=13
+  .local r0 B
+  .local r1 N
+  .local r2 I
+  .local r3 S
+  .line 54
+  0000  LoadZero     r3
+  .line 55
+  0001  LoadInt      r2, 1
+  0002  JmpIfLtInt   r1, r2, -> 0008
+  .line 56
+  0003  ClassType    r6, r0
+  .inline f1 DumpInlineSelfChecks.TBox.Get line=56
+  .line 18
+  0004  ObjGet       r11, r0, 0
+  .endinline
+  .line 56
+  0005  AddInt32     r8, r3, r11
+  0006  Move         r3, r8
+  .line 55
+  0007  ForLoopUp    r2, r1, -> 0004
+  .line 57
+  0008  LoadInt      r2, 1
+  0009  JmpIfLtInt   r1, r2, -> 0013
+  .line 59
+  000a  ClassType    r12, r0
+  .inline f1 DumpInlineSelfChecks.TBox.Get line=59
+  .line 18
+  000b  ObjGet       r11, r0, 0
+  .endinline
+  .line 59
+  000c  AddInt32     r8, r3, r11
+  000d  Move         r3, r8
+  .line 60
+  000e  IntToStr     r4, r3
+  000f  LoadConst    r5, k0
+  0010  ConcatStr    r4, r4, r5
+  0011  CallHost     r4, h0
+  .line 57
+  0012  ForLoopUp    r2, r1, -> 000a
+  .line 62
+  0013  RetVoid
+.finally r4, r5

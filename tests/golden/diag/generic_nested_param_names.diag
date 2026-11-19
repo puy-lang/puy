@@ -1,0 +1,55 @@
+error[E0701]: `T` is already declared
+   --> generic_nested_param_names.pas:13:9
+    |
+ 11 |   TA<T> = class
+    |      - declared here
+ 12 |   type
+ 13 |     TIn<T> = class
+    |         ^ declared again here
+
+error[E0701]: `T` is already declared
+   --> generic_nested_param_names.pas:16:22
+    |
+ 13 |     TIn<T> = class
+    |         - declared here
+...
+ 16 |       procedure Pick<T>;
+    |                      ^ declared again here
+
+error[E0701]: `T` is already declared
+   --> generic_nested_param_names.pas:17:17
+    |
+ 13 |     TIn<T> = class
+    |         - declared here
+...
+ 17 |       procedure T;
+    |                 ^ declared again here
+
+error[E0701]: `T` is already declared
+   --> generic_nested_param_names.pas:21:13
+    |
+ 11 |   TA<T> = class
+    |      - declared here
+...
+ 21 |       TDeep<T> = class
+    |             ^ declared again here
+
+error[E0701]: `T` is already declared
+   --> generic_nested_param_names.pas:25:14
+    |
+ 11 |   TA<T> = class
+    |      - declared here
+...
+ 25 |     TPair<U, T> = record
+    |              ^ declared again here
+
+error[E0701]: `K` is already declared
+   --> generic_nested_param_names.pas:36:11
+    |
+ 34 |   TR<K> = record
+    |      - declared here
+ 35 |   type
+ 36 |     TCell<K> = record
+    |           ^ declared again here
+
+error: aborting due to 6 errors

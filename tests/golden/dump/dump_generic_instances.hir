@@ -65,7 +65,7 @@ program DumpGenericInstances
       objfield TArray<T> FItems #0
         self TList<T>
       var v1 I: Int64
-.routine f2 AddInt(var Items: TArray<Integer>; var Count: Integer; const X: Integer)
+.routine f0 AddInt(var Items: TArray<Integer>; var Count: Integer; const X: Integer)
   .var v0 Items: TArray<Integer> var param
   .var v1 Count: Integer var param
   .var v2 X: Integer const param
@@ -93,7 +93,7 @@ program DumpGenericInstances
   inc @54 calc=Integer Q+R+
     var v1 Count
 .instance TList<Integer>
-.routine f3 TList<Integer>.Add(const X: Integer)
+.routine f1 TList<Integer>.Add(const X: Integer)
   .var v0 Self: TList<Integer> self
   .var v1 X: Integer const param
   if @38
@@ -126,7 +126,7 @@ program DumpGenericInstances
   inc @41 calc=Integer Q+R+
     objfield Integer FCount #1
       self TList<Integer>
-.routine f4 TList<Integer>.Get(I: Integer): Integer
+.routine f2 TList<Integer>.Get(I: Integer): Integer
   .var v0 Self: TList<Integer> self
   .var v1 I: Integer param
   .var v2 Result: Integer result
@@ -137,7 +137,7 @@ program DumpGenericInstances
         self TList<Integer>
       var v1 I: Int64
 .instance TList<string>
-.routine f5 TList<string>.Add(const X: string)
+.routine f3 TList<string>.Add(const X: string)
   .var v0 Self: TList<string> self
   .var v1 X: string const param
   if @38
@@ -170,7 +170,7 @@ program DumpGenericInstances
   inc @41 calc=Integer Q+R+
     objfield Integer FCount #1
       self TList<string>
-.routine f6 TList<string>.Get(I: Integer): string
+.routine f4 TList<string>.Get(I: Integer): string
   .var v0 Self: TList<string> self
   .var v1 I: Integer param
   .var v2 Result: string result
@@ -181,7 +181,7 @@ program DumpGenericInstances
         self TList<string>
       var v1 I: Int64
 .instance TList<TPoint>
-.routine f7 TList<TPoint>.Add(const X: TPoint)
+.routine f5 TList<TPoint>.Add(const X: TPoint)
   .var v0 Self: TList<TPoint> self
   .var v1 X: TPoint const param
   if @38
@@ -214,7 +214,7 @@ program DumpGenericInstances
   inc @41 calc=Integer Q+R+
     objfield Integer FCount #1
       self TList<TPoint>
-.routine f8 TList<TPoint>.Get(I: Integer): TPoint
+.routine f6 TList<TPoint>.Get(I: Integer): TPoint
   .var v0 Self: TList<TPoint> self
   .var v1 I: Integer param
   .var v2 Result: TPoint result
@@ -225,7 +225,7 @@ program DumpGenericInstances
         self TList<TPoint>
       var v1 I: Int64
 .instance TList<TFoo>
-.routine f9 TList<TFoo>.Add(const X: TFoo)
+.routine f7 TList<TFoo>.Add(const X: TFoo)
   .var v0 Self: TList<TFoo> self
   .var v1 X: TFoo const param
   if @38
@@ -259,7 +259,7 @@ program DumpGenericInstances
     objfield Integer FCount #1
       self TList<TFoo>
 .instance TList<TBar>
-.routine f11 TList<TBar>.Add(const X: TBar)
+.routine f8 TList<TBar>.Add(const X: TBar)
   .var v0 Self: TList<TBar> self
   .var v1 X: TBar const param
   if @38
@@ -293,7 +293,7 @@ program DumpGenericInstances
     objfield Integer FCount #1
       self TList<TBar>
 .instance TList<TRef>
-.routine f13 TList<TRef>.Add(const X: TRef)
+.routine f9 TList<TRef>.Add(const X: TRef)
   .var v0 Self: TList<TRef> self
   .var v1 X: TRef const param
   if @38
@@ -327,7 +327,7 @@ program DumpGenericInstances
     objfield Integer FCount #1
       self TList<TRef>
 .instance TList<TRef2>
-.routine f15 TList<TRef2>.Add(const X: TRef2)
+.routine f10 TList<TRef2>.Add(const X: TRef2)
   .var v0 Self: TList<TRef2> self
   .var v1 X: TRef2 const param
   if @38
@@ -361,7 +361,7 @@ program DumpGenericInstances
     objfield Integer FCount #1
       self TList<TRef2>
 .instance TList<Int64>
-.routine f17 TList<Int64>.Add(const X: Int64)
+.routine f11 TList<Int64>.Add(const X: Int64)
   .var v0 Self: TList<Int64> self
   .var v1 X: Int64 const param
   if @38
@@ -394,7 +394,7 @@ program DumpGenericInstances
   inc @41 calc=Integer Q+R+
     objfield Integer FCount #1
       self TList<Int64>
-.routine f18 TList<Int64>.Get(I: Integer): Int64
+.routine f12 TList<Int64>.Get(I: Integer): Int64
   .var v0 Self: TList<Int64> self
   .var v1 I: Integer param
   .var v2 Result: Int64 result
@@ -409,14 +409,14 @@ program DumpGenericInstances
     global g0 Ints
     create TList<Integer> builtin
   expr @71
-    method f3 TList<Integer>.Add: -
+    method f1 TList<Integer>.Add: -
       global g0 Ints: TList<Integer>
       const Integer 1
   assign @72 R+
     global g1 Strs
     create TList<string> builtin
   expr @73
-    method f5 TList<string>.Add: -
+    method f3 TList<string>.Add: -
       global g1 Strs: TList<string>
       const string "a"
   assign @74 R+
@@ -426,49 +426,49 @@ program DumpGenericInstances
     global g10 P
     builtin Default TPoint
   expr @76
-    method f7 TList<TPoint>.Add: -
+    method f5 TList<TPoint>.Add: -
       global g2 Points: TList<TPoint>
       global g10 P: TPoint
   assign @77 R+
     global g3 Foos
     create TList<TFoo> builtin
   expr @78
-    method f9 TList<TFoo>.Add: -
+    method f7 TList<TFoo>.Add: -
       global g3 Foos: TList<TFoo>
       const TFoo nil
   assign @79 R+
     global g4 Bars
     create TList<TBar> builtin
   expr @80
-    method f11 TList<TBar>.Add: -
+    method f8 TList<TBar>.Add: -
       global g4 Bars: TList<TBar>
       const TBar nil
   assign @81 R+
     global g5 Refs
     create TList<TRef> builtin
   expr @82
-    method f13 TList<TRef>.Add: -
+    method f9 TList<TRef>.Add: -
       global g5 Refs: TList<TRef>
       create TRef builtin
   assign @83 R+
     global g6 Refs2
     create TList<TRef2> builtin
   expr @84
-    method f15 TList<TRef2>.Add: -
+    method f10 TList<TRef2>.Add: -
       global g6 Refs2: TList<TRef2>
       create TRef2 builtin
   assign @85 R+
     global g7 Longs
     create TList<Int64> builtin
   expr @86
-    method f17 TList<Int64>.Add: -
+    method f11 TList<Int64>.Add: -
       global g7 Longs: TList<Int64>
       const Int64 3
   assign @87 R+
     global g9 Count
     const Integer 0
   expr @88
-    call f2 AddInt: -
+    call f0 AddInt: -
       ref
         global g8 Items
       ref
@@ -476,20 +476,20 @@ program DumpGenericInstances
       const Integer 2
   writeln @89
     arg
-      method f4 TList<Integer>.Get: Integer
+      method f2 TList<Integer>.Get: Integer
         global g0 Ints: TList<Integer>
         const Integer 0
     arg
-      method f6 TList<string>.Get: string
+      method f4 TList<string>.Get: string
         global g1 Strs: TList<string>
         const Integer 0
     arg
       field Integer X #0
-        method f8 TList<TPoint>.Get: TPoint
+        method f6 TList<TPoint>.Get: TPoint
           global g2 Points: TList<TPoint>
           const Integer 0
     arg
-      method f18 TList<Int64>.Get: Int64
+      method f12 TList<Int64>.Get: Int64
         global g7 Longs: TList<Int64>
         const Integer 0
     arg

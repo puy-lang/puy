@@ -68,6 +68,12 @@ pub(super) struct InstanceRoutines {
     pub runit: HashMap<RoutineId, u32>,
     /// Where each routine instantiation was asked for (E0764).
     pub rorigin: HashMap<RoutineId, Span>,
+    /// The instantiation whose copied body asked for each routine instantiation (the path of
+    /// E0764).
+    pub rfrom: HashMap<RoutineId, Asked>,
+    /// The routine instantiation whose copied body asked for each type instantiation that no
+    /// type instantiation asked for (the path of E0764; the others have `Instance::from`).
+    pub tfrom: HashMap<TypeId, RoutineId>,
     /// The generic routines E0764 was reported for (once each).
     pub deep_routines: Vec<RoutineId>,
     /// The instantiations of types and routines in the order they were asked for (the `hir`
@@ -105,6 +111,9 @@ pub(super) struct Inst<'x> {
     pub unit: u32,
     /// Where the body being copied was asked for (E0764 of the instantiations it asks for).
     pub cur_origin: Option<Span>,
+    /// The instantiation whose body is being copied (the path of E0764 of the routine
+    /// instantiations it asks for).
+    pub cur_from: Option<Asked>,
 }
 
 /// What the type parameters are replaced with.
@@ -216,7 +225,8 @@ impl Inst<'_> {
             .max()
             .unwrap_or(0);
         if depth > MAX_NESTING {
-            self.too_deep(def, &args, origin, from);
+            let last = from.map(Asked::Type).or(self.cur_from);
+            self.too_deep(def, &args, origin, last);
             return Ty::Error;
         }
         let Some((name, full_name)) = self.instance_names(def, &args, origin, from) else {
@@ -229,10 +239,17 @@ impl Inst<'_> {
             kind: TypeKind::Pending,
             span,
         });
-        let origin = origin.or_else(|| {
-            from.and_then(|f| self.types.instance_of(f))
-                .and_then(|i| i.origin)
-        });
+        let origin = origin
+            .or_else(|| {
+                from.and_then(|f| self.types.instance_of(f))
+                    .and_then(|i| i.origin)
+            })
+            .or(self.cur_origin);
+        if from.is_none()
+            && let Some(Asked::Routine(r)) = self.cur_from
+        {
+            self.inst.tfrom.insert(id, r);
+        }
         self.types
             .instance_index
             .insert(id, self.types.instances.len());
@@ -266,6 +283,9 @@ impl Inst<'_> {
         origin: Option<Span>,
         from: Option<TypeId>,
     ) -> Option<(String, String)> {
+        if let Some(local) = self.types.generic_local.get(&def).cloned() {
+            return self.local_instance_names(&local, args, origin, from);
+        }
         let def_name = self.types.get(def).name.clone().unwrap_or_default();
         let base = base_name(&def_name).to_string();
         let (own, prefix, full_prefix) = match self.types.generic_outer.get(&def).copied() {
@@ -307,6 +327,49 @@ impl Inst<'_> {
             )
         };
         Some((format!("{prefix}{name}"), format!("{full_prefix}{full}")))
+    }
+
+    /// The names of an instantiation of a type declared in a generic body
+    /// (`docs/spec/generics.md` 2.6): the routine's instantiation, then the enclosing routines
+    /// and the type's name (`Find<Integer>.TLoc` / `Hello.Find<Integer>.TLoc`,
+    /// `TBox<Integer>.Get.TLoc` / `Hello.TBox<Integer>.Get.TLoc`).
+    fn local_instance_names(
+        &mut self,
+        local: &super::types::LocalGeneric,
+        args: &[Ty],
+        origin: Option<Span>,
+        from: Option<TypeId>,
+    ) -> Option<(String, String)> {
+        let n = args.len() - local.own.min(args.len());
+        let (prefix, full_prefix) = match local.class {
+            Some(c) => {
+                let o = self.instantiate(c, args[..n].to_vec(), origin, from);
+                if o.is_error() {
+                    return None;
+                }
+                (
+                    format!("{}.", self.types.name(o)),
+                    format!("{}.", self.types.full_name(o)),
+                )
+            }
+            None => (String::new(), format!("{}.", local.unit)),
+        };
+        let own = &args[n..];
+        let (names, full_args) = if own.is_empty() {
+            (String::new(), String::new())
+        } else {
+            let names: Vec<String> = own.iter().map(|a| self.types.name(*a)).collect();
+            let full: Vec<String> = own.iter().map(|a| self.types.canonical_name(*a)).collect();
+            (
+                format!("<{}>", names.join(", ")),
+                format!("<{}>", full.join(",")),
+            )
+        };
+        let (head, tail) = (&local.head, &local.tail);
+        Some((
+            format!("{prefix}{head}{names}{tail}"),
+            format!("{full_prefix}{head}{full_args}{tail}"),
+        ))
     }
 
     /// The type of a generic definition (the form of its instantiations).
@@ -355,23 +418,17 @@ impl Inst<'_> {
     }
 
     /// E0764 (`docs/spec/generics.md` 4.4): once per definition, at the type arguments that
-    /// started the path, with the instantiations of the path in the notes.
-    fn too_deep(&mut self, def: TypeId, args: &[Ty], origin: Option<Span>, from: Option<TypeId>) {
+    /// started the path, with the instantiations of the path (ending at `last`) in the notes.
+    fn too_deep(&mut self, def: TypeId, args: &[Ty], origin: Option<Span>, last: Option<Asked>) {
         if self.inst.deep_reported.contains(&def) {
             return;
         }
         self.inst.deep_reported.push(def);
-        let mut path: Vec<TypeId> = Vec::new();
-        let mut at = from;
-        while let Some(f) = at {
-            path.push(f);
-            at = self.types.instance_of(f).and_then(|i| i.from);
-        }
-        path.reverse();
-        let origin = origin.or_else(|| {
-            path.first()
-                .and_then(|f| self.types.instance_of(*f))
-                .and_then(|i| i.origin)
+        let path = self.path(last);
+        let origin = origin.or_else(|| match path.first() {
+            Some(Asked::Type(t)) => self.types.instance_of(*t).and_then(|i| i.origin),
+            Some(Asked::Routine(r)) => self.inst.rorigin.get(r).copied(),
+            None => None,
         });
         let base = base_name(self.types.get(def).name.as_deref().unwrap_or("")).to_string();
         let shown: Vec<String> = args.iter().map(|a| short_name(self.types, *a, 1)).collect();
@@ -384,19 +441,67 @@ impl Inst<'_> {
         if let Some(o) = origin {
             d = d.with_primary(o, "");
         }
+        if let Some(n) = self.path_note(&path) {
+            d.notes.push(n);
+        }
+        self.diags.push(d);
+    }
+
+    /// The path of E0764 that ends at `last`, from its start: each step goes back to the
+    /// instantiation whose body asked for it (a type's `from` or `tfrom`, a routine's `rfrom`).
+    fn path(&self, last: Option<Asked>) -> Vec<Asked> {
+        let mut path: Vec<Asked> = Vec::new();
+        let mut at = last;
+        while let Some(a) = at {
+            path.push(a);
+            at = match a {
+                Asked::Type(t) => self
+                    .types
+                    .instance_of(t)
+                    .and_then(|i| i.from)
+                    .map(Asked::Type)
+                    .or_else(|| self.inst.tfrom.get(&t).map(|r| Asked::Routine(*r))),
+                Asked::Routine(r) => self.inst.rfrom.get(&r).copied(),
+            };
+        }
+        path.reverse();
+        path
+    }
+
+    /// The `notes` of E0764 (`docs/spec/generics.md` 4.4): the instantiations of the path, at
+    /// most 4 of them.
+    fn path_note(&self, path: &[Asked]) -> Option<String> {
+        if path.is_empty() {
+            return None;
+        }
         let mut steps: Vec<String> = path
             .iter()
             .take(4)
-            .map(|p| format!("`{}`", short_name(self.types, Ty::Class(*p), 0)))
+            .map(|a| format!("`{}`", self.path_name(*a)))
             .collect();
         if path.len() > 4 {
             steps.push("…".to_string());
         }
-        if !steps.is_empty() {
-            d.notes
-                .push(format!("instantiated through {}", steps.join(", ")));
+        Some(format!("instantiated through {}", steps.join(", ")))
+    }
+
+    /// The name of an instantiation in the path of E0764: shortened inside depth 3.
+    fn path_name(&self, a: Asked) -> String {
+        match a {
+            Asked::Type(t) => short_name(self.types, Ty::Class(t), 0),
+            Asked::Routine(r) => {
+                let Some((base, args)) = self.inst.rinst.get(&r) else {
+                    return self.routines[r.0 as usize].name.clone();
+                };
+                let shown: Vec<String> =
+                    args.iter().map(|a| short_name(self.types, *a, 1)).collect();
+                format!(
+                    "{}<{}>",
+                    self.routines[base.0 as usize].name,
+                    shown.join(", ")
+                )
+            }
         }
-        self.diags.push(d);
     }
 
     /// The type with the type parameters replaced.
@@ -893,6 +998,7 @@ impl Inst<'_> {
             file: src.file,
             interface: src.interface,
             parent: None,
+            scope: None,
             calls: Vec::new(),
             method_of: Some(inst),
             self_kind: src.self_kind,
@@ -995,6 +1101,10 @@ impl Inst<'_> {
                 if let Some(o) = origin {
                     d = d.with_primary(o, "");
                 }
+                let path = self.path(self.cur_from);
+                if let Some(n) = self.path_note(&path) {
+                    d.notes.push(n);
+                }
                 self.diags.push(d);
             }
             return None;
@@ -1033,6 +1143,9 @@ impl Inst<'_> {
         self.inst.runit.insert(id, self.unit);
         if let Some(o) = origin {
             self.inst.rorigin.insert(id, o);
+        }
+        if let Some(f) = self.cur_from {
+            self.inst.rfrom.insert(id, f);
         }
         self.inst.asked.push(Asked::Routine(id));
         Some(id)
@@ -1341,7 +1454,7 @@ impl Inst<'_> {
                 groups: Default::default(),
                 instance: None,
             };
-            self.routines[equals.0 as usize].hir = Some(routine);
+            self.routines[equals.0 as usize].hir = Some(Box::new(routine));
             self.routines[equals.0 as usize].has_body = true;
             if !self.types.is_generic(class) {
                 self.inst.order.push(equals);
@@ -1410,10 +1523,11 @@ impl Inst<'_> {
                 .extend(self.routines[base.0 as usize].type_params.iter().copied());
             env.args.extend(args);
             let unit = self.inst.runit.get(&stub).copied().unwrap_or(self.unit);
-            let saved = self.cur_origin.take();
+            let saved = (self.cur_origin.take(), self.cur_from.take());
             self.cur_origin = self.inst.rorigin.get(&stub).copied();
+            self.cur_from = Some(Asked::Routine(stub));
             let made = self.copy_body(def_r, stub, &env, Owner::Routine(stub), unit);
-            self.cur_origin = saved;
+            (self.cur_origin, self.cur_from) = saved;
             return made;
         }
         let Some(&(def_r, inst)) = self.inst.stubs.get(&stub) else {
@@ -1439,10 +1553,11 @@ impl Inst<'_> {
             .expect("a stub belongs to an instantiation");
         let env = Env::new(self.types.type_params(def).to_vec(), args, Some(inst));
         let unit = self.types.instance_of(inst).map_or(self.unit, |i| i.unit);
-        let saved = self.cur_origin.take();
+        let saved = (self.cur_origin.take(), self.cur_from.take());
         self.cur_origin = self.types.instance_of(inst).and_then(|i| i.origin);
+        self.cur_from = Some(Asked::Type(inst));
         let made = self.copy_body(def_r, stub, &env, Owner::Type(inst), unit);
-        self.cur_origin = saved;
+        (self.cur_origin, self.cur_from) = saved;
         made
     }
 
@@ -1619,11 +1734,14 @@ impl HirVisit for Subst<'_, '_> {
             let Ty::Class(c) = self.inst.subst(*class, self.env) else {
                 return;
             };
+            // A class that does not satisfy the `constructor` constraint was reported (E0759)
+            // where the type argument was given, and the instantiation is still made (4.2)
+            let Some((r, defaults)) =
+                super::generics::default_ctor(self.inst.types, self.inst.routines, c)
+            else {
+                return;
+            };
             *class = Ty::Class(c);
-            let (r, defaults) =
-                super::generics::default_ctor(self.inst.types, self.inst.routines, c).expect(
-                    "the `constructor` constraint was checked when the type argument was given",
-                );
             *ctor = r;
             *args = defaults
                 .into_iter()

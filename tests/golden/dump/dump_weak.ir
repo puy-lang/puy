@@ -54,9 +54,9 @@ bb0:
   LoadWeak     t1, t2
   Move         v2, t1
   .line 34
-  LoadWeak     t4, v2
-  ObjGet       t5, t4, 0
-  LoadWeak     t3, t5
+  LoadWeak     t5, v2
+  ObjGet       t4, t5, 0
+  LoadWeak     t3, t4
   FieldGet     t7, v1, 0
   LoadWeak     t6, t7
   JmpIfEqInt   t3, t6, bb2, bb1
@@ -79,4 +79,4 @@ bb2:
 bb3:
   .line 36
   RetVoid
-.finally v1, t1, t3, t4, t6, t8, t10, t12, t13
+.finally v1, t1, t3, t5, t6, t8, t10, t12, t13

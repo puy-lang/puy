@@ -23,6 +23,7 @@ bb0:
   LoadConst    t2, "\n"
   ConcatStr    t1, t1, t2
   CallHost     -, h0(t1)
+  Release      t1
   .line 15
   RetVoid
 .finally t0, t1, t2
@@ -73,6 +74,8 @@ bb0:
   LoadConst    t4, "\n"
   ConcatStr    t1, t1, t4
   CallHost     -, h0(t1)
+  Release      t3
+  Release      t1
   .line 31
   RetVoid
 .finally t0, t1, t2, t3, t4
@@ -110,6 +113,7 @@ bb0:
   LoadConst    t4, "\n"
   ConcatStr    t3, t3, t4
   CallHost     -, h0(t3)
+  Release      t3
   .line 40
   LoadConst    v0, "local"
   .line 41
@@ -130,6 +134,7 @@ bb0:
   LoadConst    t11, "\n"
   ConcatStr    t10, t10, t11
   CallHost     -, h0(t10)
+  Release      t10
   .line 45
   MakeRef      t12, v0
   Call         -, f3(t12)
@@ -145,6 +150,8 @@ bb0:
   LoadConst    t17, "\n"
   ConcatStr    t14, t14, t17
   CallHost     -, h0(t14)
+  Release      t16
+  Release      t14
   .line 48
   RetVoid
 .finally v0, t0, t2, t3, t4, t8, t10, t11, t14, t15, t16, t17

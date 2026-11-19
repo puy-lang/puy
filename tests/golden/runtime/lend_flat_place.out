@@ -1,0 +1,16 @@
+read: array element 0 is passed to a var parameter of a call in progress
+write: array element 0 is passed to a var parameter of a call in progress
+copy: a value containing a location passed to a var parameter of a call in progress cannot be copied
+1 a
+twice: array element 1 is passed to two var parameters
+2 3 +
+shrink: array index 1 is out of range 0..-1
+0
+2 6 back
+open: array element 0 is passed to a var parameter of a call in progress
+raised
+10 11 10
+5 5
+7 8 7 11
+kept
+9 9

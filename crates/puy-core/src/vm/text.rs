@@ -2,7 +2,7 @@
 
 use std::cmp::Ordering;
 
-use super::heap::{OutOfMemory, try_extend, try_push, try_reserve};
+use super::heap::{OutOfMemory, PStr, try_extend, try_push, try_reserve};
 
 /// The range of `units` without the leading (`left`) or trailing (`right`) characters whose
 /// code unit is at most `' '` (`Trim`, `TrimLeft`, `TrimRight`).
@@ -35,8 +35,17 @@ pub fn compare_text(a: &[u16], b: &[u16]) -> Ordering {
     )
 }
 
+/// `SameText` of two strings: folding maps one code unit to one ([`same_text`]), so strings of
+/// different lengths never match, and then no copy of their text is made.
+pub fn same_text_str(a: &PStr, b: &PStr) -> Result<bool, OutOfMemory> {
+    if a.len() != b.len() {
+        return Ok(false);
+    }
+    Ok(same_text(&a.units()?, &b.units()?))
+}
+
 /// `SameText`: equal after folding ASCII letters.
-pub fn same_text(a: &[u16], b: &[u16]) -> bool {
+fn same_text(a: &[u16], b: &[u16]) -> bool {
     a.len() == b.len()
         && a.iter()
             .zip(b)

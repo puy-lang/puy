@@ -1,0 +1,236 @@
+program DumpGenericLocalTypes
+.type TBox<T> = class(TObject)
+  .method - Get
+.global g0 B: TBox<Integer>
+.routine - TBox<T>.Get(const X: T): Boolean
+  .type TLoc = record
+    .field 0 V: T
+  .var v0 Self: TBox<T> self
+  .var v1 X: T const param
+  .var v2 Result: Boolean result
+  .var v3 L: TLoc local
+  assign @40 R+ init
+    var v3 L
+    builtin Default TLoc
+  assign @42 R+
+    field T V #0
+      var v3 L
+    var v1 X: T
+  assign @43 R+
+    var v2 Result
+    binary Boolean
+      call KeyHash<TLoc>: Int64
+        var v3 L: TLoc
+      = Boolean int:Int64
+        call KeyHash<TLoc>: Int64
+          var v3 L: TLoc
+.routine - Find<T>(const X: T): Integer
+  .type TLoc = record
+    .field 0 V: T
+    .field 1 N: Integer
+    .method - Size
+  .var v0 X: T const param
+  .var v1 Result: Integer result
+  .var v2 L: TLoc local
+  assign @25 R+ init
+    var v2 L
+    builtin Default TLoc
+  assign @27 R+
+    field T V #0
+      var v2 L
+    var v0 X: T
+  if @28
+    cond
+      call KeyEquals<TLoc>: Boolean
+        var v2 L: TLoc
+        var v2 L: TLoc
+    then
+      assign @29 R+
+        var v1 Result
+        call f8 Find<T>.TLoc.Size: Integer
+          ref
+            var v2 L
+    else
+      assign @31 R+
+        var v1 Result
+        const Integer 0
+.routine - Find<T>.TLoc.Size(): Integer
+  .var v0 Self: TLoc var self
+  .var v1 Result: Integer result
+  assign @22 R+
+    var v1 Result
+    binary Integer
+      field Integer N #1
+        self TLoc
+      + Integer int:Integer
+        const Integer 1
+.instance TBox<Integer>
+.routine f0 TBox<Integer>.Get(const X: Integer): Boolean
+  .var v0 Self: TBox<Integer> self
+  .var v1 X: Integer const param
+  .var v2 Result: Boolean result
+  .var v3 L: TBox<Integer>.Get.TLoc local
+  assign @40 R+ init
+    var v3 L
+    builtin Default TBox<Integer>.Get.TLoc
+  assign @42 R+
+    field Integer V #0
+      var v3 L
+    var v1 X: Integer
+  assign @43 R+
+    var v2 Result
+    binary Boolean
+      call KeyHash<TBox<Integer>.Get.TLoc> via f7: Int64
+        var v3 L: TBox<Integer>.Get.TLoc
+      = Boolean int:Int64
+        call KeyHash<TBox<Integer>.Get.TLoc> via f7: Int64
+          var v3 L: TBox<Integer>.Get.TLoc
+.instance Find<Integer>
+.routine f1 Find<Integer>(const X: Integer): Integer
+  .var v0 X: Integer const param
+  .var v1 Result: Integer result
+  .var v2 L: Find<Integer>.TLoc local
+  assign @25 R+ init
+    var v2 L
+    builtin Default Find<Integer>.TLoc
+  assign @27 R+
+    field Integer V #0
+      var v2 L
+    var v0 X: Integer
+  if @28
+    cond
+      call KeyEquals<Find<Integer>.TLoc> via f5: Boolean
+        var v2 L: Find<Integer>.TLoc
+        var v2 L: Find<Integer>.TLoc
+    then
+      assign @29 R+
+        var v1 Result
+        call f3 Find<Integer>.TLoc.Size: Integer
+          ref
+            var v2 L
+    else
+      assign @31 R+
+        var v1 Result
+        const Integer 0
+.instance Find<Double>
+.routine f2 Find<Double>(const X: Double): Integer
+  .var v0 X: Double const param
+  .var v1 Result: Integer result
+  .var v2 L: Find<Double>.TLoc local
+  assign @25 R+ init
+    var v2 L
+    builtin Default Find<Double>.TLoc
+  assign @27 R+
+    field Double V #0
+      var v2 L
+    var v0 X: Double
+  if @28
+    cond
+      call KeyEquals<Find<Double>.TLoc> via f6: Boolean
+        var v2 L: Find<Double>.TLoc
+        var v2 L: Find<Double>.TLoc
+    then
+      assign @29 R+
+        var v1 Result
+        call f4 Find<Double>.TLoc.Size: Integer
+          ref
+            var v2 L
+    else
+      assign @31 R+
+        var v1 Result
+        const Integer 0
+.instance Find<Integer>.TLoc
+.routine f3 Find<Integer>.TLoc.Size(): Integer
+  .var v0 Self: Find<Integer>.TLoc var self
+  .var v1 Result: Integer result
+  assign @22 R+
+    var v1 Result
+    binary Integer
+      field Integer N #1
+        self Find<Integer>.TLoc
+      + Integer int:Integer
+        const Integer 1
+.instance Find<Double>.TLoc
+.routine f4 Find<Double>.TLoc.Size(): Integer
+  .var v0 Self: Find<Double>.TLoc var self
+  .var v1 Result: Integer result
+  assign @22 R+
+    var v1 Result
+    binary Integer
+      field Integer N #1
+        self Find<Double>.TLoc
+      + Integer int:Integer
+        const Integer 1
+.instance TBox<Integer>.Get.TLoc
+.generated <eq:DumpGenericLocalTypes.Find<Integer>.TLoc>
+.routine f5 <eq:DumpGenericLocalTypes.Find<Integer>.TLoc>(const A: Find<Integer>.TLoc; const B: Find<Integer>.TLoc): Boolean
+  .var v0 A: Find<Integer>.TLoc const param
+  .var v1 B: Find<Integer>.TLoc const param
+  .var v2 Result: Boolean result
+  assign @15 R-
+    var v2 Result
+    binary Boolean
+      call KeyEquals<Integer>: Boolean
+        field Integer V #0
+          var v0 A: Find<Integer>.TLoc
+        field Integer V #0
+          var v1 B: Find<Integer>.TLoc
+      and Boolean bool
+        call KeyEquals<Integer>: Boolean
+          field Integer N #1
+            var v0 A: Find<Integer>.TLoc
+          field Integer N #1
+            var v1 B: Find<Integer>.TLoc
+.generated <eq:DumpGenericLocalTypes.Find<Double>.TLoc>
+.routine f6 <eq:DumpGenericLocalTypes.Find<Double>.TLoc>(const A: Find<Double>.TLoc; const B: Find<Double>.TLoc): Boolean
+  .var v0 A: Find<Double>.TLoc const param
+  .var v1 B: Find<Double>.TLoc const param
+  .var v2 Result: Boolean result
+  assign @15 R-
+    var v2 Result
+    binary Boolean
+      call KeyEquals<Double>: Boolean
+        field Double V #0
+          var v0 A: Find<Double>.TLoc
+        field Double V #0
+          var v1 B: Find<Double>.TLoc
+      and Boolean bool
+        call KeyEquals<Integer>: Boolean
+          field Integer N #1
+            var v0 A: Find<Double>.TLoc
+          field Integer N #1
+            var v1 B: Find<Double>.TLoc
+.generated <hash:DumpGenericLocalTypes.TBox<Integer>.Get.TLoc>
+.routine f7 <hash:DumpGenericLocalTypes.TBox<Integer>.Get.TLoc>(const X: TBox<Integer>.Get.TLoc): Int64
+  .var v0 X: TBox<Integer>.Get.TLoc const param
+  .var v1 Result: Int64 result
+  assign @36 R-
+    var v1 Result
+    call KeyHash<Int64>: Int64
+      const Int64 1
+  assign @36 R-
+    var v1 Result
+    builtin HashCombine Int64
+      var v1 Result: Int64
+      call KeyHash<Integer>: Int64
+        field Integer V #0
+          var v0 X: TBox<Integer>.Get.TLoc
+.routine <main>
+  writeln @49
+    arg
+      binary Integer
+        call f1 Find<Integer>: Integer
+          const Integer 1
+        + Integer int:Integer
+          call f2 Find<Double>: Integer
+            const Double 2.5
+  assign @50 R+
+    global g0 B
+    create TBox<Integer> builtin
+  writeln @51
+    arg
+      method f0 TBox<Integer>.Get: Boolean
+        global g0 B: TBox<Integer>
+        const Integer 3
+  free @52
+    global g0 B: TBox<Integer>

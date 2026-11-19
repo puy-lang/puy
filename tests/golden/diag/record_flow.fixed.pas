@@ -11,9 +11,10 @@ type
 
 procedure Local;
 var
-  A: TPoint = Default(TPoint);
+  A: TPoint;
   B: array[0..2] of Integer;
 begin
+  A := Default(TPoint);
   A.X := 1;
   B[0] := 1;
   WriteLn(A.X, B[0]);

@@ -44,6 +44,8 @@
   .line 20
   0013  LoadConst    r5, k3
   0014  CallHost     r5, h0
+  .line 19
+  0015  Release      r3
   .line 22
-  0015  RetVoid
+  0016  RetVoid
 .finally r0, r1, r2, r3, r4, r5

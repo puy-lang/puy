@@ -34,13 +34,18 @@ pub fn seed_from_fixed_random_seed(r: u64) -> u64 {
 pub struct HashKeys {
     pub k0: u64,
     pub k1: u64,
+    /// `HashStr` / `HashUtf8` of the empty text, which has no block to remember it
+    /// (`docs/design/vm.md` 3.18): worked out once here.
+    pub empty_text: u32,
 }
 
 impl HashKeys {
     pub fn new(seed: u64) -> HashKeys {
+        let (k0, k1) = (mix64(seed), mix64(seed ^ K1_SALT));
         HashKeys {
-            k0: mix64(seed),
-            k1: mix64(seed ^ K1_SALT),
+            k0,
+            k1,
+            empty_text: low_32(Sip13::new(k0, k1).finish()),
         }
     }
 
@@ -60,21 +65,22 @@ impl HashKeys {
         self.int(f64_key_bits(x))
     }
 
-    /// `HashStr`: SipHash-1-3 of the code units, each as two bytes, low byte first
-    /// (`docs/spec/equality.md` 2.3).
-    pub fn units(&self, units: impl Iterator<Item = u16>) -> i64 {
+    /// `HashStr`: the low 32 bits of SipHash-1-3 of the code units, each as two bytes, low byte
+    /// first (`docs/spec/equality.md` 2.3, 7.2).
+    pub fn units(&self, units: impl Iterator<Item = u16>) -> u32 {
         let mut s = Sip13::new(self.k0, self.k1);
         for u in units {
             s.write(&u.to_le_bytes());
         }
-        s.finish() as i64
+        low_32(s.finish())
     }
 
-    /// `HashUtf8`: SipHash-1-3 of the bytes of a `UTF8String` (`docs/spec/equality.md` 2.3).
-    pub fn bytes(&self, bytes: &[u8]) -> i64 {
+    /// `HashUtf8`: the low 32 bits of SipHash-1-3 of the bytes of a `UTF8String`
+    /// (`docs/spec/equality.md` 2.3, 7.2).
+    pub fn bytes(&self, bytes: &[u8]) -> u32 {
         let mut s = Sip13::new(self.k0, self.k1);
         s.write(bytes);
-        s.finish() as i64
+        low_32(s.finish())
     }
 
     /// `HashSetBig`: the words of a big set without its trailing zero words, starting from
@@ -87,6 +93,11 @@ impl HashKeys {
             self.mix(h as u64, *w as u64)
         })
     }
+}
+
+/// The low 32 bits of a SipHash-1-3 result, the hash of a text (`docs/spec/equality.md` 7.2).
+fn low_32(h: u64) -> u32 {
+    (h & 0xFFFF_FFFF) as u32
 }
 
 /// The bits a `Double` key hashes as (`docs/spec/equality.md` 2.2).

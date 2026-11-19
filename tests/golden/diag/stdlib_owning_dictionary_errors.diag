@@ -3,8 +3,8 @@ error[E0760]: `TRefFoo` is a reference counted class and cannot be used for `K` 
      |
   30 |   C: TObjectDictionary<TRefFoo, TRefFoo>;
      |                        ^^^^^^^
-    ::: <stdlib>/System.Generics.Collections.pas:579:21
- 579 |   TObjectDictionary<K: NotRefCounted; V: NotRefCounted> = class(TDictionary<K, V>)
+    ::: <stdlib>/System.Generics.Collections.pas:612:21
+ 612 |   TObjectDictionary<K: NotRefCounted; V: NotRefCounted> = class(TDictionary<K, V>)
      |                     - type parameter declared here
      |
      = note: reference counted objects are freed when the last reference goes away, so they do not need an owning container
@@ -15,8 +15,8 @@ error[E0760]: `TRefFoo` is a reference counted class and cannot be used for `V` 
      |
   30 |   C: TObjectDictionary<TRefFoo, TRefFoo>;
      |                                 ^^^^^^^
-    ::: <stdlib>/System.Generics.Collections.pas:579:39
- 579 |   TObjectDictionary<K: NotRefCounted; V: NotRefCounted> = class(TDictionary<K, V>)
+    ::: <stdlib>/System.Generics.Collections.pas:612:39
+ 612 |   TObjectDictionary<K: NotRefCounted; V: NotRefCounted> = class(TDictionary<K, V>)
      |                                       - type parameter declared here
      |
      = note: reference counted objects are freed when the last reference goes away, so they do not need an owning container

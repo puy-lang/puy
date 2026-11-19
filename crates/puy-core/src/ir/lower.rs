@@ -123,12 +123,28 @@ pub fn lower(p: &Program, files: &[(&DirectiveOutput, &SourceFile)], paths: &[St
         unit_names: p.units.iter().map(|u| u.name.clone()).collect(),
         func_index,
         func_names,
+        ctors: (0..p.types.defs.len() as u32)
+            .flat_map(|t| p.types.class_methods(crate::sema::types::TypeId(t)))
+            .filter(|m| m.kind == crate::sema::types::MethodKind::Constructor)
+            .filter_map(|m| m.routine)
+            .collect(),
     };
+    // The local records expanded into registers (`docs/design/records.md` 3.9): a routine with
+    // some is lowered from a copy of its HIR rewritten for them
+    let expanded: Vec<Option<super::expand::Expanded>> = order
+        .iter()
+        .map(|(r, _)| super::expand::expand(r, &p.types, !cell_vars(p, r).is_empty()))
+        .collect();
     let funcs = order
         .into_iter()
-        .map(|(r, id)| {
+        .zip(&expanded)
+        .map(|((r, id), ex)| {
             ml.unit = r.unit as usize;
-            FuncLower::new(&mut ml, r, id, p).lower()
+            let (r, first) = match ex {
+                Some(ex) => (&ex.routine, ex.first.clone()),
+                None => (r, Vec::new()),
+            };
+            FuncLower::new(&mut ml, r, id, p, first).lower()
         })
         .collect();
     Module {
@@ -169,6 +185,8 @@ struct ModuleLower<'a> {
     func_index: Vec<u32>,
     /// The full name of each routine (`Hello.TShape.Area`; the `ir` dump of `CallVirtual`).
     func_names: Vec<String>,
+    /// The constructors (never inlined; `docs/design/inlining.md` 3.3).
+    ctors: std::collections::HashSet<RoutineId>,
 }
 
 impl ModuleLower<'_> {
@@ -244,6 +262,10 @@ struct FuncLower<'m, 'a> {
     /// The variables whose cell has a register of its own, after the named variables
     /// (`docs/spec/objects.md` 14.9; [`cell_vars`]).
     cells: Vec<VarId>,
+    /// For each variable of the HIR before the expansion, the first of its field variables when
+    /// it is a local record expanded into registers (`docs/design/records.md` 3.9; empty when
+    /// none is).
+    expand: Vec<Option<u32>>,
 }
 
 impl<'m, 'a> FuncLower<'m, 'a> {
@@ -252,6 +274,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         r: &'m Routine,
         id: Option<RoutineId>,
         program: &'m Program,
+        expand: Vec<Option<u32>>,
     ) -> Self {
         // The HIR after instantiation has no type parameter (`docs/design/generics.md` 3.1)
         for v in &r.vars {
@@ -279,6 +302,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             guarded: 0,
             current_overflow: false,
             cells: cell_vars(program, r),
+            expand,
         }
     }
 
@@ -325,59 +349,8 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             .iter()
             .map(|&b| {
                 let built = std::mem::take(&mut blocks[b as usize]);
-                let (term, term_line) = built.term.expect("every started block is terminated");
-                let term = match term {
-                    Term::Jmp(t) => Term::Jmp(place(t)),
-                    Term::Branch {
-                        op,
-                        a,
-                        b,
-                        then,
-                        other,
-                    } => Term::Branch {
-                        op,
-                        a,
-                        b,
-                        then: place(then),
-                        other: place(other),
-                    },
-                    Term::BranchImm {
-                        op,
-                        a,
-                        imm,
-                        then,
-                        other,
-                    } => Term::BranchImm {
-                        op,
-                        a,
-                        imm,
-                        then: place(then),
-                        other: place(other),
-                    },
-                    Term::ForLoop {
-                        counter,
-                        limit,
-                        delta,
-                        top,
-                        exit,
-                    } => Term::ForLoop {
-                        counter,
-                        limit,
-                        delta,
-                        top: place(top),
-                        exit: place(exit),
-                    },
-                    Term::EndFinally {
-                        state,
-                        next,
-                        targets,
-                    } => Term::EndFinally {
-                        state,
-                        next: place(next),
-                        targets: targets.into_iter().map(place).collect(),
-                    },
-                    t => t,
-                };
+                let (mut term, term_line) = built.term.expect("every started block is terminated");
+                term.each_target_mut(|t| *t = place(*t));
                 Block {
                     insts: built.insts,
                     term,
@@ -407,12 +380,14 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 .r
                 .vars
                 .iter()
-                .map(|v| VarReg {
+                .enumerate()
+                .map(|(i, v)| VarReg {
                     name: v.name.clone(),
                     ty: v.ty,
                     kind: v.kind,
                     is_for_var: v.is_for_var,
                     shared: v.captured || v.cell,
+                    expand: self.var_expand(i as u32),
                 })
                 .chain(self.cells.iter().map(|c| {
                     let v = &self.r.vars[c.0 as usize];
@@ -425,6 +400,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                         },
                         is_for_var: false,
                         shared: true,
+                        expand: VarExpand::No,
                     }
                 }))
                 .collect(),
@@ -432,18 +408,33 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             tries: self.tries,
             temps: self.temps,
             blocks: laid_out,
+            lifecycle: self.r.dtor_of.is_some()
+                || self.id.is_some_and(|id| self.ml.ctors.contains(&id)),
+            inlines: Vec::new(),
         }
     }
 
     /// The managed registers released at the end of the routine (`docs/design/lifetime.md` 3.8):
     /// value parameters, `Result` and locals in declaration order, then the owning temporaries.
     fn finally_list(&self) -> Vec<Reg> {
-        let vars = self
-            .r
-            .vars
-            .iter()
-            .enumerate()
-            .filter(|(_, v)| self.owns_var(v));
+        // An expanded record's fields go where the record would, in the order of its slots
+        // (`docs/design/records.md` 3.9); they follow the variables of the HIR
+        let mut regs: Vec<Reg> = Vec::new();
+        for (i, v) in self.r.vars.iter().enumerate() {
+            if !self.expand.is_empty() && i >= self.expand.len() {
+                break;
+            }
+            match self.expanded_first(VarId(i as u32)) {
+                Some(first) => regs.extend(
+                    self.field_regs(first, v.ty)
+                        .into_iter()
+                        .map(|(r, _)| r)
+                        .filter(|r| self.owns(*r)),
+                ),
+                None if self.owns_var(v) => regs.push(Reg::Var(i as u32)),
+                None => {}
+            }
+        }
         let temps = self
             .temps
             .iter()
@@ -456,7 +447,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             .enumerate()
             .filter(|(_, c)| owns_cell(&self.r.vars[c.0 as usize]))
             .map(|(k, _)| Reg::Var((n + k) as u32));
-        vars.map(|(i, _)| Reg::Var(i as u32))
+        regs.into_iter()
             .chain(cells)
             .chain(temps.map(|(i, _)| Reg::Temp(i as u32)))
             .collect()
@@ -501,8 +492,22 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         self.terminate(Term::Jmp(target));
     }
 
+    /// Points the jumps to `from`, a block that is never started, at `to` instead. Only the
+    /// blocks from `since` on (in creation order) can jump to it.
+    fn retarget(&mut self, since: BlockId, from: BlockId, to: BlockId) {
+        for b in &mut self.blocks[since as usize..] {
+            if let Some((term, _)) = &mut b.term {
+                term.each_target_mut(|t| {
+                    if *t == from {
+                        *t = to;
+                    }
+                });
+            }
+        }
+    }
+
     /// A conditional branch to `target`; otherwise execution continues in a new block.
-    fn branch(&mut self, op: u8, a: Reg, b: Option<Reg>, target: BlockId) {
+    fn branch(&mut self, op: u16, a: Reg, b: Option<Reg>, target: BlockId) {
         let next = self.new_block();
         self.terminate(Term::Branch {
             op,
@@ -516,13 +521,13 @@ impl<'m, 'a> FuncLower<'m, 'a> {
 
     // ---- Instructions ----
 
-    fn push(&mut self, op: u8, kind: InstKind) {
+    fn push(&mut self, op: u16, kind: InstKind) {
         let b = self.current();
         let line = self.line;
         self.blocks[b as usize].insts.push(Inst { op, kind, line });
     }
 
-    fn plain(&mut self, op: u8, operands: Vec<Operand>) {
+    fn plain(&mut self, op: u16, operands: Vec<Operand>) {
         self.push(op, InstKind::Plain(operands));
     }
 
@@ -544,20 +549,20 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         self.intrinsic(id, &[dst, b, c]);
     }
 
-    fn op1(&mut self, op: u8, a: Reg) {
+    fn op1(&mut self, op: u16, a: Reg) {
         self.plain(op, vec![Operand::Reg(a)]);
     }
 
-    fn op2(&mut self, op: u8, a: Reg, b: Reg) {
+    fn op2(&mut self, op: u16, a: Reg, b: Reg) {
         self.plain(op, vec![Operand::Reg(a), Operand::Reg(b)]);
     }
 
-    fn op3(&mut self, op: u8, a: Reg, b: Reg, c: Reg) {
+    fn op3(&mut self, op: u16, a: Reg, b: Reg, c: Reg) {
         self.plain(op, vec![Operand::Reg(a), Operand::Reg(b), Operand::Reg(c)]);
     }
 
     /// An instruction whose last operand is an immediate (`Narrow` and friends, `AddIntI`, `StrToIntIO`).
-    fn op_imm(&mut self, op: u8, a: Reg, b: Reg, imm: i64) {
+    fn op_imm(&mut self, op: u16, a: Reg, b: Reg, imm: i64) {
         self.plain(
             op,
             vec![Operand::Reg(a), Operand::Reg(b), Operand::Imm(imm)],
@@ -565,11 +570,11 @@ impl<'m, 'a> FuncLower<'m, 'a> {
     }
 
     /// An instruction with a register and a table operand (`LoadGlobal`, `MakeGlobalRef`, ...).
-    fn op_table(&mut self, op: u8, a: Reg, x: Operand) {
+    fn op_table(&mut self, op: u16, a: Reg, x: Operand) {
         self.plain(op, vec![Operand::Reg(a), x]);
     }
 
-    fn call(&mut self, op: u8, dst: Option<Reg>, callee: Operand, args: Vec<Reg>, frame: Reg) {
+    fn call(&mut self, op: u16, dst: Option<Reg>, callee: Operand, args: Vec<Reg>, frame: Reg) {
         self.push(
             op,
             InstKind::Call {
@@ -749,7 +754,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         &mut self,
         ty: Ty,
         counted: bool,
-        (plain, counted_op): (u8, u8),
+        (plain, counted_op): (u16, u16),
         dst: Reg,
         rest: Vec<Operand>,
     ) {
@@ -787,10 +792,10 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         &mut self,
         ty: Ty,
         counted: bool,
-        (plain, counted_op): (u8, u8),
+        (plain, counted_op): (u16, u16),
         set: Vec<Operand>,
         src: Reg,
-        get: (u8, Vec<Operand>),
+        get: (u16, Vec<Operand>),
     ) {
         let kind = if counted {
             self.program.types.slot_kind(ty)
@@ -850,7 +855,141 @@ impl<'m, 'a> FuncLower<'m, 'a> {
     }
 
     fn reg_of(&self, v: VarId) -> Reg {
+        assert!(
+            self.expanded_first(v).is_none(),
+            "an expanded record is used through its fields"
+        );
         Reg::Var(v.0)
+    }
+
+    // ---- Local records expanded into registers (`docs/design/records.md` 3.9) ----
+
+    /// The first field variable of a local record expanded into registers.
+    fn expanded_first(&self, v: VarId) -> Option<u32> {
+        self.expand.get(v.0 as usize).copied().flatten()
+    }
+
+    /// How the variable `v` takes part in the expansion (for the `ir` dump).
+    fn var_expand(&self, v: u32) -> VarExpand {
+        for (i, first) in self.expand.iter().enumerate() {
+            let Some(first) = *first else { continue };
+            let count = self.flat_width(self.r.vars[i].ty);
+            if i as u32 == v {
+                return VarExpand::Whole { first, count };
+            }
+            if (first..first + count).contains(&v) {
+                return VarExpand::Field { of: i as u32 };
+            }
+        }
+        VarExpand::No
+    }
+
+    /// The number of slots of a record laid out flat.
+    fn flat_width(&self, ty: Ty) -> u32 {
+        self.program
+            .types
+            .flat_width(ty)
+            .expect("an expanded record is laid out flat")
+    }
+
+    /// The field registers (and their types) of the slots `first..` of an expanded record, as
+    /// many as a value of `ty` takes.
+    fn field_regs(&self, first: u32, ty: Ty) -> Vec<(Reg, Ty)> {
+        (first..first + self.flat_width(ty))
+            .map(|v| (Reg::Var(v), self.r.vars[v as usize].ty))
+            .collect()
+    }
+
+    /// The first field register and the type of an expanded record, or of a record field of
+    /// one, that a place names whole.
+    fn expanded_place(&self, p: &Place) -> Option<(u32, Ty)> {
+        match p {
+            Place::Var(v, _) => Some((self.expanded_first(*v)?, self.r.vars[v.0 as usize].ty)),
+            Place::Field {
+                base, index, ty, ..
+            } => {
+                let (first, bty) = self.expanded_place(base)?;
+                Some((first + self.program.types.field_offset(bty, *index), *ty))
+            }
+            _ => None,
+        }
+    }
+
+    /// [`FuncLower::expanded_place`] for an expression.
+    fn expanded_expr(&self, e: &Expr) -> Option<(u32, Ty)> {
+        if e.value.is_some() {
+            return None;
+        }
+        match &e.kind {
+            ExprKind::Var(v) => Some((self.expanded_first(*v)?, self.r.vars[v.0 as usize].ty)),
+            ExprKind::Field { base, index, .. } => {
+                let (first, bty) = self.expanded_expr(base)?;
+                Some((first + self.program.types.field_offset(bty, *index), e.ty))
+            }
+            _ => None,
+        }
+    }
+
+    /// An assignment to an expanded record (or a record field of one) whole: field by field from
+    /// another, cleared for `Default`, or read slot by slot from a flat place (`SlotGet`).
+    fn assign_to_fields(&mut self, first: u32, ty: Ty, value: &Expr) {
+        let dst = self.field_regs(first, ty);
+        if let Some((src, _)) = self.expanded_expr(value) {
+            if src != first {
+                for (k, (r, t)) in dst.into_iter().enumerate() {
+                    self.copy_value(t, r, Reg::Var(src + k as u32));
+                }
+            }
+            return;
+        }
+        match &value.kind {
+            ExprKind::Builtin {
+                func: Builtin::Default,
+                ..
+            } => {
+                for (r, t) in dst {
+                    self.clear_value(t, r);
+                }
+            }
+            _ => self.read_field_with(value, |this, h, c| this.hop_spread(h, c, &dst)),
+        }
+    }
+
+    /// An assignment of an expanded record (or a record field of one) whole to a flat place:
+    /// the target's indices, then its slots written one by one (`SlotSet`).
+    fn assign_from_fields(&mut self, target: &Place, first: u32, ty: Ty) {
+        let src = self.field_regs(first, ty);
+        match target {
+            Place::ObjField { base, slot, ty, .. } => {
+                let b = self.obj_handle(base, false);
+                let h = Hop::obj(base.ty, self.obj_slot(base.ty, *slot), *ty);
+                self.hop_gather(&h, b, &src);
+            }
+            Place::Field { .. } | Place::Elem { .. } => {
+                let part = self.eval_part(target);
+                self.part_check(&part);
+                self.part_access(&part, true, |this, h, c| this.hop_gather(h, c, &src));
+            }
+            _ => unreachable!("an expanded record is only assigned to a flat place"),
+        }
+    }
+
+    /// Reads the flat place at the address of `h` in the container `c` into the registers `dst`,
+    /// slot by slot (counted).
+    fn hop_spread(&mut self, h: &Hop, c: Reg, dst: &[(Reg, Ty)]) {
+        let (cur, _) = self.hop_cursor(h, c, true);
+        for (k, (r, ty)) in dst.iter().enumerate() {
+            self.cursor_get(*r, cur, k as u32, *ty, true);
+        }
+    }
+
+    /// Writes the registers `src` to the flat place at the address of `h` in the opened
+    /// container `c`, slot by slot (counted).
+    fn hop_gather(&mut self, h: &Hop, c: Reg, src: &[(Reg, Ty)]) {
+        let (cur, _) = self.hop_cursor(h, c, true);
+        for (k, (r, ty)) in src.iter().enumerate() {
+            self.cursor_set(cur, k as u32, *r, *ty, true);
+        }
     }
 
     /// Whether the variable's register holds a reference slot: a `var` / `out` parameter, or a
@@ -1174,7 +1313,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 let elems: Vec<Expr> = items
                     .iter()
                     .map(|v| Expr {
-                        kind: ExprKind::Const,
+                        kind: ExprKind::Const { explicit: false },
                         ty: elem,
                         value: Some(v.clone()),
                         span: TextRange::empty(0.into()),
@@ -1279,7 +1418,19 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 else_body,
             } => {
                 let end = self.new_block();
+                let mut chosen = false;
                 for (cond, body) in branches {
+                    // A condition fixed by the type: only the branch it chooses
+                    // (`docs/spec/bytecode.md` 2.23)
+                    match self.fixed_cond(cond) {
+                        Some(false) => continue,
+                        Some(true) => {
+                            self.stmt(body);
+                            chosen = true;
+                            break;
+                        }
+                        None => {}
+                    }
                     let next = self.new_block();
                     let m = self.mark();
                     let first = self.owned.len();
@@ -1292,7 +1443,9 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                     self.bind(next);
                     self.emit_releases(&cond_regs);
                 }
-                if let Some(e) = else_body {
+                if let Some(e) = else_body
+                    && !chosen
+                {
                     self.stmt(e);
                 }
                 self.bind(end);
@@ -1331,7 +1484,22 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 self.loops.pop();
                 self.bind(cont);
                 let old = self.set_line(cond.span);
-                self.cond(cond, top, false);
+                let m = self.mark();
+                let first = self.owned.len();
+                let back = self.new_block();
+                self.cond(cond, back, false);
+                self.release(m);
+                // The condition's temporaries are let go after the loop and before the next
+                // iteration (`docs/design/lifetime.md` 3.4)
+                let cond_regs = self.release_owned(first);
+                if cond_regs.is_empty() {
+                    self.retarget(cont, back, top);
+                } else {
+                    self.jump(end);
+                    self.bind(back);
+                    self.emit_releases(&cond_regs);
+                    self.jump(top);
+                }
                 self.line = old;
                 self.bind(end);
             }
@@ -1424,7 +1592,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             } => self.inc_dec(
                 target,
                 *target_ty,
-                delta.as_ref(),
+                delta.as_deref(),
                 *negative,
                 *calc,
                 *checks,
@@ -1456,6 +1624,17 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 to,
                 count,
             } => self.array_move_range(target, [from, to, count]),
+            StmtKind::ArraySortRange {
+                target,
+                index,
+                count,
+            } => self.array_sort_range(target, index, count),
+            StmtKind::HashRelink {
+                buckets,
+                hashes,
+                next,
+                count,
+            } => self.hash_relink(buckets, hashes, next, count),
             StmtKind::FreeIfClass { value } => {
                 // `docs/spec/collections.md` 12.1: `Free` (3.2) once the type is a class; any
                 // other type is only evaluated
@@ -1946,6 +2125,12 @@ impl<'m, 'a> FuncLower<'m, 'a> {
     }
 
     fn assign(&mut self, target: &Place, value: &Expr) {
+        if let Some((first, ty)) = self.expanded_place(target) {
+            return self.assign_to_fields(first, ty, value);
+        }
+        if let Some((first, ty)) = self.expanded_expr(value) {
+            return self.assign_from_fields(target, first, ty);
+        }
         if let Some((steps, kind)) = append_steps(target, self.place_type(target), value) {
             return self.append(target, steps, kind);
         }
@@ -2004,7 +2189,8 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 let b =
                     self.obj_handle(base, expr_has_call(value) && !self.stable_var(base, value));
                 let v = self.weak_aware_value(target, value);
-                self.obj_set(b, *slot, v, *ty, true);
+                let h = Hop::obj(base.ty, self.obj_slot(base.ty, *slot), *ty);
+                self.hop_store(&h, b, v);
             }
         }
     }
@@ -2392,8 +2578,11 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 self.get_value(ty, true, ops, dst, vec![Operand::Global(g.0)]);
             }
             Place::StrIndex { base, index, .. } => {
+                // The copy of the string holds no object: it is let go of when the statement ends
+                // (`docs/design/lifetime.md` 3.4)
                 let b = self.alloc(Ty::String);
                 self.load_place(base, b);
+                self.owned.push(b);
                 let i = self.alloc(index.ty);
                 self.expr(index, i);
                 self.op3(op::STR_INDEX, dst, b, i);
@@ -2405,7 +2594,8 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             }
             Place::ObjField { base, slot, ty, .. } => {
                 let b = self.obj_handle(base, false);
-                self.obj_get(dst, b, *slot, *ty, true);
+                let h = Hop::obj(base.ty, self.obj_slot(base.ty, *slot), *ty);
+                self.hop_load(&h, b, dst, true);
             }
         }
     }
@@ -2442,7 +2632,8 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             }
             Place::ObjField { base, slot, ty, .. } => {
                 let b = self.obj_handle(base, false);
-                self.obj_set(b, *slot, src, *ty, true);
+                let h = Hop::obj(base.ty, self.obj_slot(base.ty, *slot), *ty);
+                self.hop_store(&h, b, src);
             }
             Place::Field { .. } | Place::Elem { .. } => {
                 let part = self.eval_part(p);
@@ -2452,10 +2643,11 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         }
     }
 
-    // ---- Fields and elements (`docs/spec/types.md` chapter 3, `docs/design/lifetime.md` 3.6) ----
+    // ---- Fields and elements (`docs/spec/types.md` chapter 3, `docs/design/lifetime.md` 3.6,
+    // `docs/design/records.md`) ----
 
     /// Evaluates the indices of a field or element place, outer first, into temporaries
-    /// (0-based slot numbers; the range checks come later with `part_check`).
+    /// (0-based; the range checks come later with `part_check`).
     fn eval_part<'p>(&mut self, p: &'p Place) -> Part<'p> {
         match p {
             Place::Field {
@@ -2482,8 +2674,8 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                     self.expr(index, reg);
                     SlotRef::Dyn(reg)
                 } else {
-                    let (reg, check) = self.elem_index(container, index, *span);
-                    SlotRef::Elem { reg, check }
+                    let (index, check) = self.elem_idx(container, index, *span);
+                    SlotRef::Elem { index, check }
                 };
                 part.steps.push(PartStep { slot, ty: *ty });
                 part
@@ -2499,29 +2691,36 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                     root: p,
                     steps: Vec::new(),
                     handle: Some(h),
+                    root_reg: None,
                 }
             }
             _ => Part {
                 root: p,
                 steps: Vec::new(),
                 handle: None,
+                root_reg: None,
             },
         }
     }
 
-    /// The 0-based slot number of an element of the static array `arr` in a new temporary, and the
+    /// The 0-based index of an element of the static array `arr` in a new temporary, and the
     /// range check it still needs (`None` for a constant index, which sema checked).
     fn elem_index(&mut self, arr: Ty, index: &Expr, span: TextRange) -> (Reg, Option<IndexCheck>) {
+        let (idx, check) = self.elem_idx(arr, index, span);
+        (self.idx_reg(idx), check)
+    }
+
+    /// [`FuncLower::elem_index`], keeping a constant index a constant.
+    fn elem_idx(&mut self, arr: Ty, index: &Expr, span: TextRange) -> (Idx, Option<IndexCheck>) {
         let (ity, lo, hi, _) = self
             .program
             .types
             .array(arr)
             .expect("an element place indexes a static array");
-        let t = self.alloc_borrow(Ty::Int64);
         if let Some(v) = index.value.as_ref().and_then(Const::as_int) {
-            self.load_int(t, (v - lo) as i64);
-            return (t, None);
+            return (Idx::Const((v - lo) as i64), None);
         }
+        let t = self.alloc_borrow(Ty::Int64);
         self.expr(index, t);
         if lo != 0 {
             if (i8::MIN as i128..=i8::MAX as i128).contains(&-lo) {
@@ -2543,14 +2742,26 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             msg,
             span,
         };
-        (t, Some(check))
+        (Idx::Reg(t), Some(check))
+    }
+
+    /// The register with an index (a constant loaded into a new temporary).
+    fn idx_reg(&mut self, i: Idx) -> Reg {
+        match i {
+            Idx::Reg(r) => r,
+            Idx::Const(k) => {
+                let t = self.alloc_borrow(Ty::Int64);
+                self.load_int(t, k);
+                t
+            }
+        }
     }
 
     /// `ChkIndex` for each element index of the place that is not a constant.
     fn part_check(&mut self, part: &Part<'_>) {
         for step in &part.steps {
             if let SlotRef::Elem {
-                reg,
+                index: Idx::Reg(reg),
                 check: Some(c),
             } = &step.slot
             {
@@ -2577,10 +2788,43 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         self.alloc_kind(Some(ty), TempKind::Value)
     }
 
-    /// The value of the root of a place, read without counting.
+    /// Whether a value of `ty` is laid out flat in its containers (`docs/design/records.md` 3.2).
+    fn is_flat(&self, ty: Ty) -> bool {
+        self.program.types.flat_width(ty).is_some()
+    }
+
+    /// Whether the variable's register holds a reference slot that may be of kind 4 (a lent flat
+    /// place; `docs/spec/bytecode.md` 1.5): its value is a record laid out flat, read and written
+    /// whole with `LoadRefRef` / `StoreRefRef` only. A static array is passed to a `var`
+    /// parameter as a block (`PlaceBox`).
+    fn place_ref(&self, v: VarId) -> bool {
+        let ty = self.r.vars[v.0 as usize].ty;
+        self.is_ref_param(v) && matches!(ty, Ty::Record(_)) && self.is_flat(ty)
+    }
+
+    /// The first slot of the field at `slot` of an instance of the class `class`
+    /// (`docs/design/records.md` 3.2: records and static arrays among its fields are flat).
+    fn obj_slot(&self, class: Ty, slot: u32) -> u32 {
+        match class {
+            Ty::Class(id) => self.program.types.class_field_offset(id, slot),
+            _ => slot,
+        }
+    }
+
+    /// The value of the root of a place, read without counting. A reference parameter whose value
+    /// is laid out flat is read whole into an owning temporary (it may be a lent flat place).
     fn root_borrowed(&mut self, root: &Place) -> Reg {
         match root {
             Place::Var(v, _) if !self.is_ref_param(*v) => self.reg_of(*v),
+            Place::Var(v, _) if self.place_ref(*v) => {
+                let ty = self.r.vars[v.0 as usize].ty;
+                let t = self.alloc(ty);
+                self.op2(op::LOAD_REF_REF, t, self.reg_of(*v));
+                if !self.program.types.holds_object(ty) {
+                    self.owned.push(t);
+                }
+                t
+            }
             Place::Var(v, _) => {
                 let t = self.alloc_borrow(self.r.vars[v.0 as usize].ty);
                 let r = self.reg_of(*v);
@@ -2594,8 +2838,17 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             }
             Place::ObjField { base, slot, ty, .. } => {
                 let b = self.obj_handle(base, false);
+                if self.is_flat(*ty) {
+                    let t = self.alloc(*ty);
+                    let h = Hop::obj(base.ty, self.obj_slot(base.ty, *slot), *ty);
+                    self.hop_load(&h, b, t, true);
+                    if !self.program.types.holds_object(*ty) {
+                        self.owned.push(t);
+                    }
+                    return t;
+                }
                 let t = self.alloc_borrow(*ty);
-                self.obj_get(t, b, *slot, *ty, false);
+                self.obj_get(t, b, self.obj_slot(base.ty, *slot), *ty, false);
                 t
             }
             _ => unreachable!("the root of a place is a variable, a global or an object's field"),
@@ -2627,8 +2880,9 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         }
     }
 
-    /// `ObjGet` / `ObjGetRef` (`docs/spec/objects.md` 14.3): slot `slot` of the instance `obj`,
-    /// counted when `counted` and the value is managed.
+    /// `ObjGet` / `ObjGetRef` (`docs/spec/objects.md` 14.3): slot `slot` (the first slot of the
+    /// field, [`FuncLower::obj_slot`]) of the instance `obj`, counted when `counted` and the
+    /// value is managed.
     fn obj_get(&mut self, dst: Reg, obj: Reg, slot: u32, ty: Ty, counted: bool) {
         let rest = vec![Operand::Reg(obj), Operand::Imm(i64::from(slot))];
         self.get_value(ty, counted, (op::OBJ_GET, op::OBJ_GET_REF), dst, rest);
@@ -2648,15 +2902,16 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         );
     }
 
-    /// A slot read: `FieldGet` / `ValGet`, counted (`…Ref`) when `counted` and the value is managed.
-    fn get_slot(&mut self, dst: Reg, container: Reg, slot: &SlotRef, ty: Ty, counted: bool) {
+    /// A slot read: `FieldGet` / `ValGet` / `DynGet`, counted (`…Ref`) when `counted` and the
+    /// value is managed.
+    fn get_slot(&mut self, dst: Reg, container: Reg, slot: &At, ty: Ty, counted: bool) {
         let (ops, at) = slot_access(slot, true);
         self.get_value(ty, counted, ops, dst, vec![Operand::Reg(container), at]);
     }
 
-    /// A slot write into a unique container: `FieldSet` / `ValSet`, counted (`…Ref`) when `counted`
-    /// and the value is managed.
-    fn set_slot(&mut self, container: Reg, slot: &SlotRef, src: Reg, ty: Ty, counted: bool) {
+    /// A slot write into a unique container (a dynamic array is written shared): `FieldSet` /
+    /// `ValSet` / `DynSet`, counted (`…Ref`) when `counted` and the value is managed.
+    fn set_slot(&mut self, container: Reg, slot: &At, src: Reg, ty: Ty, counted: bool) {
         let (ops, at) = slot_access(slot, false);
         let (get, _) = slot_access(slot, true);
         self.set_value(
@@ -2669,18 +2924,477 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         );
     }
 
-    /// Reads the value of a field or element place into `dst` (counted).
-    fn part_load(&mut self, part: &Part<'_>, dst: Reg) {
-        let Some((last, inner)) = part.steps.split_last() else {
-            return self.load_place(part.root, dst);
+    // ---- Hops: the steps of a place grouped by the container holding their slots ----
+
+    /// The type of the root value of a place.
+    fn part_root_type(&self, part: &Part<'_>) -> Ty {
+        match part.root_reg {
+            Some((_, ty)) => ty,
+            None => self.place_type(part.root),
+        }
+    }
+
+    /// The steps of a place grouped into hops (`docs/design/records.md` 3.4): a hop is one slot
+    /// (or flat place) of one container, the steps into records and static arrays laid out flat
+    /// adding to its address. The first hop's container is the root value (or the instance, for
+    /// a flat field of an instance; or the reference slot, `HopKind::Ref`); each later hop's is
+    /// the block in the slot of the hop before.
+    fn hop_list(&self, part: &Part<'_>) -> Vec<Hop> {
+        let types = &self.program.types;
+        let mut hops: Vec<Hop> = Vec::new();
+        let mut cur = match (part.root, part.handle, part.root_reg) {
+            (Place::ObjField { base, slot, ty, .. }, Some(_), None) if self.is_flat(*ty) => {
+                Some(Hop::obj(base.ty, self.obj_slot(base.ty, *slot), *ty))
+            }
+            _ => None,
         };
-        let mut c = self.part_root_borrowed(part);
-        for step in inner {
-            let t = self.alloc_borrow(step.ty);
-            self.get_slot(t, c, &step.slot, step.ty, false);
+        let mut ty = self.part_root_type(part);
+        for (k, step) in part.steps.iter().enumerate() {
+            let inside = cur.is_some() && self.is_flat(ty);
+            if !inside {
+                hops.extend(cur.take());
+                let kind = if ty.is_dyn_indexed() {
+                    HopKind::Dyn
+                } else if hops.is_empty() && self.ref_root(part).is_some() {
+                    HopKind::Ref
+                } else {
+                    HopKind::Agg
+                };
+                let elem = types.elem_of(ty);
+                let mut h = Hop {
+                    kind,
+                    ty,
+                    elem: None,
+                    width: elem.map_or(1, |e| types.slot_width(e)),
+                    flat_elem: elem.is_some_and(|e| self.is_flat(e)),
+                    off: 0,
+                    terms: Vec::new(),
+                    start: k,
+                    val: ty,
+                };
+                match &step.slot {
+                    SlotRef::Field(i) => h.off = types.field_offset(ty, *i),
+                    SlotRef::Elem { index, .. } => h.elem = Some(*index),
+                    SlotRef::Dyn(r) => h.elem = Some(Idx::Reg(*r)),
+                }
+                cur = Some(h);
+            } else {
+                let h = cur
+                    .as_mut()
+                    .expect("a step inside a flat place has its hop");
+                match &step.slot {
+                    SlotRef::Field(i) => h.off += types.field_offset(ty, *i),
+                    SlotRef::Elem { index, .. } => {
+                        let w = types.elem_of(ty).map_or(1, |e| types.slot_width(e));
+                        match index {
+                            Idx::Const(c) => h.off += *c as u32 * w,
+                            Idx::Reg(r) => h.terms.push((*r, w)),
+                        }
+                    }
+                    SlotRef::Dyn(_) => unreachable!("a dynamic array is not laid out flat"),
+                }
+            }
+            cur.as_mut().expect("a step has its hop").val = step.ty;
+            ty = step.ty;
+        }
+        hops.extend(cur);
+        // `RefFieldGet` / `RefFieldSet` reach a slot at a number known when compiling, and
+        // never a flat place whole
+        let single = hops.len() == 1;
+        if let Some(h) = hops.first_mut()
+            && h.kind == HopKind::Ref
+            && (!h.is_static() || (single && self.is_flat(h.val)))
+        {
+            h.kind = HopKind::Agg;
+        }
+        hops
+    }
+
+    /// Whether the root of a place is a reference parameter whose value is laid out flat (it may
+    /// be a lent flat place) that its first hop cannot reach through the reference slot: the
+    /// value is then copied into a register for the access ([`FuncLower::with_ref_copy`]).
+    fn needs_ref_copy(&self, part: &Part<'_>, hops: &[Hop]) -> bool {
+        part.root_reg.is_none()
+            && matches!(part.root, Place::Var(v, _) if self.place_ref(*v))
+            && hops.first().is_some_and(|h| h.kind != HopKind::Ref)
+    }
+
+    /// Runs `f` on the place with the value of its root, a reference parameter laid out flat,
+    /// copied into an owning temporary (`LoadRefRef`; a block of its own for a lent flat place)
+    /// and, when `write`, written back whole after (`StoreRefRef`). Nothing runs in between, so
+    /// nothing else sees the copy. The copy is let go of at once.
+    fn with_ref_copy(
+        &mut self,
+        part: &Part<'_>,
+        write: bool,
+        f: impl FnOnce(&mut Self, &Part<'_>),
+    ) {
+        let ty = self.part_root_type(part);
+        let r = self
+            .ref_root(part)
+            .expect("the root is a reference parameter");
+        let t = self.alloc(ty);
+        self.op2(op::LOAD_REF_REF, t, r);
+        let copy = Part {
+            root: part.root,
+            handle: None,
+            steps: part.steps.clone(),
+            root_reg: Some((t, ty)),
+        };
+        f(self, &copy);
+        if write {
+            self.op2(op::STORE_REF_REF, r, t);
+        }
+        self.op1(op::RELEASE, t);
+    }
+
+    /// The register of the reference slot the root of a place is read through (a `var` / `out`
+    /// parameter, `Self` of a record method, a variable of an enclosing routine, a captured
+    /// variable), if it is.
+    fn ref_root(&self, part: &Part<'_>) -> Option<Reg> {
+        match (part.root, part.root_reg) {
+            (Place::Var(v, _), None) if self.is_ref_param(*v) => Some(self.reg_of(*v)),
+            _ => None,
+        }
+    }
+
+    /// The type of the record or static array the reference slot of a `Ref` hop leads to.
+    fn ref_type(&self, h: &Hop) -> Ty {
+        h.ty
+    }
+
+    /// The slot number of the address of a hop into a record, static array or instance: a
+    /// constant, or a new temporary with `element × width + offset + Σ index × stride`.
+    fn hop_slot(&mut self, h: &Hop) -> At {
+        let mut base = h.off;
+        let mut terms = Vec::new();
+        match h.elem {
+            Some(Idx::Const(k)) => base += k as u32 * h.width,
+            Some(Idx::Reg(r)) => terms.push((r, h.width)),
+            None => {}
+        }
+        terms.extend(h.terms.iter().copied());
+        if terms.is_empty() {
+            return At::Field(base);
+        }
+        let t = self.alloc_borrow(Ty::Int64);
+        self.sum_into(t, &terms, base);
+        At::Val(t)
+    }
+
+    /// `t := Σ index × stride + base` (`t` is written first).
+    fn sum_into(&mut self, t: Reg, terms: &[(Reg, u32)], base: u32) {
+        let ((r0, s0), rest) = terms.split_first().expect("a sum has a term");
+        if *s0 == 1 {
+            self.op2(op::MOVE, t, *r0);
+        } else {
+            self.op_imm(op::MUL_INT_I, t, *r0, i64::from(*s0));
+        }
+        self.add_terms(t, rest, base);
+    }
+
+    /// `t := t + Σ index × stride + base`.
+    fn add_terms(&mut self, t: Reg, terms: &[(Reg, u32)], base: u32) {
+        for &(r, s) in terms {
+            if s == 1 {
+                self.op3(op::ADD_INT, t, t, r);
+            } else {
+                let m = self.alloc_borrow(Ty::Int64);
+                self.op_imm(op::MUL_INT_I, m, r, i64::from(s));
+                self.op3(op::ADD_INT, t, t, m);
+            }
+        }
+        if base == 0 {
+            return;
+        }
+        if base <= i8::MAX as u32 {
+            self.op_imm(op::ADD_INT_I, t, t, i64::from(base));
+        } else {
+            let k = self.alloc_borrow(Ty::Int64);
+            self.load_int(k, i64::from(base));
+            self.op3(op::ADD_INT, t, t, k);
+        }
+    }
+
+    /// A cursor (`docs/spec/bytecode.md` 1.5) at the address of the hop `h` in the container `c`,
+    /// and the slot number to add to it in `SlotGet` / `SlotSet` (with `fold`, it is added to the
+    /// cursor, and 0 is returned): `ElemAt` for an element of an array whose elements are flat,
+    /// otherwise the slot number and the container.
+    fn hop_cursor(&mut self, h: &Hop, c: Reg, fold: bool) -> (Reg, u32) {
+        let cur = self.alloc_borrow(Ty::Int64);
+        let cur1 = self.alloc_borrow(h.ty);
+        if h.kind == HopKind::Dyn {
+            let Some(Idx::Reg(i)) = h.elem else {
+                unreachable!("an element of a dynamic array has its index in a register")
+            };
+            self.plain(
+                op::ELEM_AT,
+                vec![
+                    Operand::Reg(cur),
+                    Operand::Reg(cur1),
+                    Operand::Reg(c),
+                    Operand::Reg(i),
+                ],
+            );
+            let base = if fold { h.off } else { 0 };
+            self.add_terms(cur, &h.terms, base);
+            return (cur, if fold { 0 } else { h.off });
+        }
+        debug_assert!(
+            h.kind != HopKind::Ref,
+            "a cursor is not made through a reference slot"
+        );
+        match self.hop_slot(h) {
+            At::Field(s) => self.load_int(cur, i64::from(s)),
+            At::Val(s) => self.op2(op::MOVE, cur, s),
+            At::Dyn(_) => unreachable!("hop_slot gives a slot number"),
+        }
+        self.op2(op::MOVE, cur1, c);
+        (cur, 0)
+    }
+
+    /// Reads the slot at the address of `h` in the container `c` into `dst` (counted when
+    /// `counted`): a value that is not laid out flat.
+    fn hop_get(&mut self, h: &Hop, c: Reg, dst: Reg, counted: bool) {
+        let ty = h.val;
+        match h.kind {
+            HopKind::Dyn if h.flat_elem => {
+                let (cur, s) = self.hop_cursor(h, c, false);
+                self.cursor_get(dst, cur, s, ty, counted);
+            }
+            HopKind::Dyn => {
+                let Some(Idx::Reg(i)) = h.elem else {
+                    unreachable!("an element of a dynamic array has its index in a register")
+                };
+                self.get_slot(dst, c, &At::Dyn(i), ty, counted);
+            }
+            HopKind::Ref => {
+                let At::Field(s) = self.hop_slot(h) else {
+                    unreachable!("a reference slot's hop has a constant address")
+                };
+                self.ref_field_get(dst, c, s, ty, counted);
+            }
+            HopKind::Obj => match self.hop_slot(h) {
+                At::Field(s) => self.obj_get(dst, c, s, ty, counted),
+                At::Val(s) => {
+                    let (cur, k) = self.cursor_of(s, c, h.ty);
+                    self.cursor_get(dst, cur, k, ty, counted);
+                }
+                At::Dyn(_) => unreachable!("hop_slot gives a slot number"),
+            },
+            HopKind::Agg => {
+                let at = self.hop_slot(h);
+                self.get_slot(dst, c, &at, ty, counted);
+            }
+        }
+    }
+
+    /// Writes `src` to the slot at the address of `h` in the container `c` (opened for writing;
+    /// counted when `counted`): a value that is not laid out flat. Through a reference slot,
+    /// `RefFieldSet` opens the record or static array itself.
+    fn hop_set(&mut self, h: &Hop, c: Reg, src: Reg, counted: bool) {
+        let ty = h.val;
+        match h.kind {
+            HopKind::Dyn if h.flat_elem => {
+                let (cur, s) = self.hop_cursor(h, c, false);
+                self.cursor_set(cur, s, src, ty, counted);
+            }
+            HopKind::Dyn => {
+                let Some(Idx::Reg(i)) = h.elem else {
+                    unreachable!("an element of a dynamic array has its index in a register")
+                };
+                self.set_slot(c, &At::Dyn(i), src, ty, counted);
+            }
+            HopKind::Ref => {
+                let At::Field(s) = self.hop_slot(h) else {
+                    unreachable!("a reference slot's hop has a constant address")
+                };
+                let rec = self.ref_type(h);
+                self.ref_field_set(c, rec, s, src, ty, counted);
+            }
+            HopKind::Obj => match self.hop_slot(h) {
+                At::Field(s) => self.obj_set(c, s, src, ty, counted),
+                At::Val(s) => {
+                    let (cur, k) = self.cursor_of(s, c, h.ty);
+                    self.cursor_set(cur, k, src, ty, counted);
+                }
+                At::Dyn(_) => unreachable!("hop_slot gives a slot number"),
+            },
+            HopKind::Agg => {
+                let at = self.hop_slot(h);
+                self.set_slot(c, &at, src, ty, counted);
+            }
+        }
+    }
+
+    /// A cursor at slot `s` (a register) of the container `c` of type `ty`.
+    fn cursor_of(&mut self, s: Reg, c: Reg, ty: Ty) -> (Reg, u32) {
+        let cur = self.alloc_borrow(Ty::Int64);
+        let cur1 = self.alloc_borrow(ty);
+        self.op2(op::MOVE, cur, s);
+        self.op2(op::MOVE, cur1, c);
+        (cur, 0)
+    }
+
+    /// `SlotGet` / `SlotGetRef`: slot `k` from the cursor `cur`.
+    fn cursor_get(&mut self, dst: Reg, cur: Reg, k: u32, ty: Ty, counted: bool) {
+        let rest = vec![
+            Operand::Reg(cur),
+            Operand::Reg(cursor_next(cur)),
+            Operand::Imm(i64::from(k)),
+        ];
+        self.get_value(ty, counted, (op::SLOT_GET, op::SLOT_GET_REF), dst, rest);
+    }
+
+    /// `SlotSet` / `SlotSetRef`: `src` to slot `k` from the cursor `cur`.
+    fn cursor_set(&mut self, cur: Reg, k: u32, src: Reg, ty: Ty, counted: bool) {
+        let at = vec![
+            Operand::Reg(cur),
+            Operand::Reg(cursor_next(cur)),
+            Operand::Imm(i64::from(k)),
+        ];
+        let mut set = at.clone();
+        set.push(Operand::Reg(src));
+        self.set_value(
+            ty,
+            counted,
+            (op::SLOT_SET, op::SLOT_SET_REF),
+            set,
+            src,
+            (op::SLOT_GET, at),
+        );
+    }
+
+    /// Reads the value at the address of `h` in the container `c` into `dst` (counted when
+    /// `counted`): a flat place whole with `AggLoad` (always counted: it makes a block, so `dst`
+    /// owns its value), any other value with [`FuncLower::hop_get`].
+    fn hop_load(&mut self, h: &Hop, c: Reg, dst: Reg, counted: bool) {
+        if !self.is_flat(h.val) {
+            return self.hop_get(h, c, dst, counted);
+        }
+        let (cur, _) = self.hop_cursor(h, c, true);
+        self.plain(
+            op::AGG_LOAD,
+            vec![
+                Operand::Reg(dst),
+                Operand::Reg(cur),
+                Operand::Reg(cursor_next(cur)),
+                Operand::Type(h.val),
+            ],
+        );
+    }
+
+    /// Writes `src` (counted) to the address of `h` in the opened container `c`: a flat place
+    /// whole with `AggStore`, any other value with [`FuncLower::hop_set`].
+    fn hop_store(&mut self, h: &Hop, c: Reg, src: Reg) {
+        if !self.is_flat(h.val) {
+            return self.hop_set(h, c, src, true);
+        }
+        let (cur, _) = self.hop_cursor(h, c, true);
+        self.plain(
+            op::AGG_STORE,
+            vec![
+                Operand::Reg(cur),
+                Operand::Reg(cursor_next(cur)),
+                Operand::Reg(src),
+                Operand::Type(h.val),
+            ],
+        );
+    }
+
+    /// The container of the first hop read without counting: the instance, the reference
+    /// slot, or the root value.
+    fn hop0_borrowed(&mut self, part: &Part<'_>, h: &Hop) -> Reg {
+        match h.kind {
+            HopKind::Obj => part.handle.expect("an instance's field has its handle"),
+            HopKind::Ref => self.ref_root(part).expect("a reference slot's hop"),
+            _ => self.part_root_borrowed(part),
+        }
+    }
+
+    /// The container of hop `k` read without counting from the root.
+    fn hops_borrowed(&mut self, part: &Part<'_>, hops: &[Hop], k: usize) -> Reg {
+        let mut c = self.hop0_borrowed(part, &hops[0]);
+        for h in &hops[..k] {
+            let t = self.alloc_borrow(h.val);
+            self.hop_get(h, c, t, false);
             c = t;
         }
-        self.get_slot(dst, c, &last.slot, last.ty, true);
+        c
+    }
+
+    /// Reads the value of a field or element place into `dst` (counted).
+    fn part_load(&mut self, part: &Part<'_>, dst: Reg) {
+        if part.steps.is_empty() && part.root_reg.is_none() {
+            return self.load_place(part.root, dst);
+        }
+        self.part_access(part, false, |this, h, c| this.hop_load(h, c, dst, true));
+    }
+
+    /// Runs `f` on the last hop of a field or element place and its container: read without
+    /// counting, or opened for writing when `write` ([`FuncLower::open_hops`]). A root that is a
+    /// reference parameter laid out flat is copied first ([`FuncLower::with_ref_copy`]).
+    fn part_access(&mut self, part: &Part<'_>, write: bool, f: impl FnOnce(&mut Self, &Hop, Reg)) {
+        let hops = self.hop_list(part);
+        if self.needs_ref_copy(part, &hops) {
+            return self.with_ref_copy(part, write, |this, p| this.part_access(p, write, f));
+        }
+        let n = hops.len() - 1;
+        let c = if write {
+            self.open_hops(part, &hops).inner
+        } else {
+            self.hops_borrowed(part, &hops, n)
+        };
+        f(self, &hops[n], c);
+    }
+
+    /// A field read through the reference slot `r` (`RefFieldGet`, counted (`RefFieldGetRef`)
+    /// when `counted` and the value is managed; `docs/spec/bytecode.md` 2.8): slot `slot` of the
+    /// record or static array.
+    fn ref_field_get(&mut self, dst: Reg, r: Reg, slot: u32, ty: Ty, counted: bool) {
+        let ops = (op::REF_FIELD_GET, op::REF_FIELD_GET_REF);
+        let rest = vec![Operand::Reg(r), Operand::Imm(i64::from(slot))];
+        self.get_value(ty, counted, ops, dst, rest);
+    }
+
+    /// A field write through the reference slot `r` to a record or static array of type `rec`,
+    /// which `RefFieldSet` makes unique first (counted (`RefFieldSetRef`) when `counted` and the
+    /// value is managed; `src` keeps its reference).
+    fn ref_field_set(&mut self, r: Reg, rec: Ty, slot: u32, src: Reg, ty: Ty, counted: bool) {
+        let at = Operand::Imm(i64::from(slot));
+        self.set_value(
+            ty,
+            counted,
+            (op::REF_FIELD_SET, op::REF_FIELD_SET_REF),
+            vec![
+                Operand::Reg(r),
+                at.clone(),
+                Operand::Reg(src),
+                Operand::Type(rec),
+            ],
+            src,
+            (op::REF_FIELD_GET, vec![Operand::Reg(r), at]),
+        );
+    }
+
+    /// Changes slot `slot` of the record or static array the reference slot `r` leads to in
+    /// place: read without counting, written back without counting first to make the record
+    /// unique (`RefFieldSet`; a lent flat place is written in place), so that `f` changes a
+    /// value only the record holds, then written back again.
+    fn modify_ref_slot(
+        &mut self,
+        r: Reg,
+        rec: Ty,
+        slot: u32,
+        ty: Ty,
+        f: impl FnOnce(&mut Self, Reg),
+    ) -> Reg {
+        let t = self.alloc_borrow(ty);
+        self.ref_field_get(t, r, slot, ty, false);
+        self.ref_field_set(r, rec, slot, t, ty, false);
+        f(self, t);
+        self.ref_field_set(r, rec, slot, t, ty, false);
+        t
     }
 
     /// The root of a place made unique for writing (`Unique`; `docs/design/lifetime.md` 3.6). A
@@ -2693,13 +3407,17 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         })
     }
 
-    /// The value of the root of a field or element place, read without counting: an instance's
-    /// field through the handle `eval_part` took first, any other root as `root_borrowed`.
+    /// The value of the root of a field or element place, read without counting: the copy of a
+    /// reference parameter's value, an instance's field through the handle `eval_part` took
+    /// first, any other root as `root_borrowed`.
     fn part_root_borrowed(&mut self, part: &Part<'_>) -> Reg {
+        if let Some((t, _)) = part.root_reg {
+            return t;
+        }
         match (part.root, part.handle) {
-            (Place::ObjField { slot, ty, .. }, Some(h)) => {
+            (Place::ObjField { base, slot, ty, .. }, Some(h)) => {
                 let t = self.alloc_borrow(*ty);
-                self.obj_get(t, h, *slot, *ty, false);
+                self.obj_get(t, h, self.obj_slot(base.ty, *slot), *ty, false);
                 t
             }
             _ => self.root_borrowed(part.root),
@@ -2709,12 +3427,17 @@ impl<'m, 'a> FuncLower<'m, 'a> {
     /// The root of a field or element place made unique for writing (`open_root`), an
     /// instance's field through the handle `eval_part` took first.
     fn part_open_root(&mut self, part: &Part<'_>) -> Reg {
+        if let Some((t, ty)) = part.root_reg {
+            self.op_table(op::UNIQUE, t, Operand::Type(ty));
+            return t;
+        }
         match (part.root, part.handle) {
-            (Place::ObjField { slot, ty, .. }, Some(h)) => {
+            (Place::ObjField { base, slot, ty, .. }, Some(h)) => {
+                let s = self.obj_slot(base.ty, *slot);
                 let t = self.alloc_borrow(*ty);
-                self.obj_get(t, h, *slot, *ty, false);
+                self.obj_get(t, h, s, *ty, false);
                 self.op_table(op::UNIQUE, t, Operand::Type(*ty));
-                self.obj_set(h, *slot, t, *ty, false);
+                self.obj_set(h, s, t, *ty, false);
                 t
             }
             _ => self.open_root(part.root),
@@ -2724,7 +3447,10 @@ impl<'m, 'a> FuncLower<'m, 'a> {
     /// Changes the value of a variable or global in place: `f` gets a register with the value read
     /// without counting, may replace it (as `Unique` and `SetLen` do: the old reference is let go
     /// only if a new value takes its place), and the register is written back without counting.
-    /// Nothing else runs in between, so the counts stay right.
+    /// Nothing else runs in between, so the counts stay right. A value laid out flat (an
+    /// instance's field, or what a reference parameter may lend) is copied whole into an owning
+    /// temporary and written back whole (`f` then gets the copy, and the register returned no
+    /// longer holds it).
     fn modify_root(&mut self, root: &Place, f: impl FnOnce(&mut Self, Reg)) -> Reg {
         let ty = self.place_type(root);
         match root {
@@ -2732,6 +3458,15 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 let r = self.reg_of(*v);
                 f(self, r);
                 r
+            }
+            Place::Var(v, _) if self.place_ref(*v) => {
+                let r = self.reg_of(*v);
+                let t = self.alloc(ty);
+                self.op2(op::LOAD_REF_REF, t, r);
+                f(self, t);
+                self.op2(op::STORE_REF_REF, r, t);
+                self.op1(op::RELEASE, t);
+                t
             }
             Place::Var(v, _) => {
                 let r = self.reg_of(*v);
@@ -2751,10 +3486,20 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             Place::ObjField { base, slot, .. } => {
                 // The instance's slot, like a global's
                 let b = self.obj_handle(base, false);
+                let s = self.obj_slot(base.ty, *slot);
+                if self.is_flat(ty) {
+                    let h = Hop::obj(base.ty, s, ty);
+                    let t = self.alloc(ty);
+                    self.hop_load(&h, b, t, true);
+                    f(self, t);
+                    self.hop_store(&h, b, t);
+                    self.op1(op::RELEASE, t);
+                    return t;
+                }
                 let t = self.alloc_borrow(ty);
-                self.obj_get(t, b, *slot, ty, false);
+                self.obj_get(t, b, s, ty, false);
                 f(self, t);
-                self.obj_set(b, *slot, t, ty, false);
+                self.obj_set(b, s, t, ty, false);
                 t
             }
             _ => unreachable!("the root of a place is a variable, a global or an object's field"),
@@ -2764,38 +3509,49 @@ impl<'m, 'a> FuncLower<'m, 'a> {
     /// Opens the containers of a place for writing, from the root down (`docs/design/lifetime.md`
     /// 3.6, `docs/spec/types.md` chapter 3): records and static arrays are made unique and written
     /// back, while a dynamic array is written shared, so the containers before the innermost
-    /// dynamic array are only read. `inner` is the register with the innermost container (the one
-    /// holding the place's slot).
-    fn open_containers(&mut self, part: &Part<'_>) -> Opened {
-        let containers: Vec<Ty> = std::iter::once(self.place_type(part.root))
-            .chain(part.steps.iter().map(|s| s.ty))
-            .take(part.steps.len())
-            .collect();
-        let last_dyn = containers.iter().rposition(|t| t.is_dyn_indexed());
+    /// dynamic array are only read; an instance is shared, and a record or static array reached
+    /// through a reference slot is opened by `RefFieldSet`. Returns the container of the last hop,
+    /// and the number and container of the hop into the innermost dynamic array.
+    fn open_hops(&mut self, part: &Part<'_>, hops: &[Hop]) -> Opened {
+        let last_dyn = hops.iter().rposition(|h| h.kind == HopKind::Dyn);
         let (mut c, from, dyn_root) = match last_dyn {
-            None => (self.part_open_root(part), 0, None),
-            Some(0) if matches!(containers[0], Ty::OpenArray(_)) => {
+            None => {
+                let c = match hops[0].kind {
+                    HopKind::Obj | HopKind::Ref => self.hop0_borrowed(part, &hops[0]),
+                    _ => self.part_open_root(part),
+                };
+                (c, 0, None)
+            }
+            Some(0)
+                if matches!(self.part_root_type(part), Ty::OpenArray(_))
+                    && part.root_reg.is_none() =>
+            {
                 (self.open_open_array(part.root), 0, None)
             }
             Some(k) => {
                 // The dynamic array is read without counting along the way
-                let mut c = self.part_root_borrowed(part);
-                for step in &part.steps[..k] {
-                    let t = self.alloc_borrow(step.ty);
-                    self.get_slot(t, c, &step.slot, step.ty, false);
-                    c = t;
-                }
+                let c = self.hops_borrowed(part, hops, k);
                 (c, k, Some((k, c)))
             }
         };
-        let inner = part.steps[from..].split_last().map_or(&[][..], |(_, i)| i);
-        for step in inner {
-            let t = self.alloc_borrow(step.ty);
-            self.get_slot(t, c, &step.slot, step.ty, false);
-            self.op_table(op::UNIQUE, t, Operand::Type(step.ty));
-            // The container's slot takes over the reference of the copy (if one was made)
-            self.set_slot(c, &step.slot, t, step.ty, false);
-            c = t;
+        for h in &hops[from..hops.len() - 1] {
+            let ty = h.val;
+            c = if h.kind == HopKind::Ref {
+                let At::Field(s) = self.hop_slot(h) else {
+                    unreachable!("a reference slot's hop has a constant address")
+                };
+                let rec = self.ref_type(h);
+                self.modify_ref_slot(c, rec, s, ty, |this, t| {
+                    this.op_table(op::UNIQUE, t, Operand::Type(ty))
+                })
+            } else {
+                let t = self.alloc_borrow(ty);
+                self.hop_get(h, c, t, false);
+                self.op_table(op::UNIQUE, t, Operand::Type(ty));
+                // The container's slot takes over the reference of the copy (if one was made)
+                self.hop_set(h, c, t, false);
+                t
+            };
         }
         Opened { inner: c, dyn_root }
     }
@@ -2833,30 +3589,212 @@ impl<'m, 'a> FuncLower<'m, 'a> {
 
     /// Writes `src` to a field or element place (counted; `src` keeps its reference).
     fn part_store(&mut self, part: &Part<'_>, src: Reg) {
-        let Some(last) = part.steps.last() else {
+        if part.steps.is_empty() && part.root_reg.is_none() {
             return self.store_place(part.root, src);
-        };
-        let c = self.open_containers(part).inner;
-        self.set_slot(c, &last.slot, src, last.ty, true);
+        }
+        self.part_access(part, true, |this, h, c| this.hop_store(h, c, src));
     }
 
     /// Changes the value of a field or element place in place: the slot of its opened container
-    /// (like `modify_root` for a variable or global).
+    /// (like `modify_root` for a variable or global). A flat place is copied whole into an
+    /// owning temporary and written back whole.
     fn modify_part(&mut self, part: &Part<'_>, f: impl FnOnce(&mut Self, Reg)) {
-        let last = part
-            .steps
-            .last()
-            .expect("a field or element place has a step");
-        let c = self.open_containers(part).inner;
-        let t = self.alloc_borrow(last.ty);
-        self.get_slot(t, c, &last.slot, last.ty, false);
-        f(self, t);
-        self.set_slot(c, &last.slot, t, last.ty, false);
+        let hops = self.hop_list(part);
+        if self.needs_ref_copy(part, &hops) {
+            return self.with_ref_copy(part, true, |this, p| this.modify_part(p, f));
+        }
+        let c = self.open_hops(part, &hops).inner;
+        let last = hops.last().expect("a place has a hop");
+        let ty = last.val;
+        if self.is_flat(ty) {
+            let t = self.alloc(ty);
+            self.hop_load(last, c, t, true);
+            f(self, t);
+            self.hop_store(last, c, t);
+            self.op1(op::RELEASE, t);
+        } else if last.kind == HopKind::Ref {
+            let At::Field(s) = self.hop_slot(last) else {
+                unreachable!("a reference slot's hop has a constant address")
+            };
+            let rec = self.ref_type(last);
+            self.modify_ref_slot(c, rec, s, ty, f);
+        } else {
+            let t = self.alloc_borrow(ty);
+            self.hop_get(last, c, t, false);
+            f(self, t);
+            self.hop_set(last, c, t, false);
+        }
+    }
+
+    // ---- Reading fields and elements in expressions ----
+
+    /// Reads a field or element expression (or an instance's field) into `dst`, counted when
+    /// `counted` (a flat value is always counted, into a register that owns it): the root
+    /// first, then each hop's indices (a static array's checked at once) followed by the read of
+    /// the slot holding the next hop's container. A container is read with counting when the
+    /// indices after it may run code (a call), so the code cannot free it.
+    fn read_chain(&mut self, e: &Expr, dst: Reg, counted: bool) {
+        self.read_chain_with(e, |this, h, c| this.hop_load(h, c, dst, counted));
+    }
+
+    /// [`FuncLower::read_chain`] with `f` reading the last hop from its container.
+    fn read_chain_with(&mut self, e: &Expr, f: impl FnOnce(&mut Self, &Hop, Reg)) {
+        let mut f = Some(f);
+        let mut steps: Vec<&Expr> = Vec::new();
+        let mut x = e;
+        while x.value.is_none() {
+            match &x.kind {
+                ExprKind::Field { base, .. } | ExprKind::Elem { base, .. } => {
+                    steps.push(x);
+                    x = base;
+                }
+                _ => break,
+            }
+        }
+        steps.reverse();
+        let root = x;
+        let types = &self.program.types;
+        // The hops, by the types (as `hop_list`): the steps of each, and its kind
+        let mut groups: Vec<(HopKind, Ty, Vec<&Expr>)> = Vec::new();
+        let obj_root = match &root.kind {
+            ExprKind::ObjField { base, slot, .. }
+                if root.value.is_none() && self.is_flat(root.ty) =>
+            {
+                Some((base, *slot))
+            }
+            _ => None,
+        };
+        if let Some((base, _)) = obj_root {
+            groups.push((HopKind::Obj, base.ty, Vec::new()));
+        }
+        let mut ty = root.ty;
+        for s in &steps {
+            let inside = !groups.is_empty() && self.is_flat(ty);
+            if !inside {
+                let kind = if ty.is_dyn_indexed() {
+                    HopKind::Dyn
+                } else {
+                    HopKind::Agg
+                };
+                groups.push((kind, ty, Vec::new()));
+            }
+            groups.last_mut().expect("a hop").2.push(s);
+            ty = s.ty;
+        }
+        let ref_var = match &root.kind {
+            ExprKind::Var(v) if root.value.is_none() && self.is_ref_param(*v) => Some(*v),
+            _ => None,
+        };
+        // Through a reference slot, the first hop's slot is read with `RefFieldGet` when its
+        // address is constant and it is not a flat place whole
+        let first_static = groups.first().is_some_and(|(k, _, g)| {
+            *k == HopKind::Agg
+                && g.iter().all(|s| match &s.kind {
+                    ExprKind::Elem { index, .. } => index.value.is_some(),
+                    _ => true,
+                })
+        });
+        let use_ref =
+            ref_var.is_some() && first_static && !(groups.len() == 1 && self.is_flat(e.ty));
+        let has_call = |g: &[&Expr]| {
+            g.iter()
+                .any(|s| matches!(&s.kind, ExprKind::Elem { index, .. } if expr_has_call(index)))
+        };
+        let calls_after = |k: usize| groups[k..].iter().any(|(_, _, g)| has_call(g));
+        let mut c = if let Some((base, _)) = obj_root {
+            self.obj_handle(base, calls_after(0))
+        } else if use_ref {
+            self.reg_of(ref_var.expect("a reference parameter"))
+        } else if groups.is_empty() {
+            unreachable!("read_chain reads a field, an element or an instance's field")
+        } else if calls_after(0) {
+            let t = self.alloc(root.ty);
+            self.expr(root, t);
+            t
+        } else {
+            self.borrowed_value(root)
+        };
+        let n = groups.len();
+        for (k, (kind, cty, g)) in groups.iter().enumerate() {
+            let elem = types.elem_of(*cty);
+            let mut h = Hop {
+                kind: if k == 0 && use_ref {
+                    HopKind::Ref
+                } else {
+                    *kind
+                },
+                ty: *cty,
+                elem: None,
+                width: elem.map_or(1, |e| types.slot_width(e)),
+                flat_elem: elem.is_some_and(|e| self.is_flat(e)),
+                off: 0,
+                terms: Vec::new(),
+                start: 0,
+                val: *cty,
+            };
+            let mut sty = *cty;
+            if let Some((base, slot)) = obj_root.filter(|_| k == 0) {
+                h = Hop::obj(base.ty, self.obj_slot(base.ty, slot), root.ty);
+                sty = root.ty;
+            }
+            for (j, s) in g.iter().enumerate() {
+                match &s.kind {
+                    ExprKind::Field { index, .. } => h.off += types.field_offset(sty, *index),
+                    ExprKind::Elem { index, .. } if sty.is_dyn_indexed() => {
+                        let r = self.alloc_borrow(Ty::Int64);
+                        self.expr(index, r);
+                        h.elem = Some(Idx::Reg(r));
+                        // A later index of the hop may run code: this index is checked first,
+                        // as a read checks it right after it is evaluated
+                        if has_call(&g[j + 1..]) {
+                            let probe = Hop {
+                                terms: Vec::new(),
+                                ..h.clone()
+                            };
+                            self.hop_cursor(&probe, c, true);
+                        }
+                    }
+                    ExprKind::Elem { index, .. } => {
+                        let (i, check) = self.elem_idx(sty, index, s.span);
+                        if let (Idx::Reg(r), Some(chk)) = (i, &check) {
+                            self.chk_index(r, chk);
+                        }
+                        let w = types.elem_of(sty).map_or(1, |e| types.slot_width(e));
+                        if j == 0 && h.kind != HopKind::Obj {
+                            h.elem = Some(i);
+                        } else {
+                            match i {
+                                Idx::Const(v) => h.off += v as u32 * w,
+                                Idx::Reg(r) => h.terms.push((r, w)),
+                            }
+                        }
+                    }
+                    _ => unreachable!("a step is a field or an element"),
+                }
+                sty = s.ty;
+            }
+            h.val = sty;
+            if k + 1 == n {
+                let f = f.take().expect("the last hop is read once");
+                f(self, &h, c);
+            } else {
+                let t = if calls_after(k + 1) {
+                    let t = self.alloc(sty);
+                    self.hop_get(&h, c, t, true);
+                    t
+                } else {
+                    let t = self.alloc_borrow(sty);
+                    self.hop_get(&h, c, t, false);
+                    t
+                };
+                c = t;
+            }
+        }
     }
 
     /// A register with the value of an expression that is only read right away: a variable's
     /// register, or a container read without counting (`docs/design/lifetime.md` 3.6). Anything
-    /// that makes a value goes to an owning temporary.
+    /// that makes a value goes to an owning temporary, a flat place read whole among them.
     fn borrowed_value(&mut self, e: &Expr) -> Reg {
         if e.value.is_none() {
             match &e.kind {
@@ -2864,23 +3802,19 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                     return self.root_borrowed(&Place::Var(*v, e.span));
                 }
                 ExprKind::Global(g) => return self.root_borrowed(&Place::Global(*g)),
-                ExprKind::Field { base, index, .. } => {
-                    let b = self.borrowed_value(base);
+                ExprKind::Field { .. } | ExprKind::Elem { .. } | ExprKind::ObjField { .. }
+                    if !self.is_flat(e.ty) =>
+                {
                     let t = self.alloc_borrow(e.ty);
-                    self.get_slot(t, b, &SlotRef::Field(*index), e.ty, false);
+                    self.read_field(e, t, false);
                     return t;
                 }
-                ExprKind::ObjField { base, slot, .. } => {
-                    let b = self.borrowed_value(base);
-                    let t = self.alloc_borrow(e.ty);
-                    self.obj_get(t, b, *slot, e.ty, false);
-                    return t;
-                }
-                ExprKind::Elem { base, index } => {
-                    let b = self.index_base(base, index);
-                    let (i, get) = self.read_index(base.ty, index, e.span);
-                    let t = self.alloc_borrow(e.ty);
-                    self.op3(get, t, b, i);
+                ExprKind::Field { .. } | ExprKind::Elem { .. } | ExprKind::ObjField { .. } => {
+                    let t = self.alloc(e.ty);
+                    self.read_field(e, t, true);
+                    if !self.program.types.holds_object(e.ty) {
+                        self.owned.push(t);
+                    }
                     return t;
                 }
                 _ => {}
@@ -2891,31 +3825,33 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         t
     }
 
-    /// The array an element is read from. When evaluating the index may run code (a call), the
-    /// array is read with counting first, so the code cannot free it.
-    fn index_base(&mut self, base: &Expr, index: &Expr) -> Reg {
-        if expr_has_call(index) {
-            let t = self.alloc(base.ty);
-            self.expr(base, t);
-            t
-        } else {
-            self.borrowed_value(base)
+    /// Reads a field, element or instance's field expression into `dst` (counted when
+    /// `counted`; a flat value always is).
+    fn read_field(&mut self, e: &Expr, dst: Reg, counted: bool) {
+        match &e.kind {
+            ExprKind::ObjField { base, slot, .. } if !self.is_flat(e.ty) => {
+                let b = self.borrowed_value(base);
+                let s = self.obj_slot(base.ty, *slot);
+                self.obj_get(dst, b, s, e.ty, counted);
+            }
+            ExprKind::ObjField { .. } => {
+                self.read_field_with(e, |this, h, c| this.hop_load(h, c, dst, true))
+            }
+            _ => self.read_chain(e, dst, counted),
         }
     }
 
-    /// An element index for a read: the register with the 0-based index (range-checked for a static
-    /// array; the VM checks a dynamic or open array) and the read instruction without counting.
-    fn read_index(&mut self, arr: Ty, index: &Expr, span: TextRange) -> (Reg, u8) {
-        if arr.is_dyn_indexed() {
-            let i = self.alloc_borrow(Ty::Int64);
-            self.expr(index, i);
-            return (i, op::DYN_GET);
+    /// Runs `f` on the last hop of a field, element or instance's field expression and its
+    /// container read without counting ([`FuncLower::read_chain_with`]).
+    fn read_field_with(&mut self, e: &Expr, f: impl FnOnce(&mut Self, &Hop, Reg)) {
+        match &e.kind {
+            ExprKind::ObjField { base, slot, .. } => {
+                let b = self.borrowed_value(base);
+                let h = Hop::obj(base.ty, self.obj_slot(base.ty, *slot), e.ty);
+                f(self, &h, b);
+            }
+            _ => self.read_chain_with(e, f),
         }
-        let (i, check) = self.elem_index(arr, index, span);
-        if let Some(c) = check {
-            self.chk_index(i, &c);
-        }
-        (i, op::VAL_GET)
     }
 
     fn for_stmt(
@@ -3264,15 +4200,25 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         } else if f.coll_ty == Ty::String {
             self.op3(op::STR_INDEX, raw, c, i);
         } else {
-            let ops = if f.coll_ty.is_dyn_indexed() {
-                (op::DYN_GET, op::DYN_GET_REF)
-            } else {
-                (op::VAL_GET, op::VAL_GET_REF)
+            let types = &self.program.types;
+            let h = Hop {
+                kind: if f.coll_ty.is_dyn_indexed() {
+                    HopKind::Dyn
+                } else {
+                    HopKind::Agg
+                },
+                ty: f.coll_ty,
+                elem: Some(Idx::Reg(i)),
+                width: types.slot_width(f.elem),
+                flat_elem: self.is_flat(f.elem),
+                off: 0,
+                terms: Vec::new(),
+                start: 0,
+                val: f.elem,
             };
-            let rest = vec![Operand::Reg(c), Operand::Reg(i)];
             // A `[weak]` loop variable does not count the element (`docs/spec/objects.md` 4.4)
             let counted = !matches!(self.reg_type(raw), Some(Ty::Weak(_)));
-            self.get_value(f.elem, counted, ops, raw, rest);
+            self.hop_load(&h, c, raw, counted);
         }
         if let Some(kind) = f.conv {
             self.convert(kind, f.elem, dst, raw);
@@ -3605,7 +4551,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         let ty = self.place_type(target);
         let f = |this: &mut Self, t: Reg| {
             if ty == Ty::String {
-                this.op2(op::STR_SET_LEN, t, regs[0]);
+                this.intrinsic(op::intr::STR_SET_LEN, &[t, regs[0]]);
             } else if ty == Ty::Utf8String {
                 this.intrinsic(op::intr::U8_SET_LEN, &[t, regs[0]]);
             } else {
@@ -3683,12 +4629,13 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             _ => self.program.types.array(ty).map(|(_, _, _, e)| e),
         }
         .expect("`Exchange` takes an array");
-        let (get, set, ri, rj) = if let Ty::DynArray(_) = ty {
+        let dynamic = matches!(ty, Ty::DynArray(_));
+        let (ri, rj) = if dynamic {
             let ri = self.alloc_borrow(Ty::Int64);
             self.expr(first, ri);
             let rj = self.alloc_borrow(Ty::Int64);
             self.expr(second, rj);
-            (op::DYN_GET, op::DYN_SET, ri, rj)
+            (ri, rj)
         } else {
             let (ri, ci) = self.elem_index(ty, first, span);
             let (rj, cj) = self.elem_index(ty, second, span);
@@ -3697,18 +4644,42 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                     self.chk_index(r, &c);
                 }
             }
-            (op::VAL_GET, op::VAL_SET, ri, rj)
+            (ri, rj)
         };
+        let flat = self.is_flat(elem);
+        let width = self.program.types.slot_width(elem);
         let f = |this: &mut Self, t: Reg| {
             if let Ty::Array(_) = ty {
                 this.op_table(op::UNIQUE, t, Operand::Type(ty));
             }
-            let x = this.alloc_borrow(elem);
-            let y = this.alloc_borrow(elem);
-            this.op3(get, x, t, ri);
-            this.op3(get, y, t, rj);
-            this.op3(set, t, ri, y);
-            this.op3(set, t, rj, x);
+            let at = |i: Reg| Hop {
+                kind: if dynamic { HopKind::Dyn } else { HopKind::Agg },
+                ty,
+                elem: Some(Idx::Reg(i)),
+                width,
+                flat_elem: flat,
+                off: 0,
+                terms: Vec::new(),
+                start: 0,
+                val: elem,
+            };
+            // A flat element is swapped whole, through blocks of its own
+            let (x, y) = if flat {
+                (this.alloc(elem), this.alloc(elem))
+            } else {
+                (this.alloc_borrow(elem), this.alloc_borrow(elem))
+            };
+            this.hop_load(&at(ri), t, x, false);
+            this.hop_load(&at(rj), t, y, false);
+            if flat {
+                this.hop_store(&at(ri), t, y);
+                this.hop_store(&at(rj), t, x);
+                this.op1(op::RELEASE, x);
+                this.op1(op::RELEASE, y);
+            } else {
+                this.hop_set(&at(ri), t, y, false);
+                this.hop_set(&at(rj), t, x, false);
+            }
         };
         self.edit_place(target, part, f);
     }
@@ -3733,6 +4704,101 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             this.intrinsic(op::intr::ARRAY_MOVE_RANGE, &[t, regs[0], regs[1], regs[2]]);
         };
         self.edit_place(target, part, f);
+    }
+
+    /// `ArraySortRange` (`docs/spec/bytecode.md` 2.22): the target's indices, then the two `Int64`
+    /// arguments, then, for an element type whose default order is a built-in comparison
+    /// (`IsPlainOrder`), the comparison and `I96` on the dynamic array in place (shared, as
+    /// `Exchange` writes it; no count changes). Any other type raises `EInvalidOperation` once
+    /// the arguments are evaluated (only a mistake of the standard library gets there).
+    fn array_sort_range(&mut self, target: &Place, index: &Expr, count: &Expr) {
+        let ty = self.place_type(target);
+        let elem = self
+            .program
+            .types
+            .elem_of(ty)
+            .expect("sema checked a dynamic array");
+        let Some(kind) = self.sort_kind(elem) else {
+            if is_part(target) {
+                self.eval_part(target);
+            }
+            for e in [index, count] {
+                let r = self.alloc_borrow(Ty::Int64);
+                self.expr(e, r);
+            }
+            let name = self.program.types.name(elem);
+            let msg = format!("`{name}` is not ordered by a built-in comparison");
+            self.raise_invalid_operation(&msg);
+            return;
+        };
+        let part = is_part(target).then(|| self.eval_part(target));
+        let values = [index, count].map(|e| {
+            let r = self.alloc_borrow(Ty::Int64);
+            self.expr(e, r);
+            r
+        });
+        let f = |this: &mut Self, t: Reg| {
+            // `B` to `B+2` are consecutive call-argument temporaries
+            let regs = values.map(|v| {
+                let r = this.alloc_arg(Some(Ty::Int64));
+                this.op2(op::MOVE, r, v);
+                r
+            });
+            let k = this.alloc_arg(Some(Ty::Int64));
+            this.load_int(k, kind);
+            this.intrinsic(op::intr::ARRAY_SORT_RANGE, &[t, regs[0], regs[1], k]);
+        };
+        self.edit_place(target, part, f);
+    }
+
+    /// How `ArraySortRange` (`I96`) compares the elements of `ty` (`docs/spec/bytecode.md`
+    /// 2.22), from the same kind as the expansion of `KeyCompare` (`docs/spec/collections.md`
+    /// 10.2); `None` when the order is not a built-in comparison. `IsPlainOrder` is whether it is
+    /// `Some`.
+    fn sort_kind(&self, ty: Ty) -> Option<i64> {
+        Some(match self.program.types.order_kind(ty) {
+            OrderKind::Int => bytecode::SORT_INT,
+            OrderKind::UInt => bytecode::SORT_UINT,
+            OrderKind::Single => bytecode::SORT_SINGLE,
+            OrderKind::Double => bytecode::SORT_DOUBLE,
+            OrderKind::Str => bytecode::SORT_STR,
+            OrderKind::Utf8 => bytecode::SORT_UTF8,
+            OrderKind::Call | OrderKind::None => return None,
+        })
+    }
+
+    /// `HashRelink` (`docs/spec/bytecode.md` 2.23): the buckets in `A`, then the hashes, the next
+    /// entries and the count in consecutive registers. The arrays are read without counting (the
+    /// intrinsic runs no Pascal code) and written in place, so the places are not written back.
+    fn hash_relink(&mut self, buckets: &Place, hashes: &Expr, next: &Place, count: &Expr) {
+        let b = self.place_borrowed(buckets);
+        let h = self.borrowed_value(hashes);
+        let x = self.place_borrowed(next);
+        let n = self.alloc_borrow(Ty::Int64);
+        self.expr(count, n);
+        let types = [hashes.ty, self.place_type(next), Ty::Int64];
+        let mut args = Vec::new();
+        for (r, t) in [h, x, n].into_iter().zip(types) {
+            let a = self.alloc_arg(Some(t));
+            self.op2(op::MOVE, a, r);
+            args.push(a);
+        }
+        self.intrinsic(op::intr::HASH_RELINK, &[b, args[0], args[1], args[2]]);
+    }
+
+    /// The value of a place read only right away: without counting when it is the root of the
+    /// place (a variable, a global or an instance's field), else a counted copy let go of when
+    /// the statement ends.
+    fn place_borrowed(&mut self, p: &Place) -> Reg {
+        match p {
+            Place::Var(..) | Place::Global(_) | Place::ObjField { .. } => self.root_borrowed(p),
+            _ => {
+                let t = self.alloc(self.place_type(p));
+                self.load_place(p, t);
+                self.owned.push(t);
+                t
+            }
+        }
     }
 
     /// Changes the value of a place in place with `f` (given the register holding the value).
@@ -3760,7 +4826,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
 
     /// An array instruction `opc A Bx` on the array in `t` (an owning value read without counting;
     /// `A+1`, `A+2` are `args`), written back to `t`.
-    fn array_edit(&mut self, opc: u8, ty: Ty, t: Reg, args: [(Reg, Ty); 2]) {
+    fn array_edit(&mut self, opc: u16, ty: Ty, t: Reg, args: [(Reg, Ty); 2]) {
         let a = self.alloc_arg(Some(ty));
         let b = self.alloc_arg(Some(args[0].1));
         let c = self.alloc_arg(Some(args[1].1));
@@ -3836,17 +4902,29 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             self.op_table(op::UNIQUE, a, Operand::Type(ty));
         }
         let k = self.alloc_borrow(Ty::Int64);
-        let slot = if dynamic {
-            SlotRef::Dyn(k)
-        } else {
-            SlotRef::Elem {
-                reg: k,
-                check: None,
-            }
+        let types = &self.program.types;
+        let elem = types
+            .elem_of(ty)
+            .expect("an array constructor makes an array");
+        let mut h = Hop {
+            kind: if dynamic { HopKind::Dyn } else { HopKind::Agg },
+            ty,
+            elem: None,
+            width: types.slot_width(elem),
+            flat_elem: self.is_flat(elem),
+            off: 0,
+            terms: Vec::new(),
+            start: 0,
+            val: elem,
         };
-        for (i, (x, v)) in elems.iter().zip(vals).enumerate() {
-            self.load_int(k, i as i64);
-            self.set_slot(a, &slot, v, x.ty, true);
+        for (i, v) in vals.into_iter().enumerate() {
+            h.elem = Some(if dynamic {
+                self.load_int(k, i as i64);
+                Idx::Reg(k)
+            } else {
+                Idx::Const(i as i64)
+            });
+            self.hop_store(&h, a, v);
         }
         self.op2(op::MOVE_REF, dst, a);
     }
@@ -3875,7 +4953,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 self.intrinsic(op::intr::READ_REST, &[a]);
                 if ty == Ty::Utf8String {
                     let t = self.alloc(ty);
-                    self.op2(op::STR_TO_U8, t, a);
+                    self.intrinsic(op::intr::STR_TO_U8, &[t, a]);
                     t
                 } else {
                     a
@@ -3946,7 +5024,11 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             let old = self.set_line(arg.value.span);
             match &arg.precision {
                 Some(d) => self.fixed_value(&arg.value, d, s),
-                None => self.string_value(&arg.value, s),
+                None => {
+                    self.string_value(&arg.value, s);
+                    // `Write(G)`: the copy of `G` is let go of when the statement ends
+                    self.let_go_at_statement_end(&arg.value, s);
+                }
             }
             if let Some(w) = &arg.width {
                 let wr = self.alloc(w.ty);
@@ -4094,8 +5176,8 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         match kind {
             Conversion::Int { to, check } => self.convert_int(dst, src, from, to, check),
             Conversion::CharToStr => self.op2(op::STR_FROM_CHAR, dst, src),
-            Conversion::StrToU8 => self.op2(op::STR_TO_U8, dst, src),
-            Conversion::U8ToStr => self.op2(op::U8_TO_STR, dst, src),
+            Conversion::StrToU8 => self.intrinsic(op::intr::STR_TO_U8, &[dst, src]),
+            Conversion::U8ToStr => self.intrinsic(op::intr::U8_TO_STR, &[dst, src]),
             // The checked form uses the `Char` width so that the `ERangeError` names `Char`
             // (`docs/spec/semantics.md` 2.5); both widths keep the low 16 bits
             Conversion::IntToChar { check: true } => self.op_imm(op::NARROW_RNG, dst, src, 8),
@@ -4127,27 +5209,31 @@ impl<'m, 'a> FuncLower<'m, 'a> {
     /// An integer, real or `Currency` value to the real or `Currency` type `to`
     /// (`docs/spec/types.md` 8.4): one rounding.
     fn convert_num(&mut self, from: Ty, to: Ty, dst: Reg, src: Reg) {
+        // The `Currency` conversions are intrinsics (`docs/spec/bytecode.md` 2.19)
         let opc = match (from, to) {
-            (Ty::UInt64, Ty::Double) => op::UINT_TO_F64,
-            (Ty::UInt64, Ty::Single) => op::UINT_TO_F32,
-            (Ty::UInt64, _) => op::UINT_TO_CURR,
-            (f, Ty::Double) if f.is_integer() => op::INT_TO_F64,
-            (f, Ty::Single) if f.is_integer() => op::INT_TO_F32,
-            (f, _) if f.is_integer() => op::INT_TO_CURR,
-            (Ty::Single, Ty::Double) => op::F32_TO_F64,
-            (Ty::Double, Ty::Single) => op::F64_TO_F32,
-            (Ty::Currency, Ty::Double) => op::CURR_TO_F64,
-            (Ty::Currency, Ty::Single) => op::CURR_TO_F32,
-            (Ty::Double, Ty::Currency) => op::F64_TO_CURR,
+            (Ty::UInt64, Ty::Double) => Ok(op::UINT_TO_F64),
+            (Ty::UInt64, Ty::Single) => Ok(op::UINT_TO_F32),
+            (Ty::UInt64, _) => Err(op::intr::UINT_TO_CURR),
+            (f, Ty::Double) if f.is_integer() => Ok(op::INT_TO_F64),
+            (f, Ty::Single) if f.is_integer() => Ok(op::INT_TO_F32),
+            (f, _) if f.is_integer() => Err(op::intr::INT_TO_CURR),
+            (Ty::Single, Ty::Double) => Ok(op::F32_TO_F64),
+            (Ty::Double, Ty::Single) => Ok(op::F64_TO_F32),
+            (Ty::Currency, Ty::Double) => Err(op::intr::CURR_TO_F64),
+            (Ty::Currency, Ty::Single) => Err(op::intr::CURR_TO_F32),
+            (Ty::Double, Ty::Currency) => Err(op::intr::F64_TO_CURR),
             (Ty::Single, Ty::Currency) => {
                 // Exact, then one rounding to four decimals
                 self.op2(op::F32_TO_F64, dst, src);
-                self.op2(op::F64_TO_CURR, dst, dst);
+                self.intrinsic(op::intr::F64_TO_CURR, &[dst, dst]);
                 return;
             }
             _ => unreachable!("sema converts only numbers to reals and `Currency`"),
         };
-        self.op2(opc, dst, src);
+        match opc {
+            Ok(opc) => self.op2(opc, dst, src),
+            Err(id) => self.intrinsic(id, &[dst, src]),
+        }
     }
 
     /// `ChkRange` of the value in `reg` against the range of the enumeration or subrange type `ty`
@@ -4207,7 +5293,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         }
         let mut pending = None;
         match &e.kind {
-            ExprKind::Const => {
+            ExprKind::Const { .. } => {
                 // value has already been handled above
                 self.op1(op::LOAD_ZERO, dst);
             }
@@ -4240,7 +5326,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                     }
                     (UnOp::Neg, Calc::Real(Ty::Single)) => self.op2(op::NEG_F32, dst, dst),
                     (UnOp::Neg, Calc::Real(_)) => self.op2(op::NEG_F64, dst, dst),
-                    (UnOp::Neg, Calc::Curr) => self.op2(op::NEG_CURR, dst, dst),
+                    (UnOp::Neg, Calc::Curr) => self.intrinsic(op::intr::NEG_CURR, &[dst, dst]),
                     (UnOp::Neg, Calc::Int(t)) => {
                         let overflow = self.current_overflow;
                         if *t == Ty::Int64 && overflow {
@@ -4257,7 +5343,14 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 }
             }
             ExprKind::StrIndex { base, index } => {
-                let b = self.expr_any(base);
+                // When the index runs no code, nothing can change the string before `StrIndex`
+                // reads it, so it is read without counting (as `Length`); a counted copy would
+                // cost a `Release` in a loop over `G[I]` (`docs/design/lifetime.md` 3.5)
+                let b = if expr_has_call(index) {
+                    self.expr_any(base)
+                } else {
+                    self.borrowed_value(base)
+                };
                 let i = self.expr_any(index);
                 let opc = if base.ty == Ty::Utf8String {
                     op::U8_INDEX
@@ -4266,21 +5359,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 };
                 self.op3(opc, dst, b, i);
             }
-            ExprKind::Field { base, index, .. } => {
-                let b = self.borrowed_value(base);
-                self.get_slot(dst, b, &SlotRef::Field(*index), e.ty, true);
-            }
-            ExprKind::Elem { base, index } => {
-                let b = self.index_base(base, index);
-                let (i, get) = self.read_index(base.ty, index, e.span);
-                let ops = match get {
-                    op::DYN_GET => (op::DYN_GET, op::DYN_GET_REF),
-                    op::VAL_GET => (op::VAL_GET, op::VAL_GET_REF),
-                    other => (other, other),
-                };
-                let rest = vec![Operand::Reg(b), Operand::Reg(i)];
-                self.get_value(e.ty, true, ops, dst, rest);
-            }
+            ExprKind::Field { .. } | ExprKind::Elem { .. } => self.read_field(e, dst, true),
             ExprKind::ArrayCtor(elems) => self.array_ctor(e.ty, elems, dst),
             ExprKind::Slice { base, low, high } => {
                 self.slice(base, low.as_deref(), high.as_deref(), e.ty, dst)
@@ -4410,10 +5489,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             }
             // The built-in body does nothing (`docs/spec/objects.md` 14.3)
             ExprKind::InheritedBuiltin { .. } => {}
-            ExprKind::ObjField { base, slot, .. } => {
-                let b = self.borrowed_value(base);
-                self.obj_get(dst, b, *slot, e.ty, true);
-            }
+            ExprKind::ObjField { .. } => self.read_field(e, dst, true),
             ExprKind::Weak(inner) => {
                 // `docs/spec/objects.md` 4.4, 14.3: the handle is read without counting, then
                 // `LoadWeak` counts it into `dst` (or writes `nil`)
@@ -4464,6 +5540,8 @@ impl<'m, 'a> FuncLower<'m, 'a> {
     }
 
     /// A register holding the expression's value (the variable's register for a variable, otherwise a temporary).
+    /// A counted copy of a variable holding no object is let go of when the statement ends
+    /// ([`FuncLower::let_go_at_statement_end`]).
     fn expr_any(&mut self, e: &Expr) -> Reg {
         if e.value.is_none()
             && let ExprKind::Var(v) = &e.kind
@@ -4473,6 +5551,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         }
         let t = self.alloc(e.ty);
         self.expr(e, t);
+        self.let_go_at_statement_end(e, t);
         t
     }
 
@@ -4620,9 +5699,10 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             if let Some(c) = carried {
                 self.op2(op::MOVE, slots[0], c);
             }
+            let mut copies = Vec::new();
             for (&(e, span), &slot) in group.iter().zip(&slots[carry..]) {
                 let old = self.set_line(span);
-                self.borrow_arg(e, slot, exprs.as_slice());
+                copies.extend(self.borrow_arg(e, slot, exprs.as_slice()));
                 self.line = old;
             }
             let to = if tail.is_empty() {
@@ -4638,6 +5718,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             ];
             ops.extend(slots.iter().map(|&r| Operand::Reg(r)));
             self.plain(op::CONCAT_STR_N, ops);
+            self.let_go_copies(&copies);
             self.line = old;
             carried = Some(to);
             rest = tail;
@@ -4814,7 +5895,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
     /// is false except `<>`, so `>` and `>=` swap the operands rather than negate).
     fn real_arith(&mut self, bop: BinOp, calc: Ty, dst: Reg, a: Reg, b: Reg) {
         let single = calc == Ty::Single;
-        let pick = |d: u8, s: u8| if single { s } else { d };
+        let pick = |d: u16, s: u16| if single { s } else { d };
         let (opc, a, b) = match bop {
             BinOp::Add => (pick(op::ADD_F64, op::ADD_F32), a, b),
             BinOp::Sub => (pick(op::SUB_F64, op::SUB_F32), a, b),
@@ -4936,6 +6017,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         }
         let t = self.alloc(e.ty);
         let p = self.expr_lazy(e, t);
+        self.let_go_at_statement_end(e, t);
         (t, p)
     }
 
@@ -4952,6 +6034,17 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             return;
         }
         match &e.kind {
+            // A constant once the type is known: no instruction (`docs/spec/bytecode.md` 2.23)
+            ExprKind::Builtin {
+                func: func @ (Builtin::IsPlainKey | Builtin::IsPlainOrder),
+                args,
+            } => {
+                if self.is_plain(*func, args[0].ty) == jump_if {
+                    self.jump(target);
+                }
+                self.release(mark);
+                self.line = old;
+            }
             ExprKind::Unary {
                 op: UnOp::Not,
                 operand,
@@ -5172,27 +6265,33 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         // A nested routine taking the static link gets it first: a reference to the frame of the
         // routine it is nested in, this one or one `up` levels out (`docs/spec/semantics.md` 4.9)
         // A closure-form nested routine gets its group's block first (`docs/spec/objects.md`
-        // 14.9)
-        let block = match dispatch {
-            Dispatch::Group(b) => Some((b, self.alloc_kind(None, TempKind::Ref))),
-            _ => None,
-        };
+        // 14.9). Either is the register `eval_args` puts before the arguments, so that the
+        // registers of a lent argument do not come between it and them.
         let link = callee.link.then(|| {
             let parent = callee
                 .parent
                 .expect("a routine with a static link is nested");
             let mut chain =
                 std::iter::successors(self.id, |r| self.program.routines[r.0 as usize].parent);
-            let up = chain
+            chain
                 .position(|r| r == parent)
-                .expect("a nested routine is called from inside the routine it is nested in");
-            let t = self.alloc_kind(None, TempKind::Ref);
-            (t, up as i64)
+                .expect("a nested routine is called from inside the routine it is nested in")
+                as i64
         });
+        let block = match dispatch {
+            Dispatch::Group(b) => Some(b),
+            _ => None,
+        };
         let self_first = matches!(
             callee.vars.first().map(|v| v.kind),
             Some(VarKind::SelfParam)
         );
+        // Both would be written to the one leading register
+        debug_assert!(
+            !(link.is_some() && block.is_some()),
+            "a closure-form routine takes its block instead of the static link"
+        );
+        let lead = link.is_some() || block.is_some();
         let laid = self.eval_args(
             args,
             &modes,
@@ -5200,25 +6299,21 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             new.is_some(),
             self_first,
             ret,
-            link.is_some() || block.is_some(),
-            false,
+            lead,
         );
         let (mut slots, temps, lent) = (laid.slots, laid.temps, laid.lent);
-        let mut frame = slots.first().copied();
-        slots.truncate(args.len());
-        if let Some((t, up)) = link {
+        let frame = slots.first().copied();
+        if let Some(up) = link {
+            let t = slots[0];
             self.plain(
                 op::OUTER_REF,
                 vec![Operand::Reg(t), Operand::Imm(0), Operand::Imm(up)],
             );
-            slots.insert(0, t);
-            frame = Some(t);
         }
-        if let Some((b, t)) = block {
-            self.load_block(b, t);
-            slots.insert(0, t);
-            frame = Some(t);
+        if let Some(b) = block {
+            self.load_block(b, slots[0]);
         }
+        slots.truncate(args.len() + usize::from(lead));
         let frame = frame.expect("a call has a frame");
         let scope = new.map(|n| {
             self.new_in(&n);
@@ -5283,9 +6378,9 @@ impl<'m, 'a> FuncLower<'m, 'a> {
     /// `self_first`) borrowed, others made there, `var` / `out` ones as reference slots, a field or element
     /// lent (`Lend`) after every argument is evaluated. `modes` and `param_tys` are the
     /// parameters'; `skip_first` leaves the first argument for the caller (the new instance of a
-    /// constructor); `lead` puts a register before the arguments (the frame of `CallClosure`),
-    /// and `linked` tells that the static link comes first (so a call without arguments needs
-    /// no register of its own for its frame).
+    /// constructor); `lead` puts a register before the arguments (the frame of `CallClosure`,
+    /// the static link of a nested routine, or the block of a closure-form one), after the
+    /// registers of the lent arguments and the copies.
     #[allow(clippy::too_many_arguments)]
     fn eval_args(
         &mut self,
@@ -5295,7 +6390,6 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         skip_first: bool,
         self_first: bool,
         ret: Option<Ty>,
-        linked: bool,
         lead: bool,
     ) -> LaidArgs {
         // A field or element passed to a `var` / `out` parameter is lent to the call (`Lend`) after
@@ -5303,8 +6397,15 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         // chapter 3). Its registers come before the arguments, so the call does not overwrite them.
         let mut lends: Vec<Option<Lending>> = args
             .iter()
-            .map(|a| match a {
-                CallArg::Ref { place, .. } if is_lent(place) => Some(self.alloc_lending(place)),
+            .enumerate()
+            .map(|(i, a)| match a {
+                CallArg::Ref { place, .. } if is_lent(place) => {
+                    // A static array is passed as a block to a `var` open array parameter, and
+                    // to a `var` static array parameter, so that a static array parameter is never
+                    // a lent flat place (`FuncLower::place_ref`)
+                    let open = matches!(param_tys.get(i), Some(Ty::OpenArray(_) | Ty::Array(_)));
+                    Some(self.alloc_lending(place, open))
+                }
                 _ => None,
             })
             .collect();
@@ -5329,7 +6430,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             };
             slots.push(t);
         }
-        if slots.is_empty() && !linked {
+        if slots.is_empty() {
             slots.push(self.alloc_arg(ret));
         }
         let mut temps = Vec::new();
@@ -5401,14 +6502,24 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 continue;
             };
             self.lend(lending);
-            // A static array passed to a `var` open array parameter becomes a block (the callee
-            // cannot know the length of a default value, 0)
-            if let Ty::OpenArray(_) = param_tys[i]
-                && let ty @ Ty::Array(_) = self.place_type(place)
-            {
-                self.op_table(op::UNIQUE, lending.value, Operand::Type(ty));
+            if let Some(b) = lending.boxed {
+                // A flat static array passed to a `var` open array parameter, which reads its
+                // argument as a block, is taken out into one (`docs/spec/bytecode.md` 2.8)
+                self.intrinsic(op::intr::PLACE_BOX, &[b, lending.value]);
+                self.op2(op::MAKE_REF, reg, b);
+            } else if lending.place.is_some() {
+                // The reference to the lent flat place is passed
+                self.op2(op::MOVE, reg, lending.value);
+            } else {
+                // A static array passed to a `var` open array parameter becomes a block (the
+                // callee cannot know the length of a default value, 0)
+                if let Ty::OpenArray(_) = param_tys[i]
+                    && let ty @ Ty::Array(_) = self.place_type(place)
+                {
+                    self.op_table(op::UNIQUE, lending.value, Operand::Type(ty));
+                }
+                self.op2(op::MAKE_REF, reg, lending.value);
             }
-            self.op2(op::MAKE_REF, reg, lending.value);
             if *is_out {
                 self.clear_ref(self.place_type(place), reg);
             }
@@ -5472,7 +6583,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 t
             }
         };
-        let laid = self.eval_args(args, &modes, &param_tys, false, false, ret, false, closure);
+        let laid = self.eval_args(args, &modes, &param_tys, false, false, ret, closure);
         let mut slots = laid.slots;
         let frame = *slots.first().expect("a call has a frame");
         if closure {
@@ -5511,11 +6622,12 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 self.op2(op::MOVE, t, r);
                 self.store_place(target, z);
             }
-            Place::ObjField { slot, .. } => {
+            Place::ObjField { base, slot, .. } => {
                 let part = self.eval_part(target);
                 let h = part.handle.expect("an instance's field has its handle");
-                self.obj_get(t, h, *slot, ty, false);
-                self.obj_set(h, *slot, z, ty, false);
+                let s = self.obj_slot(base.ty, *slot);
+                self.obj_get(t, h, s, ty, false);
+                self.obj_set(h, s, z, ty, false);
             }
             _ => {
                 let part = self.eval_part(target);
@@ -5535,72 +6647,160 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             Operand::Imm(lending.path.len() as i64),
         ];
         operands.extend(lending.path.iter().map(|p| Operand::Reg(*p)));
-        self.plain(op::LEND, operands);
+        match lending.place {
+            // A flat place is lent where it is (`docs/design/records.md` 3.7)
+            Some(ty) => {
+                operands.push(Operand::Type(ty));
+                self.plain(op::LEND_PLACE, operands);
+            }
+            None => self.plain(op::LEND, operands),
+        }
     }
 
-    /// The registers lending a field or element to a call (`Lend`): the value taken out and the
-    /// path after it, and the root (a reference slot, or an instance's handle whose slot number
-    /// starts the path; `docs/spec/objects.md` 14.3), all before the call's arguments.
-    fn alloc_lending(&mut self, place: &Place) -> Lending {
-        let value = self.alloc_kind(Some(self.place_type(place)), TempKind::Lent);
-        let root_place = part_root(place);
-        let mut depth = 0;
-        let mut p = place;
-        while let Place::Field { base, .. } | Place::Elem { base, .. } = p {
-            depth += 1;
-            p = base;
+    /// A place with its steps' indices replaced by placeholders: the hops of a place by its
+    /// types alone ([`FuncLower::hop_list`]), as the lending registers are made before the
+    /// indices are evaluated.
+    fn shape_part<'p>(&self, place: &'p Place) -> Part<'p> {
+        match place {
+            Place::Field {
+                base, index, ty, ..
+            } => {
+                let mut part = self.shape_part(base);
+                part.steps.push(PartStep {
+                    slot: SlotRef::Field(*index),
+                    ty: *ty,
+                });
+                part
+            }
+            Place::Elem { base, ty, .. } => {
+                let mut part = self.shape_part(base);
+                let slot = if self.place_type(base).is_dyn_indexed() {
+                    SlotRef::Dyn(Reg::Link)
+                } else {
+                    SlotRef::Elem {
+                        index: Idx::Const(0),
+                        check: None,
+                    }
+                };
+                part.steps.push(PartStep { slot, ty: *ty });
+                part
+            }
+            Place::ObjField { .. } => Part {
+                root: place,
+                steps: Vec::new(),
+                handle: Some(Reg::Link),
+                root_reg: None,
+            },
+            _ => Part {
+                root: place,
+                steps: Vec::new(),
+                handle: None,
+                root_reg: None,
+            },
         }
-        let obj = matches!(root_place, Place::ObjField { .. });
-        let path = (0..depth + usize::from(obj))
-            .map(|_| self.alloc_borrow(Ty::Int64))
-            .collect();
+    }
+
+    /// The number of steps of the lending path into each hop (`docs/spec/bytecode.md` 2.8): a slot
+    /// number in a record or instance; an element index in an array, followed by the slot number
+    /// in the element when the elements take more than one slot and the place is inside one.
+    fn hop_path_len(&self, hops: &[Hop], k: usize, nsteps: usize) -> usize {
+        let h = &hops[k];
+        if h.elem.is_none() {
+            return 1;
+        }
+        let end = hops.get(k + 1).map_or(nsteps, |n| n.start);
+        1 + usize::from(h.width > 1 && end > h.start + 1)
+    }
+
+    /// The registers lending a field or element to a call (`Lend` / `LendPlace`): the value taken
+    /// out (or the reference to the flat place) and the path after it, and the root (a reference
+    /// slot, or an instance's handle whose slot number starts the path; `docs/spec/objects.md`
+    /// 14.3), all before the call's arguments. `open` is for a `var` open array or static array
+    /// parameter: a flat static array is taken out into a block (`PlaceBox`) in a register of its
+    /// own.
+    fn alloc_lending(&mut self, place: &Place, open: bool) -> Lending {
+        let ty = self.place_type(place);
+        let flat = self.is_flat(ty);
+        let value = self.alloc_kind((!flat).then_some(ty), TempKind::Lent);
+        let root_place = part_root(place);
+        let shape = self.shape_part(place);
+        let hops = self.hop_list(&shape);
+        let extra = matches!(root_place, Place::ObjField { ty, .. } if !self.is_flat(*ty));
+        let len = usize::from(extra)
+            + (0..hops.len())
+                .map(|k| self.hop_path_len(&hops, k, shape.steps.len()))
+                .sum::<usize>();
+        let path = (0..len).map(|_| self.alloc_borrow(Ty::Int64)).collect();
         let root = match root_place {
             Place::Var(v, _) if self.is_ref_param(*v) => self.reg_of(*v),
             Place::ObjField { base, .. } => self.alloc_borrow(base.ty),
             _ => self.alloc_kind(None, TempKind::Ref),
         };
+        let boxed = (open && flat && matches!(ty, Ty::Array(_)))
+            .then(|| self.alloc_kind(Some(ty), TempKind::Lent));
         Lending {
             value,
             root,
             path,
-            steps: Vec::new(),
+            hops: Vec::new(),
+            place: flat.then_some(ty),
+            boxed,
         }
     }
 
-    /// Evaluates the indices of a lent place in its turn among the arguments: they are copied to
-    /// the lending path, which `Unlend` follows again after the call, and the static array
-    /// indices are checked.
+    /// Evaluates the indices of a lent place in its turn among the arguments: the path to it is
+    /// computed into the lending path, which `Unlend` follows again after the call, and the static
+    /// array indices are checked.
     fn eval_lending(&mut self, place: &Place, lending: &mut Lending) {
         let part = self.eval_part(place);
         self.part_check(&part);
+        let hops = self.hop_list(&part);
+        let mut p = 0;
         // An instance's field: the slot number comes first on the path
-        let from = match (part.root, part.handle) {
-            (Place::ObjField { slot, .. }, Some(h)) => {
-                self.load_int(lending.path[0], *slot as i64);
-                self.op2(op::MOVE, lending.root, h);
-                1
+        if let (Place::ObjField { base, slot, ty, .. }, Some(h)) = (part.root, part.handle) {
+            if !self.is_flat(*ty) {
+                self.load_int(lending.path[0], i64::from(self.obj_slot(base.ty, *slot)));
+                p = 1;
             }
-            _ => 0,
-        };
-        for (step, &p) in part.steps.iter().zip(&lending.path[from..]) {
-            let slot = match &step.slot {
-                SlotRef::Field(i) => {
-                    self.load_int(p, *i as i64);
-                    SlotRef::Field(*i)
-                }
-                SlotRef::Elem { reg, .. } => {
-                    self.op2(op::MOVE, p, *reg);
-                    SlotRef::Elem {
-                        reg: p,
-                        check: None,
+            self.op2(op::MOVE, lending.root, h);
+        }
+        for (k, h) in hops.iter().enumerate() {
+            let n = self.hop_path_len(&hops, k, part.steps.len());
+            let mut out = h.clone();
+            let at = lending.path[p];
+            match h.elem {
+                None => {
+                    // The slot number: the hop's address
+                    if h.is_static() {
+                        self.load_int(at, i64::from(h.off));
+                    } else {
+                        self.sum_into(at, &h.terms, h.off);
+                        out.off = 0;
+                        out.terms = vec![(at, 1)];
                     }
                 }
-                SlotRef::Dyn(reg) => {
-                    self.op2(op::MOVE, p, *reg);
-                    SlotRef::Dyn(p)
+                Some(i) => {
+                    match i {
+                        Idx::Const(c) => self.load_int(at, c),
+                        Idx::Reg(r) => {
+                            self.op2(op::MOVE, at, r);
+                            out.elem = Some(Idx::Reg(at));
+                        }
+                    }
+                    if n == 2 {
+                        let inner = lending.path[p + 1];
+                        if h.terms.is_empty() {
+                            self.load_int(inner, i64::from(h.off));
+                        } else {
+                            self.sum_into(inner, &h.terms, h.off);
+                            out.off = 0;
+                            out.terms = vec![(inner, 1)];
+                        }
+                    }
                 }
-            };
-            lending.steps.push(PartStep { slot, ty: step.ty });
+            }
+            p += n;
+            lending.hops.push(out);
         }
         match part.root {
             Place::Var(v, _) if self.is_ref_param(*v) => {}
@@ -5617,42 +6817,50 @@ impl<'m, 'a> FuncLower<'m, 'a> {
     }
 
     /// Opens the containers of a lent place for writing (`Lend` takes the value out of a unique
-    /// record or static array). When a record or static array comes before the innermost
-    /// dynamic array, that array's index is checked here, so `Lend` meets a default container
-    /// only as an empty dynamic array.
+    /// record or static array, `LendPlace` lends a place in one). When a record or static array
+    /// comes before the innermost dynamic array, that array's index is checked here, so `Lend`
+    /// meets a default container only as an empty dynamic array.
     fn open_lending(&mut self, place: &Place, lending: &Lending) {
         let root = part_root(place);
-        // An instance is shared: only the records and static arrays inside its field are opened
-        if lending.steps.is_empty() {
+        let hops = &lending.hops;
+        let last_dyn = hops.iter().rposition(|h| h.kind == HopKind::Dyn);
+        let check = last_dyn.is_some_and(|k| hops[..k].iter().any(|h| h.kind != HopKind::Dyn));
+        // An element of a dynamic array reached through dynamic arrays only needs nothing here,
+        // and an instance is shared
+        if hops.is_empty()
+            || !check && last_dyn == Some(hops.len() - 1)
+            || hops.len() == 1 && hops[0].kind == HopKind::Obj
+        {
             return;
         }
         let part = Part {
             root,
             handle: matches!(root, Place::ObjField { .. }).then_some(lending.root),
-            steps: lending
-                .steps
-                .iter()
-                .map(|s| PartStep {
-                    slot: s.slot.copy_unchecked(),
-                    ty: s.ty,
-                })
-                .collect(),
+            steps: Vec::new(),
+            root_reg: None,
         };
-        // The containers from the root; the last one holds the lent slot
-        let containers: Vec<Ty> = std::iter::once(self.place_type(root))
-            .chain(part.steps.iter().map(|s| s.ty))
-            .take(part.steps.len())
-            .collect();
-        let last_dyn = containers.iter().rposition(|t| t.is_dyn_indexed());
-        let check = last_dyn.is_some_and(|k| containers[..k].iter().any(|t| !t.is_dyn_indexed()));
-        // An element of a dynamic array reached through dynamic arrays only needs nothing here
-        if !check && last_dyn == Some(containers.len() - 1) {
-            return;
-        }
-        let opened = self.open_containers(&part);
-        if check && let Some((k, block)) = opened.dyn_root {
-            let t = self.alloc_borrow(part.steps[k].ty);
-            self.get_slot(t, block, &part.steps[k].slot, part.steps[k].ty, false);
+        let open = |this: &mut Self, part: &Part<'_>| {
+            let opened = this.open_hops(part, hops);
+            // A record or static array reached through a reference slot alone is opened by
+            // writing a slot of it back (`RefFieldSet`)
+            if hops.len() == 1 && hops[0].kind == HopKind::Ref {
+                let At::Field(s) = this.hop_slot(&hops[0]) else {
+                    unreachable!("a reference slot's hop has a constant address")
+                };
+                let (r, ty) = (opened.inner, hops[0].val);
+                let t = this.alloc_borrow(ty);
+                this.ref_field_get(t, r, s, ty, false);
+                this.ref_field_set(r, hops[0].ty, s, t, ty, false);
+            }
+            if check && let Some((k, block)) = opened.dyn_root {
+                let t = this.alloc_borrow(hops[k].val);
+                this.hop_get(&hops[k], block, t, false);
+            }
+        };
+        if self.needs_ref_copy(&part, hops) {
+            self.with_ref_copy(&part, true, open);
+        } else {
+            open(self, &part);
         }
     }
 
@@ -5669,20 +6877,35 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         self.expr(e, slot);
     }
 
-    /// Puts a borrowed managed value into a call argument temporary (value and `const` arguments
-    /// and the register ranges of built-in instructions; `docs/design/lifetime.md` 3.3). A local
-    /// variable that nothing in `siblings` can write during the call is lent as it is; anything
-    /// else is first copied (counted) into an owning temporary, which lends it.
-    fn borrow_arg(&mut self, e: &Expr, slot: Reg, siblings: &(impl WritesVar + ?Sized)) {
-        self.borrow_arg_copy(e, slot, siblings);
+    /// Puts a borrowed managed value into a register of a built-in instruction's range
+    /// (`docs/design/lifetime.md` 3.3). A local variable that nothing in `siblings` can write is
+    /// lent as it is; anything else is first copied (counted) into an owning temporary, which
+    /// lends it. Returns that temporary when it holds a copy of a variable (a global, a field, an
+    /// element) holding no object: the caller lets go of it right after the instruction
+    /// ([`FuncLower::let_go_copies`]), unobserved. Held to the end of the routine, it would make
+    /// the next `T := T + X` or element write of that variable copy the whole value.
+    fn borrow_arg(
+        &mut self,
+        e: &Expr,
+        slot: Reg,
+        siblings: &(impl WritesVar + ?Sized),
+    ) -> Option<Reg> {
+        let t = self.borrow_arg_copy(e, slot, siblings)?;
+        self.copy_of_place_let_go(e).then_some(t)
     }
 
-    /// [`FuncLower::borrow_arg`] of a call argument: a copy of a variable (a global, a field, an
-    /// element) holding no object is let go of when the statement ends, unobserved. Held to the
-    /// end of the routine, it would make the next `T := T + X` or element write of that variable
-    /// copy the whole value (`docs/design/lifetime.md` 3.3, 3.4).
-    fn lend_arg(&mut self, e: &Expr, slot: Reg, siblings: &(impl WritesVar + ?Sized)) {
-        let read = e.value.is_none()
+    /// Lets go of the copies [`FuncLower::borrow_arg`] returned, once the instruction reading
+    /// them has run (a dynamic array's is no longer left to the end of the statement).
+    fn let_go_copies(&mut self, copies: &[Reg]) {
+        self.owned.retain(|r| !copies.contains(r));
+        self.emit_releases(copies);
+    }
+
+    /// Whether a counted copy of `e` lent to a call or an instruction may be let go of before the
+    /// routine ends: `e` reads a variable (a global, a field, an element) and its type holds no
+    /// object, so letting go of the copy runs no destructor (`docs/design/lifetime.md` 3.3).
+    fn copy_of_place_let_go(&self, e: &Expr) -> bool {
+        e.value.is_none()
             && matches!(
                 e.kind,
                 ExprKind::Var(_)
@@ -5690,12 +6913,29 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                     | ExprKind::Field { .. }
                     | ExprKind::Elem { .. }
                     | ExprKind::ObjField { .. }
-            );
-        if let Some(t) = self.borrow_arg_copy(e, slot, siblings)
-            && read
-            && !self.released_early(e.ty)
+            )
             && !self.program.types.holds_object(e.ty)
-        {
+    }
+
+    /// [`FuncLower::borrow_arg`] of a call argument: a copy of a variable (a global, a field, an
+    /// element) holding no object is let go of when the statement ends, unobserved. Held to the
+    /// end of the routine, it would make the next `T := T + X` or element write of that variable
+    /// copy the whole value (`docs/design/lifetime.md` 3.3, 3.4).
+    fn lend_arg(&mut self, e: &Expr, slot: Reg, siblings: &(impl WritesVar + ?Sized)) {
+        if let Some(t) = self.borrow_arg_copy(e, slot, siblings) {
+            self.let_go_at_statement_end(e, t);
+        }
+    }
+
+    /// Has the owning temporary `t`, which holds the value of `e`, let go of when the statement
+    /// ends (or, in the condition of `if` / `while`, before the body runs) if it is a counted
+    /// copy of a variable (a global, a field, an element) holding no object
+    /// ([`FuncLower::copy_of_place_let_go`]), unobserved. Held to the end of the routine, it
+    /// would make the next `T := T + X` or element write of that variable copy the whole value
+    /// (`docs/design/lifetime.md` 3.3, 3.4). A dynamic array's is let go of then already
+    /// ([`FuncLower::released_early`]).
+    fn let_go_at_statement_end(&mut self, e: &Expr, t: Reg) {
+        if self.managed(e.ty) && self.copy_of_place_let_go(e) && !self.released_early(e.ty) {
             self.owned.push(t);
         }
     }
@@ -5851,18 +7091,129 @@ impl<'m, 'a> FuncLower<'m, 'a> {
 
     /// Raises the `EInvalidOperation` of a type without a default order (10.2).
     fn raise_no_order(&mut self, ty: Ty) {
+        let name = self.program.types.name(ty);
+        self.raise_invalid_operation(&format!("`{name}` has no default order; pass a comparer"));
+    }
+
+    /// Raises a new `EInvalidOperation` with the message `text`.
+    fn raise_invalid_operation(&mut self, text: &str) {
         // A new `EInvalidOperation` with the message, which `Raise` hands to the VM
         let msg = self.alloc(Ty::String);
-        let name = self.program.types.name(ty);
-        self.load_text(
-            msg,
-            &format!("`{name}` has no default order; pass a comparer"),
-        );
+        self.load_text(msg, text);
         let class = Ty::Class(TypeId(bytecode::exc::INVALID_OPERATION));
         let x = self.alloc(class);
         self.new_into(x, class);
         self.obj_set(x, bytecode::EXC_SLOT_MESSAGE, msg, Ty::String, true);
         self.terminate(Term::Raise(x));
+    }
+
+    /// The value of a condition fixed by the type: `IsPlainKey(X)` / `IsPlainOrder(X)` or its
+    /// `not` (`docs/spec/bytecode.md` 2.22, 2.23). `None` for any other condition.
+    fn fixed_cond(&self, e: &Expr) -> Option<bool> {
+        match &e.kind {
+            ExprKind::Builtin {
+                func: func @ (Builtin::IsPlainKey | Builtin::IsPlainOrder),
+                args,
+            } => Some(self.is_plain(*func, args[0].ty)),
+            ExprKind::Unary {
+                op: UnOp::Not,
+                operand,
+                calc: Calc::Bool,
+            } => self.fixed_cond(operand).map(|b| !b),
+            _ => None,
+        }
+    }
+
+    /// `IsPlainKey` / `IsPlainOrder` of the type `ty` (`docs/spec/bytecode.md` 2.22, 2.23).
+    fn is_plain(&self, func: Builtin, ty: Ty) -> bool {
+        match func {
+            Builtin::IsPlainKey => self.is_plain_key(ty),
+            _ => self.sort_kind(ty).is_some(),
+        }
+    }
+
+    /// Whether `HashLookup` compares the keys of `ty` itself (`docs/spec/bytecode.md` 2.23): its
+    /// key equality is `EqInt` or `EqStr` (`docs/spec/equality.md` 8.3). `IsPlainKey`.
+    fn is_plain_key(&self, ty: Ty) -> bool {
+        matches!(self.program.types.key_kind(ty), KeyKind::Int | KeyKind::Str)
+    }
+
+    /// `HashFind` (`docs/spec/bytecode.md` 2.23): the arguments in consecutive registers (the
+    /// arrays read without counting: the instruction runs no Pascal code), then instruction 90.
+    fn hash_find(&mut self, args: &[Expr], dst: Reg) {
+        let regs: Vec<Reg> = args.iter().map(|e| self.alloc_arg(Some(e.ty))).collect();
+        for (e, r) in args.iter().zip(&regs) {
+            self.borrowed_into(e, *r);
+        }
+        let mut operands = vec![Operand::Reg(dst)];
+        operands.extend(regs.iter().map(|r| Operand::Reg(*r)));
+        self.plain(op::HASH_FIND, operands);
+    }
+
+    /// `HashLookup` (`docs/spec/bytecode.md` 2.23), whose arguments are `KeyHash(Key)` and the
+    /// four fields of `Self`: for a key whose equality is `EqInt` / `EqStr`, `Self` (read without
+    /// counting) and the key in consecutive registers, then instruction 96 / 98 with the slot of
+    /// the first field (the instruction reads the fields and hashes the key). For another key,
+    /// `HashFind` from the start with `KeyHash(Key)` and the fields read without counting.
+    fn hash_lookup(&mut self, args: &[Expr], dst: Reg) {
+        let ExprKind::Key { args: key, .. } = &args[0].kind else {
+            unreachable!("sema passes the key of `HashLookup` as `KeyHash(Key)`")
+        };
+        let ExprKind::ObjField { base, slot, .. } = &args[1].kind else {
+            unreachable!("sema checks the arrays of `HashLookup` are fields of `Self`")
+        };
+        let key = &key[0];
+        let opc = match self.program.types.key_kind(key.ty) {
+            KeyKind::Int => op::HASH_LOOKUP_INT,
+            KeyKind::Str => op::HASH_LOOKUP_STR,
+            _ => {
+                // `HashFind` from the start of the chain with the hash and the first three
+                // fields (the keys are not compared), the start right after them
+                let args = &args[..4];
+                let regs: Vec<Reg> = args.iter().map(|e| self.alloc_arg(Some(e.ty))).collect();
+                let start = self.alloc_arg(Some(Ty::Int64));
+                for (e, r) in args.iter().zip(&regs) {
+                    self.borrowed_into(e, *r);
+                }
+                self.load_int(start, -1);
+                let mut operands = vec![Operand::Reg(dst)];
+                operands.extend(regs.iter().map(|r| Operand::Reg(*r)));
+                operands.push(Operand::Reg(start));
+                self.plain(op::HASH_FIND, operands);
+                return;
+            }
+        };
+        let this = self.alloc_arg(Some(base.ty));
+        let k = self.alloc_arg(Some(key.ty));
+        self.borrowed_into(base, this);
+        self.borrowed_into(key, k);
+        self.plain(
+            opc,
+            vec![
+                Operand::Reg(dst),
+                Operand::Reg(this),
+                Operand::Reg(k),
+                Operand::Imm(i64::from(*slot)),
+            ],
+        );
+    }
+
+    /// The value of `e`, read only right away, in `dst` (a call-argument temporary): a field
+    /// read there without counting, a value that is not managed made there, anything else as
+    /// [`FuncLower::borrowed_value`] and moved.
+    fn borrowed_into(&mut self, e: &Expr, dst: Reg) {
+        let field = matches!(
+            e.kind,
+            ExprKind::Field { .. } | ExprKind::Elem { .. } | ExprKind::ObjField { .. }
+        );
+        if e.value.is_none() && field && !self.is_flat(e.ty) {
+            self.read_field(e, dst, false);
+        } else if !self.program.types.managed(e.ty) && !matches!(e.kind, ExprKind::Var(_)) {
+            self.expr(e, dst);
+        } else {
+            let r = self.borrowed_value(e);
+            self.op2(op::MOVE, dst, r);
+        }
     }
 
     /// The key equality of `a` and `b` (`docs/spec/equality.md` 2, 8.3).
@@ -6001,16 +7352,19 @@ impl<'m, 'a> FuncLower<'m, 'a> {
 
     /// Evaluates the arguments into consecutive temporaries (an instruction reading a register range).
     /// The instruction only reads them, so managed values are borrowed.
-    fn args_range(&mut self, args: &[Expr]) -> Vec<Reg> {
+    /// Returns the registers and the copies to let go of after the instruction
+    /// ([`FuncLower::let_go_copies`]).
+    fn args_range(&mut self, args: &[Expr]) -> (Vec<Reg>, Vec<Reg>) {
         let regs: Vec<Reg> = args.iter().map(|a| self.alloc_arg(Some(a.ty))).collect();
+        let mut copies = Vec::new();
         for (a, &r) in args.iter().zip(&regs) {
             if self.managed(a.ty) {
-                self.borrow_arg(a, r, args);
+                copies.extend(self.borrow_arg(a, r, args));
             } else {
                 self.expr(a, r);
             }
         }
-        regs
+        (regs, copies)
     }
 
     /// A built-in function of result type `ty`.
@@ -6067,6 +7421,14 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 self.load_func(f, self.ml.func_index[routine.0 as usize], 0);
                 self.intrinsic(op::intr::IS_OVERRIDDEN, &[dst, recv, entry, f]);
             }
+            Builtin::HashFind => self.hash_find(args, dst),
+            Builtin::HashLookup => self.hash_lookup(args, dst),
+            Builtin::IsPlainKey | Builtin::IsPlainOrder => {
+                // `docs/spec/bytecode.md` 2.22, 2.23: a constant of the type (`X` is not
+                // evaluated)
+                let plain = self.is_plain(func, args[0].ty);
+                self.load_int(dst, i64::from(plain));
+            }
             Builtin::ObjectClassName => {
                 // `docs/spec/collections.md` 9.3, 12.1: `ClassName` of an instance
                 // (`docs/spec/objects.md` 14.3); the other types have none
@@ -6103,16 +7465,22 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             }
             Builtin::Copy | Builtin::Pos | Builtin::StrToIntDef => {
                 let u8 = args.iter().any(|a| a.ty == Ty::Utf8String);
+                // The `UTF8String` ones and `StrToIntDef` are intrinsics (`docs/spec/bytecode.md`
+                // 2.19)
                 let opc = match func {
-                    Builtin::Copy if u8 => op::U8_COPY,
-                    Builtin::Pos if u8 => op::U8_POS,
-                    Builtin::Copy => op::STR_COPY,
-                    Builtin::Pos => op::STR_POS,
-                    _ => op::STR_TO_INT_DEF,
+                    Builtin::Copy if u8 => Err(op::intr::U8_COPY),
+                    Builtin::Pos if u8 => Err(op::intr::U8_POS),
+                    Builtin::Copy => Ok(op::STR_COPY),
+                    Builtin::Pos => Ok(op::STR_POS),
+                    _ => Err(op::intr::STR_TO_INT_DEF),
                 };
-                let mut operands = vec![Operand::Reg(dst)];
-                operands.extend(self.args_range(args).into_iter().map(Operand::Reg));
-                self.plain(opc, operands);
+                let (regs, copies) = self.args_range(args);
+                let operands: Vec<Reg> = std::iter::once(dst).chain(regs).collect();
+                match opc {
+                    Ok(opc) => self.plain(opc, operands.into_iter().map(Operand::Reg).collect()),
+                    Err(id) => self.intrinsic(id, &operands),
+                }
+                self.let_go_copies(&copies);
             }
             // sema turns `Chr` into Convert, so it only gets here for `Ord`
             Builtin::Ord | Builtin::Chr => self.expr(&args[0], dst),
@@ -6134,7 +7502,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 self.op1(op::LOAD_ZERO, z);
                 let skip = self.new_block();
                 self.branch(op::JMP_IF_LE_INT, z, Some(dst), skip);
-                self.op2(op::NEG_CURR, dst, dst);
+                self.intrinsic(op::intr::NEG_CURR, &[dst, dst]);
                 self.bind(skip);
             }
             Builtin::Sqr => {
@@ -6175,12 +7543,12 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 let round = func == Builtin::Round;
                 match x.ty {
                     Ty::Currency => {
-                        let opc = if round {
-                            op::ROUND_CURR
+                        let id = if round {
+                            op::intr::ROUND_CURR
                         } else {
-                            op::TRUNC_CURR
+                            op::intr::TRUNC_CURR
                         };
-                        self.op2(opc, dst, dst);
+                        self.intrinsic(id, &[dst, dst]);
                     }
                     t => {
                         if t == Ty::Single {
@@ -6244,16 +7612,20 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             | Builtin::LowerCase
             | Builtin::Trim => {
                 let x = self.expr_any(&args[0]);
+                // The rarer ones are intrinsics (`docs/spec/bytecode.md` 2.19)
                 let opc = match func {
-                    Builtin::IntToStr => op::INT_TO_STR,
-                    Builtin::UIntToStr => op::UINT_TO_STR,
-                    Builtin::StrToInt => op::STR_TO_INT,
-                    Builtin::StrToInt64 => op::STR_TO_INT64,
-                    Builtin::UpperCase => op::STR_UPPER_ASCII,
-                    Builtin::LowerCase => op::STR_LOWER_ASCII,
-                    _ => op::STR_TRIM,
+                    Builtin::IntToStr => Ok(op::INT_TO_STR),
+                    Builtin::UIntToStr => Ok(op::UINT_TO_STR),
+                    Builtin::UpperCase => Ok(op::STR_UPPER_ASCII),
+                    Builtin::LowerCase => Ok(op::STR_LOWER_ASCII),
+                    Builtin::StrToInt => Err(op::intr::STR_TO_INT),
+                    Builtin::StrToInt64 => Err(op::intr::STR_TO_INT64),
+                    _ => Err(op::intr::STR_TRIM),
                 };
-                self.op2(opc, dst, x);
+                match opc {
+                    Ok(opc) => self.op2(opc, dst, x),
+                    Err(id) => self.intrinsic(id, &[dst, x]),
+                }
             }
             // The default value of every type is 0 (`docs/design/lifetime.md` 3.2)
             Builtin::Default => self.clear_value(ty, dst),
@@ -6357,9 +7729,11 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                     Builtin::AnsiSameText => op::intr::ANSI_SAME_TEXT,
                     _ => op::intr::ANSI_COMPARE_TEXT,
                 };
+                let (range, copies) = self.args_range(args);
                 let mut regs = vec![dst];
-                regs.extend(self.args_range(args));
+                regs.extend(range);
                 self.intrinsic(id, &regs);
+                self.let_go_copies(&copies);
             }
             Builtin::GetEnvironmentVariable => {
                 // The host function lets go of the name it read when it writes the value in its place
@@ -6384,11 +7758,11 @@ impl FuncLower<'_, '_> {
             .iter()
             .map(|a| (self.alloc_arg(Some(Ty::Int64)), self.alloc_arg(Some(a.ty))))
             .collect();
-        self.borrow_arg(&args[0], fmt, args);
+        let mut copies: Vec<Reg> = self.borrow_arg(&args[0], fmt, args).into_iter().collect();
         for (a, &(kind, value)) in args[1..].iter().zip(&pairs) {
             self.load_int(kind, format_kind(a.ty));
             if self.managed(a.ty) {
-                self.borrow_arg(a, value, args);
+                copies.extend(self.borrow_arg(a, value, args));
             } else {
                 self.expr(a, value);
             }
@@ -6403,6 +7777,7 @@ impl FuncLower<'_, '_> {
             operands.push(Operand::Reg(v));
         }
         self.plain(op::FORMAT, operands);
+        self.let_go_copies(&copies);
     }
 
     /// `Copy` of an array (`ArrCopy`; `docs/spec/types.md` chapter 7): the source and the bounds
@@ -6414,14 +7789,15 @@ impl FuncLower<'_, '_> {
         let regs: Vec<Reg> = (0..3)
             .map(|i| self.alloc_arg(Some(if i == 0 { src.ty } else { Ty::Int64 })))
             .collect();
-        if let Ty::Array(_) = src.ty {
+        let copy = if let Ty::Array(_) = src.ty {
             let t = self.alloc(src.ty);
             self.expr(src, t);
             self.op_table(op::MATERIALIZE, t, Operand::Type(src.ty));
             self.op2(op::MOVE, regs[0], t);
+            None
         } else {
-            self.borrow_arg(src, regs[0], args);
-        }
+            self.borrow_arg(src, regs[0], args)
+        };
         match args.get(1) {
             Some(i) => self.expr(i, regs[1]),
             None => self.op1(op::LOAD_ZERO, regs[1]),
@@ -6437,6 +7813,7 @@ impl FuncLower<'_, '_> {
         operands.extend(regs[1..].iter().map(|r| Operand::Reg(*r)));
         self.plain(op::ARR_COPY, operands);
         self.op2(op::MOVE_REF, dst, regs[0]);
+        self.let_go_copies(copy.as_slice());
     }
 
     /// A new `TIndexRange` (`docs/spec/objects.md` 12.3, 14.10): the bounds are evaluated in
@@ -6459,8 +7836,8 @@ impl FuncLower<'_, '_> {
         }
         for (slot, value) in bounds {
             // `First` / `Last` are slots 0 and 1, `HasFirst` / `HasLast` slots 2 and 3
-            self.set_slot(dst, &SlotRef::Field(slot), value, Ty::Integer, false);
-            self.set_slot(dst, &SlotRef::Field(slot + 2), flag, Ty::Boolean, false);
+            self.set_slot(dst, &At::Field(slot), value, Ty::Integer, false);
+            self.set_slot(dst, &At::Field(slot + 2), flag, Ty::Boolean, false);
         }
     }
 
@@ -6482,14 +7859,15 @@ impl FuncLower<'_, '_> {
             .map(|i| self.alloc_arg(Some(if i == 0 { base.ty } else { Ty::Int64 })))
             .collect();
         let bounds: Vec<&Expr> = low.into_iter().chain(high).collect();
-        if fixed.is_some() {
+        let copy = if fixed.is_some() {
             let t = self.alloc(base.ty);
             self.expr(base, t);
             self.op_table(op::MATERIALIZE, t, Operand::Type(base.ty));
             self.op2(op::MOVE, regs[0], t);
+            None
         } else {
-            self.borrow_arg(base, regs[0], &bounds[..]);
-        }
+            self.borrow_arg(base, regs[0], &bounds[..])
+        };
         let len = self.alloc_borrow(Ty::Int64);
         match fixed {
             Some((lo, hi)) => {
@@ -6519,16 +7897,20 @@ impl FuncLower<'_, '_> {
             (None, None) => self.op2(op::MOVE, regs[2], len),
         }
         self.load_int(regs[3], first);
-        self.op2(op::SLICE_RANGE, len, regs[1]);
+        self.intrinsic(op::intr::SLICE_RANGE, &[len, regs[1]]);
         if is_str {
             self.op_imm(op::ADD_INT_I, regs[1], regs[1], 1);
-            let opc = if base.ty == Ty::Utf8String {
-                op::U8_COPY
+            let operands: Vec<Reg> = std::iter::once(dst)
+                .chain(regs[..3].iter().copied())
+                .collect();
+            if base.ty == Ty::Utf8String {
+                self.intrinsic(op::intr::U8_COPY, &operands);
             } else {
-                op::STR_COPY
-            };
-            let operands = std::iter::once(dst).chain(regs[..3].iter().copied());
-            self.plain(opc, operands.map(Operand::Reg).collect());
+                self.plain(
+                    op::STR_COPY,
+                    operands.into_iter().map(Operand::Reg).collect(),
+                );
+            }
         } else {
             self.plain(
                 op::ARR_COPY,
@@ -6541,6 +7923,7 @@ impl FuncLower<'_, '_> {
             );
             self.op2(op::MOVE_REF, dst, regs[0]);
         }
+        self.let_go_copies(copy.as_slice());
     }
 
     /// The dynamic array type `Copy` of an array makes (the element type's dynamic array).
@@ -6781,15 +8164,15 @@ fn cell_index(program: &Program, r: &Routine, v: VarId) -> Option<u32> {
 }
 
 /// The (uncounted, counted) opcodes reading (`get`) or writing a slot, and the operand naming the
-/// slot (a field number, or the register of an index).
-fn slot_access(slot: &SlotRef, get: bool) -> ((u8, u8), Operand) {
+/// slot (a slot number, or the register of a slot number or an index).
+fn slot_access(slot: &At, get: bool) -> ((u16, u16), Operand) {
     match (slot, get) {
-        (SlotRef::Field(i), true) => ((op::FIELD_GET, op::FIELD_GET_REF), Operand::Imm(*i as i64)),
-        (SlotRef::Field(i), false) => ((op::FIELD_SET, op::FIELD_SET_REF), Operand::Imm(*i as i64)),
-        (SlotRef::Elem { reg, .. }, true) => ((op::VAL_GET, op::VAL_GET_REF), Operand::Reg(*reg)),
-        (SlotRef::Elem { reg, .. }, false) => ((op::VAL_SET, op::VAL_SET_REF), Operand::Reg(*reg)),
-        (SlotRef::Dyn(reg), true) => ((op::DYN_GET, op::DYN_GET_REF), Operand::Reg(*reg)),
-        (SlotRef::Dyn(reg), false) => ((op::DYN_SET, op::DYN_SET_REF), Operand::Reg(*reg)),
+        (At::Field(i), true) => ((op::FIELD_GET, op::FIELD_GET_REF), Operand::Imm(*i as i64)),
+        (At::Field(i), false) => ((op::FIELD_SET, op::FIELD_SET_REF), Operand::Imm(*i as i64)),
+        (At::Val(reg), true) => ((op::VAL_GET, op::VAL_GET_REF), Operand::Reg(*reg)),
+        (At::Val(reg), false) => ((op::VAL_SET, op::VAL_SET_REF), Operand::Reg(*reg)),
+        (At::Dyn(reg), true) => ((op::DYN_GET, op::DYN_GET_REF), Operand::Reg(*reg)),
+        (At::Dyn(reg), false) => ((op::DYN_SET, op::DYN_SET_REF), Operand::Reg(*reg)),
     }
 }
 
@@ -6869,7 +8252,7 @@ struct FinallyScope {
 /// `out` parameter somewhere inside).
 fn expr_writes_var(e: &Expr, v: VarId) -> bool {
     match &e.kind {
-        ExprKind::Var(_) | ExprKind::Const | ExprKind::Global(_) | ExprKind::Error => false,
+        ExprKind::Var(_) | ExprKind::Const { .. } | ExprKind::Global(_) | ExprKind::Error => false,
         ExprKind::Binary { first, steps } => {
             expr_writes_var(first, v) || steps.iter().any(|s| expr_writes_var(&s.rhs, v))
         }
@@ -6943,7 +8326,7 @@ struct NewIn {
 fn expr_reads_reg(e: &Expr, reg: Reg) -> bool {
     match &e.kind {
         ExprKind::Var(v) => Reg::Var(v.0) == reg,
-        ExprKind::Const | ExprKind::Global(_) | ExprKind::Error => false,
+        ExprKind::Const { .. } | ExprKind::Global(_) | ExprKind::Error => false,
         ExprKind::Binary { first, steps } => {
             expr_reads_reg(first, reg) || steps.iter().any(|s| expr_reads_reg(&s.rhs, reg))
         }
@@ -7033,7 +8416,7 @@ fn expr_has_call(e: &Expr) -> bool {
         ExprKind::Builtin { func, args } => {
             *func == Builtin::GetEnvironmentVariable || args.iter().any(expr_has_call)
         }
-        ExprKind::Var(_) | ExprKind::Const | ExprKind::Global(_) | ExprKind::Error => false,
+        ExprKind::Var(_) | ExprKind::Const { .. } | ExprKind::Global(_) | ExprKind::Error => false,
         ExprKind::Binary { first, steps } => {
             expr_has_call(first) || steps.iter().any(|s| expr_has_call(&s.rhs))
         }
@@ -7269,6 +8652,7 @@ fn part_root(p: &Place) -> &Place {
 }
 
 /// A field or element place with its indices evaluated (`FuncLower::eval_part`).
+#[derive(Clone)]
 struct Part<'p> {
     /// The variable, global or instance's field the place starts from.
     root: &'p Place,
@@ -7277,34 +8661,113 @@ struct Part<'p> {
     handle: Option<Reg>,
     /// From the root outward.
     steps: Vec<PartStep>,
+    /// The register holding the root's value and its type, read and written as a local
+    /// variable's, in place of the root: a copy of a reference parameter's value
+    /// ([`FuncLower::with_ref_copy`]).
+    root_reg: Option<(Reg, Ty)>,
 }
 
+#[derive(Clone)]
 struct PartStep {
     slot: SlotRef,
     /// The type of the slot's value.
     ty: Ty,
 }
 
-/// A slot of a record (a field number), of a static array (a register with the 0-based index) or
-/// of a dynamic or open array (a register with the index, checked by the VM).
+/// An element index of a static array: a constant, or a register with it (0-based).
+#[derive(Debug, Clone, Copy)]
+enum Idx {
+    Const(i64),
+    Reg(Reg),
+}
+
+/// A step of a place: a field of a record (its number), an element of a static array, or an
+/// element of a dynamic or open array (a register with the index, checked by the VM).
+#[derive(Clone)]
 enum SlotRef {
     Field(u32),
-    Elem { reg: Reg, check: Option<IndexCheck> },
+    Elem {
+        index: Idx,
+        check: Option<IndexCheck>,
+    },
     Dyn(Reg),
 }
 
-impl SlotRef {
-    /// The same slot without its range check (a lent place's indices were checked when the
-    /// arguments were evaluated).
-    fn copy_unchecked(&self) -> SlotRef {
-        match self {
-            SlotRef::Field(i) => SlotRef::Field(*i),
-            SlotRef::Elem { reg, .. } => SlotRef::Elem {
-                reg: *reg,
-                check: None,
-            },
-            SlotRef::Dyn(reg) => SlotRef::Dyn(*reg),
+/// One slot of a container, for the instructions reading and writing one: a slot number
+/// (`FieldGet`), a register with a slot number (`ValGet`), a register with an element index
+/// of a dynamic or open array (`DynGet`).
+enum At {
+    Field(u32),
+    Val(Reg),
+    Dyn(Reg),
+}
+
+/// What holds the slots of a hop ([`FuncLower::hop_list`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HopKind {
+    /// A record or static array block.
+    Agg,
+    /// An instance (its handle).
+    Obj,
+    /// A dynamic or open array block.
+    Dyn,
+    /// The record or static array a reference slot leads to (`RefFieldGet` / `RefFieldSet`),
+    /// at a constant address.
+    Ref,
+}
+
+/// A slot or flat place in a container: the steps of a place into it, with those inside
+/// records and static arrays laid out flat folded into its address (`docs/design/records.md`
+/// 3.4).
+#[derive(Debug, Clone)]
+struct Hop {
+    kind: HopKind,
+    /// The container's type: a record, static array, dynamic or open array, or the class.
+    ty: Ty,
+    /// In an array: the element.
+    elem: Option<Idx>,
+    /// The slots of an element of an array (1 otherwise).
+    width: u32,
+    /// In a dynamic or open array: whether its elements are laid out flat.
+    flat_elem: bool,
+    /// The slot in the element (or in the record or instance): `off` plus each index times its
+    /// stride.
+    off: u32,
+    terms: Vec<(Reg, u32)>,
+    /// The number of the place's first step into the container.
+    start: usize,
+    /// The type of the value at the address.
+    val: Ty,
+}
+
+impl Hop {
+    /// The field of an instance whose first slot is `slot`, of type `val`.
+    fn obj(class: Ty, slot: u32, val: Ty) -> Hop {
+        Hop {
+            kind: HopKind::Obj,
+            ty: class,
+            elem: None,
+            width: 1,
+            flat_elem: false,
+            off: slot,
+            terms: Vec::new(),
+            start: 0,
+            val,
         }
+    }
+
+    /// Whether the address is known when compiling.
+    fn is_static(&self) -> bool {
+        self.terms.is_empty() && !matches!(self.elem, Some(Idx::Reg(_)))
+    }
+}
+
+/// The second register of the cursor whose first is `cur` (`docs/spec/bytecode.md` 1.5):
+/// `FuncLower` makes the two one after the other on the stack of temporaries.
+fn cursor_next(cur: Reg) -> Reg {
+    match cur {
+        Reg::Temp(t) => Reg::Temp(t + 1),
+        _ => unreachable!("a cursor is a pair of temporaries"),
     }
 }
 
@@ -7317,28 +8780,36 @@ struct LaidArgs {
     lent: bool,
 }
 
-/// The registers of a field or element lent to a call (`Lend`; `FuncLower::alloc_lending`).
+/// The registers of a field or element lent to a call (`Lend` / `LendPlace`;
+/// `FuncLower::alloc_lending`).
 struct Lending {
-    /// The value taken out; the path follows it in consecutive registers.
+    /// The value taken out, or the reference to the flat place; the path follows it in
+    /// consecutive registers.
     value: Reg,
     path: Vec<Reg>,
     /// The root: a reference slot (a `var` / `out` parameter's own register), or the handle of
     /// the instance whose field starts the path.
     root: Reg,
-    /// The steps over the path registers, once evaluated.
-    steps: Vec<PartStep>,
+    /// The hops of the place over the path registers, once evaluated.
+    hops: Vec<Hop>,
+    /// The type of a flat place (lent with `LendPlace`).
+    place: Option<Ty>,
+    /// The register a flat static array passed to a `var` open array parameter is taken out
+    /// into (`PlaceBox`).
+    boxed: Option<Reg>,
 }
 
-/// The containers of a place opened for writing (`FuncLower::open_containers`).
+/// The containers of a place opened for writing (`FuncLower::open_hops`).
 struct Opened {
-    /// The innermost container (holding the place's slot).
+    /// The container of the last hop (holding the place's slot).
     inner: Reg,
-    /// When the place is inside an element of a dynamic array: the number of the step that indexes
-    /// the innermost such array, and the register with that array (read without counting).
+    /// When the place is inside an element of a dynamic array: the number of the hop into the
+    /// innermost such array, and the register with that array (read without counting).
     dyn_root: Option<(usize, Reg)>,
 }
 
 /// A range check still to emit for an element index (`ChkIndex`).
+#[derive(Clone)]
 struct IndexCheck {
     len: i64,
     /// The constant of `ChkIndex`: the type name and the bounds (`` `TArr` (0..3) ``).

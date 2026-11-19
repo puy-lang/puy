@@ -4,7 +4,9 @@
 use super::expr::err_expr;
 use super::hir::{Expr, ExprKind};
 use super::methods::Member;
-use super::types::{BuiltinHelper, SelfKind, Ty, TypeDef, TypeId, TypeKind, Visibility};
+use super::types::{
+    BuiltinHelper, SelfKind, StaticKind, Ty, TypeDef, TypeId, TypeKind, Visibility,
+};
 use super::{GSym, Resolved, Sema};
 use crate::diagnostics::{Code, Diagnostic, Fix, Stage, TextEdit};
 use crate::source::{Span, TextRange};
@@ -296,9 +298,23 @@ impl<'a, 's> Sema<'a, 's> {
             }
             return None;
         }
-        let p = h.parent()?;
-        let range = p.syntax().text_range();
-        let pid = match self.resolve_type_name(&p) {
+        // A helper nested in an instantiation (`TOuter<Integer>.THelper`; `docs/spec/generics.md`
+        // 2.5), or a name
+        let (written, range) = match h.parent_list().and_then(|l| {
+            l.children()
+                .find(|n| n.kind() == crate::syntax::SyntaxKind::NESTED_TYPE_REF)
+        }) {
+            Some(n) => {
+                let range = n.text_range();
+                let n = ast::NestedTypeRef::cast(n).expect("the node is a NESTED_TYPE_REF");
+                (self.nested_type_ref(&n), range)
+            }
+            None => {
+                let p = h.parent()?;
+                (self.resolve_type_name(&p), p.syntax().text_range())
+            }
+        };
+        let pid = match written {
             Ty::Helper(pid) => pid,
             Ty::Error => return None,
             other => {
@@ -542,7 +558,8 @@ impl<'a, 's> Sema<'a, 's> {
 
     /// The helpers visible where the code being analyzed is (`docs/spec/objects.md` 10.4): those
     /// declared earlier in this file, those declared in the `interface` section of a unit in
-    /// `uses`, and the built-in helpers of `System` (10.7; listed first).
+    /// `uses`, and the built-in helpers of `System` (10.7; listed first). A helper nested in a
+    /// class or record is visible where that type is, as its nested type (`TOuter.TH`).
     pub(super) fn visible_helpers(&self, at: TextRange) -> Vec<TypeId> {
         let mut out: Vec<TypeId> = Vec::new();
         for (i, d) in self.types.defs.iter().enumerate() {
@@ -558,25 +575,17 @@ impl<'a, 's> Sema<'a, 's> {
             }
         }
         for (_, sym) in &self.global_scope {
-            if let GSym::Type {
-                ty: Ty::Helper(h),
-                span,
-            } = sym
+            if let GSym::Type { ty, span } = sym
                 && span.start() < at.start()
-                && !out.contains(h)
             {
-                out.push(*h);
+                self.push_visible_helpers(*ty, Some(at), &mut out);
             }
         }
         if let Some(c) = &self.cur {
             for scope in &c.scopes {
                 for (_, sym) in scope {
-                    if let super::LSym::Type {
-                        ty: Ty::Helper(h), ..
-                    } = sym
-                        && !out.contains(h)
-                    {
-                        out.push(*h);
+                    if let super::LSym::Type { ty, .. } = sym {
+                        self.push_visible_helpers(*ty, None, &mut out);
                     }
                 }
             }
@@ -587,16 +596,78 @@ impl<'a, 's> Sema<'a, 's> {
                 continue;
             }
             for (_, sym) in &self.units[i].exports {
-                if let GSym::Type {
-                    ty: Ty::Helper(h), ..
-                } = sym
-                    && !out.contains(h)
-                {
-                    out.push(*h);
+                if let GSym::Type { ty, .. } = sym {
+                    self.push_visible_helpers(*ty, None, &mut out);
                 }
             }
         }
         out
+    }
+
+    /// Adds the type `ty` that is visible by name to `out` when it is a helper, or else the
+    /// helpers nested in it (`docs/spec/objects.md` 10.4): those of its own nested types, not of
+    /// its ancestors', that its visibility sections let the code being analyzed name, declared
+    /// before `at` when it is given (a type of this file). The types nested in a generic type
+    /// are left out: its helpers are not copied per instantiation.
+    fn push_visible_helpers(&self, ty: Ty, at: Option<TextRange>, out: &mut Vec<TypeId>) {
+        let id = match ty {
+            Ty::Helper(h) => {
+                if !out.contains(&h) {
+                    out.push(h);
+                }
+                return;
+            }
+            Ty::Class(id) | Ty::Record(id) => id,
+            _ => return,
+        };
+        if self.types.is_generic(id) || self.types.instance_of(id).is_some() {
+            return;
+        }
+        for s in self.types.class_statics(id) {
+            if let StaticKind::Type(t) = s.kind
+                && self.declared_nested(id, &s.name, t)
+                && at.is_none_or(|at| s.span.start() < at.start())
+                && self.can_see(s.vis, id)
+            {
+                self.push_visible_helpers(t, at, out);
+            }
+        }
+    }
+
+    /// The name a helper is written with outside the types it is nested in: `TOuter.TH` for a
+    /// helper declared in `TOuter` (`docs/spec/objects.md` 10.4), its own name otherwise.
+    fn helper_written_name(&self, h: TypeId) -> String {
+        let mut name = self.tn(Ty::Helper(h));
+        let mut inner = h;
+        while let Some(outer) = (0..self.types.defs.len() as u32).map(TypeId).find(|&o| {
+            self.types.class_statics(o).iter().any(|s| {
+                matches!(s.kind, StaticKind::Type(t)
+                    if t.type_id() == Some(inner) && self.declared_nested(o, &s.name, t))
+            })
+        }) {
+            let Some(outer_name) = self.types.get(outer).name.as_deref() else {
+                break;
+            };
+            name = format!("{outer_name}.{name}");
+            inner = outer;
+        }
+        name
+    }
+
+    /// Whether the nested type `name` of `owner` is the type `ty` declared there, not another
+    /// type it names (`type TOther = TFoo;` in a class, or the class itself).
+    fn declared_nested(&self, owner: TypeId, name: &str, ty: Ty) -> bool {
+        let (Some(nested), Some(outer)) = (
+            ty.type_id()
+                .and_then(|t| self.types.get(t).full_name.as_deref()),
+            self.types.get(owner).full_name.as_deref(),
+        ) else {
+            return false;
+        };
+        nested
+            .strip_prefix(outer)
+            .and_then(|rest| rest.strip_prefix('.'))
+            .is_some_and(|rest| rest.eq_ignore_ascii_case(name))
     }
 
     /// Whether a declaration of the program or of a used unit has the name `lower` where the code
@@ -716,7 +787,7 @@ impl<'a, 's> Sema<'a, 's> {
             .iter()
             .map(|(h, m)| match m {
                 HelperMember::Builtin(_) if *h == super::types::TOBJECT => "System".to_string(),
-                _ => self.tn(Ty::Helper(*h)),
+                _ => self.helper_written_name(*h),
             })
             .collect();
         let list = match names.as_slice() {
@@ -878,7 +949,8 @@ impl<'a, 's> Sema<'a, 's> {
 
     /// `X.Name` on a value that is neither an instance nor a class reference, when the type has no
     /// such member (`docs/spec/objects.md` 10.4): the helpers' member, or E0700 for a record (the
-    /// record has no such member), or the E3200 of the built-in types' helpers (M5).
+    /// record has no such member) or a procedural value (9.10), or the E3200 of the built-in types'
+    /// helpers (M5).
     /// `declared` is the subrange type of the value when `recv` has its base type (a subrange
     /// type's own helpers come first; 10.4, step 3), otherwise `recv`'s type.
     pub(super) fn value_member(
@@ -912,6 +984,8 @@ impl<'a, 's> Sema<'a, 's> {
                 }
             };
         }
+        // Kept for E0700 on a procedural value, which the helpers take first
+        let procedural = ty.is_procedural().then(|| recv.clone());
         if let Some(r) = self.helper_resolved_as(recv, declared, name, range) {
             return r;
         }
@@ -925,6 +999,17 @@ impl<'a, 's> Sema<'a, 's> {
                 let t = self.tn(ty);
                 self.error(Code::E(700), format!("`{t}` has no member `{name}`"), range);
             }
+            _ if let Some(recv) = procedural => {
+                // A procedural value that is not a variable, such as a function's result
+                // (`docs/spec/objects.md` 9.10)
+                match self.written_member_base(range) {
+                    Some(base) => self.procedural_member_error(&base, &recv, name, range),
+                    None => {
+                        let t = self.tn(ty);
+                        self.error(Code::E(700), format!("`{t}` has no member `{name}`"), range);
+                    }
+                }
+            }
             _ => {
                 self.error(
                     Code::E(3200),
@@ -934,6 +1019,18 @@ impl<'a, 's> Sema<'a, 's> {
             }
         }
         Resolved::Error
+    }
+
+    /// The base `X` of the member `X.Name` whose name is written at `name`.
+    fn written_member_base(&self, name: TextRange) -> Option<ast::Expr> {
+        let node = match self.input.root.covering_element(name) {
+            rowan::NodeOrToken::Node(n) => n,
+            rowan::NodeOrToken::Token(t) => t.parent()?,
+        };
+        node.ancestors()
+            .filter_map(ast::FieldExpr::cast)
+            .find(|f| f.field().is_some_and(|t| t.text_range() == name))?
+            .base()
     }
 
     /// `X.Name` written with the name of a helper `H` (`docs/spec/objects.md` 10.5): a class

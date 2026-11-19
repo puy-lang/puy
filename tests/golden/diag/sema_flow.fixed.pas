@@ -64,6 +64,7 @@ end;
 procedure Loop;
 var I, J: Integer;
 begin
+  J := 0;
   for I := 1 to 3 do
     J := I;
   WriteLn(I, J);

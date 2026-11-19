@@ -1,0 +1,10 @@
+same block twice: TRUE
+same as a fresh string: TRUE
+abc found: FALSE
+after S[1] := x: xbc TRUE TRUE FALSE
+back to abc: FALSE TRUE
+after S + d: abcd TRUE TRUE
+after Hashed + e: TRUE TRUE
+UTF8String: TRUE TRUE
+after A + B: FALSE TRUE
+abx found: TRUE

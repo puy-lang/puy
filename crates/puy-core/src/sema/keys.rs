@@ -161,6 +161,7 @@ impl Sema<'_, '_> {
                 file: s.input.file,
                 interface: s.in_interface_part,
                 parent: None,
+                scope: s.cur.as_ref().and_then(|c| c.routine),
                 calls: Vec::new(),
                 method_of: Some(id),
                 self_kind: SelfKind::Instance,
@@ -230,7 +231,7 @@ impl Gen {
 
     fn constant(&self, value: super::types::Const, ty: Ty) -> Expr {
         Expr {
-            kind: ExprKind::Const,
+            kind: ExprKind::Const { explicit: false },
             ty,
             value: Some(value),
             span: self.span,
@@ -398,8 +399,8 @@ impl Gen {
             kind: StmtKind::For {
                 var: ForVar::Local(VarId(v)),
                 var_span: self.span,
-                from,
-                to,
+                from: Box::new(from),
+                to: Box::new(to),
                 downto: false,
                 body: Box::new(body),
                 checks: Checks {
@@ -653,7 +654,7 @@ impl Inst<'_> {
     /// Gives a generated method of `class` its body; a class's own comes after every unit's
     /// functions (a generic type's is copied into its instantiations).
     fn set_generated_body(&mut self, r: RoutineId, body: Routine, class: TypeId) {
-        self.routines[r.0 as usize].hir = Some(body);
+        self.routines[r.0 as usize].hir = Some(Box::new(body));
         self.routines[r.0 as usize].has_body = true;
         if !self.types.is_generic(class) {
             self.inst.order.push(r);
@@ -809,13 +810,14 @@ impl Inst<'_> {
             forward_span: None,
             implicit_forward: true,
             name_span: span,
-            hir: Some(hir),
+            hir: Some(Box::new(hir)),
             overload: false,
             overload_fix_at: None,
             unit: at_unit,
             file: at_file,
             interface: false,
             parent: None,
+            scope: None,
             calls: Vec::new(),
             method_of: None,
             self_kind: super::types::SelfKind::Instance,

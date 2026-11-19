@@ -1,0 +1,8 @@
+limit read once: 6 33
+lookups: 207 54
+strings: 1190 20
+EIntOverflow: integer overflow in Integer arithmetic
+  at InlineCopies.Add (inline_copies.pas:36)
+  at InlineCopies.Twice (inline_copies.pas:41)
+  at InlineCopies.Overflow (inline_copies.pas:106)
+  at InlineCopies.<main> (inline_copies.pas:127)

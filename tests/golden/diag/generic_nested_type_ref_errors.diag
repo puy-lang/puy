@@ -1,0 +1,75 @@
+error[E0757]: a helper cannot be declared inside a generic type
+   --> generic_nested_type_ref_errors.pas:20:15
+    |
+ 20 |       THelp = class helper for TObject
+    |               ^^^^^^^^^^^^
+    |
+    = note: a helper is not copied for each instantiation; declare it outside the generic type
+
+error[E0753]: `TOuter<Integer>.TCell` is not a helper
+   --> generic_nested_type_ref_errors.pas:28:31
+    |
+ 28 |   TPlainHelper = class helper(TOuter<Integer>.TCell) for TObject
+    |                               ^^^^^^^^^^^^^^^^^^^^^
+
+error[E0700]: `TOuter<Integer>` has no member `TMissing`
+   --> generic_nested_type_ref_errors.pas:32:22
+    |
+ 32 |   A: TOuter<Integer>.TMissing;
+    |                      ^^^^^^^^
+
+error[E0700]: `TOuter<Integer>` has no member `Field`
+   --> generic_nested_type_ref_errors.pas:33:22
+    |
+ 33 |   B: TOuter<Integer>.Field;
+    |                      ^^^^^
+
+error[E0708]: `TOuter<Integer>.Limit` is not a type
+   --> generic_nested_type_ref_errors.pas:34:6
+    |
+ 34 |   C: TOuter<Integer>.Limit;
+    |      ^^^^^^^^^^^^^^^^^^^^^
+
+error[E0761]: `TCell` is not generic
+   --> generic_nested_type_ref_errors.pas:35:22
+    |
+ 35 |   D: TOuter<Integer>.TCell<string>;
+    |                      ^^^^^^^^^^^^^
+
+error[E0761]: generic type `TInner` needs type arguments
+   --> generic_nested_type_ref_errors.pas:36:22
+    |
+ 36 |   E: TOuter<Integer>.TInner;
+    |                      ^^^^^^
+
+error[E0761]: `TInner` expects 1 type argument, found 2
+   --> generic_nested_type_ref_errors.pas:37:28
+    |
+ 37 |   F: TOuter<Integer>.TInner<string, string>;
+    |                            ^^^^^^^^^^^^^^^^
+
+error[E0700]: `TOuter<Integer>` has no member `TMissing`
+   --> generic_nested_type_ref_errors.pas:38:22
+    |
+ 38 |   G: TOuter<Integer>.TMissing<string>;
+    |                      ^^^^^^^^
+
+error[E0753]: a helper cannot be used as a type
+   --> generic_nested_type_ref_errors.pas:39:6
+    |
+ 39 |   H: TOuter<Integer>.THelp;
+    |      ^^^^^^^^^^^^^^^^^^^^^
+
+error[E0708]: `TArray<Integer>.TItem` is not a type
+   --> generic_nested_type_ref_errors.pas:40:6
+    |
+ 40 |   I: TArray<Integer>.TItem;
+    |      ^^^^^^^^^^^^^^^^^^^^^
+
+error[E0700]: `TOuter<Integer>.TCell` has no member `TDeep`
+   --> generic_nested_type_ref_errors.pas:41:28
+    |
+ 41 |   J: TOuter<Integer>.TCell.TDeep;
+    |                            ^^^^^
+
+error: aborting due to 12 errors

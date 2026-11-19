@@ -88,7 +88,7 @@ dependencies = [
 
 [[package]]
 name = "puy"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "puy-core",
  "puy-fmt",
@@ -100,7 +100,7 @@ dependencies = [
 
 [[package]]
 name = "puy-core"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "puy-host",
  "puy-stdlib",
@@ -109,18 +109,18 @@ dependencies = [
 
 [[package]]
 name = "puy-fmt"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "puy-core",
 ]
 
 [[package]]
 name = "puy-host"
-version = "0.0.4"
+version = "0.0.5"
 
 [[package]]
 name = "puy-runtime-native"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "getrandom",
  "puy-core",
@@ -129,7 +129,7 @@ dependencies = [
 
 [[package]]
 name = "puy-runtime-wasi"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "puy-core",
  "puy-host",
@@ -138,7 +138,7 @@ dependencies = [
 
 [[package]]
 name = "puy-runtime-web"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "puy-core",
  "puy-host",
@@ -146,11 +146,11 @@ dependencies = [
 
 [[package]]
 name = "puy-stdlib"
-version = "0.0.4"
+version = "0.0.5"
 
 [[package]]
 name = "puy-testsuite"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "puy-core",
  "puy-host",

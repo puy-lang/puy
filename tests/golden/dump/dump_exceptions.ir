@@ -43,6 +43,7 @@ bb0:
   LoadConst    t12, "\n"
   ConcatStr    t2, t2, t12
   CallHost     -, h0(t2)
+  Release      t4
   .line 26
   LoadGlobalRef t13, g0
   Release      t14
@@ -89,6 +90,7 @@ bb0:
   LoadConst    t5, "\n"
   ConcatStr    t2, t2, t5
   CallHost     -, h0(t2)
+  Release      t4
   .line 18
   AssignRef    t6, v1
   Raise        t6

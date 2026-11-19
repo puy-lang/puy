@@ -4,7 +4,7 @@ error[E0700]: undeclared identifier `TList`
  34 |     Items: TList<TList<Integer>>;
     |            ^^^^^
 
-error[E2001]: function `TStack.Map` may return without assigning `Result`
+error[E2001]: function `TStack<T>.Map` may return without assigning `Result`
    --> generic_decl_syntax.pas:44:10
     |
  44 | function TStack<T>.Map<U>(const Item: T): TArray<U>;

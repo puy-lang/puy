@@ -215,7 +215,7 @@ impl<'a, 's> Sema<'a, 's> {
                 }
             }
             return Expr {
-                kind: ExprKind::Const,
+                kind: ExprKind::Const { explicit: false },
                 ty: set,
                 value: Some(Const::Set(setbits::trim(words))),
                 span,

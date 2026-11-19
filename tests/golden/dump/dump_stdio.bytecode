@@ -60,12 +60,13 @@
   0025  InEof        r13
   0026  JmpIfTrue    r13, -> 0029
   0027  InEoln       r13
-  0028  JmpIfFalse   r13, -> 002d
+  0028  JmpIfFalse   r13, -> 002e
   .line 22
   0029  LoadGlobalRef r11, g2
   002a  LoadConst    r12, k1
   002b  ConcatStr    r11, r11, r12
   002c  CallHost     r11, h1
+  002d  Release      r11
   .line 23
-  002d  RetVoid
+  002e  RetVoid
 .finally r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12

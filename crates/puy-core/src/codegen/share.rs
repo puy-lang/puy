@@ -3,16 +3,17 @@
 //!
 //! Functions made from the same generic routine that come out the same are merged into one,
 //! named with the generic form (`Hello.TList<T>.Add`). Two functions are the same when their
-//! instructions, handler tables, managed registers, line tables, local names, file, enclosing
-//! function and numbers of arguments and registers are, comparing
+//! instructions, handler tables, inline tables, managed registers, line tables, local names, file,
+//! enclosing function and numbers of arguments and registers are, comparing
 //! - the type operands that only give a shape to the VM (`Unique`, `SetLen`, `NewArr`, `ArrCopy`,
-//!   `ArrConcat`, `ArrInsert`, `ArrInsertArr`, `ArrDelete`, `Materialize`, the type of an
-//!   aggregate or big set constant) by the contents of the type entry without its name;
+//!   `ArrConcat`, `ArrInsert`, `ArrInsertArr`, `ArrDelete`, `Materialize`, the type word of
+//!   `RefFieldSet` / `RefFieldSetRef`, the type of an aggregate or big set constant) by the
+//!   contents of the type entry without its name;
 //! - the other type operands (`New`, `IsClass`, `AsClass`, `EnumToStr`, a class reference or a
 //!   type index loaded as an integer), the globals, the host functions and the interface call
 //!   targets by their index;
 //! - the constants by their contents;
-//! - the functions called or loaded as values by the class they are in.
+//! - the functions called, loaded as values or inlined by the class they are in.
 //!
 //! The classes are found by refining a partition (the functions that call each other are
 //! compared together): every function of an instantiation starts in the class of its generic
@@ -25,7 +26,7 @@ use std::collections::HashMap;
 
 use crate::bytecode::{
     self, ConstEntry, FIRST_TYPE_INDEX, Module, TypeEntry, bx_at, decode_at, op, set_bx_at,
-    signed_bx,
+    signed_bx, type_word_at,
 };
 use crate::sema::hir::GenericOrigin;
 
@@ -91,6 +92,9 @@ pub(super) fn share(
             &new_consts.index,
         );
         f.outer = f.outer.map(|o| new_index[o as usize]);
+        for e in &mut f.inlines {
+            e.func = new_index[e.func as usize];
+        }
         if !shared_by[i].is_empty() {
             f.name = origins[i]
                 .expect("a merged function has an origin")
@@ -209,6 +213,16 @@ fn fixed_key(f: &bytecode::Function) -> (Vec<u64>, Vec<String>) {
             u64::from(h.reg),
         ]);
     }
+    // The inline table without the functions inlined (compared by their classes, `code_key`)
+    w.push(f.inlines.len() as u64);
+    for e in &f.inlines {
+        w.extend([
+            u64::from(e.start),
+            u64::from(e.end),
+            u64::from(e.line),
+            e.outer.map_or(u64::MAX, u64::from),
+        ]);
+    }
     let mut names = Vec::with_capacity(f.locals.len());
     for (r, name) in &f.locals {
         w.push(u64::from(*r));
@@ -224,6 +238,7 @@ const TAG_CONST: u64 = 2;
 const TAG_SHAPE: u64 = 3;
 const TAG_VALUE: u64 = 4;
 const TAG_OUTER: u64 = 5;
+const TAG_INLINE: u64 = 6;
 
 /// The instructions of function `i` and its enclosing function, with the operands that name
 /// functions, shapes and constants replaced by their classes.
@@ -239,6 +254,8 @@ fn code_key(
     let mut w: Vec<u64> = Vec::with_capacity(f.code.len() * 2 + 2);
     w.push(TAG_OUTER);
     w.push(f.outer.map_or(u64::MAX, |o| classes[o as usize] as u64));
+    w.push(TAG_INLINE);
+    w.extend(f.inlines.iter().map(|e| classes[e.func as usize] as u64));
     let mut next_value = 0usize;
     let mut pc = 0usize;
     while pc < f.code.len() {
@@ -278,6 +295,12 @@ fn code_key(
                     w.extend(head);
                     w.push(shapes.of(bx_at(&f.code, pc)));
                 }
+                // The words before the type word as they are, the type word by its shape
+                _ if bytecode::has_type_word(opc) => {
+                    w.extend([TAG_SHAPE, len as u64]);
+                    w.extend(f.code[pc..pc + len - 1].iter().map(|x| u64::from(*x)));
+                    w.push(shapes.of(type_word_at(&f.code, pc, len)));
+                }
                 _ => {
                     w.push(TAG_RAW);
                     w.extend(f.code[pc..pc + len].iter().map(|x| u64::from(*x)));
@@ -300,7 +323,7 @@ fn value_at(values: &[(u32, i64)], next: &mut usize, pc: usize) -> Option<i64> {
 
 /// The value a `LoadInt` / `LoadConst` at `pc` loads (a function index plus the amount added).
 /// Both comparing and renumbering read it here.
-fn function_value(consts: &[ConstEntry], code: &[u32], pc: usize, opc: u8, len: usize) -> i64 {
+fn function_value(consts: &[ConstEntry], code: &[u32], pc: usize, opc: u16, len: usize) -> i64 {
     let bx = bx_at(code, pc);
     match opc {
         op::LOAD_INT => signed_bx(bx, len == 3),

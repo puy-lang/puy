@@ -7,6 +7,7 @@ program DirIgnored;
 {$J-}
 {$RTTI EXPLICIT}
 {$M+}
+{$TYPEINFO ON}
 {$M 16384,1048576}
 {$SCOPEDENUMS ON}
 {$HINTS OFF}

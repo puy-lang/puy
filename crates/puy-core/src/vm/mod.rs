@@ -12,7 +12,9 @@ pub mod heap;
 mod input;
 mod lend;
 pub mod report;
+mod sort;
 mod strconv;
+mod task;
 mod text;
 
 use std::future::Future;
@@ -25,8 +27,9 @@ use crate::numfmt;
 use crate::sema::types::MAX_STRING_LEN;
 use destroy::DTOR_FN;
 use heap::{BadRef, Heap, OutOfMemory, PStr, Piece, Trace, try_join};
-use puy_host::{HostError, HostErrorKind, HostFuture, HostSet, OutStream};
+use puy_host::{HostError, HostErrorKind, HostSet, OutStream};
 pub use report::{ExceptionReport, PropValue, StackFrame, leaks_json, render_leaks};
+use task::{FRAME_COUNTED_SELF, Frame, PendingHost, PendingKind, Task};
 
 /// A register / global variable slot (8 bytes).
 pub type Slot = i64;
@@ -51,8 +54,8 @@ fn f32_slot(v: f32) -> Slot {
     v.to_bits() as Slot
 }
 
-/// The registers an 8-bit operand reaches from a frame's base. `self.regs` always has this many
-/// from the running frame's base, past the frame's own registers if it has fewer (`frame_end`), so
+/// The registers an 8-bit operand reaches from a frame's base. the registers of the running task
+/// ([`Task::regs`]) always have this many from the running frame's base, past the frame's own registers if it has fewer (`frame_end`), so
 /// the fast path reads and writes them without a bounds check (`docs/design/vm.md` 3.14).
 const REG_WINDOW: usize = 256;
 
@@ -62,12 +65,35 @@ const SMALL_CHARS: usize = 128;
 const SMALL_INTS: i64 = 100;
 const SMALL_STRS: usize = SMALL_CHARS + SMALL_INTS as usize;
 
-/// The end of the registers a frame of `regs` registers at `base` needs in `self.regs`: its own
+/// The end of the registers a frame of `regs` registers at `base` needs in [`Task::regs`]: its own
 /// registers and its window (see [`REG_WINDOW`]). Every frame the fast path runs is pushed after
-/// growing `self.regs` to this; `self.regs` never shrinks, so a caller's window is still there
+/// growing the registers to this; they never shrink, so a caller's window is still there
 /// after a return.
 fn frame_end(base: usize, regs: usize) -> usize {
     base + regs.max(REG_WINDOW)
+}
+
+/// Zeroes the registers a call does not pass (`docs/spec/bytecode.md` 1.4: the registers other
+/// than the arguments start at zero). A routine has a few of them, so up to 8 are written with
+/// overlapping stores of fixed length instead of a call of `memset` (`docs/design/vm.md` 3.14).
+#[inline(always)]
+fn zero_slots(s: &mut [Slot]) {
+    let n = s.len();
+    match n {
+        0 => {}
+        // Slots 0, n / 2 and n - 1 cover every slot of 1 to 3
+        1..=3 => {
+            s[0] = 0;
+            s[n / 2] = 0;
+            s[n - 1] = 0;
+        }
+        // The first 4 and the last 4 cover every slot of 4 to 8
+        4..=8 => {
+            s[..4].copy_from_slice(&[0; 4]);
+            s[n - 4..].copy_from_slice(&[0; 4]);
+        }
+        _ => s.fill(0),
+    }
 }
 
 /// The register window of the frame at `base` (see [`REG_WINDOW`]).
@@ -84,20 +110,20 @@ fn real_op(opc: u8, x: Slot, y: Slot) -> Slot {
     let (a, b) = (slot_f64(x), slot_f64(y));
     let (fa, fb) = (slot_f32(x), slot_f32(y));
     match opc {
-        op::ADD_F64 => f64_slot(a + b),
-        op::SUB_F64 => f64_slot(a - b),
-        op::MUL_F64 => f64_slot(a * b),
-        op::DIV_F64 => f64_slot(a / b),
-        op::EQ_F64 => (a == b) as Slot,
-        op::LT_F64 => (a < b) as Slot,
-        op::LE_F64 => (a <= b) as Slot,
-        op::ADD_F32 => f32_slot(fa + fb),
-        op::SUB_F32 => f32_slot(fa - fb),
-        op::MUL_F32 => f32_slot(fa * fb),
-        op::DIV_F32 => f32_slot(fa / fb),
-        op::EQ_F32 => (fa == fb) as Slot,
-        op::LT_F32 => (fa < fb) as Slot,
-        op::LE_F32 => (fa <= fb) as Slot,
+        op::word::ADD_F64 => f64_slot(a + b),
+        op::word::SUB_F64 => f64_slot(a - b),
+        op::word::MUL_F64 => f64_slot(a * b),
+        op::word::DIV_F64 => f64_slot(a / b),
+        op::word::EQ_F64 => (a == b) as Slot,
+        op::word::LT_F64 => (a < b) as Slot,
+        op::word::LE_F64 => (a <= b) as Slot,
+        op::word::ADD_F32 => f32_slot(fa + fb),
+        op::word::SUB_F32 => f32_slot(fa - fb),
+        op::word::MUL_F32 => f32_slot(fa * fb),
+        op::word::DIV_F32 => f32_slot(fa / fb),
+        op::word::EQ_F32 => (fa == fb) as Slot,
+        op::word::LT_F32 => (fa < fb) as Slot,
+        op::word::LE_F32 => (fa <= fb) as Slot,
         _ => unreachable!("not a real operation"),
     }
 }
@@ -125,7 +151,7 @@ pub enum HashSeed {
 pub struct IsolateConfig {
     /// Memory limit per isolate (§5.12).
     pub memory_limit: Option<usize>,
-    /// Recursion limit (total bytes of `regs` and `frames`; 256MB by default).
+    /// Recursion limit (total bytes of the running task's registers and frames; 256MB by default).
     pub stack_limit: usize,
     pub hash_seed: HashSeed,
     pub budget_default: u32,
@@ -246,34 +272,6 @@ enum HostFn {
     EnvGet,
 }
 
-#[derive(Debug, Clone, Copy)]
-struct Frame {
-    func: u32,
-    base: u32,
-    pc: u32,
-    /// The caller's register to write the return value to (absolute position; [`Frame::ret`]),
-    /// and in the top bit the mark of a frame whose `r0` holds a counted `Self` that leaving the
-    /// frame lets go of ([`FRAME_COUNTED_SELF`]).
-    ret_reg: u32,
-}
-
-/// The mark in [`Frame::ret_reg`] of a frame `CallClosure` made for a method of a reference
-/// counted class (`docs/spec/objects.md` 14.9): `r0` holds `Self`, counted. The bit is above any
-/// register number (the stack limit keeps them far smaller).
-const FRAME_COUNTED_SELF: u32 = 1 << 31;
-
-impl Frame {
-    /// The caller's register the return value goes to.
-    fn ret(&self) -> u32 {
-        self.ret_reg & !FRAME_COUNTED_SELF
-    }
-
-    /// Whether `r0` holds a counted `Self` ([`FRAME_COUNTED_SELF`]).
-    fn counted_self(&self) -> bool {
-        self.ret_reg & FRAME_COUNTED_SELF != 0
-    }
-}
-
 /// The position of a frame while unwinding or recording a stack trace
 /// (`docs/spec/exceptions.md` 6.3): the current instruction if it is the frame the unwinding
 /// started in (`innermost`), otherwise the `Call` (one word before the return address) of a
@@ -284,6 +282,15 @@ fn frame_pos(fr: &Frame, innermost: bool) -> u32 {
     } else {
         fr.pc.saturating_sub(1)
     }
+}
+
+/// Where the line of a frame of a stack trace comes from (`docs/spec/diagnostics.md` chapter 8).
+#[derive(Debug, Clone, Copy)]
+enum TraceLine {
+    /// The line table of a function (its index) at a word position.
+    At(u32, u32),
+    /// The line of an inlined call.
+    Line(u32),
 }
 
 /// A runtime error the VM detects (`semantics.md` 7.1): the class (a built-in type index), the
@@ -312,23 +319,6 @@ fn rt(class: u32, message: impl Into<String>) -> RtError {
     }
 }
 
-/// A pending call to a suspendable host function.
-struct PendingHost {
-    kind: PendingKind,
-    /// The `pc` to go on at when done (the instruction after `CallHost`, or the input instruction
-    /// itself, which runs again). On failure it is not advanced, so the report points at the instruction.
-    resume_pc: u32,
-}
-
-enum PendingKind {
-    Write(HostFuture<()>),
-    /// A line for the input buffer (`ahead`: the line after the current one; `input.rs`).
-    ReadLine {
-        fut: HostFuture<Option<String>>,
-        ahead: bool,
-    },
-}
-
 enum Phase {
     NotStarted,
     /// Running the `<init>` of the unit with this index (`docs/spec/units.md` 5.3).
@@ -352,8 +342,8 @@ pub struct Isolate {
     config: IsolateConfig,
     heap: Heap,
     globals: Vec<Slot>,
-    regs: Vec<Slot>,
-    frames: Vec<Frame>,
+    /// The running task (`task.rs`; `docs/design/stackless-vm.md` 3.8).
+    task: Task,
     args: Vec<String>,
     /// The constant cache (`docs/design/vm.md` 3.11), one entry per constant of the module.
     const_cache: Vec<CachedConst>,
@@ -363,9 +353,11 @@ pub struct Isolate {
     /// Buffers reused by `Unlend` (`lend.rs`), so that giving values back does not allocate.
     loan_buf: Vec<heap::Loan>,
     loan_container_buf: Vec<heap::LoanContainer>,
+    /// The values of a flat place being moved by `Unlend` (kept empty between uses and reused;
+    /// `lend.rs`).
+    place_buf: Vec<Slot>,
     host_table: Vec<HostFn>,
     stdout_buf: Vec<u8>,
-    pending: Option<PendingHost>,
     phase: Phase,
     finished: Option<ExitStatus>,
     /// `ExitCode` when the module has no `ExitCode` global (`docs/spec/semantics.md` 5.3, 7.2).
@@ -605,16 +597,15 @@ impl Isolate {
             hash_keys: hash::HashKeys::new(seed),
             heap: Heap::new(config.memory_limit, !config.leak_check, &module.types),
             globals,
-            regs: Vec::with_capacity(256),
-            frames: Vec::with_capacity(16),
+            task: Task::new(),
             args: Vec::new(),
             const_cache,
             small_strs: vec![0; SMALL_STRS],
             loan_buf: Vec::new(),
             loan_container_buf: Vec::new(),
+            place_buf: Vec::new(),
             host_table,
             stdout_buf: Vec::new(),
-            pending: None,
             phase: Phase::NotStarted,
             finished: None,
             exit_code: 0,
@@ -666,14 +657,18 @@ impl Isolate {
     /// Grows the registers to `need` slots, counting the growth toward the usage limit
     /// (`EOutOfMemory` past it).
     fn grow_regs(&mut self, need: usize) -> Result<(), RtError> {
-        if self.regs.len() < need {
-            let grow = (need - self.regs.len()) * std::mem::size_of::<Slot>();
+        if self.task.regs.len() < need {
+            let grow = (need - self.task.regs.len()) * std::mem::size_of::<Slot>();
             if self.heap.account(grow).is_err()
-                || self.regs.try_reserve(need - self.regs.len()).is_err()
+                || self
+                    .task
+                    .regs
+                    .try_reserve(need - self.task.regs.len())
+                    .is_err()
             {
                 return Err(rt(exc::OUT_OF_MEMORY, "out of memory"));
             }
-            self.regs.resize(need, 0);
+            self.task.regs.resize(need, 0);
         }
         Ok(())
     }
@@ -684,12 +679,12 @@ impl Isolate {
         let end = frame_end(base as usize, regs);
         // Frames pushed here start the program (`<init>`, `<main>`, `<fini>`) at base 0; their
         // registers and window are not counted toward the usage limit
-        if self.regs.len() < end {
-            self.regs.resize(end, 0);
+        if self.task.regs.len() < end {
+            self.task.regs.resize(end, 0);
         }
         // A frame starts zeroed (`<main>` reuses the registers `<init>` left behind)
-        self.regs[base as usize..need].fill(0);
-        self.frames.push(Frame {
+        self.task.regs[base as usize..need].fill(0);
+        self.task.frames.push(Frame {
             func,
             base,
             pc: 0,
@@ -716,7 +711,7 @@ impl Isolate {
             });
         }
         // Pending Future
-        if self.pending.is_some() {
+        if self.task.pending.is_some() {
             match self.poll_pending() {
                 Ok(true) => {}
                 Ok(false) => return RunOutcome::Waiting,
@@ -769,7 +764,7 @@ impl Isolate {
                 Step::Halt(from) => {
                     if self.heap.job_open() {
                         // Not made by the instructions that start `Halt`; run before it all the same
-                        let pc = self.frames.last().map_or(0, |f| f.pc);
+                        let pc = self.task.frames.last().map_or(0, |f| f.pc);
                         self.stamp_instr(pc);
                     }
                     if let Some(o) = self.halt(from) {
@@ -888,7 +883,7 @@ impl Isolate {
         if self.heap.job_open() {
             self.heap.stamp_job(
                 heap::JobOrigin::Globals { unit: unit as u32 },
-                self.frames.len() as u32,
+                self.task.frames.len() as u32,
             );
             return Ok(true);
         }
@@ -1031,7 +1026,7 @@ impl Isolate {
         }
         self.heap.stamp_job(
             heap::JobOrigin::Unwind { pc: None },
-            self.frames.len() as u32,
+            self.task.frames.len() as u32,
         );
         self.heap.job_record(x);
         None
@@ -1047,14 +1042,16 @@ impl Isolate {
             return None;
         }
         // A `ReadLn` the exception left drops the rest of its line (`docs/spec/semantics.md` 6.2)
-        let caught_at = matches!(unwound, Ok(Unwound::Caught)).then_some(self.frames.len());
-        self.input.exception_left(caught_at);
+        let caught_at = matches!(unwound, Ok(Unwound::Caught)).then_some(self.task.frames.len());
+        if self.task.readln_left(caught_at) {
+            self.input.drop_line();
+        }
         match unwound {
             Ok(Unwound::Suspended) => unreachable!("returned above"),
             Ok(Unwound::Caught) => {
                 if self.heap.job_open() {
                     // Released on the way (a value given back, …): run at the handler
-                    let pc = self.frames.last().map_or(0, |f| f.pc);
+                    let pc = self.task.frames.last().map_or(0, |f| f.pc);
                     self.stamp_instr(pc);
                 }
                 None
@@ -1072,7 +1069,7 @@ impl Isolate {
         self.record_trace(x)?;
         let module = Arc::clone(&self.module);
         let mut innermost = true;
-        while let Some(&fr) = self.frames.last() {
+        while let Some(&fr) = self.task.frames.last() {
             // The values lent to a call of this frame go back first (`docs/spec/bytecode.md` 2.8)
             self.give_back(false)?;
             if fr.func == DTOR_FN {
@@ -1086,7 +1083,7 @@ impl Isolate {
             for h in &module.funcs[fr.func as usize].handlers {
                 let r = base + h.reg as usize;
                 if h.kind == bytecode::HANDLER_FINALLY && h.in_handler(pc) {
-                    let state = std::mem::take(&mut self.regs[r]);
+                    let state = std::mem::take(&mut self.task.regs[r]);
                     if state == FINALLY_HALT {
                         // An exception leaving a `finally` block during `Halt`: report it and go on
                         // with `Halt` after the block (5.3)
@@ -1096,35 +1093,39 @@ impl Isolate {
                         return Ok(Unwound::Halt(h.handler_end));
                     }
                     if state == FINALLY_EXCEPTION {
-                        let y = std::mem::take(&mut self.regs[r + 1]);
+                        let y = std::mem::take(&mut self.task.regs[r + 1]);
                         self.attach_suppressed(x, y)?;
                     }
                 }
                 if h.kind == bytecode::HANDLER_EXCEPT && h.in_handler(pc) {
                     // Leaving an `except` block (5.2)
-                    let old = std::mem::take(&mut self.regs[r]);
+                    let old = std::mem::take(&mut self.task.regs[r]);
                     self.heap.release(old)?;
                 }
                 if h.in_body(pc) {
                     if h.kind == bytecode::HANDLER_EXCEPT {
                         self.put(r, x)?;
                     } else {
-                        self.regs[r] = FINALLY_EXCEPTION;
+                        self.task.regs[r] = FINALLY_EXCEPTION;
                         self.put(r + 1, x)?;
                     }
-                    self.frames.last_mut().expect("the frame being unwound").pc = h.handler_start;
+                    self.task
+                        .frames
+                        .last_mut()
+                        .expect("the frame being unwound")
+                        .pc = h.handler_start;
                     return Ok(Unwound::Caught);
                 }
             }
             self.release_frame(&fr)?;
-            self.frames.pop();
+            self.task.frames.pop();
             if self.heap.job_open() {
                 // The destructors run before the unwinding goes on, from the caller's `Call`
                 self.heap.stamp_job(
                     heap::JobOrigin::Unwind {
-                        pc: self.frames.last().map(|c| frame_pos(c, false)),
+                        pc: self.task.frames.last().map(|c| frame_pos(c, false)),
                     },
-                    self.frames.len() as u32,
+                    self.task.frames.len() as u32,
                 );
                 self.heap.job_record(x);
                 return Ok(Unwound::Suspended);
@@ -1139,8 +1140,8 @@ impl Isolate {
     /// being run, from the top frame down (each frame's innermost entry first; the handler table
     /// lists inner entries first), or 0 outside every `except` block.
     fn except_object(&self) -> Slot {
-        let last = self.frames.len().saturating_sub(1);
-        for (i, fr) in self.frames.iter().enumerate().rev() {
+        let last = self.task.frames.len().saturating_sub(1);
+        for (i, fr) in self.task.frames.iter().enumerate().rev() {
             if fr.func == DTOR_FN {
                 continue;
             }
@@ -1150,7 +1151,7 @@ impl Isolate {
                 .iter()
                 .find(|h| h.kind == bytecode::HANDLER_EXCEPT && h.in_handler(pc));
             if let Some(h) = handler {
-                return self.regs[fr.base as usize + h.reg as usize];
+                return self.task.regs[fr.base as usize + h.reg as usize];
             }
         }
         0
@@ -1189,17 +1190,17 @@ impl Isolate {
         let module = Arc::clone(&self.module);
         let result: Result<bool, BadRef> = (|| {
             let mut innermost = true;
-            while let Some(&fr) = self.frames.last() {
+            while let Some(&fr) = self.task.frames.last() {
                 if self
                     .heap
                     .top_job()
-                    .is_some_and(|(_, d)| d as usize == self.frames.len())
+                    .is_some_and(|(_, d)| d as usize == self.task.frames.len())
                 {
                     // A release job of this frame (left by a destruction `Halt` cut short, or by
                     // a dropped frame) runs first; `Halt` goes on from here when it ends
                     if fr.func != DTOR_FN {
                         let pos = from.take().unwrap_or_else(|| frame_pos(&fr, innermost));
-                        self.frames.last_mut().expect("the frame").pc = pos;
+                        self.task.frames.last_mut().expect("the frame").pc = pos;
                     }
                     self.halt_job()?;
                     return Ok(true);
@@ -1218,35 +1219,38 @@ impl Isolate {
                 for h in &module.funcs[fr.func as usize].handlers {
                     let r = base + h.reg as usize;
                     if h.kind == bytecode::HANDLER_FINALLY && h.in_handler(pc) {
-                        let state = std::mem::take(&mut self.regs[r]);
+                        let state = std::mem::take(&mut self.task.regs[r]);
                         if state == FINALLY_EXCEPTION {
                             // The exception being propagated is dropped (not reported)
-                            let y = std::mem::take(&mut self.regs[r + 1]);
+                            let y = std::mem::take(&mut self.task.regs[r + 1]);
                             self.heap.release(y)?;
                         }
                     }
                     if h.kind == bytecode::HANDLER_EXCEPT && h.in_handler(pc) {
-                        let old = std::mem::take(&mut self.regs[r]);
+                        let old = std::mem::take(&mut self.task.regs[r]);
                         self.heap.release(old)?;
                     }
                     if h.kind == bytecode::HANDLER_FINALLY && h.in_body(pc) {
-                        self.regs[r] = FINALLY_HALT;
-                        let old = std::mem::take(&mut self.regs[r + 1]);
+                        self.task.regs[r] = FINALLY_HALT;
+                        let old = std::mem::take(&mut self.task.regs[r + 1]);
                         self.heap.release(old)?;
-                        self.frames.last_mut().expect("the frame being unwound").pc =
-                            h.handler_start;
+                        self.task
+                            .frames
+                            .last_mut()
+                            .expect("the frame being unwound")
+                            .pc = h.handler_start;
                         return Ok(true);
                     }
                 }
                 self.release_frame(&fr)?;
-                self.frames.pop();
+                self.task.frames.pop();
                 if self.heap.job_open() {
                     // The destructors run before `Halt` goes on (from the caller's `Call`)
-                    if let Some(c) = self.frames.last_mut() {
+                    if let Some(c) = self.task.frames.last_mut() {
                         c.pc = frame_pos(c, false);
                     }
                     self.heap
-                        .stamp_job(heap::JobOrigin::Halt, self.frames.len() as u32);
+                        .stamp_job(heap::JobOrigin::Halt, self.task.frames.len() as u32);
                     return Ok(true);
                 }
             }
@@ -1266,7 +1270,7 @@ impl Isolate {
             return Ok(());
         };
         if let heap::JobOrigin::Ret { result, kind, .. } = origin {
-            let v = std::mem::take(&mut self.regs[result as usize]);
+            let v = std::mem::take(&mut self.task.regs[result as usize]);
             match kind {
                 bytecode::MANAGED_HEAP_REF => self.heap.release(v)?,
                 bytecode::MANAGED_OBJ => self.heap.release_obj(v)?,
@@ -1283,23 +1287,47 @@ impl Isolate {
         if self.heap.exc_trace(x)?.is_some() {
             return Ok(());
         }
-        // The frames of the destruction procedure are not shown (`docs/spec/objects.md` 3.3)
-        let last = self.frames.len().saturating_sub(1);
-        let visible: Vec<(u32, u32)> = self
-            .frames
-            .iter()
-            .enumerate()
-            .filter(|(_, f)| f.func != DTOR_FN)
-            .map(|(i, f)| (f.func, frame_pos(f, i == last)))
-            .collect();
+        // The frames of the destruction procedure are not shown (`docs/spec/objects.md` 3.3).
+        // A frame running inlined code stands for the frames of the calls inlined there
+        // (`docs/spec/diagnostics.md` chapter 8): (function shown, where its line comes from)
+        let last = self.task.frames.len().saturating_sub(1);
+        let mut visible: Vec<(u32, TraceLine)> = Vec::with_capacity(self.task.frames.len());
+        for (i, f) in self.task.frames.iter().enumerate() {
+            if f.func == DTOR_FN {
+                continue;
+            }
+            let pos = frame_pos(f, i == last);
+            let func = &self.module.funcs[f.func as usize];
+            let chain = func.inline_chain(pos);
+            // Outermost first: the function itself at the line of the outermost call, then each
+            // inlined callee at the line of the call inside it, the innermost at `pos`
+            let mut shown = f.func;
+            for &k in chain.iter().rev() {
+                let e = &func.inlines[k];
+                visible.push((shown, TraceLine::Line(e.line)));
+                shown = e.func;
+            }
+            visible.push((shown, TraceLine::At(f.func, pos)));
+        }
         let n = visible.len();
-        let (frames, omitted) = if n > 32 {
-            let mut v: Vec<(u32, u32)> = visible.iter().rev().take(16).copied().collect();
+        let kept: Vec<(u32, TraceLine)> = if n > 32 {
+            let mut v: Vec<_> = visible.iter().rev().take(16).copied().collect();
             v.extend(visible[..16].iter().rev().copied());
-            (v, n - 32)
+            v
         } else {
-            (visible.into_iter().rev().collect(), 0)
+            visible.into_iter().rev().collect()
         };
+        let omitted = n.saturating_sub(32);
+        let frames = kept
+            .into_iter()
+            .map(|(func, line)| {
+                let line = match line {
+                    TraceLine::Line(l) => l,
+                    TraceLine::At(f, pos) => self.module.funcs[f as usize].line_at(pos),
+                };
+                (func, line)
+            })
+            .collect();
         self.heap.set_exc_trace(x, Trace { frames, omitted })
     }
 
@@ -1311,7 +1339,7 @@ impl Isolate {
         let frames = t
             .frames
             .iter()
-            .map(|&(func, pc)| {
+            .map(|&(func, line)| {
                 let f = &self.module.funcs[func as usize];
                 StackFrame {
                     function: f.name.clone(),
@@ -1321,7 +1349,7 @@ impl Isolate {
                         .get(f.file as usize)
                         .map(|u| u.path.clone())
                         .unwrap_or_default(),
-                    line: f.line_at(pc),
+                    line,
                 }
             })
             .collect();
@@ -1398,14 +1426,14 @@ impl Isolate {
     /// Discards the frames from the innermost, releasing the managed registers of each
     /// (the implicit `finally`; `docs/design/lifetime.md` 3.8).
     fn release_frames(&mut self) -> Result<(), BadRef> {
-        while let Some(&fr) = self.frames.last() {
+        while let Some(&fr) = self.task.frames.last() {
             self.give_back(false)?;
             if fr.func == DTOR_FN {
                 self.dtor_abandon()?;
                 continue;
             }
             self.release_frame(&fr)?;
-            self.frames.pop();
+            self.task.frames.pop();
         }
         Ok(())
     }
@@ -1416,10 +1444,14 @@ impl Isolate {
     fn release_frame(&mut self, fr: &Frame) -> Result<(), BadRef> {
         let base = fr.base as usize;
         for m in &self.module.funcs[fr.func as usize].managed {
-            release_slot(&mut self.heap, &mut self.regs[base + m.reg as usize], m)?;
+            release_slot(
+                &mut self.heap,
+                &mut self.task.regs[base + m.reg as usize],
+                m,
+            )?;
         }
         if fr.counted_self() {
-            let s = std::mem::take(&mut self.regs[base]);
+            let s = std::mem::take(&mut self.task.regs[base]);
             self.heap.release(s)?;
         }
         Ok(())
@@ -1428,7 +1460,7 @@ impl Isolate {
     /// Writes a value that holds its own reference into a register, letting go of the register's old value
     /// (every instruction that makes a managed value; `docs/design/lifetime.md` 3.1).
     fn put(&mut self, i: usize, v: Slot) -> Result<(), BadRef> {
-        let old = std::mem::replace(&mut self.regs[i], v);
+        let old = std::mem::replace(&mut self.task.regs[i], v);
         self.heap.release(old)
     }
 
@@ -1482,7 +1514,7 @@ impl Isolate {
     // ---- Host functions ----
 
     fn poll_pending(&mut self) -> Result<bool, PollError> {
-        let Some(p) = self.pending.as_mut() else {
+        let Some(p) = self.task.pending.as_mut() else {
             return Ok(true);
         };
         let waker = noop_waker();
@@ -1500,14 +1532,14 @@ impl Isolate {
             },
         };
         let resume_pc = p.resume_pc;
-        self.pending = None;
+        self.task.pending = None;
         match result {
             Ok(None) => {}
             // The line goes into the buffer; the input instruction runs again (`input.rs`)
             Ok(Some((line, ahead))) => self.input.receive(line, ahead)?,
             Err(e) => return Err(PollError::Rt(host_error_to_rt(e))),
         }
-        if let Some(fr) = self.frames.last_mut() {
+        if let Some(fr) = self.task.frames.last_mut() {
             fr.pc = resume_pc;
         }
         Ok(true)
@@ -1626,7 +1658,7 @@ impl Isolate {
                     other => return other,
                 }
             }
-            let Some(frame) = self.frames.last().copied() else {
+            let Some(frame) = self.task.frames.last().copied() else {
                 return self.step(budget);
             };
             if frame.func == DTOR_FN {
@@ -1634,9 +1666,11 @@ impl Isolate {
                 // `run_loop` again after it
                 return self.dtor_run(budget);
             }
-            let func = &module.funcs[frame.func as usize];
-            let code: &[u32] = &func.code;
-            let base = frame.base as usize;
+            // The running function's information. A call or a return on the fast path replaces it
+            // and goes on in the inner loop (`enter!`)
+            let mut func = &module.funcs[frame.func as usize];
+            let mut code: &[u32] = &func.code;
+            let mut base = frame.base as usize;
             let mut pc = frame.pc as usize;
             // Instruction not on the fast path: write back pc and leave it to step
             macro_rules! slow {
@@ -1658,8 +1692,22 @@ impl Isolate {
                 };
             }
             // The frame's registers as seen by an 8-bit operand: no bounds check on each access.
-            // Taken again after anything that may grow `self.regs`
-            let mut regs = reg_window(&mut self.regs, base);
+            // Taken again after anything that may grow `self.task.regs`
+            let mut regs = reg_window(&mut self.task.regs, base);
+            // Goes on in the function `$f` of the frame at `$base` from `$pc`, without leaving the
+            // inner loop (the outer loop would read the same from the top frame). Only after a
+            // call or a return that opens no release job and leaves no job to run in the frame
+            // it goes to, and not into the destruction procedure (`DTOR_FN`)
+            macro_rules! enter {
+                ($f:expr, $base:expr, $pc:expr) => {{
+                    func = $f;
+                    code = &func.code;
+                    base = $base;
+                    pc = $pc;
+                    regs = reg_window(&mut self.task.regs, base);
+                    continue;
+                }};
+            }
             loop {
                 debug_assert!(pc < code.len(), "pc {pc} past the instruction stream");
                 // SAFETY: `pc` is an instruction boundary of the function, whose module was
@@ -1667,8 +1715,8 @@ impl Isolate {
                 // stream is not empty), and `pc` is set only to a verified jump target or handler,
                 // to the boundary `step` or a return writes back, or to the word after an
                 // instruction that is not the last one (the last one is `Ret`, `RetVoid`, `Halt`,
-                // `Jmp` or `Raise`, none of which goes on to the next word). `Wide` goes to step
-                // below, so the fast path never stops inside a wide instruction
+                // `Jmp` or `Raise`, none of which goes on to the next word). `Wide` and `Ext` go to
+                // step below, so the fast path never stops inside an instruction with a prefix
                 let word = unsafe { *code.get_unchecked(pc) };
                 // Every instruction passes here once, also those left to `step`
                 #[cfg(test)]
@@ -1712,7 +1760,7 @@ impl Isolate {
                         bytecode::signed_c(bytecode::word_c(word), false)
                     };
                 }
-                // The operands as indexes of `self.regs`, for the bodies shared with step
+                // The operands as indexes of `self.task.regs`, for the bodies shared with step
                 macro_rules! abs {
                     () => {
                         (base + a!(), base + b!(), base + c!())
@@ -1734,7 +1782,7 @@ impl Isolate {
                             if off < 0 {
                                 *budget = budget.saturating_sub(1);
                                 if *budget == 0 {
-                                    self.frames.last_mut().unwrap().pc = pc as u32;
+                                    self.task.frames.last_mut().unwrap().pc = pc as u32;
                                     return Step::Continue;
                                 }
                             }
@@ -1745,6 +1793,18 @@ impl Isolate {
                 // An instruction body shared with step (`exec_op`), or step itself
                 macro_rules! shared {
                     () => {{
+                        // `bx!()` is not the type word of `RefFieldSet` / `RefFieldSetRef`
+                        // (`docs/spec/bytecode.md` 1.2): their arms go to step instead. `AggLoad`,
+                        // `AggStore` and `LendPlace` come here, but `exec_op` does not run them, so
+                        // they go to step too (an arm of their own here slowed the loop down by
+                        // moving its code; `docs/notes/benchmark-m4c.md`, M4-63, M4-64)
+                        debug_assert!(
+                            !bytecode::has_type_word(u16::from(opc))
+                                || matches!(
+                                    opc,
+                                    op::word::AGG_LOAD | op::word::AGG_STORE | op::word::LEND_PLACE
+                                )
+                        );
                         let (ra, rb, rc) = abs!();
                         match self.exec_op(opc, ra, rb, rc, b!(), c!(), bx!()) {
                             Some(r) => {
@@ -1753,25 +1813,61 @@ impl Isolate {
                                     // The instruction let go of an instance's last reference: its
                                     // destruction runs before the next instruction
                                     self.stamp_instr(pc as u32);
-                                    self.frames.last_mut().unwrap().pc = next as u32;
+                                    self.task.frames.last_mut().unwrap().pc = next as u32;
                                     break;
                                 }
                             }
                             None => slow!(),
                         }
-                        regs = reg_window(&mut self.regs, base);
+                        regs = reg_window(&mut self.task.regs, base);
+                    }};
+                }
+                // Enters `$callee` with its frame at `r$args` of this one (the arguments are there);
+                // the result comes back in `rA` (a routine's arguments start after it). A call that
+                // needs more registers or passes the stack limit is left to step
+                macro_rules! call {
+                    ($callee:expr, $args:expr) => {{
+                        let callee: usize = $callee;
+                        let f = &module.funcs[callee];
+                        let new_base = base + $args;
+                        let need = new_base + f.regs as usize;
+                        let bytes = need * std::mem::size_of::<Slot>()
+                            + (self.task.frames.len() + 1) * std::mem::size_of::<Frame>();
+                        if bytes > self.config.stack_limit
+                            || self.task.regs.len() < frame_end(new_base, f.regs as usize)
+                        {
+                            slow!();
+                        }
+                        *budget = budget.saturating_sub(1);
+                        zero_slots(&mut self.task.regs[new_base + f.params as usize..need]);
+                        self.task.frames.last_mut().unwrap().pc = next as u32;
+                        self.task.frames.push(Frame {
+                            func: callee as u32,
+                            base: new_base as u32,
+                            pc: 0,
+                            ret_reg: (base + a!()) as u32,
+                        });
+                        if *budget == 0 {
+                            return Step::Continue;
+                        }
+                        // Entering a frame opens no job, and a job waiting below runs only when the
+                        // frames come back down to it
+                        enter!(f, new_base, 0)
                     }};
                 }
                 match opc {
-                    op::NOP => {}
-                    // A wide instruction is left to step (`docs/design/vm.md` 3.14)
-                    op::WIDE => slow!(),
-                    op::MOVE => regs[a!()] = regs[b!()],
-                    op::LOAD_ZERO => regs[a!()] = 0,
-                    op::LOAD_INT => regs[a!()] = sbx!(),
+                    op::word::NOP => {}
+                    // A wide instruction is left to step (`docs/design/vm.md` 3.14). So is one
+                    // numbered past 255 (`docs/spec/bytecode.md` 1.2): `Ext` goes through the last
+                    // arm, as `exec_op` does not run it (an arm of its own here moved the code of
+                    // the loop and slowed it down; `docs/notes/benchmark-m4c.md`, M4-109)
+                    op::word::WIDE => slow!(),
+                    op::word::MOVE => regs[a!()] = regs[b!()],
+                    op::word::LOAD_ZERO => regs[a!()] = 0,
+                    op::word::LOAD_INT => regs[a!()] = sbx!(),
                     // SAFETY: `Bx` of `LoadConst` is in the constant pool (verified;
                     // `docs/spec/bytecode.md` 3.3), and the cache has an entry for each constant
-                    op::LOAD_CONST => {
+                    op::word::LOAD_CONST => {
                         match unsafe { self.const_cache.get_unchecked(bx!()) }.plain() {
                             Some(v) => regs[a!()] = v,
                             // A managed constant goes to `exec_op`, one not made yet to step (a
@@ -1782,149 +1878,189 @@ impl Isolate {
                                     Some(r) => op!(r),
                                     None => slow!(),
                                 }
-                                regs = reg_window(&mut self.regs, base);
+                                regs = reg_window(&mut self.task.regs, base);
                             }
                         }
                     }
                     // SAFETY: `Bx` of `LoadGlobal` / `StoreGlobal` is in the global variable table
                     // (verified; `docs/spec/bytecode.md` 3.3), and `self.globals` has one slot for
                     // each entry and never shrinks
-                    op::LOAD_GLOBAL => regs[a!()] = unsafe { *self.globals.get_unchecked(bx!()) },
-                    op::STORE_GLOBAL => unsafe {
+                    op::word::LOAD_GLOBAL => {
+                        regs[a!()] = unsafe { *self.globals.get_unchecked(bx!()) }
+                    }
+                    op::word::STORE_GLOBAL => unsafe {
                         *self.globals.get_unchecked_mut(bx!()) = regs[a!()]
                     },
-                    op::ADD_INT => regs[a!()] = regs[b!()].wrapping_add(regs[c!()]),
-                    op::SUB_INT => regs[a!()] = regs[b!()].wrapping_sub(regs[c!()]),
-                    op::MUL_INT => regs[a!()] = regs[b!()].wrapping_mul(regs[c!()]),
-                    op::ADD_INT32 => {
-                        regs[a!()] = exec::int32(op::ADD_INT32, regs[b!()], regs[c!()])
+                    op::word::ADD_INT => regs[a!()] = regs[b!()].wrapping_add(regs[c!()]),
+                    op::word::SUB_INT => regs[a!()] = regs[b!()].wrapping_sub(regs[c!()]),
+                    op::word::MUL_INT => regs[a!()] = regs[b!()].wrapping_mul(regs[c!()]),
+                    op::word::ADD_INT32 => {
+                        regs[a!()] = exec::int32(op::word::ADD_INT32, regs[b!()], regs[c!()])
                     }
-                    op::SUB_INT32 => {
-                        regs[a!()] = exec::int32(op::SUB_INT32, regs[b!()], regs[c!()])
+                    op::word::SUB_INT32 => {
+                        regs[a!()] = exec::int32(op::word::SUB_INT32, regs[b!()], regs[c!()])
                     }
-                    op::MUL_INT32 => {
-                        regs[a!()] = exec::int32(op::MUL_INT32, regs[b!()], regs[c!()])
+                    op::word::MUL_INT32 => {
+                        regs[a!()] = exec::int32(op::word::MUL_INT32, regs[b!()], regs[c!()])
                     }
-                    op::NEG_INT => regs[a!()] = regs[b!()].wrapping_neg(),
-                    op::AND_INT => regs[a!()] = regs[b!()] & regs[c!()],
-                    op::OR_INT => regs[a!()] = regs[b!()] | regs[c!()],
-                    op::XOR_INT => regs[a!()] = regs[b!()] ^ regs[c!()],
-                    op::NOT_INT => regs[a!()] = !regs[b!()],
-                    op::SHL_INT => regs[a!()] = regs[b!()].wrapping_shl((regs[c!()] & 63) as u32),
-                    op::SHR_INT => {
+                    op::word::NEG_INT => regs[a!()] = regs[b!()].wrapping_neg(),
+                    op::word::AND_INT => regs[a!()] = regs[b!()] & regs[c!()],
+                    op::word::OR_INT => regs[a!()] = regs[b!()] | regs[c!()],
+                    op::word::XOR_INT => regs[a!()] = regs[b!()] ^ regs[c!()],
+                    op::word::NOT_INT => regs[a!()] = !regs[b!()],
+                    op::word::SHL_INT => {
+                        regs[a!()] = regs[b!()].wrapping_shl((regs[c!()] & 63) as u32)
+                    }
+                    op::word::SHR_INT => {
                         regs[a!()] =
                             ((regs[b!()] as u64).wrapping_shr((regs[c!()] & 63) as u32)) as i64
                     }
-                    op::SHL_INT32 => {
+                    op::word::SHL_INT32 => {
                         regs[a!()] =
                             ((regs[b!()] as i32).wrapping_shl((regs[c!()] & 31) as u32)) as i64
                     }
-                    op::SHR_INT32 => {
+                    op::word::SHR_INT32 => {
                         regs[a!()] = (((regs[b!()] as u32).wrapping_shr((regs[c!()] & 31) as u32))
                             as i32) as i64
                     }
-                    op::ADD_INT_I => regs[a!()] = regs[b!()].wrapping_add(sc!()),
-                    op::MUL_INT_I => regs[a!()] = exec::int_imm(op::MUL_INT_I, regs[b!()], sc!()),
-                    op::ADD_INT32_I => {
-                        regs[a!()] = exec::int_imm(op::ADD_INT32_I, regs[b!()], sc!())
+                    op::word::ADD_INT_I => regs[a!()] = regs[b!()].wrapping_add(sc!()),
+                    op::word::MUL_INT_I => {
+                        regs[a!()] = exec::int_imm(op::word::MUL_INT_I, regs[b!()], sc!())
                     }
-                    op::MUL_INT32_I => {
-                        regs[a!()] = exec::int_imm(op::MUL_INT32_I, regs[b!()], sc!())
+                    op::word::ADD_INT32_I => {
+                        regs[a!()] = exec::int_imm(op::word::ADD_INT32_I, regs[b!()], sc!())
                     }
-                    op::AND_INT_I => regs[a!()] = exec::int_imm(op::AND_INT_I, regs[b!()], sc!()),
-                    op::OR_INT_I => regs[a!()] = exec::int_imm(op::OR_INT_I, regs[b!()], sc!()),
-                    op::XOR_INT_I => regs[a!()] = exec::int_imm(op::XOR_INT_I, regs[b!()], sc!()),
-                    op::SHL_INT_I => regs[a!()] = exec::int_imm(op::SHL_INT_I, regs[b!()], sc!()),
-                    op::SHR_INT_I => regs[a!()] = exec::int_imm(op::SHR_INT_I, regs[b!()], sc!()),
-                    op::SHL_INT32_I => {
-                        regs[a!()] = exec::int_imm(op::SHL_INT32_I, regs[b!()], sc!())
+                    op::word::MUL_INT32_I => {
+                        regs[a!()] = exec::int_imm(op::word::MUL_INT32_I, regs[b!()], sc!())
                     }
-                    op::SHR_INT32_I => {
-                        regs[a!()] = exec::int_imm(op::SHR_INT32_I, regs[b!()], sc!())
+                    op::word::AND_INT_I => {
+                        regs[a!()] = exec::int_imm(op::word::AND_INT_I, regs[b!()], sc!())
                     }
-                    op::DIV_INT_I | op::MOD_INT_I => {
-                        let div = if opc == op::DIV_INT_I {
-                            op::DIV_INT
+                    op::word::OR_INT_I => {
+                        regs[a!()] = exec::int_imm(op::word::OR_INT_I, regs[b!()], sc!())
+                    }
+                    op::word::XOR_INT_I => {
+                        regs[a!()] = exec::int_imm(op::word::XOR_INT_I, regs[b!()], sc!())
+                    }
+                    op::word::SHL_INT_I => {
+                        regs[a!()] = exec::int_imm(op::word::SHL_INT_I, regs[b!()], sc!())
+                    }
+                    op::word::SHR_INT_I => {
+                        regs[a!()] = exec::int_imm(op::word::SHR_INT_I, regs[b!()], sc!())
+                    }
+                    op::word::SHL_INT32_I => {
+                        regs[a!()] = exec::int_imm(op::word::SHL_INT32_I, regs[b!()], sc!())
+                    }
+                    op::word::SHR_INT32_I => {
+                        regs[a!()] = exec::int_imm(op::word::SHR_INT32_I, regs[b!()], sc!())
+                    }
+                    op::word::DIV_INT_I | op::word::MOD_INT_I => {
+                        let div = if opc == op::word::DIV_INT_I {
+                            op::word::DIV_INT
                         } else {
-                            op::MOD_INT
+                            op::word::MOD_INT
                         };
                         match exec::int_div(div, regs[b!()], sc!()) {
                             Ok(v) => regs[a!()] = v,
                             Err(e) => op!(Err(RefError::Rt(e))),
                         }
                     }
-                    op::NEG_F64 => regs[a!()] = f64_slot(-slot_f64(regs[b!()])),
-                    op::NEG_F32 => regs[a!()] = f32_slot(-slot_f32(regs[b!()])),
+                    op::word::NEG_F64 => regs[a!()] = f64_slot(-slot_f64(regs[b!()])),
+                    op::word::NEG_F32 => regs[a!()] = f32_slot(-slot_f32(regs[b!()])),
                     // One arm each, not a range pattern: a range splits the dispatch in two (the
                     // arms after it get a second table)
-                    op::ADD_F64 => real!(op::ADD_F64),
-                    op::SUB_F64 => real!(op::SUB_F64),
-                    op::MUL_F64 => real!(op::MUL_F64),
-                    op::DIV_F64 => real!(op::DIV_F64),
-                    op::EQ_F64 => real!(op::EQ_F64),
-                    op::LT_F64 => real!(op::LT_F64),
-                    op::LE_F64 => real!(op::LE_F64),
-                    op::ADD_F32 => real!(op::ADD_F32),
-                    op::SUB_F32 => real!(op::SUB_F32),
-                    op::MUL_F32 => real!(op::MUL_F32),
-                    op::DIV_F32 => real!(op::DIV_F32),
-                    op::EQ_F32 => real!(op::EQ_F32),
-                    op::LT_F32 => real!(op::LT_F32),
-                    op::LE_F32 => real!(op::LE_F32),
-                    op::NARROW => regs[a!()] = narrow(regs[b!()], c!() as u32),
+                    op::word::ADD_F64 => real!(op::word::ADD_F64),
+                    op::word::SUB_F64 => real!(op::word::SUB_F64),
+                    op::word::MUL_F64 => real!(op::word::MUL_F64),
+                    op::word::DIV_F64 => real!(op::word::DIV_F64),
+                    op::word::EQ_F64 => real!(op::word::EQ_F64),
+                    op::word::LT_F64 => real!(op::word::LT_F64),
+                    op::word::LE_F64 => real!(op::word::LE_F64),
+                    op::word::ADD_F32 => real!(op::word::ADD_F32),
+                    op::word::SUB_F32 => real!(op::word::SUB_F32),
+                    op::word::MUL_F32 => real!(op::word::MUL_F32),
+                    op::word::DIV_F32 => real!(op::word::DIV_F32),
+                    op::word::EQ_F32 => real!(op::word::EQ_F32),
+                    op::word::LT_F32 => real!(op::word::LT_F32),
+                    op::word::LE_F32 => real!(op::word::LE_F32),
+                    op::word::NARROW => regs[a!()] = narrow(regs[b!()], c!() as u32),
                     // An out-of-range value goes to step, which raises the exception
-                    op::NARROW_OVF | op::NARROW_RNG => {
+                    op::word::NARROW_OVF | op::word::NARROW_RNG => {
                         let v = regs[b!()];
                         if !narrow_fits(v, c!() as u32) {
                             slow!();
                         }
                         regs[a!()] = v;
                     }
-                    op::DIV_INT | op::DIV_INT_CHK | op::MOD_INT | op::DIV_UINT | op::MOD_UINT => {
-                        match exec::int_div(opc, regs[b!()], regs[c!()]) {
-                            Ok(v) => regs[a!()] = v,
-                            Err(e) => op!(Err(RefError::Rt(e))),
-                        }
+                    op::word::DIV_INT
+                    | op::word::DIV_INT_CHK
+                    | op::word::MOD_INT
+                    | op::word::DIV_UINT
+                    | op::word::MOD_UINT => match exec::int_div(opc, regs[b!()], regs[c!()]) {
+                        Ok(v) => regs[a!()] = v,
+                        Err(e) => op!(Err(RefError::Rt(e))),
+                    },
+                    op::word::EQ_INT => regs[a!()] = (regs[b!()] == regs[c!()]) as i64,
+                    op::word::LT_INT => regs[a!()] = (regs[b!()] < regs[c!()]) as i64,
+                    op::word::LE_INT => regs[a!()] = (regs[b!()] <= regs[c!()]) as i64,
+                    op::word::LT_UINT => {
+                        regs[a!()] = ((regs[b!()] as u64) < (regs[c!()] as u64)) as i64
                     }
-                    op::EQ_INT => regs[a!()] = (regs[b!()] == regs[c!()]) as i64,
-                    op::LT_INT => regs[a!()] = (regs[b!()] < regs[c!()]) as i64,
-                    op::LE_INT => regs[a!()] = (regs[b!()] <= regs[c!()]) as i64,
-                    op::LT_UINT => regs[a!()] = ((regs[b!()] as u64) < (regs[c!()] as u64)) as i64,
-                    op::LE_UINT => regs[a!()] = ((regs[b!()] as u64) <= (regs[c!()] as u64)) as i64,
-                    op::NOT_BOOL => regs[a!()] = regs[b!()] ^ 1,
+                    op::word::LE_UINT => {
+                        regs[a!()] = ((regs[b!()] as u64) <= (regs[c!()] as u64)) as i64
+                    }
+                    op::word::NOT_BOOL => regs[a!()] = regs[b!()] ^ 1,
                     // Each branch has an arm of its own, so the dispatch jumps straight to it
-                    op::JMP => branch!(true, sbx!()),
-                    op::JMP_IF_TRUE => branch!(regs[a!()] != 0, sbx!()),
-                    op::JMP_IF_FALSE => branch!(regs[a!()] == 0, sbx!()),
-                    op::JMP_IF_EQ_INT => branch!(regs[a!()] == regs[b!()], sc!()),
-                    op::JMP_IF_NE_INT => branch!(regs[a!()] != regs[b!()], sc!()),
-                    op::JMP_IF_LT_INT => branch!(regs[a!()] < regs[b!()], sc!()),
-                    op::JMP_IF_LE_INT => branch!(regs[a!()] <= regs[b!()], sc!()),
-                    op::JMP_IF_LT_UINT => {
+                    op::word::JMP => branch!(true, sbx!()),
+                    op::word::JMP_IF_TRUE => branch!(regs[a!()] != 0, sbx!()),
+                    op::word::JMP_IF_FALSE => branch!(regs[a!()] == 0, sbx!()),
+                    op::word::JMP_IF_EQ_INT => branch!(regs[a!()] == regs[b!()], sc!()),
+                    op::word::JMP_IF_NE_INT => branch!(regs[a!()] != regs[b!()], sc!()),
+                    op::word::JMP_IF_LT_INT => branch!(regs[a!()] < regs[b!()], sc!()),
+                    op::word::JMP_IF_LE_INT => branch!(regs[a!()] <= regs[b!()], sc!()),
+                    op::word::JMP_IF_LT_UINT => {
                         branch!((regs[a!()] as u64) < (regs[b!()] as u64), sc!())
                     }
-                    op::JMP_IF_LE_UINT => {
+                    op::word::JMP_IF_LE_UINT => {
                         branch!((regs[a!()] as u64) <= (regs[b!()] as u64), sc!())
                     }
-                    op::JMP_IF_EQ_INT_I => {
-                        branch!(exec::cmp_imm(op::JMP_IF_EQ_INT_I, regs[a!()], sb!()), sc!())
+                    op::word::JMP_IF_EQ_INT_I => {
+                        branch!(
+                            exec::cmp_imm(op::word::JMP_IF_EQ_INT_I, regs[a!()], sb!()),
+                            sc!()
+                        )
                     }
-                    op::JMP_IF_NE_INT_I => {
-                        branch!(exec::cmp_imm(op::JMP_IF_NE_INT_I, regs[a!()], sb!()), sc!())
+                    op::word::JMP_IF_NE_INT_I => {
+                        branch!(
+                            exec::cmp_imm(op::word::JMP_IF_NE_INT_I, regs[a!()], sb!()),
+                            sc!()
+                        )
                     }
-                    op::JMP_IF_LT_INT_I => {
-                        branch!(exec::cmp_imm(op::JMP_IF_LT_INT_I, regs[a!()], sb!()), sc!())
+                    op::word::JMP_IF_LT_INT_I => {
+                        branch!(
+                            exec::cmp_imm(op::word::JMP_IF_LT_INT_I, regs[a!()], sb!()),
+                            sc!()
+                        )
                     }
-                    op::JMP_IF_LE_INT_I => {
-                        branch!(exec::cmp_imm(op::JMP_IF_LE_INT_I, regs[a!()], sb!()), sc!())
+                    op::word::JMP_IF_LE_INT_I => {
+                        branch!(
+                            exec::cmp_imm(op::word::JMP_IF_LE_INT_I, regs[a!()], sb!()),
+                            sc!()
+                        )
                     }
-                    op::JMP_IF_GT_INT_I => {
-                        branch!(exec::cmp_imm(op::JMP_IF_GT_INT_I, regs[a!()], sb!()), sc!())
+                    op::word::JMP_IF_GT_INT_I => {
+                        branch!(
+                            exec::cmp_imm(op::word::JMP_IF_GT_INT_I, regs[a!()], sb!()),
+                            sc!()
+                        )
                     }
-                    op::JMP_IF_GE_INT_I => {
-                        branch!(exec::cmp_imm(op::JMP_IF_GE_INT_I, regs[a!()], sb!()), sc!())
+                    op::word::JMP_IF_GE_INT_I => {
+                        branch!(
+                            exec::cmp_imm(op::word::JMP_IF_GE_INT_I, regs[a!()], sb!()),
+                            sc!()
+                        )
                     }
-                    op::FOR_LOOP_UP | op::FOR_LOOP_DOWN => {
+                    op::word::FOR_LOOP_UP | op::word::FOR_LOOP_DOWN => {
                         let a = a!();
                         let more = match exec::for_step(opc, regs[a], regs[b!()]) {
                             Some(v) => {
@@ -1935,106 +2071,82 @@ impl Isolate {
                         };
                         branch!(more, sc!())
                     }
-                    op::JMP_IF_EQ_STR | op::JMP_IF_NE_STR => {
+                    op::word::JMP_IF_EQ_STR | op::word::JMP_IF_NE_STR => {
                         let (x, y) = (regs[a!()], regs[b!()]);
                         let eq = op!(self.str_equal(x, y));
-                        regs = reg_window(&mut self.regs, base);
-                        branch!(eq == (opc == op::JMP_IF_EQ_STR), sc!())
+                        regs = reg_window(&mut self.task.regs, base);
+                        branch!(eq == (opc == op::word::JMP_IF_EQ_STR), sc!())
                     }
-                    op::CALL
-                    | op::CALL_METHOD
-                    | op::CALL_VIRTUAL
-                    | op::CALL_INTF
-                    | op::CALL_INDIRECT
-                    | op::CALL_CLOSURE => {
-                        // Same as `Call` in `step`. Growing the registers and exceeding the limit (exception) are left to step.
-                        // A method call whose `Self` does not check, or whose table entry is not a
-                        // function, is also left to step (`docs/spec/objects.md` 14.5), and so
-                        // are the calls of a callable value that needs a `Self` (14.9).
-                        // `args`: the register of the first argument (the frame's base)
-                        // `closure`: `rA` takes the closure block `rB` as the hidden first argument
-                        let (callee, args, closure) = match opc {
-                            op::CALL => (bx!(), a!(), false),
-                            op::CALL_INDIRECT | op::CALL_CLOSURE => {
-                                let Some((f, closure)) =
-                                    fast_value_callee(&self.heap, &module, opc, regs[b!()])
-                                else {
-                                    slow!()
-                                };
-                                // A routine's arguments start after `rA`, which takes the result
-                                let args = if opc == op::CALL_CLOSURE && !closure {
-                                    a!() + 1
-                                } else {
-                                    a!()
-                                };
-                                if args + module.funcs[f].params as usize > func.regs as usize {
-                                    slow!();
-                                }
-                                (f, args, closure)
+                    // Same as `Call` in `step`. Growing the registers and exceeding the limit
+                    // (exception) are left to step (`call!`). A method call whose `Self` does not
+                    // check, or whose table entry is not a function, is also left to step
+                    // (`docs/spec/objects.md` 14.5), and so are the calls of a callable value that
+                    // needs a `Self` (14.9)
+                    op::word::CALL => call!(bx!(), a!()),
+                    op::word::CALL_METHOD | op::word::CALL_VIRTUAL | op::word::CALL_INTF => {
+                        match fast_method_callee(&self.heap, &module, opc, regs[a!()], bx!()) {
+                            Some(f)
+                                if a!() + module.funcs[f].params as usize <= func.regs as usize =>
+                            {
+                                call!(f, a!())
                             }
-                            _ => match fast_method_callee(
-                                &self.heap,
-                                &module,
-                                opc,
-                                regs[a!()],
-                                bx!(),
-                            ) {
-                                Some(f)
-                                    if a!() + module.funcs[f].params as usize
-                                        <= func.regs as usize =>
-                                {
-                                    (f, a!(), false)
-                                }
-                                _ => slow!(),
-                            },
-                        };
-                        if closure {
-                            // Borrowed (`docs/spec/objects.md` 14.9). Step writes it the same way
-                            // when it takes over the call below
-                            regs[a!()] = regs[b!()];
+                            _ => slow!(),
                         }
-                        let f = &module.funcs[callee];
-                        let new_base = base + args;
-                        let need = new_base + f.regs as usize;
-                        let bytes = need * std::mem::size_of::<Slot>()
-                            + (self.frames.len() + 1) * std::mem::size_of::<Frame>();
-                        if bytes > self.config.stack_limit
-                            || self.regs.len() < frame_end(new_base, f.regs as usize)
-                        {
+                    }
+                    op::word::CALL_INDIRECT | op::word::CALL_CLOSURE => {
+                        // `closure`: `rA` takes the closure block `rB` as the hidden first argument
+                        let Some((f, closure)) =
+                            fast_value_callee(&self.heap, &module, opc, regs[b!()])
+                        else {
+                            slow!()
+                        };
+                        // A routine's arguments start after `rA`, which takes the result
+                        let args = if opc == op::word::CALL_CLOSURE && !closure {
+                            a!() + 1
+                        } else {
+                            a!()
+                        };
+                        if args + module.funcs[f].params as usize > func.regs as usize {
                             slow!();
                         }
-                        *budget = budget.saturating_sub(1);
-                        for slot in &mut self.regs[new_base + f.params as usize..need] {
-                            *slot = 0;
+                        if closure {
+                            // Borrowed (`docs/spec/objects.md` 14.9). Step writes it the same way
+                            // when it takes over the call in `call!`
+                            regs[a!()] = regs[b!()];
                         }
-                        self.frames.last_mut().unwrap().pc = next as u32;
-                        self.frames.push(Frame {
-                            func: callee as u32,
-                            base: new_base as u32,
-                            pc: 0,
-                            // The result comes back in `rA` (a routine's arguments start after it)
-                            ret_reg: (base + a!()) as u32,
-                        });
-                        if *budget == 0 {
-                            return Step::Continue;
-                        }
-                        break;
+                        call!(f, args)
                     }
-                    op::RET | op::RET_VOID => {
-                        if self.frames.len() <= 1 {
+                    op::word::RET | op::word::RET_VOID => {
+                        if self.task.frames.len() <= 1 {
                             // A return from the first frame (<init> → <main>, exit) is left to step
                             slow!();
                         }
-                        let counted_self = self.frames.last().unwrap().counted_self();
+                        // Back in the caller (the frame now on top) after the frame is popped.
+                        // A job waiting for the frames to come down (a destructor's caller) and
+                        // the destruction procedure go through the outer loop
+                        macro_rules! back {
+                            () => {{
+                                let caller = *self.task.frames.last().expect("not the first frame");
+                                if caller.func == DTOR_FN || self.heap.has_jobs() {
+                                    break;
+                                }
+                                enter!(
+                                    &module.funcs[caller.func as usize],
+                                    caller.base as usize,
+                                    caller.pc as usize
+                                )
+                            }};
+                        }
+                        let counted_self = self.task.frames.last().unwrap().counted_self();
                         if func.managed.is_empty() && !counted_self {
                             // No implicit `finally` (`op_ret` without managed registers): only the
                             // result moves
-                            let fr = self.frames.pop().unwrap();
-                            if opc == op::RET {
+                            let fr = self.task.frames.pop().unwrap();
+                            if opc == op::word::RET {
                                 let v = regs[a!()];
-                                self.regs[fr.ret() as usize] = v;
+                                self.task.regs[fr.ret() as usize] = v;
                             }
-                            break;
+                            back!()
                         }
                         if !counted_self {
                             // The implicit `finally` when each release only decrements a count
@@ -2042,14 +2154,14 @@ impl Isolate {
                             // aside first, as `op_ret` does. A release that may free goes back to
                             // `op_ret` from there; the registers let go of so far are 0, which it
                             // releases as nothing. A managed register may lie beyond the register
-                            // window, so they are reached through `self.regs`
-                            let v = if opc == op::RET {
-                                std::mem::take(&mut self.regs[base + a!()])
+                            // window, so they are reached through `self.task.regs`
+                            let v = if opc == op::word::RET {
+                                std::mem::take(&mut self.task.regs[base + a!()])
                             } else {
                                 0
                             };
                             let released = func.managed.iter().all(|m| {
-                                let slot = &mut self.regs[base + m.reg as usize];
+                                let slot = &mut self.task.regs[base + m.reg as usize];
                                 let kept = if m.kind == bytecode::MANAGED_OBJ {
                                     self.heap.release_obj_fast(*slot)
                                 } else {
@@ -2061,91 +2173,193 @@ impl Isolate {
                                 kept
                             });
                             if released {
-                                let fr = self.frames.pop().unwrap();
-                                if opc == op::RET {
-                                    self.regs[fr.ret() as usize] = v;
+                                let fr = self.task.frames.pop().unwrap();
+                                if opc == op::word::RET {
+                                    self.task.regs[fr.ret() as usize] = v;
                                 }
-                                break;
+                                back!()
                             }
-                            if opc == op::RET {
-                                self.regs[base + a!()] = v;
+                            if opc == op::word::RET {
+                                self.task.regs[base + a!()] = v;
                             }
                         }
                         // Not the last frame, so the caller goes on
-                        op!(self.op_ret((opc == op::RET).then_some(base + a!())));
+                        op!(self.op_ret((opc == op::word::RET).then_some(base + a!())));
                         break;
                     }
                     // Reference slots to a register, a global variable or a cell, and the
                     // captured cells (`docs/spec/objects.md` 14.9). Anything else, and a check
                     // that fails, goes to `exec_op`
-                    op::LOAD_REF => {
+                    op::word::LOAD_REF => {
                         let place = regs[b!()];
                         match self.fast_ref_read(place) {
                             Some(v) => {
-                                regs = reg_window(&mut self.regs, base);
+                                regs = reg_window(&mut self.task.regs, base);
                                 regs[a!()] = v;
                             }
                             None => shared!(),
                         }
                     }
-                    op::STORE_REF => {
+                    op::word::STORE_REF => {
                         let (place, v) = (regs[a!()], regs[b!()]);
                         match self.fast_ref_write(place, v) {
-                            Some(()) => regs = reg_window(&mut self.regs, base),
+                            Some(()) => regs = reg_window(&mut self.task.regs, base),
                             None => shared!(),
                         }
                     }
-                    op::CAP_GET => match self.heap.closure_cap(regs[b!()], c!()) {
+                    op::word::CAP_GET => match self.heap.closure_cap(regs[b!()], c!()) {
                         Some(v) => regs[a!()] = v,
                         None => shared!(),
                     },
+                    // The type checks of an instance (`docs/spec/objects.md` 14.3): a handle that
+                    // does not check, or an `as` that fails, goes to `exec_op`
+                    op::word::IS_CLASS => match self.heap.is_class_fast(regs[a!()], bx!() as u32) {
+                        Some(yes) => regs[a!()] = Slot::from(yes),
+                        None => shared!(),
+                    },
+                    // `nil` passes `AsClass` (also in `op_as_class`, `exec.rs`): kept here so
+                    // that `nil` does not call `is_class_fast`
+                    op::word::AS_CLASS => {
+                        let h = regs[a!()];
+                        if h != 0 && self.heap.is_class_fast(h, bx!() as u32) != Some(true) {
+                            shared!()
+                        }
+                    }
                     // Unmanaged fields of an instance (`docs/spec/objects.md` 14.5): a handle that
                     // does not check, or a lent location, goes to `exec_op`
-                    op::OBJ_GET => match self.heap.obj_get_fast(regs[b!()], c!()) {
+                    op::word::OBJ_GET => match self.heap.obj_get_fast(regs[b!()], c!()) {
                         Some(v) => regs[a!()] = v,
                         None => shared!(),
                     },
-                    op::OBJ_SET => match self.heap.obj_set_fast(regs[a!()], b!(), regs[c!()]) {
-                        Some(()) => {}
-                        None => shared!(),
-                    },
-                    // Unmanaged elements of an array (`docs/design/vm.md` 3.14 (a′))
-                    op::DYN_GET => match self.heap.dyn_get_fast(regs[b!()], regs[c!()]) {
-                        Some(v) => regs[a!()] = v,
-                        None => shared!(),
-                    },
-                    op::DYN_SET => match self.heap.dyn_set_fast(regs[a!()], regs[b!()], regs[c!()])
+                    op::word::OBJ_SET => match self.heap.obj_set_fast(regs[a!()], b!(), regs[c!()])
                     {
                         Some(()) => {}
                         None => shared!(),
                     },
+                    // Unmanaged elements of an array (`docs/design/vm.md` 3.14 (a′))
+                    op::word::DYN_GET => match self.heap.dyn_get_fast(regs[b!()], regs[c!()]) {
+                        Some(v) => regs[a!()] = v,
+                        None => shared!(),
+                    },
+                    op::word::DYN_SET => {
+                        match self.heap.dyn_set_fast(regs[a!()], regs[b!()], regs[c!()]) {
+                            Some(()) => {}
+                            None => shared!(),
+                        }
+                    }
                     // Counting by the contents (`docs/spec/objects.md` 14.3) when nothing is
                     // freed: a count that may reach 0 goes to `exec_op`
-                    op::ASSIGN_OBJ => {
+                    op::word::ASSIGN_OBJ => {
                         if self.heap.assign_obj_fast(regs[b!()], regs[a!()]) {
                             regs[a!()] = regs[b!()];
                         } else {
                             shared!()
                         }
                     }
-                    op::ADD_REF_OBJ => self.heap.add_ref_obj_fast(regs[a!()]),
+                    op::word::ADD_REF_OBJ => self.heap.add_ref_obj_fast(regs[a!()]),
                     // Unmanaged fields of a record (`docs/design/vm.md` 3.14 (a′)): a write to a
                     // shared record, a lent location or a slot out of range goes to `exec_op`
-                    op::FIELD_GET => match self.heap.dyn_get_fast(regs[b!()], c!() as i64) {
+                    op::word::FIELD_GET => match self.heap.dyn_get_fast(regs[b!()], c!() as i64) {
                         Some(v) => regs[a!()] = v,
                         None => shared!(),
                     },
-                    op::FIELD_SET => {
+                    op::word::FIELD_SET => {
                         match self.heap.dyn_set_fast(regs[a!()], b!() as i64, regs[c!()]) {
                             Some(()) => {}
                             None => shared!(),
                         }
                     }
-                    op::STR_LEN => match self.heap.str_len_fast(regs[b!()]) {
+                    // The cursor of an element of an array whose elements may be flat, and the
+                    // unmanaged slots read and written through a cursor (`docs/design/records.md`
+                    // 3.4): an index out of range, a lent slot or anything else goes to `exec_op`
+                    op::word::ELEM_AT => match self.heap.elem_at_fast(regs[b!()], regs[c!()]) {
+                        Some(pos) => {
+                            regs[a!() + 1] = regs[b!()];
+                            regs[a!()] = pos;
+                        }
+                        None => shared!(),
+                    },
+                    op::word::SLOT_GET => {
+                        match self
+                            .heap
+                            .dyn_get_fast(regs[b!() + 1], regs[b!()].wrapping_add(c!() as i64))
+                        {
+                            Some(v) => regs[a!()] = v,
+                            None => shared!(),
+                        }
+                    }
+                    op::word::SLOT_SET => {
+                        let (r, i) = (regs[a!() + 1], regs[a!()].wrapping_add(b!() as i64));
+                        match self.heap.dyn_set_fast(r, i, regs[c!()]) {
+                            Some(()) => {}
+                            None => shared!(),
+                        }
+                    }
+                    // Unmanaged fields of a record through a reference slot to a register, a
+                    // global variable or a cell (`docs/design/records.md` 3.8). A write needs the
+                    // record unique already; anything else goes to `exec_op`, and a write (whose
+                    // type word `shared!` does not pass) to step
+                    op::word::REF_FIELD_GET => {
+                        let place = regs[b!()];
+                        match self.fast_ref_read(place) {
+                            Some(r) => match self.heap.dyn_get_fast(r, c!() as i64) {
+                                Some(v) => {
+                                    regs = reg_window(&mut self.task.regs, base);
+                                    regs[a!()] = v;
+                                }
+                                None => shared!(),
+                            },
+                            // A lent flat place (`docs/design/records.md` 3.7 B)
+                            None => match deref(place) {
+                                (lend::PLACE_REF, j) => {
+                                    match self.heap.place_slot_fast(j, c!() as i64) {
+                                        Some(v) => {
+                                            let v = *v;
+                                            regs = reg_window(&mut self.task.regs, base);
+                                            regs[a!()] = v;
+                                        }
+                                        None => shared!(),
+                                    }
+                                }
+                                _ => shared!(),
+                            },
+                        }
+                    }
+                    op::word::REF_FIELD_SET => {
+                        let (place, v) = (regs[a!()], regs[c!()]);
+                        let done = match self.fast_ref_read(place) {
+                            Some(r) => {
+                                self.heap.unique_fast(r)
+                                    && self.heap.dyn_set_fast(r, b!() as i64, v).is_some()
+                            }
+                            None => match deref(place) {
+                                (lend::PLACE_REF, j) => {
+                                    match self.heap.place_slot_fast(j, b!() as i64) {
+                                        Some(slot) => {
+                                            *slot = v;
+                                            true
+                                        }
+                                        None => false,
+                                    }
+                                }
+                                _ => false,
+                            },
+                        };
+                        if done {
+                            regs = reg_window(&mut self.task.regs, base);
+                            // Over the type word
+                            pc = next + 1;
+                            continue;
+                        }
+                        slow!()
+                    }
+                    // Their type word is not `bx!()` (`docs/spec/bytecode.md` 1.2): step reads it
+                    op::word::REF_FIELD_SET_REF => slow!(),
+                    op::word::STR_LEN => match self.heap.str_len_fast(regs[b!()]) {
                         Some(n) => regs[a!()] = n,
                         None => shared!(),
                     },
-                    op::ASSIGN_REF => {
+                    op::word::ASSIGN_REF => {
                         if self.heap.assign_ref_fast(regs[b!()], regs[a!()]) {
                             regs[a!()] = regs[b!()];
                         } else {
@@ -2153,7 +2367,7 @@ impl Isolate {
                         }
                     }
                     // The same counting as `AssignRef`, from and to a global variable
-                    op::LOAD_GLOBAL_REF => {
+                    op::word::LOAD_GLOBAL_REF => {
                         let v = self.globals[bx!()];
                         if self.heap.assign_ref_fast(v, regs[a!()]) {
                             regs[a!()] = v;
@@ -2161,7 +2375,7 @@ impl Isolate {
                             shared!()
                         }
                     }
-                    op::STORE_GLOBAL_REF => {
+                    op::word::STORE_GLOBAL_REF => {
                         let v = regs[a!()];
                         if self.heap.assign_ref_fast(v, self.globals[bx!()]) {
                             self.globals[bx!()] = v;
@@ -2169,16 +2383,16 @@ impl Isolate {
                             shared!()
                         }
                     }
-                    op::RELEASE_OBJ => {
+                    op::word::RELEASE_OBJ => {
                         if self.heap.release_obj_fast(regs[a!()]) {
                             regs[a!()] = 0;
                         } else {
                             shared!()
                         }
                     }
-                    op::MAKE_REF => regs[a!()] = make_ref(1, (base + b!()) as u64),
-                    op::MAKE_GLOBAL_REF => regs[a!()] = make_ref(2, bx!() as u64),
-                    op::INTRINSIC
+                    op::word::MAKE_REF => regs[a!()] = make_ref(1, (base + b!()) as u64),
+                    op::word::MAKE_GLOBAL_REF => regs[a!()] = make_ref(2, bx!() as u64),
+                    op::word::INTRINSIC
                         if c!() == usize::from(op::intr::CELL_REF)
                             && heap::is_block_ref(regs[b!()]) =>
                     {
@@ -2199,7 +2413,7 @@ impl Isolate {
     #[cold]
     #[inline(never)]
     fn slow_at(&mut self, pc: usize, budget: &mut u32) -> Option<Step> {
-        self.frames.last_mut().unwrap().pc = pc as u32;
+        self.task.frames.last_mut().unwrap().pc = pc as u32;
         match self.step(budget) {
             Step::Continue => {
                 if self.heap.job_open() {
@@ -2220,12 +2434,12 @@ impl Isolate {
     #[cold]
     #[inline(never)]
     fn fail_at(&mut self, pc: usize, e: RefError) -> Step {
-        self.frames.last_mut().unwrap().pc = pc as u32;
+        self.task.frames.last_mut().unwrap().pc = pc as u32;
         e.into_step()
     }
 
     fn step(&mut self, budget: &mut u32) -> Step {
-        let Some(frame) = self.frames.last().copied() else {
+        let Some(frame) = self.task.frames.last().copied() else {
             return Step::Fatal("no frame".into());
         };
         if frame.func == DTOR_FN {
@@ -2239,10 +2453,18 @@ impl Isolate {
             return Step::Fatal(format!("pc {pc} out of range in {}", func.name));
         }
         // The verifier keeps a `Wide` followed by two words
-        let (opc, a, b, c, len) = bytecode::decode_at(code, pc);
-        let wide = len > 1;
+        let (number, a, b, c, len) = bytecode::decode_at(code, pc);
+        let wide = bytecode::is_wide_at(code, pc);
         let next = pc + len;
-        let bx = bytecode::bx_at(code, pc);
+        // The VM runs the instructions 0 to 255 by the `op` of their word (`op::word`); one
+        // numbered past 255 (after `Ext`; 1.2) has its own arms below
+        let opc = u8::try_from(number).unwrap_or(op::word::EXT);
+        // The type word stands for `Bx` in the instructions that have one (1.2)
+        let bx = if bytecode::has_type_word(number) {
+            bytecode::type_word_at(code, pc, len)
+        } else {
+            bytecode::bx_at(code, pc)
+        };
         let sbx = bytecode::signed_bx(bx, wide);
         let sc = bytecode::signed_c(c, wide);
         let base = frame.base as usize;
@@ -2250,12 +2472,14 @@ impl Isolate {
         let rb = base + b as usize;
         let rc = base + c as usize;
         // The instructions the fast path also runs (`exec.rs`)
-        if let Some(r) = self.exec_op(opc, ra, rb, rc, b as usize, c as usize, bx as usize) {
+        if number < op::EXT_BASE
+            && let Some(r) = self.exec_op(opc, ra, rb, rc, b as usize, c as usize, bx as usize)
+        {
             try_op!(r);
-            self.frames.last_mut().unwrap().pc = next as u32;
+            self.task.frames.last_mut().unwrap().pc = next as u32;
             return Step::Continue;
         }
-        let regs = &mut self.regs;
+        let regs = &mut self.task.regs;
         macro_rules! r {
             ($i:expr) => {
                 regs[$i]
@@ -2271,11 +2495,11 @@ impl Isolate {
         };
         let overflow = exec::int_overflow;
         match opc {
-            op::NOP => {}
-            op::MOVE => r!(ra) = r!(rb),
-            op::LOAD_ZERO => r!(ra) = 0,
-            op::LOAD_INT => r!(ra) = sbx,
-            op::LOAD_CONST => {
+            op::word::NOP => {}
+            op::word::MOVE => r!(ra) = r!(rb),
+            op::word::LOAD_ZERO => r!(ra) = 0,
+            op::word::LOAD_INT => r!(ra) = sbx,
+            op::word::LOAD_CONST => {
                 // Make the constant on first use; then it is a load from the cache
                 match self.load_const(bx as usize) {
                     Ok(_) => {}
@@ -2284,11 +2508,11 @@ impl Isolate {
                 };
                 try_op!(self.op_load_cached_const(ra, bx as usize));
             }
-            op::LOAD_GLOBAL => r!(ra) = self.globals[bx as usize],
-            op::STORE_GLOBAL => self.globals[bx as usize] = r!(ra),
-            op::MAKE_REF => r!(ra) = make_ref(1, rb as u64),
-            op::MAKE_GLOBAL_REF => r!(ra) = make_ref(2, bx as u64),
-            op::OUTER_REF => {
+            op::word::LOAD_GLOBAL => r!(ra) = self.globals[bx as usize],
+            op::word::STORE_GLOBAL => self.globals[bx as usize] = r!(ra),
+            op::word::MAKE_REF => r!(ra) = make_ref(1, rb as u64),
+            op::word::MAKE_GLOBAL_REF => r!(ra) = make_ref(2, bx as u64),
+            op::word::OUTER_REF => {
                 // Follow `C` static links (each in register 0 of its frame; `docs/spec/semantics.md` 4.9)
                 let mut frame = base;
                 for _ in 0..c {
@@ -2300,90 +2524,91 @@ impl Isolate {
                 }
                 r!(ra) = make_ref(1, (frame + b as usize) as u64);
             }
-            op::ADD_INT => r!(ra) = r!(rb).wrapping_add(r!(rc)),
-            op::SUB_INT => r!(ra) = r!(rb).wrapping_sub(r!(rc)),
-            op::MUL_INT => r!(ra) = r!(rb).wrapping_mul(r!(rc)),
-            op::ADD_INT32 | op::SUB_INT32 | op::MUL_INT32 => {
+            op::word::ADD_INT => r!(ra) = r!(rb).wrapping_add(r!(rc)),
+            op::word::SUB_INT => r!(ra) = r!(rb).wrapping_sub(r!(rc)),
+            op::word::MUL_INT => r!(ra) = r!(rb).wrapping_mul(r!(rc)),
+            op::word::ADD_INT32 | op::word::SUB_INT32 | op::word::MUL_INT32 => {
                 r!(ra) = exec::int32(opc, r!(rb), r!(rc))
             }
-            op::DIV_INT | op::DIV_INT_CHK | op::MOD_INT | op::DIV_UINT | op::MOD_UINT => {
-                match exec::int_div(opc, r!(rb), r!(rc)) {
-                    Ok(v) => r!(ra) = v,
-                    Err(e) => return Step::Error(e),
-                }
+            op::word::DIV_INT
+            | op::word::DIV_INT_CHK
+            | op::word::MOD_INT
+            | op::word::DIV_UINT
+            | op::word::MOD_UINT => match exec::int_div(opc, r!(rb), r!(rc)) {
+                Ok(v) => r!(ra) = v,
+                Err(e) => return Step::Error(e),
+            },
+            op::word::NEG_INT => r!(ra) = r!(rb).wrapping_neg(),
+            op::word::AND_INT => r!(ra) = r!(rb) & r!(rc),
+            op::word::OR_INT => r!(ra) = r!(rb) | r!(rc),
+            op::word::XOR_INT => r!(ra) = r!(rb) ^ r!(rc),
+            op::word::NOT_INT => r!(ra) = !r!(rb),
+            op::word::SHL_INT => r!(ra) = r!(rb).wrapping_shl((r!(rc) & 63) as u32),
+            op::word::SHR_INT => {
+                r!(ra) = ((r!(rb) as u64).wrapping_shr((r!(rc) & 63) as u32)) as i64
             }
-            op::NEG_INT => r!(ra) = r!(rb).wrapping_neg(),
-            op::AND_INT => r!(ra) = r!(rb) & r!(rc),
-            op::OR_INT => r!(ra) = r!(rb) | r!(rc),
-            op::XOR_INT => r!(ra) = r!(rb) ^ r!(rc),
-            op::NOT_INT => r!(ra) = !r!(rb),
-            op::SHL_INT => r!(ra) = r!(rb).wrapping_shl((r!(rc) & 63) as u32),
-            op::SHR_INT => r!(ra) = ((r!(rb) as u64).wrapping_shr((r!(rc) & 63) as u32)) as i64,
-            op::SHL_INT32 => r!(ra) = ((r!(rb) as i32).wrapping_shl((r!(rc) & 31) as u32)) as i64,
-            op::SHR_INT32 => {
+            op::word::SHL_INT32 => {
+                r!(ra) = ((r!(rb) as i32).wrapping_shl((r!(rc) & 31) as u32)) as i64
+            }
+            op::word::SHR_INT32 => {
                 r!(ra) = (((r!(rb) as u32).wrapping_shr((r!(rc) & 31) as u32)) as i32) as i64
             }
-            op::ADD_INT_I => r!(ra) = r!(rb).wrapping_add(sc),
-            op::MUL_INT_I
-            | op::AND_INT_I
-            | op::OR_INT_I
-            | op::XOR_INT_I
-            | op::SHL_INT_I
-            | op::SHR_INT_I
-            | op::SHL_INT32_I
-            | op::SHR_INT32_I
-            | op::ADD_INT32_I
-            | op::MUL_INT32_I => r!(ra) = exec::int_imm(opc, r!(rb), sc),
-            op::DIV_INT_I | op::MOD_INT_I => {
-                let div = if opc == op::DIV_INT_I {
-                    op::DIV_INT
+            op::word::ADD_INT_I => r!(ra) = r!(rb).wrapping_add(sc),
+            op::word::MUL_INT_I
+            | op::word::AND_INT_I
+            | op::word::OR_INT_I
+            | op::word::XOR_INT_I
+            | op::word::SHL_INT_I
+            | op::word::SHR_INT_I
+            | op::word::SHL_INT32_I
+            | op::word::SHR_INT32_I
+            | op::word::ADD_INT32_I
+            | op::word::MUL_INT32_I => r!(ra) = exec::int_imm(opc, r!(rb), sc),
+            op::word::DIV_INT_I | op::word::MOD_INT_I => {
+                let div = if opc == op::word::DIV_INT_I {
+                    op::word::DIV_INT
                 } else {
-                    op::MOD_INT
+                    op::word::MOD_INT
                 };
                 match exec::int_div(div, r!(rb), sc) {
                     Ok(v) => r!(ra) = v,
                     Err(e) => return Step::Error(e),
                 }
             }
-            op::SLICE_RANGE => {
-                let (start, count) = slice_range(r!(ra), r!(rb), r!(rb + 1), r!(rb + 2));
-                r!(rb) = start;
-                r!(rb + 1) = count;
-            }
-            op::ADD_INT_CHK => match r!(rb).checked_add(r!(rc)) {
+            op::word::ADD_INT_CHK => match r!(rb).checked_add(r!(rc)) {
                 Some(v) => r!(ra) = v,
                 None => return Step::Error(overflow("Int64")),
             },
-            op::SUB_INT_CHK => match r!(rb).checked_sub(r!(rc)) {
+            op::word::SUB_INT_CHK => match r!(rb).checked_sub(r!(rc)) {
                 Some(v) => r!(ra) = v,
                 None => return Step::Error(overflow("Int64")),
             },
-            op::MUL_INT_CHK => match r!(rb).checked_mul(r!(rc)) {
+            op::word::MUL_INT_CHK => match r!(rb).checked_mul(r!(rc)) {
                 Some(v) => r!(ra) = v,
                 None => return Step::Error(overflow("Int64")),
             },
-            op::NEG_INT_CHK => match r!(rb).checked_neg() {
+            op::word::NEG_INT_CHK => match r!(rb).checked_neg() {
                 Some(v) => r!(ra) = v,
                 None => return Step::Error(overflow("Int64")),
             },
-            op::ADD_UINT_CHK => match (r!(rb) as u64).checked_add(r!(rc) as u64) {
+            op::word::ADD_UINT_CHK => match (r!(rb) as u64).checked_add(r!(rc) as u64) {
                 Some(v) => r!(ra) = v as i64,
                 None => return Step::Error(overflow("UInt64")),
             },
-            op::SUB_UINT_CHK => match (r!(rb) as u64).checked_sub(r!(rc) as u64) {
+            op::word::SUB_UINT_CHK => match (r!(rb) as u64).checked_sub(r!(rc) as u64) {
                 Some(v) => r!(ra) = v as i64,
                 None => return Step::Error(overflow("UInt64")),
             },
-            op::MUL_UINT_CHK => match (r!(rb) as u64).checked_mul(r!(rc) as u64) {
+            op::word::MUL_UINT_CHK => match (r!(rb) as u64).checked_mul(r!(rc) as u64) {
                 Some(v) => r!(ra) = v as i64,
                 None => return Step::Error(overflow("UInt64")),
             },
-            op::NARROW => r!(ra) = narrow(r!(rb), c),
-            op::NARROW_OVF | op::NARROW_RNG => {
+            op::word::NARROW => r!(ra) = narrow(r!(rb), c),
+            op::word::NARROW_OVF | op::word::NARROW_RNG => {
                 let v = r!(rb);
                 if !narrow_fits(v, c) {
                     let (name, lo, hi) = width_type(c);
-                    if opc == op::NARROW_OVF {
+                    if opc == op::word::NARROW_OVF {
                         return Step::Error(overflow(name));
                     }
                     // An out-of-range value at width 6 is a UInt64 value, so display it unsigned
@@ -2399,77 +2624,77 @@ impl Isolate {
                 }
                 r!(ra) = v;
             }
-            op::EQ_INT => r!(ra) = (r!(rb) == r!(rc)) as i64,
-            op::LT_INT => r!(ra) = (r!(rb) < r!(rc)) as i64,
-            op::LE_INT => r!(ra) = (r!(rb) <= r!(rc)) as i64,
-            op::LT_UINT => r!(ra) = ((r!(rb) as u64) < (r!(rc) as u64)) as i64,
-            op::LE_UINT => r!(ra) = ((r!(rb) as u64) <= (r!(rc) as u64)) as i64,
-            op::NOT_BOOL => r!(ra) = r!(rb) ^ 1,
-            op::JMP => jump(sbx, budget),
-            op::JMP_IF_TRUE => {
+            op::word::EQ_INT => r!(ra) = (r!(rb) == r!(rc)) as i64,
+            op::word::LT_INT => r!(ra) = (r!(rb) < r!(rc)) as i64,
+            op::word::LE_INT => r!(ra) = (r!(rb) <= r!(rc)) as i64,
+            op::word::LT_UINT => r!(ra) = ((r!(rb) as u64) < (r!(rc) as u64)) as i64,
+            op::word::LE_UINT => r!(ra) = ((r!(rb) as u64) <= (r!(rc) as u64)) as i64,
+            op::word::NOT_BOOL => r!(ra) = r!(rb) ^ 1,
+            op::word::JMP => jump(sbx, budget),
+            op::word::JMP_IF_TRUE => {
                 if r!(ra) != 0 {
                     jump(sbx, budget);
                 }
             }
-            op::JMP_IF_FALSE => {
+            op::word::JMP_IF_FALSE => {
                 if r!(ra) == 0 {
                     jump(sbx, budget);
                 }
             }
-            op::JMP_IF_EQ_INT => {
+            op::word::JMP_IF_EQ_INT => {
                 if r!(ra) == r!(rb) {
                     jump(sc, budget);
                 }
             }
-            op::JMP_IF_NE_INT => {
+            op::word::JMP_IF_NE_INT => {
                 if r!(ra) != r!(rb) {
                     jump(sc, budget);
                 }
             }
-            op::JMP_IF_LT_INT => {
+            op::word::JMP_IF_LT_INT => {
                 if r!(ra) < r!(rb) {
                     jump(sc, budget);
                 }
             }
-            op::JMP_IF_LE_INT => {
+            op::word::JMP_IF_LE_INT => {
                 if r!(ra) <= r!(rb) {
                     jump(sc, budget);
                 }
             }
-            op::JMP_IF_LT_UINT => {
+            op::word::JMP_IF_LT_UINT => {
                 if (r!(ra) as u64) < (r!(rb) as u64) {
                     jump(sc, budget);
                 }
             }
-            op::JMP_IF_LE_UINT => {
+            op::word::JMP_IF_LE_UINT => {
                 if (r!(ra) as u64) <= (r!(rb) as u64) {
                     jump(sc, budget);
                 }
             }
-            op::JMP_IF_EQ_INT_I
-            | op::JMP_IF_NE_INT_I
-            | op::JMP_IF_LT_INT_I
-            | op::JMP_IF_LE_INT_I
-            | op::JMP_IF_GT_INT_I
-            | op::JMP_IF_GE_INT_I => {
+            op::word::JMP_IF_EQ_INT_I
+            | op::word::JMP_IF_NE_INT_I
+            | op::word::JMP_IF_LT_INT_I
+            | op::word::JMP_IF_LE_INT_I
+            | op::word::JMP_IF_GT_INT_I
+            | op::word::JMP_IF_GE_INT_I => {
                 if exec::cmp_imm(opc, r!(ra), bytecode::signed_b(b, wide)) {
                     jump(sc, budget);
                 }
             }
-            op::FOR_LOOP_UP | op::FOR_LOOP_DOWN => {
+            op::word::FOR_LOOP_UP | op::word::FOR_LOOP_DOWN => {
                 if let Some(v) = exec::for_step(opc, r!(ra), r!(rb)) {
                     r!(ra) = v;
                     jump(sc, budget);
                 }
             }
-            op::JMP_IF_EQ_STR | op::JMP_IF_NE_STR => {
-                let eq = try_op!(self.str_equal(self.regs[ra], self.regs[rb]));
-                if eq == (opc == op::JMP_IF_EQ_STR) {
+            op::word::JMP_IF_EQ_STR | op::word::JMP_IF_NE_STR => {
+                let eq = try_op!(self.str_equal(self.task.regs[ra], self.task.regs[rb]));
+                if eq == (opc == op::word::JMP_IF_EQ_STR) {
                     jump(sc, budget);
                 }
             }
-            op::STR_FROM_CHAR => try_op!(self.op_str_from_char(ra, rb)),
-            op::ENUM_TO_STR => {
+            op::word::STR_FROM_CHAR => try_op!(self.op_str_from_char(ra, rb)),
+            op::word::ENUM_TO_STR => {
                 let text = match module.type_entry(c) {
                     Some(t) => t.enum_name(regs[rb]),
                     None => return Step::Fatal(format!("type {c} is not an enumeration")),
@@ -2479,34 +2704,7 @@ impl Isolate {
                     Err(e) => return Step::Error(e),
                 }
             }
-            op::STR_TO_INT | op::STR_TO_INT64 => {
-                let s = get_str!(self.heap, regs[rb]);
-                let units = try_oom!(s.units());
-                let (lo, hi) = if opc == op::STR_TO_INT {
-                    (i32::MIN as i128, i32::MAX as i128)
-                } else {
-                    (i64::MIN as i128, i64::MAX as i128)
-                };
-                match strconv::parse_int(&units, false) {
-                    Some(v) if v >= lo && v <= hi => regs[ra] = v as i64,
-                    _ => {
-                        let text = try_oom!(s.to_utf8());
-                        return Step::Error(convert_error(text, |t| {
-                            format!("'{t}' is not a valid integer")
-                        }));
-                    }
-                }
-            }
-            op::STR_TO_INT_DEF => {
-                let s = get_str!(self.heap, regs[rb]);
-                let units = try_oom!(s.units());
-                let def = regs[rb + 1];
-                regs[ra] = match strconv::parse_int(&units, false) {
-                    Some(v) if v >= i32::MIN as i128 && v <= i32::MAX as i128 => v as i64,
-                    _ => def,
-                };
-            }
-            op::STR_TO_INT_IO => {
+            op::word::STR_TO_INT_IO => {
                 let s = get_str!(self.heap, regs[rb]);
                 let units = try_oom!(s.units());
                 let (_, lo, hi) = width_type(c);
@@ -2520,8 +2718,7 @@ impl Isolate {
                     }
                 }
             }
-            op::STR_TRIM => return self.trim(ra, rb, true, true, next),
-            op::FORMAT => {
+            op::word::FORMAT => {
                 let fmt = try_oom!(get_str!(self.heap, regs[rb]).units());
                 let mut args = Vec::with_capacity(c as usize);
                 for i in 0..c as usize {
@@ -2572,19 +2769,19 @@ impl Isolate {
                 }
             }
             // `NegF64` / `NegF32` have the shape `A B`: `C` is not verified, so it is not read
-            op::NEG_F64 => regs[ra] = f64_slot(-slot_f64(regs[rb])),
-            op::NEG_F32 => regs[ra] = f32_slot(-slot_f32(regs[rb])),
-            op::ADD_F64..=op::LE_F32 => regs[ra] = real_op(opc, regs[rb], regs[rc]),
-            op::INT_TO_F64 => regs[ra] = f64_slot(regs[rb] as f64),
-            op::UINT_TO_F64 => regs[ra] = f64_slot(regs[rb] as u64 as f64),
-            op::INT_TO_F32 => regs[ra] = f32_slot(regs[rb] as f32),
-            op::UINT_TO_F32 => regs[ra] = f32_slot(regs[rb] as u64 as f32),
-            op::F64_TO_F32 => regs[ra] = f32_slot(slot_f64(regs[rb]) as f32),
-            op::F32_TO_F64 => regs[ra] = f64_slot(slot_f32(regs[rb]) as f64),
-            op::SQRT_F64 => regs[ra] = f64_slot(slot_f64(regs[rb]).sqrt()),
-            op::TRUNC_F64 | op::ROUND_F64 => {
+            op::word::NEG_F64 => regs[ra] = f64_slot(-slot_f64(regs[rb])),
+            op::word::NEG_F32 => regs[ra] = f32_slot(-slot_f32(regs[rb])),
+            op::word::ADD_F64..=op::word::LE_F32 => regs[ra] = real_op(opc, regs[rb], regs[rc]),
+            op::word::INT_TO_F64 => regs[ra] = f64_slot(regs[rb] as f64),
+            op::word::UINT_TO_F64 => regs[ra] = f64_slot(regs[rb] as u64 as f64),
+            op::word::INT_TO_F32 => regs[ra] = f32_slot(regs[rb] as f32),
+            op::word::UINT_TO_F32 => regs[ra] = f32_slot(regs[rb] as u64 as f32),
+            op::word::F64_TO_F32 => regs[ra] = f32_slot(slot_f64(regs[rb]) as f32),
+            op::word::F32_TO_F64 => regs[ra] = f64_slot(slot_f32(regs[rb]) as f64),
+            op::word::SQRT_F64 => regs[ra] = f64_slot(slot_f64(regs[rb]).sqrt()),
+            op::word::TRUNC_F64 | op::word::ROUND_F64 => {
                 let v = slot_f64(regs[rb]);
-                let round = opc == op::ROUND_F64;
+                let round = opc == op::word::ROUND_F64;
                 match numfmt::f64_to_int(v, round) {
                     Some(n) => regs[ra] = n,
                     None => {
@@ -2599,12 +2796,12 @@ impl Isolate {
                     }
                 }
             }
-            op::ADD_CURR | op::SUB_CURR | op::MUL_CURR | op::DIV_CURR => {
+            op::word::ADD_CURR | op::word::SUB_CURR | op::word::MUL_CURR | op::word::DIV_CURR => {
                 let (x, y) = (regs[rb], regs[rc]);
                 let v = match opc {
-                    op::ADD_CURR => numfmt::curr_add(x, y),
-                    op::SUB_CURR => numfmt::curr_sub(x, y),
-                    op::MUL_CURR => numfmt::curr_mul(x, y),
+                    op::word::ADD_CURR => numfmt::curr_add(x, y),
+                    op::word::SUB_CURR => numfmt::curr_sub(x, y),
+                    op::word::MUL_CURR => numfmt::curr_mul(x, y),
                     _ => match numfmt::curr_div(x, y) {
                         Ok(v) => v,
                         Err(()) => {
@@ -2617,27 +2814,7 @@ impl Isolate {
                     None => return Step::Error(rt(exc::OVERFLOW, CURRENCY_OVERFLOW)),
                 }
             }
-            op::NEG_CURR => match regs[rb].checked_neg() {
-                Some(v) => regs[ra] = v,
-                None => return Step::Error(rt(exc::OVERFLOW, CURRENCY_OVERFLOW)),
-            },
-            op::INT_TO_CURR | op::UINT_TO_CURR | op::F64_TO_CURR => {
-                let x = regs[rb];
-                let v = match opc {
-                    op::INT_TO_CURR => numfmt::int_to_curr(x as i128),
-                    op::UINT_TO_CURR => numfmt::int_to_curr(x as u64 as i128),
-                    _ => numfmt::f64_to_curr(slot_f64(x)),
-                };
-                match v {
-                    Some(v) => regs[ra] = v,
-                    None => return Step::Error(rt(exc::OVERFLOW, CURRENCY_OVERFLOW)),
-                }
-            }
-            op::CURR_TO_F64 => regs[ra] = f64_slot(numfmt::curr_to_f64(regs[rb])),
-            op::CURR_TO_F32 => regs[ra] = f32_slot(numfmt::curr_to_f32(regs[rb])),
-            op::TRUNC_CURR => regs[ra] = numfmt::curr_to_int(regs[rb], false),
-            op::ROUND_CURR => regs[ra] = numfmt::curr_to_int(regs[rb], true),
-            op::STR_PAD_LEFT => {
+            op::word::STR_PAD_LEFT => {
                 let w = regs[rc];
                 let s = get_str!(self.heap, regs[rb]);
                 if w <= s.len() as i64 {
@@ -2657,13 +2834,13 @@ impl Isolate {
                     }
                 }
             }
-            op::CALL
-            | op::CALL_METHOD
-            | op::CALL_VIRTUAL
-            | op::CALL_VIRTUAL_CLASS
-            | op::CALL_INTF => {
+            op::word::CALL
+            | op::word::CALL_METHOD
+            | op::word::CALL_VIRTUAL
+            | op::word::CALL_VIRTUAL_CLASS
+            | op::word::CALL_INTF => {
                 let callee = match opc {
-                    op::CALL => bx,
+                    op::word::CALL => bx,
                     _ => match self.method_callee(opc, ra, bx) {
                         Ok(Some(f)) => {
                             // A table entry is checked against the function table; its
@@ -2679,7 +2856,7 @@ impl Isolate {
                         }
                         // A built-in body ran in place (`docs/spec/objects.md` 14.3)
                         Ok(None) => {
-                            self.frames.last_mut().unwrap().pc = next as u32;
+                            self.task.frames.last_mut().unwrap().pc = next as u32;
                             return Step::Continue;
                         }
                         Err(step) => return step,
@@ -2695,8 +2872,8 @@ impl Isolate {
                 );
             }
             // `docs/spec/objects.md` 14.9
-            op::CALL_INDIRECT => {
-                let v = self.regs[rb];
+            op::word::CALL_INDIRECT => {
+                let v = self.task.regs[rb];
                 if v == 0 {
                     return Step::Error(rt(exc::ACCESS_VIOLATION, NIL_ACCESS));
                 }
@@ -2711,17 +2888,17 @@ impl Isolate {
                 }
                 return self.enter_call(callee, ra, ra as u32, false, next, budget);
             }
-            op::CALL_CLOSURE => return self.call_closure(ra, rb, pc, next, budget),
-            op::CALL_HOST => {
+            op::word::CALL_CLOSURE => return self.call_closure(ra, rb, pc, next, budget),
+            op::word::CALL_HOST => {
                 // Advance `pc` only on success (so that a failure is reported at the `CallHost` line)
                 let step = self.call_host(bx as usize, ra as u32, next as u32);
                 if matches!(step, Step::Continue) {
-                    self.frames.last_mut().unwrap().pc = next as u32;
+                    self.task.frames.last_mut().unwrap().pc = next as u32;
                 }
                 return step;
             }
-            op::RET | op::RET_VOID => {
-                let value = (opc == op::RET).then_some(ra);
+            op::word::RET | op::word::RET_VOID => {
+                let value = (opc == op::word::RET).then_some(ra);
                 if try_op!(self.op_ret(value)) {
                     if self
                         .heap
@@ -2735,25 +2912,25 @@ impl Isolate {
                 }
                 return Step::Continue;
             }
-            op::HALT => {
+            op::word::HALT => {
                 let code = regs[ra];
                 self.set_exit_code(code);
                 return Step::Halt(None);
             }
-            op::RAISE => {
-                if let Err(e) = self.check_raised(self.regs[ra]) {
+            op::word::RAISE => {
+                if let Err(e) = self.check_raised(self.task.regs[ra]) {
                     return e;
                 }
-                let x = std::mem::take(&mut self.regs[ra]);
+                let x = std::mem::take(&mut self.task.regs[ra]);
                 return Step::Throw(x);
             }
-            op::RAISE_OUTER => {
-                if let Err(e) = self.check_raised(self.regs[ra]) {
+            op::word::RAISE_OUTER => {
+                if let Err(e) = self.check_raised(self.task.regs[ra]) {
                     return e;
                 }
-                let x = std::mem::take(&mut self.regs[ra]);
+                let x = std::mem::take(&mut self.task.regs[ra]);
                 // `rB` becomes the `InnerException` of `rA`, unless that makes a cycle (5.4)
-                let inner = self.regs[rb];
+                let inner = self.task.regs[rb];
                 let cycle = match self.heap.exc_reaches(inner, x) {
                     Ok(c) => c,
                     Err(e) => return Step::Fatal(e.message),
@@ -2769,7 +2946,7 @@ impl Isolate {
                 }
                 return Step::Throw(x);
             }
-            op::END_FINALLY => {
+            op::word::END_FINALLY => {
                 let state = regs[ra];
                 match state {
                     FINALLY_NORMAL => {
@@ -2804,7 +2981,7 @@ impl Isolate {
                     _ => return Step::Fatal(format!("bad `finally` state {state}")),
                 }
             }
-            op::EXC_INFO => {
+            op::word::EXC_INFO => {
                 let x = regs[rb];
                 if x == 0 {
                     return Step::Error(rt(exc::ACCESS_VIOLATION, NIL_ACCESS));
@@ -2850,11 +3027,11 @@ impl Isolate {
             }
             // Sets (`docs/spec/types.md` 8.3, `docs/spec/bytecode.md` 2.12): a small set is the
             // bits of an integer, a big set a block of bit words (0 is the empty set)
-            op::SET_IN => {
+            op::word::SET_IN => {
                 let x = regs[rb];
                 regs[ra] = ((0..64).contains(&x) && regs[rc] & (1 << x) != 0) as i64;
             }
-            op::SET_RANGE => {
+            op::word::SET_RANGE => {
                 let (lo, hi) = (regs[rb].max(0), regs[rc].min(63));
                 regs[ra] = if lo > hi {
                     0
@@ -2868,7 +3045,7 @@ impl Isolate {
                     ones << lo
                 };
             }
-            op::SET_NEXT => {
+            op::word::SET_NEXT => {
                 let (bits, from) = (regs[rb] as u64, regs[rc].max(0));
                 regs[ra] = if from > 63 {
                     -1
@@ -2881,7 +3058,7 @@ impl Isolate {
                     }
                 };
             }
-            op::CHK_SET => {
+            op::word::CHK_SET => {
                 let bad = regs[ra] & !regs[rb];
                 if bad != 0 {
                     let tail = match &module.consts[c as usize] {
@@ -2892,15 +3069,15 @@ impl Isolate {
                     return Step::Error(rt(exc::RANGE_ERROR, value_message(tail, e)));
                 }
             }
-            op::SET_IN_BIG => {
+            op::word::SET_IN_BIG => {
                 let (x, set) = (regs[rb], regs[rc]);
                 let words = match self.heap.set_slots(set) {
                     Ok(w) => w,
                     Err(e) => return Step::Fatal(e.message),
                 };
-                self.regs[ra] = set_word_bit(words, x) as i64;
+                self.task.regs[ra] = set_word_bit(words, x) as i64;
             }
-            op::SET_INCL | op::SET_EXCL => {
+            op::word::SET_INCL | op::word::SET_EXCL => {
                 let (set, lo, hi) = (regs[ra], regs[rb], regs[rc]);
                 let bits = match self.set_bits(set) {
                     Ok(b) => b,
@@ -2913,16 +3090,19 @@ impl Isolate {
                 };
                 for i in lo..=hi {
                     let (k, m) = ((i / 64) as usize, 1i64 << (i % 64));
-                    if opc == op::SET_INCL {
+                    if opc == op::word::SET_INCL {
                         words[k] |= m;
                     } else {
                         words[k] &= !m;
                     }
                 }
             }
-            op::SET_UNION | op::SET_DIFF | op::SET_INTER | op::SET_UNION_BITS => {
+            op::word::SET_UNION
+            | op::word::SET_DIFF
+            | op::word::SET_INTER
+            | op::word::SET_UNION_BITS => {
                 let (set, other) = (regs[ra], regs[rb]);
-                let theirs: Vec<i64> = if opc == op::SET_UNION_BITS {
+                let theirs: Vec<i64> = if opc == op::word::SET_UNION_BITS {
                     vec![other]
                 } else {
                     match self.heap.set_slots(other) {
@@ -2941,8 +3121,8 @@ impl Isolate {
                 for (k, w) in words.iter_mut().enumerate() {
                     let t = theirs.get(k).copied().unwrap_or(0);
                     *w = match opc {
-                        op::SET_DIFF => *w & !t,
-                        op::SET_INTER => *w & t,
+                        op::word::SET_DIFF => *w & !t,
+                        op::word::SET_INTER => *w & t,
                         _ => *w | t,
                     };
                 }
@@ -2954,7 +3134,7 @@ impl Isolate {
                     *last &= ((1u64 << (64 - extra)) - 1) as i64;
                 }
             }
-            op::SET_EQ | op::SET_SUB => {
+            op::word::SET_EQ | op::word::SET_SUB => {
                 let (x, y) = (regs[rb], regs[rc]);
                 let (xs, ys) = match (self.heap.set_slots(x), self.heap.set_slots(y)) {
                     (Ok(a), Ok(b)) => (a, b),
@@ -2964,23 +3144,23 @@ impl Isolate {
                 let at = |v: &[i64], k: usize| v.get(k).copied().unwrap_or(0);
                 let holds = (0..n).all(|k| {
                     let (a, b) = (at(xs, k), at(ys, k));
-                    if opc == op::SET_EQ {
+                    if opc == op::word::SET_EQ {
                         a == b
                     } else {
                         a & !b == 0
                     }
                 });
-                self.regs[ra] = holds as i64;
+                self.task.regs[ra] = holds as i64;
             }
-            op::SET_NEXT_BIG => {
+            op::word::SET_NEXT_BIG => {
                 let (set, from) = (regs[rb], regs[rc].max(0));
                 let words = match self.heap.set_slots(set) {
                     Ok(w) => w,
                     Err(e) => return Step::Fatal(e.message),
                 };
-                self.regs[ra] = set_next_in(words, from);
+                self.task.regs[ra] = set_next_in(words, from);
             }
-            op::CHK_SET_BIG => {
+            op::word::CHK_SET_BIG => {
                 let (set, mask) = (regs[ra], regs[rb]);
                 let (xs, ms) = match (self.heap.set_slots(set), self.heap.set_slots(mask)) {
                     (Ok(a), Ok(b)) => (a, b),
@@ -2998,15 +3178,15 @@ impl Isolate {
                     return Step::Error(rt(exc::RANGE_ERROR, value_message(tail, e)));
                 }
             }
-            op::SET_BITS => {
+            op::word::SET_BITS => {
                 let set = regs[rb];
                 let words = match self.heap.set_slots(set) {
                     Ok(w) => w,
                     Err(e) => return Step::Fatal(e.message),
                 };
-                self.regs[ra] = words.first().copied().unwrap_or(0);
+                self.task.regs[ra] = words.first().copied().unwrap_or(0);
             }
-            op::CHK_INDEX => {
+            op::word::CHK_INDEX => {
                 let (i, len) = (regs[ra], regs[rb]);
                 if !(0..len).contains(&i) {
                     let tail = match &module.consts[c as usize] {
@@ -3016,7 +3196,7 @@ impl Isolate {
                     return Step::Error(rt(exc::RANGE_ERROR, index_message(tail, i)));
                 }
             }
-            op::CHK_RANGE => {
+            op::word::CHK_RANGE => {
                 // The value minus the lower bound, and the number of values (as unsigned, so a
                 // range of `UInt64` compares right)
                 let (i, len) = (regs[ra], regs[rb]);
@@ -3028,7 +3208,7 @@ impl Isolate {
                     return Step::Error(rt(exc::RANGE_ERROR, range_message(tail, i)));
                 }
             }
-            op::SET_LEN => {
+            op::word::SET_LEN => {
                 let ty = bx;
                 let n = regs[ra + 1];
                 if n < 0 {
@@ -3045,21 +3225,21 @@ impl Isolate {
                     }
                 }
                 match self.heap.set_len(regs[ra], ty, n as usize) {
-                    Ok(Ok(v)) => self.regs[ra] = v,
+                    Ok(Ok(v)) => self.task.regs[ra] = v,
                     Ok(Err(_)) => return Step::Error(rt(exc::OUT_OF_MEMORY, "out of memory")),
                     Err(e) => return Step::Fatal(e.message),
                 }
             }
-            op::NEW_ARR => {
+            op::word::NEW_ARR => {
                 // `rA` holds the length (an integer), so nothing is let go
                 let ty = bx;
                 let n = regs[ra].max(0) as usize;
                 match self.heap.alloc_dyn(ty, n) {
-                    Ok(v) => self.regs[ra] = v,
+                    Ok(v) => self.task.regs[ra] = v,
                     Err(_) => return Step::Error(rt(exc::OUT_OF_MEMORY, "out of memory")),
                 }
             }
-            op::ARR_COPY => {
+            op::word::ARR_COPY => {
                 // `rA` holds the borrowed source, so nothing is let go
                 let ty = bx;
                 let (src, index, count) = (regs[ra], regs[ra + 1], regs[ra + 2]);
@@ -3074,58 +3254,13 @@ impl Isolate {
                     );
                 }
                 match self.heap.copy_range(src, ty, index, count) {
-                    Ok(Ok(v)) => self.regs[ra] = v,
+                    Ok(Ok(v)) => self.task.regs[ra] = v,
                     Ok(Err(_)) => return Step::Error(rt(exc::OUT_OF_MEMORY, "out of memory")),
                     Err(e) => return Step::Fatal(e.message),
                 }
             }
-            op::STR_SET_LEN => {
-                let n = regs[rb];
-                if n < 0 {
-                    return Step::Error(rt(exc::RANGE_ERROR, format!("invalid length {n}")));
-                }
-                if n as u64 > MAX_STRING_LEN as u64 {
-                    return Step::Error(rt(exc::OUT_OF_MEMORY, "out of memory"));
-                }
-                let s = get_str!(self.heap, regs[ra]);
-                let n = n as usize;
-                if n != s.len() {
-                    // Only a new value is checked against the room left; the same length
-                    // allocates nothing
-                    if n > self.heap.str_room() {
-                        return Step::Error(rt(exc::OUT_OF_MEMORY, "out of memory"));
-                    }
-                    let mut units = Vec::new();
-                    try_oom!(heap::try_reserve(&mut units, n));
-                    units.extend(s.iter_units().take(n));
-                    units.resize(n, 0);
-                    match self.alloc_string(try_oom!(PStr::from_units(&units))) {
-                        Ok(v) => try_ref!(self.put(ra, v)),
-                        Err(e) => return Step::Error(e),
-                    }
-                }
-            }
-            op::STR_TO_U8 => {
-                let text = try_oom!(get_str!(self.heap, regs[rb]).to_utf8());
-                if text.len() > MAX_STRING_LEN {
-                    return Step::Error(rt(exc::OUT_OF_MEMORY, "out of memory"));
-                }
-                match self.alloc_u8(text.into_bytes()) {
-                    Ok(v) => try_ref!(self.put(ra, v)),
-                    Err(e) => return Step::Error(e),
-                }
-            }
-            op::U8_TO_STR => {
-                // Valid UTF-8 has at most as many UTF-16 code units as bytes, so the length fits
-                let b = get_u8!(self.heap, regs[rb]);
-                let p = try_oom!(PStr::from_text(&String::from_utf8_lossy(b)));
-                match self.alloc_string(p) {
-                    Ok(v) => try_ref!(self.put(ra, v)),
-                    Err(e) => return Step::Error(e),
-                }
-            }
-            op::U8_LEN => r!(ra) = get_u8!(self.heap, regs[rb]).len() as i64,
-            op::U8_INDEX => {
+            op::word::U8_LEN => r!(ra) = get_u8!(self.heap, regs[rb]).len() as i64,
+            op::word::U8_INDEX => {
                 let s = get_u8!(self.heap, regs[rb]);
                 let i = regs[rc];
                 if i < 1 || i > s.len() as i64 {
@@ -3139,56 +3274,20 @@ impl Isolate {
             // The body is shared with `AppendU8` (`exec.rs`, inlined here). The arm stays in `step`:
             // moving it to `exec_op`, or calling the body without inlining, changed the layout of
             // the hot loop (`docs/notes/benchmark-m2.md`, M3-17)
-            op::CONCAT_U8 => try_op!(self.op_concat_u8(ra, rb, rc)),
-            op::CMP_U8 => {
+            op::word::CONCAT_U8 => try_op!(self.op_concat_u8(ra, rb, rc)),
+            op::word::CMP_U8 => {
                 // The byte order of UTF-8 is the code point order (`docs/spec/types.md` 8.5)
                 let o = get_u8!(self.heap, regs[rb]).cmp(get_u8!(self.heap, regs[rc]));
                 regs[ra] = o as i64;
             }
-            op::EQ_U8 => {
+            op::word::EQ_U8 => {
                 regs[ra] = (get_u8!(self.heap, regs[rb]) == get_u8!(self.heap, regs[rc])) as i64
             }
-            op::U8_COPY => {
-                let s = get_u8!(self.heap, regs[rb]);
-                match copy_range(regs[rb + 1], regs[rb + 2], s.len()) {
-                    None => try_ref!(self.put(ra, 0)),
-                    Some((start, end)) => {
-                        if let Err(e) =
-                            check_u8_boundary(s, start).and_then(|_| check_u8_boundary(s, end))
-                        {
-                            return Step::Error(e);
-                        }
-                        if start == 0 && end == s.len() {
-                            let whole = regs[rb];
-                            try_ref!(self.put_shared(ra, whole));
-                        } else {
-                            let piece = try_oom!(try_join(&[&s[start..end]]));
-                            match self.alloc_u8(piece) {
-                                Ok(x) => try_ref!(self.put(ra, x)),
-                                Err(e) => return Step::Error(e),
-                            }
-                        }
-                    }
-                }
-            }
-            op::U8_POS => {
-                let sub = get_u8!(self.heap, regs[rb]);
-                let s = get_u8!(self.heap, regs[rb + 1]);
-                let pos = if sub.is_empty() || sub.len() > s.len() {
-                    0
-                } else {
-                    s.windows(sub.len())
-                        .position(|w| w == sub)
-                        .map(|p| p as i64 + 1)
-                        .unwrap_or(0)
-                };
-                regs[ra] = pos;
-            }
-            op::UP_CASE_CHAR => {
+            op::word::UP_CASE_CHAR => {
                 let u = regs[rb];
                 regs[ra] = if (97..=122).contains(&u) { u - 32 } else { u };
             }
-            op::ARR_CONCAT => {
+            op::word::ARR_CONCAT => {
                 // `rA` holds the borrowed left operand, so nothing is let go
                 let (x, y) = (regs[ra], regs[ra + 1]);
                 let lens = self.heap.len(x).and_then(|a| Ok((a, self.heap.len(y)?)));
@@ -3205,12 +3304,12 @@ impl Isolate {
                 }
                 let pieces = [Piece::Range(x, 0, lx), Piece::Range(y, 0, ly)];
                 match self.heap.build_dyn(bx, &pieces) {
-                    Ok(Ok(v)) => self.regs[ra] = v,
+                    Ok(Ok(v)) => self.task.regs[ra] = v,
                     Ok(Err(_)) => return Step::Error(rt(exc::OUT_OF_MEMORY, "out of memory")),
                     Err(e) => return Step::Fatal(e.message),
                 }
             }
-            op::ARR_INSERT | op::ARR_INSERT_ARR | op::ARR_DELETE => {
+            op::word::ARR_INSERT | op::word::ARR_INSERT_ARR | op::word::ARR_DELETE => {
                 // `rA` is the owned array read without counting; the compiler writes it back
                 let arr = regs[ra];
                 let (b, c) = (regs[ra + 1], regs[ra + 2]);
@@ -3221,13 +3320,13 @@ impl Isolate {
                 // Inserting and deleting move the elements (`docs/spec/types.md` chapter 3)
                 if self.heap.lending() {
                     let mut check = self.heap.check_copy(arr, 0, len);
-                    if opc == op::ARR_INSERT_ARR {
+                    if opc == op::word::ARR_INSERT_ARR {
                         let n = match self.heap.len(b) {
                             Ok(n) => n,
                             Err(e) => return Step::Fatal(e.message),
                         };
                         check = check.and_then(|()| self.heap.check_copy(b, 0, n));
-                    } else if opc == op::ARR_INSERT {
+                    } else if opc == op::word::ARR_INSERT {
                         check = check.and_then(|()| self.heap.check_share(b));
                     }
                     if let Err(a) = check {
@@ -3236,7 +3335,7 @@ impl Isolate {
                 }
                 let range_error =
                     |i: i64, n: usize| Step::Error(rt(exc::RANGE_ERROR, dyn_index_message(i, n)));
-                let pieces = if opc == op::ARR_DELETE {
+                let pieces = if opc == op::word::ARR_DELETE {
                     // `Count <= 0` does nothing without looking at `Index` (`docs/spec/types.md` 8.6)
                     if c <= 0 {
                         None
@@ -3255,7 +3354,7 @@ impl Isolate {
                     return range_error(c, len + 1);
                 } else {
                     let at = c as usize;
-                    let mid = if opc == op::ARR_INSERT {
+                    let mid = if opc == op::word::ARR_INSERT {
                         Some(Piece::Elem(b))
                     } else {
                         match self.heap.len(b) {
@@ -3270,7 +3369,7 @@ impl Isolate {
                     match self.heap.build_dyn(bx, &pieces) {
                         Ok(Ok(v)) => {
                             try_ref!(self.heap.release(arr));
-                            self.regs[ra] = v;
+                            self.task.regs[ra] = v;
                         }
                         Ok(Err(_)) => {
                             return Step::Error(rt(exc::OUT_OF_MEMORY, "out of memory"));
@@ -3279,31 +3378,48 @@ impl Isolate {
                     }
                 }
             }
-            op::UNIQUE_VAL => match self
-                .check_copy_shared(self.regs[ra])
-                .and_then(|()| Ok(self.heap.unique_val(self.regs[ra])?))
+            // Flat places with a type word (`docs/spec/bytecode.md` 2.8): `bx` is the type word.
+            // Not in `exec_op`, so the fast path leaves them to step without an arm of its own
+            op::word::AGG_LOAD => try_op!(self.op_agg_load(ra, rb, bx)),
+            op::word::AGG_STORE => try_op!(self.op_agg_store(ra, rb, bx)),
+            op::word::LEND_PLACE => try_op!(self.op_lend_place(ra, rb, c as usize, bx)),
+            op::word::UNIQUE_VAL => match self
+                .check_copy_shared(self.task.regs[ra])
+                .and_then(|()| Ok(self.heap.unique_val(self.task.regs[ra])?))
             {
-                Ok(Ok(v)) => self.regs[ra] = v,
+                Ok(Ok(v)) => self.task.regs[ra] = v,
                 Ok(Err(_)) => return Step::Error(rt(exc::OUT_OF_MEMORY, "out of memory")),
                 Err(e) => return e.into_step(),
             },
-            op::MATERIALIZE => {
+            op::word::MATERIALIZE => {
                 if regs[ra] == 0 {
                     let ty = bx;
                     match self.heap.alloc_default(ty) {
-                        Ok(Ok(v)) => self.regs[ra] = v,
+                        Ok(Ok(v)) => self.task.regs[ra] = v,
                         Ok(Err(_)) => return Step::Error(rt(exc::OUT_OF_MEMORY, "out of memory")),
                         Err(e) => return Step::Fatal(e.message),
                     }
                 }
             }
-            op::INTRINSIC => match u8::try_from(c) {
+            op::word::INTRINSIC => match u8::try_from(c) {
+                // `docs/spec/bytecode.md` 1.3, 2.22: the budget goes down by the comparisons
+                Ok(op::intr::ARRAY_SORT_RANGE) => match self.array_sort_range(ra, rb) {
+                    Ok(compares) => {
+                        let used = u32::try_from(1 + compares / SORT_COMPARES_PER_UNIT)
+                            .unwrap_or(u32::MAX);
+                        *budget = budget.saturating_sub(used);
+                    }
+                    Err(e) => return e.into_step(),
+                },
                 Ok(id) => return self.intrinsic(id, ra, rb, pc, next),
                 Err(_) => return Step::Fatal(format!("unknown intrinsic {c}")),
             },
-            _ => return Step::Fatal(format!("unknown opcode {opc}")),
+            // The instruction past 255 of the unit tests (`op::TEST_EXT`)
+            #[cfg(test)]
+            op::word::EXT if number == op::TEST_EXT => r!(ra) = r!(rb).wrapping_sub(r!(rc)),
+            _ => return Step::Fatal(format!("unknown opcode {number}")),
         }
-        self.frames.last_mut().unwrap().pc = new_pc;
+        self.task.frames.last_mut().unwrap().pc = new_pc;
         Step::Continue
     }
 
@@ -3336,14 +3452,14 @@ impl Isolate {
         let need = new_base + f.regs as usize;
         // Recursion limit
         let bytes = need * std::mem::size_of::<Slot>()
-            + (self.frames.len() + 1) * std::mem::size_of::<Frame>();
+            + (self.task.frames.len() + 1) * std::mem::size_of::<Frame>();
         // The arguments are lent by the caller (`docs/design/lifetime.md` 3.3); a counted `Self`
         // is let go of when the frame cannot be made, as if the callee had been entered and left
         let failed = |this: &mut Self, e: RtError| {
             if !counted_self {
                 return Step::Error(e);
             }
-            let s = std::mem::take(&mut this.regs[new_base]);
+            let s = std::mem::take(&mut this.task.regs[new_base]);
             match this.heap.release(s) {
                 Ok(()) => Step::Error(e),
                 Err(b) => Step::Fatal(b.message),
@@ -3360,12 +3476,10 @@ impl Isolate {
             return failed(self, e);
         }
         // Zero the registers other than the arguments
-        for slot in &mut self.regs[new_base + f.params as usize..need] {
-            *slot = 0;
-        }
-        self.frames.last_mut().unwrap().pc = next as u32;
+        zero_slots(&mut self.task.regs[new_base + f.params as usize..need]);
+        self.task.frames.last_mut().unwrap().pc = next as u32;
         let mark = if counted_self { FRAME_COUNTED_SELF } else { 0 };
-        self.frames.push(Frame {
+        self.task.frames.push(Frame {
             func: callee,
             base: new_base as u32,
             pc: 0,
@@ -3384,7 +3498,7 @@ impl Isolate {
         next: usize,
         budget: &mut u32,
     ) -> Step {
-        let v = self.regs[rb];
+        let v = self.task.regs[rb];
         if v == 0 {
             return Step::Error(rt(exc::ACCESS_VIOLATION, NIL_ACCESS));
         }
@@ -3393,7 +3507,7 @@ impl Isolate {
             Err(e) => return Step::Fatal(e.message),
         };
         let module = Arc::clone(&self.module);
-        let frame = *self.frames.last().expect("a call runs in a frame");
+        let frame = *self.task.frames.last().expect("a call runs in a frame");
         let caller_regs = module.funcs[frame.func as usize].regs as usize;
         let a = ra - frame.base as usize;
         let fits = |f: u32, base: usize| {
@@ -3408,7 +3522,7 @@ impl Isolate {
                     return Step::Fatal(format!("bad closure at {pc:04x}"));
                 }
                 // The closure is the hidden first argument, borrowed (`docs/spec/objects.md` 14.9)
-                self.regs[ra] = v;
+                self.task.regs[ra] = v;
                 self.enter_call(c.func, ra, ra as u32, false, next, budget)
             }
             heap::CallableKind::Routine => {
@@ -3439,7 +3553,7 @@ impl Isolate {
                     }
                     (h, counted)
                 };
-                self.regs[ra] = this;
+                self.task.regs[ra] = this;
                 if c.func >= bytecode::VMT_BUILTIN {
                     // A built-in body runs here without a frame (`docs/spec/objects.md` 9.3); the
                     // instance taken out is let go of at once
@@ -3450,7 +3564,7 @@ impl Isolate {
                         let released = if ran {
                             self.heap.release(this)
                         } else {
-                            let s = std::mem::take(&mut self.regs[ra]);
+                            let s = std::mem::take(&mut self.task.regs[ra]);
                             self.heap.release(s)
                         };
                         if let Err(e) = released {
@@ -3459,7 +3573,7 @@ impl Isolate {
                     }
                     return match r {
                         Ok(_) => {
-                            self.frames.last_mut().unwrap().pc = next as u32;
+                            self.task.frames.last_mut().unwrap().pc = next as u32;
                             Step::Continue
                         }
                         Err(step) => step,
@@ -3583,8 +3697,8 @@ impl Isolate {
             bytecode::VMT_BUILTIN_NOTHING => Ok(false),
             bytecode::VMT_BUILTIN_CLASS_NAME if !class => {
                 // `ToString` of `TObject`: the class name
-                let x = self.class_name_string(self.regs[ra])?;
-                self.regs[ra] = x;
+                let x = self.class_name_string(self.task.regs[ra])?;
+                self.task.regs[ra] = x;
                 Ok(true)
             }
             bytecode::VMT_BUILTIN_MESSAGE if !class => {
@@ -3592,27 +3706,28 @@ impl Isolate {
                 // verifier gives it to exception classes only
                 let msg = self
                     .heap
-                    .exc_slot(self.regs[ra], bytecode::EXC_SLOT_MESSAGE)
+                    .exc_slot(self.task.regs[ra], bytecode::EXC_SLOT_MESSAGE)
                     .map_err(|e| Step::Fatal(e.message))?
                     .unwrap_or(0);
                 self.heap.add_ref(msg).map_err(|e| Step::Fatal(e.message))?;
-                self.regs[ra] = msg;
+                self.task.regs[ra] = msg;
                 Ok(true)
             }
             bytecode::VMT_BUILTIN_EQUALS if !class => {
                 // `Equals` of `TObject`: the same instance (`docs/spec/equality.md` 3.1, 8.2). The
                 // argument `Obj` follows `Self`; both are borrowed
                 let obj = self
+                    .task
                     .regs
                     .get(ra + 1)
                     .copied()
                     .ok_or_else(|| Step::Fatal("`Equals` has no argument register".into()))?;
-                self.regs[ra] = Slot::from(self.regs[ra] == obj);
+                self.task.regs[ra] = Slot::from(self.task.regs[ra] == obj);
                 Ok(true)
             }
             bytecode::VMT_BUILTIN_HASH if !class => {
                 // `GetHashCode` of `TObject`: `HashInt` of the handle (`docs/spec/equality.md` 3.1)
-                self.regs[ra] = self.hash_keys.int(self.regs[ra] as u64);
+                self.task.regs[ra] = self.hash_keys.int(self.task.regs[ra] as u64);
                 Ok(true)
             }
             _ => Err(Step::Fatal(format!(
@@ -3626,21 +3741,21 @@ impl Isolate {
     /// `None` when the entry is a built-in body, run here without a frame (its result, if any,
     /// in `rA`).
     fn method_callee(&mut self, opc: u8, ra: usize, bx: u32) -> Result<Option<u32>, Step> {
-        let ty = if opc == op::CALL_VIRTUAL_CLASS {
+        let ty = if opc == op::word::CALL_VIRTUAL_CLASS {
             // `Self` is a class reference (`docs/spec/objects.md` 14.3)
-            self.class_of_ref(self.regs[ra])?
+            self.class_of_ref(self.task.regs[ra])?
         } else {
             self.heap
-                .obj_class(self.regs[ra])
+                .obj_class(self.task.regs[ra])
                 .map_err(|e| RefError::from(e).into_step())?
         };
-        if opc == op::CALL_METHOD {
+        if opc == op::word::CALL_METHOD {
             return Ok(Some(bx));
         }
         let Some(entry) = self.heap.type_entry(ty) else {
             return Err(Step::Fatal(format!("type {ty} out of range")));
         };
-        let target = if opc == op::CALL_INTF {
+        let target = if opc == op::word::CALL_INTF {
             // The entry of the call target's interface in the class's interface table
             // (`docs/spec/objects.md` 14.7); the verifier checked the target
             let (intf, k) = self.module.intf_calls[bx as usize];
@@ -3671,12 +3786,13 @@ impl Isolate {
             | bytecode::VMT_BUILTIN_MESSAGE
             | bytecode::VMT_BUILTIN_EQUALS
             | bytecode::VMT_BUILTIN_HASH
-                if target == bytecode::VMT_BUILTIN_NOTHING || opc != op::CALL_VIRTUAL_CLASS =>
+                if target == bytecode::VMT_BUILTIN_NOTHING
+                    || opc != op::word::CALL_VIRTUAL_CLASS =>
             {
-                self.builtin_body(target, ra, opc == op::CALL_VIRTUAL_CLASS)?;
+                self.builtin_body(target, ra, opc == op::word::CALL_VIRTUAL_CLASS)?;
                 Ok(None)
             }
-            bytecode::VMT_ABSTRACT if opc == op::CALL_INTF => {
+            bytecode::VMT_ABSTRACT if opc == op::word::CALL_INTF => {
                 // An abstract method implementing an interface's method (`docs/spec/objects.md`
                 // 7.3): the interface table does not keep the method's name, so the interface
                 // names it
@@ -3750,7 +3866,7 @@ impl Isolate {
     fn intrinsic(&mut self, id: u8, ra: usize, rb: usize, pc: usize, next: usize) -> Step {
         // The second argument (`r(B+1)`; the `rC` of the instructions these were before)
         let rc = rb + 1;
-        let regs = &mut self.regs;
+        let regs = &mut self.task.regs;
         match id {
             op::intr::CLASS_NAME => {
                 // `docs/spec/objects.md` 14.3: the declared name of the instance's class
@@ -3763,31 +3879,31 @@ impl Isolate {
             op::intr::NEW_OF => {
                 // `docs/spec/objects.md` 3.1: an instance of the class `rB` points to (an abstract
                 // class too). Like `New`, the old value of `rA` is let go of by its contents
-                let ty = match self.class_of_ref(self.regs[rb]) {
+                let ty = match self.class_of_ref(self.task.regs[rb]) {
                     Ok(t) => t,
                     Err(step) => return step,
                 };
                 match self.heap.alloc_obj(ty) {
                     Ok(Ok(h)) => {
-                        let old = std::mem::replace(&mut self.regs[ra], h);
+                        let old = std::mem::replace(&mut self.task.regs[ra], h);
                         try_ref!(self.heap.release_obj(old));
                     }
                     Ok(Err(_)) => return Step::Error(rt(exc::OUT_OF_MEMORY, "out of memory")),
                     Err(e) => return Step::Fatal(e.message),
                 }
             }
-            op::intr::REF_COUNT => match self.heap.obj_ref_count(self.regs[rb]) {
+            op::intr::REF_COUNT => match self.heap.obj_ref_count(self.task.regs[rb]) {
                 // `docs/spec/objects.md` chapter 5 (0 for an instance managed by hand)
-                Ok(n) => self.regs[ra] = Slot::from(n),
+                Ok(n) => self.task.regs[ra] = Slot::from(n),
                 Err(e) => return RefError::from(e).into_step(),
             },
-            op::intr::CLASS_TYPE => match self.heap.obj_class(self.regs[rb]) {
-                Ok(ty) => self.regs[ra] = Slot::from(ty) + 1,
+            op::intr::CLASS_TYPE => match self.heap.obj_class(self.task.regs[rb]) {
+                Ok(ty) => self.task.regs[ra] = Slot::from(ty) + 1,
                 Err(e) => return RefError::from(e).into_step(),
             },
             op::intr::CLASS_REF_NAME => {
                 let x = match self
-                    .class_of_ref(self.regs[rb])
+                    .class_of_ref(self.task.regs[rb])
                     .and_then(|ty| self.type_name_string(ty))
                 {
                     Ok(x) => x,
@@ -3796,16 +3912,16 @@ impl Isolate {
                 try_ref!(self.put(ra, x));
             }
             op::intr::CLASS_PARENT => {
-                let ty = match self.class_of_ref(self.regs[rb]) {
+                let ty = match self.class_of_ref(self.task.regs[rb]) {
                     Ok(t) => t,
                     Err(step) => return step,
                 };
                 let parent = self.heap.type_entry(ty).and_then(|e| e.parent);
-                self.regs[ra] = parent.map_or(0, |p| Slot::from(p) + 1);
+                self.task.regs[ra] = parent.map_or(0, |p| Slot::from(p) + 1);
             }
             op::intr::CLASS_INHERITS => {
                 // `nil` on either side is `False` (`docs/spec/objects.md` chapter 5)
-                let (a, b) = (self.regs[rb], self.regs[rc]);
+                let (a, b) = (self.task.regs[rb], self.task.regs[rc]);
                 let mut yes = false;
                 if a != 0 && b != 0 {
                     let (x, y) = match (self.class_of_ref(a), self.class_of_ref(b)) {
@@ -3814,18 +3930,18 @@ impl Isolate {
                     };
                     yes = self.heap.class_inherits(x, y);
                 }
-                self.regs[ra] = Slot::from(yes);
+                self.task.regs[ra] = Slot::from(yes);
             }
             op::intr::AS_CLASS_REF => {
                 // `docs/spec/objects.md` 2.8, 14.3: `nil` passes; `rB` is the target's type index
-                let r = self.regs[ra];
+                let r = self.task.regs[ra];
                 if r != 0 {
                     let class = match self.class_of_ref(r) {
                         Ok(t) => t,
                         Err(step) => return step,
                     };
                     // The code generator only passes a class's type index
-                    let target = match u32::try_from(self.regs[rb]) {
+                    let target = match u32::try_from(self.task.regs[rb]) {
                         Ok(t)
                             if self
                                 .heap
@@ -3834,7 +3950,7 @@ impl Isolate {
                         {
                             t
                         }
-                        _ => return Step::Fatal(format!("bad type index {}", self.regs[rb])),
+                        _ => return Step::Fatal(format!("bad type index {}", self.task.regs[rb])),
                     };
                     if !self.heap.class_inherits(class, target) {
                         return Step::Error(self.invalid_cast(class, target));
@@ -3843,25 +3959,25 @@ impl Isolate {
             }
             op::intr::IS_INTF => {
                 // `docs/spec/objects.md` 7.6, 14.7: `rA` is an uncounted copy of the handle
-                let ty = match self.intf_operand(self.regs[rb]) {
+                let ty = match self.intf_operand(self.task.regs[rb]) {
                     Ok(t) => t,
                     Err(step) => return step,
                 };
-                let h = self.regs[ra];
+                let h = self.task.regs[ra];
                 let yes = h != 0
                     && match self.heap.obj_class(h) {
                         Ok(class) => self.heap.class_implements(class, ty),
                         Err(e) => return RefError::from(e).into_step(),
                     };
-                self.regs[ra] = Slot::from(yes);
+                self.task.regs[ra] = Slot::from(yes);
             }
             op::intr::AS_INTF => {
                 // `docs/spec/objects.md` 7.6, 14.7: `nil` passes; `rA` is left as it is
-                let ty = match self.intf_operand(self.regs[rb]) {
+                let ty = match self.intf_operand(self.task.regs[rb]) {
                     Ok(t) => t,
                     Err(step) => return step,
                 };
-                let h = self.regs[ra];
+                let h = self.task.regs[ra];
                 if h != 0 {
                     let class = match self.heap.obj_class(h) {
                         Ok(c) => c,
@@ -3875,11 +3991,11 @@ impl Isolate {
             op::intr::CLASS_SUPPORTS => {
                 // `Supports(C, IA)` (`docs/spec/objects.md` 7.6, 14.7): a `nil` class reference
                 // is `False`
-                let ty = match self.intf_operand(self.regs[rc]) {
+                let ty = match self.intf_operand(self.task.regs[rc]) {
                     Ok(t) => t,
                     Err(step) => return step,
                 };
-                let r = self.regs[rb];
+                let r = self.task.regs[rb];
                 let mut yes = false;
                 if r != 0 {
                     let class = match self.class_of_ref(r) {
@@ -3888,7 +4004,7 @@ impl Isolate {
                     };
                     yes = self.heap.class_implements(class, ty);
                 }
-                self.regs[ra] = Slot::from(yes);
+                self.task.regs[ra] = Slot::from(yes);
             }
             op::intr::FREE | op::intr::DESTROY => {
                 // `docs/spec/objects.md` 3.2: `Free` of `nil` does nothing, `Destroy` of `nil` is
@@ -3929,7 +4045,7 @@ impl Isolate {
             | op::intr::CLASS_VIRTUAL_REF => {
                 let class_ref =
                     matches!(id, op::intr::CLASS_METHOD_REF | op::intr::CLASS_VIRTUAL_REF);
-                let target = self.regs[rb];
+                let target = self.task.regs[rb];
                 // The receiver is checked when the value is made (9.3)
                 let ty = if class_ref {
                     self.class_of_ref(target)
@@ -3942,7 +4058,7 @@ impl Isolate {
                     Ok(t) => t,
                     Err(step) => return step,
                 };
-                let k = self.regs[rc];
+                let k = self.task.regs[rc];
                 let func = if matches!(id, op::intr::VIRTUAL_REF | op::intr::CLASS_VIRTUAL_REF) {
                     match self.table_entry(ty, k) {
                         Ok(f) => f,
@@ -3967,7 +4083,7 @@ impl Isolate {
                 try_ref!(self.put(ra, r));
             }
             op::intr::ROUTINE_REF => {
-                let v = self.regs[rb];
+                let v = self.task.regs[rb];
                 let r = if v == 0 {
                     0
                 } else {
@@ -3987,14 +4103,14 @@ impl Isolate {
                 try_ref!(self.put(ra, r));
             }
             op::intr::CLOSURE_WITH => {
-                let f = self.regs[rc];
+                let f = self.task.regs[rc];
                 let Some(func) = u32::try_from(f)
                     .ok()
                     .filter(|f| (*f as usize) < self.module.funcs.len())
                 else {
                     return Step::Fatal(format!("bad function index {f}"));
                 };
-                let caps = match self.heap.closure_caps(self.regs[rb]) {
+                let caps = match self.heap.closure_caps(self.task.regs[rb]) {
                     Ok(c) => try_oom!(heap::Caps::new(c)),
                     Err(e) => return Step::Fatal(e.message),
                 };
@@ -4005,7 +4121,7 @@ impl Isolate {
                     Ok(r) => r,
                     Err(OutOfMemory) => {
                         // The cells counted for it are let go of again, read from the block
-                        let caps: Vec<i64> = match self.heap.closure_caps(self.regs[rb]) {
+                        let caps: Vec<i64> = match self.heap.closure_caps(self.task.regs[rb]) {
                             Ok(c) => c.to_vec(),
                             Err(e) => return Step::Fatal(e.message),
                         };
@@ -4017,14 +4133,16 @@ impl Isolate {
                 };
                 try_ref!(self.put(ra, r));
             }
-            op::intr::CALLABLE_ASSIGNED => match self.callable_assigned(self.regs[rb]) {
-                Ok(yes) => self.regs[ra] = Slot::from(yes),
+            op::intr::CALLABLE_ASSIGNED => match self.callable_assigned(self.task.regs[rb]) {
+                Ok(yes) => self.task.regs[ra] = Slot::from(yes),
                 Err(e) => return Step::Fatal(e.message),
             },
-            op::intr::CALLABLE_EQUAL => match self.callable_equal(self.regs[rb], self.regs[rc]) {
-                Ok(yes) => self.regs[ra] = Slot::from(yes),
-                Err(e) => return Step::Fatal(e.message),
-            },
+            op::intr::CALLABLE_EQUAL => {
+                match self.callable_equal(self.task.regs[rb], self.task.regs[rc]) {
+                    Ok(yes) => self.task.regs[ra] = Slot::from(yes),
+                    Err(e) => return Step::Fatal(e.message),
+                }
+            }
             // `docs/spec/equality.md` 8.1
             op::intr::OBJ_ALIVE => {
                 // A live instance, or one being destroyed; `nil`, a freed handle and a tombstone
@@ -4036,22 +4154,27 @@ impl Isolate {
                 };
             }
             op::intr::HASH_UTF8 => {
-                let h = self.hash_keys.bytes(get_u8!(self.heap, regs[rb]));
-                self.regs[ra] = h;
+                let h = match self.heap.u8_hash(regs[rb], &self.hash_keys) {
+                    Ok(h) => h,
+                    Err(e) => return Step::Fatal(e.message),
+                };
+                self.task.regs[ra] = Slot::from(h);
             }
             op::intr::HASH_SET_BIG => {
                 let h = match self.heap.set_slots(regs[rb]) {
                     Ok(words) => self.hash_keys.set_words(words),
                     Err(e) => return Step::Fatal(e.message),
                 };
-                self.regs[ra] = h;
+                self.task.regs[ra] = h;
             }
-            op::intr::CALLABLE_KEY_EQ => match self.callable_key_eq(self.regs[rb], self.regs[rc]) {
-                Ok(yes) => self.regs[ra] = Slot::from(yes),
-                Err(e) => return Step::Fatal(e.message),
-            },
-            op::intr::CALLABLE_HASH => match self.callable_hash(self.regs[rb]) {
-                Ok(h) => self.regs[ra] = h,
+            op::intr::CALLABLE_KEY_EQ => {
+                match self.callable_key_eq(self.task.regs[rb], self.task.regs[rc]) {
+                    Ok(yes) => self.task.regs[ra] = Slot::from(yes),
+                    Err(e) => return Step::Fatal(e.message),
+                }
+            }
+            op::intr::CALLABLE_HASH => match self.callable_hash(self.task.regs[rb]) {
+                Ok(h) => self.task.regs[ra] = h,
                 Err(e) => return Step::Fatal(e.message),
             },
             op::intr::EXCEPT_OBJECT => {
@@ -4130,14 +4253,15 @@ impl Isolate {
                     Err(e) => return Step::Error(e),
                 }
             }
-            op::intr::SAME_TEXT | op::intr::COMPARE_TEXT => {
+            op::intr::SAME_TEXT => {
+                let a = get_str!(self.heap, regs[rb]);
+                let b = get_str!(self.heap, regs[rc]);
+                regs[ra] = try_oom!(text::same_text_str(a, b)) as i64;
+            }
+            op::intr::COMPARE_TEXT => {
                 let a = try_oom!(get_str!(self.heap, regs[rb]).units());
                 let b = try_oom!(get_str!(self.heap, regs[rc]).units());
-                regs[ra] = if id == op::intr::SAME_TEXT {
-                    text::same_text(&a, &b) as i64
-                } else {
-                    text::compare_text(&a, &b) as i64
-                };
+                regs[ra] = text::compare_text(&a, &b) as i64;
             }
             op::intr::STR_UPPER | op::intr::STR_LOWER => {
                 let s = try_oom!(get_str!(self.heap, regs[rb]).units());
@@ -4390,6 +4514,8 @@ impl Isolate {
                     return e.into_step();
                 }
             }
+            // `docs/spec/bytecode.md` 2.23
+            op::intr::HASH_RELINK => try_op!(self.op_hash_relink(ra, rb)),
             op::intr::IS_REF_OBJ => {
                 // A live instance of a reference counted class (one being destroyed too); `nil`
                 // and a freed handle are not, as an instance managed by hand (`docs/spec/objects.md`
@@ -4403,7 +4529,11 @@ impl Isolate {
             op::intr::IS_OVERRIDDEN => {
                 // Whether the entry `r(B+1)` of the table of the instance's class is another
                 // function than `r(B+2)` (an abstract entry or a built-in body is another)
-                let (h, k, func) = (self.regs[rb], self.regs[rb + 1], self.regs[rb + 2]);
+                let (h, k, func) = (
+                    self.task.regs[rb],
+                    self.task.regs[rb + 1],
+                    self.task.regs[rb + 2],
+                );
                 let ty = match self.heap.obj_class(h) {
                     Ok(t) => t,
                     Err(e) => return RefError::from(e).into_step(),
@@ -4412,20 +4542,156 @@ impl Isolate {
                     Ok((t, _)) => t,
                     Err(step) => return step,
                 };
-                self.regs[ra] = Slot::from(Slot::from(t) != func);
+                self.task.regs[ra] = Slot::from(Slot::from(t) != func);
             }
+            op::intr::PLACE_BOX => try_op!(self.op_place_box(ra, rb)),
             op::intr::STR_TRIM_LEFT => return self.trim(ra, rb, true, false, next),
             op::intr::STR_TRIM_RIGHT => return self.trim(ra, rb, false, true, next),
+            // Instructions moved here to free their numbers (M4-109)
+            op::intr::SLICE_RANGE => {
+                let (start, count) = slice_range(regs[ra], regs[rb], regs[rb + 1], regs[rb + 2]);
+                regs[rb] = start;
+                regs[rb + 1] = count;
+            }
+            op::intr::STR_TO_INT | op::intr::STR_TO_INT64 => {
+                let s = get_str!(self.heap, regs[rb]);
+                let units = try_oom!(s.units());
+                let (lo, hi) = if id == op::intr::STR_TO_INT {
+                    (i32::MIN as i128, i32::MAX as i128)
+                } else {
+                    (i64::MIN as i128, i64::MAX as i128)
+                };
+                match strconv::parse_int(&units, false) {
+                    Some(v) if v >= lo && v <= hi => regs[ra] = v as i64,
+                    _ => {
+                        let text = try_oom!(s.to_utf8());
+                        return Step::Error(convert_error(text, |t| {
+                            format!("'{t}' is not a valid integer")
+                        }));
+                    }
+                }
+            }
+            op::intr::STR_TO_INT_DEF => {
+                let s = get_str!(self.heap, regs[rb]);
+                let units = try_oom!(s.units());
+                let def = regs[rb + 1];
+                regs[ra] = match strconv::parse_int(&units, false) {
+                    Some(v) if v >= i32::MIN as i128 && v <= i32::MAX as i128 => v as i64,
+                    _ => def,
+                };
+            }
+            op::intr::STR_TRIM => return self.trim(ra, rb, true, true, next),
+            op::intr::NEG_CURR => match regs[rb].checked_neg() {
+                Some(v) => regs[ra] = v,
+                None => return Step::Error(rt(exc::OVERFLOW, CURRENCY_OVERFLOW)),
+            },
+            op::intr::INT_TO_CURR | op::intr::UINT_TO_CURR | op::intr::F64_TO_CURR => {
+                let x = regs[rb];
+                let v = match id {
+                    op::intr::INT_TO_CURR => numfmt::int_to_curr(x as i128),
+                    op::intr::UINT_TO_CURR => numfmt::int_to_curr(x as u64 as i128),
+                    _ => numfmt::f64_to_curr(slot_f64(x)),
+                };
+                match v {
+                    Some(v) => regs[ra] = v,
+                    None => return Step::Error(rt(exc::OVERFLOW, CURRENCY_OVERFLOW)),
+                }
+            }
+            op::intr::CURR_TO_F64 => regs[ra] = f64_slot(numfmt::curr_to_f64(regs[rb])),
+            op::intr::CURR_TO_F32 => regs[ra] = f32_slot(numfmt::curr_to_f32(regs[rb])),
+            op::intr::TRUNC_CURR => regs[ra] = numfmt::curr_to_int(regs[rb], false),
+            op::intr::ROUND_CURR => regs[ra] = numfmt::curr_to_int(regs[rb], true),
+            op::intr::STR_SET_LEN => {
+                let n = regs[rb];
+                if n < 0 {
+                    return Step::Error(rt(exc::RANGE_ERROR, format!("invalid length {n}")));
+                }
+                if n as u64 > MAX_STRING_LEN as u64 {
+                    return Step::Error(rt(exc::OUT_OF_MEMORY, "out of memory"));
+                }
+                let s = get_str!(self.heap, regs[ra]);
+                let n = n as usize;
+                if n != s.len() {
+                    // Only a new value is checked against the room left; the same length
+                    // allocates nothing
+                    if n > self.heap.str_room() {
+                        return Step::Error(rt(exc::OUT_OF_MEMORY, "out of memory"));
+                    }
+                    let mut units = Vec::new();
+                    try_oom!(heap::try_reserve(&mut units, n));
+                    units.extend(s.iter_units().take(n));
+                    units.resize(n, 0);
+                    match self.alloc_string(try_oom!(PStr::from_units(&units))) {
+                        Ok(v) => try_ref!(self.put(ra, v)),
+                        Err(e) => return Step::Error(e),
+                    }
+                }
+            }
+            op::intr::STR_TO_U8 => {
+                let text = try_oom!(get_str!(self.heap, regs[rb]).to_utf8());
+                if text.len() > MAX_STRING_LEN {
+                    return Step::Error(rt(exc::OUT_OF_MEMORY, "out of memory"));
+                }
+                match self.alloc_u8(text.into_bytes()) {
+                    Ok(v) => try_ref!(self.put(ra, v)),
+                    Err(e) => return Step::Error(e),
+                }
+            }
+            op::intr::U8_TO_STR => {
+                // Valid UTF-8 has at most as many UTF-16 code units as bytes, so the length fits
+                let b = get_u8!(self.heap, regs[rb]);
+                let p = try_oom!(PStr::from_text(&String::from_utf8_lossy(b)));
+                match self.alloc_string(p) {
+                    Ok(v) => try_ref!(self.put(ra, v)),
+                    Err(e) => return Step::Error(e),
+                }
+            }
+            op::intr::U8_COPY => {
+                let s = get_u8!(self.heap, regs[rb]);
+                match copy_range(regs[rb + 1], regs[rb + 2], s.len()) {
+                    None => try_ref!(self.put(ra, 0)),
+                    Some((start, end)) => {
+                        if let Err(e) =
+                            check_u8_boundary(s, start).and_then(|_| check_u8_boundary(s, end))
+                        {
+                            return Step::Error(e);
+                        }
+                        if start == 0 && end == s.len() {
+                            let whole = regs[rb];
+                            try_ref!(self.put_shared(ra, whole));
+                        } else {
+                            let piece = try_oom!(try_join(&[&s[start..end]]));
+                            match self.alloc_u8(piece) {
+                                Ok(x) => try_ref!(self.put(ra, x)),
+                                Err(e) => return Step::Error(e),
+                            }
+                        }
+                    }
+                }
+            }
+            op::intr::U8_POS => {
+                let sub = get_u8!(self.heap, regs[rb]);
+                let s = get_u8!(self.heap, regs[rb + 1]);
+                let pos = if sub.is_empty() || sub.len() > s.len() {
+                    0
+                } else {
+                    s.windows(sub.len())
+                        .position(|w| w == sub)
+                        .map(|p| p as i64 + 1)
+                        .unwrap_or(0)
+                };
+                regs[ra] = pos;
+            }
             _ => return Step::Fatal(format!("unknown intrinsic {id}")),
         }
-        self.frames.last_mut().expect("a frame runs").pc = next as u32;
+        self.task.frames.last_mut().expect("a frame runs").pc = next as u32;
         Step::Continue
     }
 
     /// `Trim` / `TrimLeft` / `TrimRight` of `rB` into `rA`: cut the blanks at the start (`left`)
     /// and at the end (`right`); the value itself when there is nothing to cut.
     fn trim(&mut self, ra: usize, rb: usize, left: bool, right: bool, next: usize) -> Step {
-        let regs = &mut self.regs;
+        let regs = &mut self.task.regs;
         let s = get_str!(self.heap, regs[rb]);
         let units = try_oom!(s.units());
         let (start, end) = text::trimmed(&units, left, right);
@@ -4438,7 +4704,7 @@ impl Isolate {
                 Err(e) => return Step::Error(e),
             }
         }
-        self.frames.last_mut().expect("a frame runs").pc = next as u32;
+        self.task.frames.last_mut().expect("a frame runs").pc = next as u32;
         Step::Continue
     }
 
@@ -4481,7 +4747,7 @@ impl Isolate {
         let kind = self.host_table[index];
         match kind {
             HostFn::ConsoleWrite | HostFn::ConsoleWriteError => {
-                let text = try_oom!(get_str!(self.heap, self.regs[dst as usize]).to_utf8());
+                let text = try_oom!(get_str!(self.heap, self.task.regs[dst as usize]).to_utf8());
                 if kind == HostFn::ConsoleWrite {
                     if let Err(e) = self.write_stdout(text.as_bytes()) {
                         return Step::Error(e);
@@ -4495,13 +4761,13 @@ impl Isolate {
                     return Step::Continue;
                 };
                 let fut = console.write(OutStream::Stderr, text.as_bytes());
-                self.pending = Some(PendingHost {
+                self.task.pending = Some(PendingHost {
                     kind: PendingKind::Write(fut),
                     resume_pc,
                 });
             }
             HostFn::EnvGet => {
-                let name = try_oom!(get_str!(self.heap, self.regs[dst as usize]).to_utf8());
+                let name = try_oom!(get_str!(self.heap, self.task.regs[dst as usize]).to_utf8());
                 let value = if name.is_empty() || name.contains('=') || name.contains('\0') {
                     None
                 } else {
@@ -4563,6 +4829,34 @@ impl RefError {
     }
 }
 
+/// How many comparisons of `ArraySortRange` (`I96`) take one unit of the budget, past the 1 of
+/// the instruction (`docs/spec/bytecode.md` 1.3; `docs/design/vm.md` 3.17).
+const SORT_COMPARES_PER_UNIT: u64 = 16;
+
+/// The range of `count` elements at `start` of an array of `len` elements, as `ArrayMoveRange`
+/// and `ArraySortRange` check it (`docs/spec/bytecode.md` 2.22): `ERangeError` for a negative
+/// count or a range outside the array.
+fn check_array_range(start: i64, count: i64, len: usize) -> Result<(), RefError> {
+    if count < 0 {
+        return Err(RefError::Rt(rt(
+            exc::RANGE_ERROR,
+            format!("array count {count} is out of range"),
+        )));
+    }
+    let end = i128::from(start) + i128::from(count);
+    if start < 0 || end > len as i128 {
+        return Err(RefError::Rt(rt(
+            exc::RANGE_ERROR,
+            format!(
+                "array range {start}..{} is out of range 0..{}",
+                end - 1,
+                len as i64 - 1
+            ),
+        )));
+    }
+    Ok(())
+}
+
 impl From<BadRef> for RefError {
     fn from(e: BadRef) -> Self {
         RefError::Fatal(e.message)
@@ -4598,31 +4892,15 @@ impl Isolate {
                 "`ArrayMoveRange` of the heap block {arr}, which is not a dynamic array"
             )));
         }
-        let len = self.heap.elems(arr)?.len();
-        if count < 0 {
-            return Err(RefError::Rt(rt(
-                exc::RANGE_ERROR,
-                format!("array count {count} is out of range"),
-            )));
-        }
-        for start in [from, to] {
-            let end = i128::from(start) + i128::from(count);
-            if start < 0 || end > len as i128 {
-                return Err(RefError::Rt(rt(
-                    exc::RANGE_ERROR,
-                    format!(
-                        "array range {start}..{} is out of range 0..{}",
-                        end - 1,
-                        len as i64 - 1
-                    ),
-                )));
-            }
-        }
+        let len = self.heap.len(arr)?;
+        check_array_range(from, count, len)?;
+        check_array_range(to, count, len)?;
         if count == 0 || from == to {
             return Ok(());
         }
-        // In range, so they fit in `usize`
-        let (from, to, count) = (from as usize, to as usize, count as usize);
+        // In range, so they fit in `usize`; in slots, an element of a flat record taking several
+        let w = self.heap.width_of(self.heap.agg_type(arr)?);
+        let (from, to, count) = (from as usize * w, to as usize * w, count as usize * w);
         let (lo, hi) = (from.min(to), from.max(to) + count);
         for i in lo..hi {
             self.heap.check_slot(arr, i as i64)?;
@@ -4631,11 +4909,51 @@ impl Isolate {
         Ok(())
     }
 
+    /// `ArraySortRange A B` (`I96`; `docs/spec/bytecode.md` 2.22): the `r(B+1)` elements of the
+    /// dynamic array `rA` (0 is empty) at `rB` sorted stably in place by the comparison `r(B+2)`.
+    /// Returns the number of comparisons. The range is checked as `ArrayMoveRange`'s, and every
+    /// exception is raised before an element moves.
+    fn array_sort_range(&mut self, ra: usize, rb: usize) -> Result<u64, RefError> {
+        let (arr, index, count, kind) = (
+            self.task.regs[ra],
+            self.task.regs[rb],
+            self.task.regs[rb + 1],
+            self.task.regs[rb + 2],
+        );
+        if !(bytecode::SORT_INT..=bytecode::SORT_UTF8).contains(&kind) {
+            return Err(RefError::Fatal(format!(
+                "`ArraySortRange` with the unknown comparison {kind}"
+            )));
+        }
+        if arr != 0 {
+            let ty = self.heap.agg_type(arr)?;
+            if !self.heap.is_dyn_type(ty) || self.heap.width_of(ty) != 1 {
+                return Err(RefError::Fatal(format!(
+                    "`ArraySortRange` of the heap block {arr}, which is not a dynamic array of \
+                     one-slot elements"
+                )));
+            }
+        }
+        check_array_range(index, count, self.heap.len(arr)?)?;
+        if count <= 1 {
+            return Ok(0);
+        }
+        // In range, so they fit in `usize`
+        let (lo, hi) = (index as usize, (index + count) as usize);
+        for i in lo..hi {
+            self.heap.check_slot(arr, i as i64)?;
+        }
+        let compares = self.heap.sort_slots(arr, lo, hi, kind)??;
+        #[cfg(test)]
+        executed::add(compares);
+        Ok(compares)
+    }
+
     /// The register or global variable a reference slot points to (kind 1 or 2;
     /// `docs/spec/bytecode.md` 1.5).
     fn ref_target(&self, slot: Slot) -> Result<Loc, RefError> {
         match deref(slot) {
-            (1, i) if i < self.regs.len() => Ok(Loc::Reg(i)),
+            (1, i) if i < self.task.regs.len() => Ok(Loc::Reg(i)),
             (2, i) if i < self.globals.len() => Ok(Loc::Global(i)),
             // A cell (`docs/spec/objects.md` 14.9): its block is checked when it is used
             (3, i) => Ok(Loc::Cell(i as Slot)),
@@ -4645,7 +4963,7 @@ impl Isolate {
 
     fn loc_get(&self, loc: Loc) -> Result<Slot, RefError> {
         Ok(match loc {
-            Loc::Reg(i) => self.regs[i],
+            Loc::Reg(i) => self.task.regs[i],
             Loc::Global(i) => self.globals[i],
             Loc::Slot(b, i) => self
                 .heap
@@ -4659,7 +4977,7 @@ impl Isolate {
     /// Writes a value to a location without counting; returns the old value.
     fn loc_replace(&mut self, loc: Loc, v: Slot) -> Result<Slot, RefError> {
         Ok(match loc {
-            Loc::Reg(i) => std::mem::replace(&mut self.regs[i], v),
+            Loc::Reg(i) => std::mem::replace(&mut self.task.regs[i], v),
             Loc::Global(i) => std::mem::replace(&mut self.globals[i], v),
             Loc::Slot(b, i) => std::mem::replace(self.heap.slot_mut(b, i)?, v),
             Loc::ObjSlot(index, i) => self.heap.obj_replace_at(index, i, v)?,
@@ -4678,7 +4996,7 @@ impl Isolate {
     #[inline(always)]
     fn fast_ref_read(&self, slot: Slot) -> Option<Slot> {
         match deref(slot) {
-            (1, i) => self.regs.get(i).copied(),
+            (1, i) => self.task.regs.get(i).copied(),
             (2, i) => self.globals.get(i).copied(),
             (3, i) => self.heap.cell_value(i as Slot),
             _ => None,
@@ -4690,7 +5008,7 @@ impl Isolate {
     #[inline(always)]
     fn fast_ref_write(&mut self, slot: Slot, v: Slot) -> Option<()> {
         let place = match deref(slot) {
-            (1, i) => self.regs.get_mut(i)?,
+            (1, i) => self.task.regs.get_mut(i)?,
             (2, i) => self.globals.get_mut(i)?,
             (3, i) => self.heap.cell_value_mut(i as Slot)?,
             _ => return None,
@@ -4922,17 +5240,15 @@ const FINALLY_NORMAL: i64 = 0;
 const FINALLY_EXCEPTION: i64 = 1;
 const FINALLY_HALT: i64 = 2;
 
-/// The number of words of the instruction at `pc` (3 with `Wide`).
+/// The number of words of the instruction at the boundary `pc` (`bytecode::decode_at`): one of
+/// the `Jmp`s after an `EndFinally`, which the verifier keeps in the code (3.3).
 fn instruction_len(code: &[u32], pc: usize) -> usize {
-    match code.get(pc) {
-        Some(&w) if (w & 0xFF) as u8 == op::WIDE => 3,
-        _ => 1,
-    }
+    bytecode::decode_at(code, pc).4
 }
 
 /// The target of the `Jmp` at `pc` (`None` if it is not a `Jmp`).
 fn jump_target(code: &[u32], pc: usize) -> Option<usize> {
-    let wide = (code.get(pc)? & 0xFF) as u8 == op::WIDE;
+    let wide = (code.get(pc)? & 0xFF) as u8 == op::word::WIDE;
     if wide && code.len() < pc + 3 {
         return None;
     }
@@ -4977,8 +5293,9 @@ fn host_error_to_rt(e: HostError) -> RtError {
     }
 }
 
-/// Reference slot: the upper 8 bits are the kind (1: register, 2: global variable, 3: cell), the
-/// lower 56 bits the index (the cell's heap reference for a cell).
+/// Reference slot: the upper 8 bits are the kind (1: register, 2: global variable, 3: cell, 4: flat
+/// place), the lower 56 bits the index (the cell's heap reference for a cell, the loan table entry
+/// for a flat place).
 fn make_ref(kind: u8, index: u64) -> Slot {
     (((kind as u64) << 56) | (index & 0x00FF_FFFF_FFFF_FFFF)) as i64
 }
@@ -5004,6 +5321,7 @@ fn narrow(v: i64, width: u32) -> i64 {
 pub(crate) mod testing {
     //! Test host (captures output).
     use super::*;
+    use puy_host::HostFuture;
     use std::cell::RefCell;
     use std::rc::Rc;
 
@@ -5062,6 +5380,7 @@ mod tests {
     use super::*;
     use crate::driver::{CompileOptions, compile};
     use crate::source::MemorySourceProvider;
+    use puy_host::HostFuture;
     use std::cell::RefCell;
     use std::rc::Rc;
 
@@ -5136,6 +5455,17 @@ mod tests {
         )
     }
 
+    // `zero_slots` writes each length with stores of fixed positions: every slot of every length
+    // across the boundaries of those forms (3, 4, 8, 9) ends up zero, as a frame's registers must
+    #[test]
+    fn zero_slots_clears_every_length() {
+        for n in 0..=17 {
+            let mut s = vec![Slot::MAX; n];
+            zero_slots(&mut s);
+            assert_eq!(s, vec![0; n], "{n}");
+        }
+    }
+
     // The three forms of the end of a `for` iteration (`ForLoopUp`, and the expanded ones for a
     // body out of its reach, with and without `Wide`; codegen.rs `for_loop_out_of_reach_expands`)
     // all run the loop the same number of times (M3-58)
@@ -5196,6 +5526,19 @@ mod tests {
         }
     }
 
+    #[test]
+    // `RefFieldSet` / `RefFieldSetRef` in the `Wide` form (left to step) run as the short form
+    // and go on after the type word (`docs/spec/bytecode.md` 1.2, 2.8).
+    fn wide_ref_field_writes_run_like_short_forms() {
+        for pad in [0, 300] {
+            assert_eq!(
+                out(&crate::codegen::tests::padded_ref_fields(pad)),
+                "2 xx\n",
+                "{pad}"
+            );
+        }
+    }
+
     fn out(src: &str) -> String {
         let r = run(src);
         assert_eq!(r.status.kind, ExitKind::Code(0), "{src}\n{:?}", r.status);
@@ -5209,6 +5552,8 @@ mod tests {
         source: "unit TestStd;
 interface
 procedure MoveRange<T>(var A: TArray<T>; FromIndex, ToIndex, Count: Integer);
+procedure SortRange<T>(var A: TArray<T>; Index, Count: Integer);
+function PlainOrder<T>(const X: T): Boolean;
 procedure FreeValue<T>(const X: T);
 function IsCounted<T>(const X: T): Boolean;
 function Same<T>(const X, Y: T): Boolean;
@@ -5221,7 +5566,41 @@ type
   public
     function Hooked: Boolean;
   end;
+  TTable<T> = class
+  private
+    FBuckets: TArray<Integer>;
+    FHashes: TArray<Int64>;
+    FNext: TArray<Integer>;
+    FKeys: TArray<T>;
+  public
+    procedure Put(const Key: T; Hash: Int64);
+    function FindKey(const Key: T): Integer;
+    function Plain: Boolean;
+  end;
 implementation
+procedure TTable<T>.Put(const Key: T; Hash: Int64);
+var
+  N: Integer;
+begin
+  N := Length(FKeys);
+  SetLength(FKeys, N + 1);
+  SetLength(FHashes, N + 1);
+  SetLength(FNext, N + 1);
+  FKeys[N] := Key;
+  FHashes[N] := Hash;
+  SetLength(FBuckets, 4);
+  HashRelink(FBuckets, FHashes, FNext, N + 1);
+end;
+function TTable<T>.FindKey(const Key: T): Integer;
+begin
+  Result := HashLookup(Key, FBuckets, FHashes, FNext, FKeys);
+end;
+function TTable<T>.Plain: Boolean;
+begin
+  Result := False;
+  if IsPlainKey(Default(T)) then
+    Result := True;
+end;
 procedure TProbe<T>.Hook(const X: T);
 begin
 end;
@@ -5232,6 +5611,14 @@ end;
 procedure MoveRange<T>(var A: TArray<T>; FromIndex, ToIndex, Count: Integer);
 begin
   ArrayMoveRange(A, FromIndex, ToIndex, Count);
+end;
+procedure SortRange<T>(var A: TArray<T>; Index, Count: Integer);
+begin
+  ArraySortRange(A, Index, Count);
+end;
+function PlainOrder<T>(const X: T): Boolean;
+begin
+  Result := IsPlainOrder(X);
 end;
 procedure FreeValue<T>(const X: T);
 begin
@@ -5434,6 +5821,275 @@ end.
         );
     }
 
+    // `ArraySortRange` sorts only its range, stably and in place, and does nothing for a count
+    // of 0 or 1, also at the end of the array and on an empty array (bytecode.md 2.22).
+    #[test]
+    fn array_sort_range_sorts_its_range() {
+        for (n, call, expected) in [
+            (
+                6,
+                "A[1] := 'z'; A[4] := 'a'; SortRange<string>(A, 1, 4)",
+                "aacdzf",
+            ),
+            (6, "A[0] := 'z'; SortRange<string>(A, 0, 6)", "bcdefz"),
+            (6, "A[2] := 'a'; SortRange<string>(A, 2, 0)", "abadef"),
+            (6, "A[5] := 'a'; SortRange<string>(A, 5, 1)", "abcdea"),
+            (6, "A[5] := 'a'; SortRange<string>(A, 6, 0)", "abcdea"),
+            (0, "SortRange<string>(A, 0, 0)", ""),
+        ] {
+            assert_eq!(
+                out_std(&move_range_program(n, call)),
+                format!("{expected}\n"),
+                "{call}"
+            );
+        }
+    }
+
+    // A negative count and a range outside the array are `ERangeError` with the messages of
+    // `ArrayMoveRange`, and nothing moves (bytecode.md 2.22).
+    #[test]
+    fn array_sort_range_out_of_range() {
+        for (call, message) in [
+            (
+                "SortRange<string>(A, 0, -1)",
+                "array count -1 is out of range",
+            ),
+            (
+                "SortRange<string>(A, 3, 2)",
+                "array range 3..4 is out of range 0..3",
+            ),
+            (
+                "SortRange<string>(A, -1, 2)",
+                "array range -1..0 is out of range 0..3",
+            ),
+            (
+                "SortRange<string>(A, 5, 0)",
+                "array range 5..4 is out of range 0..3",
+            ),
+        ] {
+            // Descending, so that a sort would show; printed after the caught exception
+            let src = move_range_program(
+                4,
+                &format!(
+                    "for I := 0 to 3 do A[I] := Chr(Ord('d') - I); \
+                     try {call} except for I := 0 to High(A) do Write(A[I]); WriteLn end; {call}"
+                ),
+            );
+            let (class, msg, stdout) = error_std(&src);
+            assert_eq!(stdout, "dcba\n", "{call}");
+            assert_eq!(
+                (class.as_str(), msg.as_str()),
+                ("ERangeError", message),
+                "{call}"
+            );
+        }
+    }
+
+    // Sorting a range with an element lent to a `var` parameter is refused (`EAliasError`)
+    // before anything moves; a range without it sorts (bytecode.md 2.22).
+    #[test]
+    fn array_sort_range_refuses_lent_elements() {
+        let src = "program T;
+uses TestStd;
+var
+  A: TArray<Integer>;
+procedure P(var X: Integer; Count: Integer);
+begin
+  SortRange<Integer>(A, 0, Count);
+  WriteLn(A[0], A[1], A[2]);
+end;
+begin
+  A := [4, 3, 2, 1];
+  P(A[3], 3);
+  P(A[3], 4);
+end.
+";
+        let (class, msg, stdout) = error_std(src);
+        assert_eq!(stdout, "234\n");
+        assert_eq!(
+            (class.as_str(), msg.as_str()),
+            (
+                "EAliasError",
+                "array element 3 is passed to a var parameter of a call in progress"
+            )
+        );
+    }
+
+    // `ArraySortRange` sorts the elements of each kind of type whose default order is a built-in
+    // comparison by that order (bytecode.md 2.22; collections.md 10.2).
+    #[test]
+    fn array_sort_range_sorts_each_plain_order() {
+        let src = "program T;
+uses TestStd;
+type
+  TColor = (Red, Green, Blue);
+  TSmall = 10..20;
+var
+  I: TArray<Integer>;
+  U: TArray<UInt64>;
+  B: TArray<Byte>;
+  F: TArray<Single>;
+  D: TArray<Double>;
+  C: TArray<Currency>;
+  S: TArray<string>;
+  U8: TArray<UTF8String>;
+  E: TArray<TColor>;
+  R: TArray<TSmall>;
+  L: TArray<Boolean>;
+  H: TArray<Char>;
+begin
+  I := [3, -1, 2];
+  SortRange<Integer>(I, 0, 3);
+  WriteLn(I[0], ' ', I[1], ' ', I[2]);
+  U := [High(UInt64), 1, UInt64(High(Int64)) + 1];
+  SortRange<UInt64>(U, 0, 3);
+  WriteLn(U[0], ' ', U[1], ' ', U[2]);
+  B := [200, 7, 255];
+  SortRange<Byte>(B, 0, 3);
+  WriteLn(B[0], ' ', B[1], ' ', B[2]);
+  F := [1.5, -2.5, 0.0 / 0.0, -0.0, 0.25];
+  SortRange<Single>(F, 0, 5);
+  WriteLn(F[0]:0:2, ' ', F[1]:0:2, ' ', F[2]:0:2, ' ', F[3]:0:2, ' ', F[4] <> F[4]);
+  D := [1.5, 0.0 / 0.0, -1e3, 1e3];
+  SortRange<Double>(D, 0, 4);
+  WriteLn(D[0]:0:1, ' ', D[1]:0:1, ' ', D[2]:0:1, ' ', D[3] <> D[3]);
+  C := [1.25, -3.5, 0.0001];
+  SortRange<Currency>(C, 0, 3);
+  WriteLn(C[0]:0:4, ' ', C[1]:0:4, ' ', C[2]:0:4);
+  S := ['b', '', 'Z', 'a'];
+  SortRange<string>(S, 0, 4);
+  WriteLn('[', S[0], '] ', S[1], ' ', S[2], ' ', S[3]);
+  U8 := [UTF8String('é'), UTF8String('z'), UTF8String('a')];
+  SortRange<UTF8String>(U8, 0, 3);
+  WriteLn(string(U8[0]), ' ', string(U8[1]), ' ', string(U8[2]));
+  E := [TColor.Blue, TColor.Red, TColor.Green];
+  SortRange<TColor>(E, 0, 3);
+  WriteLn(Ord(E[0]), Ord(E[1]), Ord(E[2]));
+  R := [20, 10, 15];
+  SortRange<TSmall>(R, 0, 3);
+  WriteLn(R[0], ' ', R[1], ' ', R[2]);
+  L := [True, False];
+  SortRange<Boolean>(L, 0, 2);
+  WriteLn(L[0], ' ', L[1]);
+  H := ['c', 'A', 'b'];
+  SortRange<Char>(H, 0, 3);
+  WriteLn(H[0], H[1], H[2]);
+end.
+";
+        assert_eq!(
+            out_std(src),
+            "-1 2 3\n\
+             1 9223372036854775808 18446744073709551615\n\
+             7 200 255\n\
+             -2.50 -0.00 0.25 1.50 TRUE\n\
+             -1000.0 1.5 1000.0 TRUE\n\
+             -3.5000 0.0001 1.2500\n\
+             [] Z a b\n\
+             a z é\n\
+             012\n\
+             10 15 20\n\
+             FALSE TRUE\n\
+             Abc\n"
+        );
+    }
+
+    /// The types of [`is_plain_order_is_fixed_by_type`] and
+    /// [`array_sort_range_refuses_other_orders`]: a record with its own `LessThan`, and one
+    /// without a default order.
+    const ORDER_TYPES: &str = "type
+  TRec = record
+    X: Integer;
+    class operator LessThan(const A, B: TRec): Boolean;
+  end;
+  TPlainRec = record
+    X: Integer;
+  end;
+class operator TRec.LessThan(const A, B: TRec): Boolean;
+begin
+  Result := A.X < B.X;
+end;
+";
+
+    // `IsPlainOrder` is `True` for a type whose default order is a built-in comparison, and
+    // `False` for a record with its own `LessThan`, a record and a class without a default order
+    // (bytecode.md 2.22; collections.md 10.2).
+    #[test]
+    fn is_plain_order_is_fixed_by_type() {
+        let src = format!(
+            "program T;
+uses TestStd;
+{ORDER_TYPES}begin
+  WriteLn(PlainOrder<Integer>(0), ' ', PlainOrder<string>(''), ' ', PlainOrder<TRec>(Default(TRec)),
+    ' ', PlainOrder<TPlainRec>(Default(TPlainRec)), ' ', PlainOrder<TObject>(nil));
+end.
+"
+        );
+        assert_eq!(out_std(&src), "TRUE TRUE FALSE FALSE FALSE\n");
+    }
+
+    // `ArraySortRange` of a type whose default order is not a built-in comparison (here a record
+    // with its own `LessThan`) raises `EInvalidOperation` (bytecode.md 2.22).
+    #[test]
+    fn array_sort_range_refuses_other_orders() {
+        let src = format!(
+            "program T;
+uses TestStd;
+{ORDER_TYPES}var
+  X: TArray<TRec>;
+begin
+  SetLength(X, 2);
+  SortRange<TRec>(X, 0, 2);
+end.
+"
+        );
+        let (class, msg, _) = error_std(&src);
+        assert_eq!(
+            (class.as_str(), msg.as_str()),
+            (
+                "EInvalidOperation",
+                "`TRec` is not ordered by a built-in comparison"
+            )
+        );
+    }
+
+    // The room of the merges counts against the isolate's memory limit: a sort that would go
+    // over it raises `EOutOfMemory` before anything moves (bytecode.md 2.22; requirements §5.12).
+    #[test]
+    fn array_sort_range_counts_its_room() {
+        let src = "program T;
+uses TestStd;
+var
+  A: TArray<Integer>;
+  I: Integer;
+begin
+  SetLength(A, 100000);
+  for I := 0 to High(A) do
+    A[I] := -I;
+  try
+    SortRange<Integer>(A, 0, Length(A));
+  except
+    on E: EOutOfMemory do WriteLn('out of memory ', A[0], ' ', A[High(A)]);
+  end;
+  SortRange<Integer>(A, 0, 1000);
+  WriteLn(A[0], ' ', A[999]);
+end.
+";
+        // The array takes 800,000 bytes; the room of the whole sort as many again
+        let r = run_with_stdlib(
+            src,
+            "",
+            &[],
+            IsolateConfig {
+                hash_seed: HashSeed::Fixed(0),
+                memory_limit: Some(1_200_000),
+                ..Default::default()
+            },
+            &[TEST_STDLIB],
+        );
+        assert_eq!(r.status.kind, ExitKind::Code(0), "{}", r.stdout);
+        assert_eq!(r.stdout, "out of memory 0 -99999\n-999 0\n");
+    }
+
     // `FreeIfClass` frees an instance of a class (through `TObject` too) and does nothing for
     // `nil` and for a value of another type; `IsRefCountedObject` looks at the instance of
     // `TObject` and of a reference counted class only (collections.md 12.1, 9.2).
@@ -5541,6 +6197,169 @@ begin
 end.
 ";
         assert_eq!(out_std(src), "TRUE FALSE TRUE\nFALSE FALSE\nTBar TBar []\n");
+    }
+
+    // `HashLookup` hashes and compares the keys of `Integer` and `string` (`IsPlainKey`): an
+    // entry whose remembered hash is not its key's is not found. For another key type
+    // (`Double`) it is `HashFind` from the start of the chain of `KeyHash(Key)`: the first entry
+    // with the hash, whatever its key (bytecode.md 2.23).
+    #[test]
+    fn hash_lookup_compares_plain_keys_only() {
+        let src = "program T;
+uses TestStd;
+var
+  I: TTable<Integer>;
+  S: TTable<string>;
+  D: TTable<Double>;
+  A: string;
+begin
+  I := TTable<Integer>.Create;
+  I.Put(10, KeyHash(10));
+  I.Put(20, KeyHash(20));
+  I.Put(30, KeyHash(30));
+  I.Put(40, KeyHash(41));
+  WriteLn(I.Plain, ' ', I.FindKey(30), ' ', I.FindKey(10), ' ', I.FindKey(40), ' ', I.FindKey(50));
+  S := TTable<string>.Create;
+  A := 'a';
+  S.Put(A + 'b', KeyHash('ab'));
+  S.Put('cd', KeyHash('cd'));
+  WriteLn(S.Plain, ' ', S.FindKey('ab'), ' ', S.FindKey(A + 'b'), ' ', S.FindKey('cd'), ' ',
+    S.FindKey('x'));
+  D := TTable<Double>.Create;
+  D.Put(1.5, KeyHash(1.5));
+  D.Put(2.5, KeyHash(1.5));
+  WriteLn(D.Plain, ' ', D.FindKey(1.5), ' ', D.FindKey(2.5));
+end.
+";
+        assert_eq!(out_std(src), "TRUE 2 0 -1 -1\nTRUE 0 0 1 -1\nFALSE 1 -1\n");
+    }
+
+    // The arrays of `HashLookup` are fields of `Self` named without `Self.`, declared one after
+    // another in the order of the parameters: a qualified field, fields out of that order and
+    // local variables are E0702 (bytecode.md 2.23).
+    #[test]
+    fn hash_lookup_wants_consecutive_fields_of_self() {
+        const BAD_STD: puy_stdlib::Unit = puy_stdlib::Unit {
+            name: "BadStd",
+            source: "unit BadStd;
+interface
+type
+  TBad = class
+  private
+    FBuckets: TArray<Integer>;
+    FHashes: TArray<Int64>;
+    FNext: TArray<Integer>;
+    FKeys: TArray<Integer>;
+  public
+    function Qualified(Key: Integer): Integer;
+    function Swapped(Key: Integer): Integer;
+    function Locals(Key: Integer): Integer;
+    function Fine(Key: Integer): Integer;
+  end;
+implementation
+function TBad.Qualified(Key: Integer): Integer;
+begin
+  Result := HashLookup(Key, Self.FBuckets, FHashes, FNext, FKeys);
+end;
+function TBad.Swapped(Key: Integer): Integer;
+begin
+  Result := HashLookup(Key, FBuckets, FHashes, FKeys, FNext);
+end;
+function TBad.Locals(Key: Integer): Integer;
+var
+  B, N: TArray<Integer>;
+begin
+  B := nil;
+  N := nil;
+  Result := HashLookup(Key, B, FHashes, N, FKeys);
+end;
+function TBad.Fine(Key: Integer): Integer;
+begin
+  Result := HashLookup(Key, FBuckets, FHashes, FNext, FKeys);
+end;
+end.
+",
+        };
+        let mut provider = MemorySourceProvider::new();
+        let out = crate::driver::compile_with_stdlib(
+            "t.pas",
+            b"program T;\nuses BadStd;\nbegin\nend.\n".to_vec(),
+            &mut provider,
+            &CompileOptions::default(),
+            &[BAD_STD],
+        );
+        let errors: Vec<(Option<String>, String)> = out
+            .diagnostics
+            .iter()
+            .filter(|d| d.is_error())
+            .map(|d| (d.code.map(|c| c.to_string()), d.message.clone()))
+            .collect();
+        let one = (
+            Some("E0702".to_string()),
+            "type mismatch: expected four consecutive fields of `Self`".to_string(),
+        );
+        // `Qualified`, `Swapped` and `Locals`; `Fine` passes
+        assert_eq!(errors, vec![one; 3]);
+    }
+
+    // `HashLookupInt` / `HashLookupStr` check their instance and destroy none, so the second
+    // inlined lookup on the same table keeps no check of `Self` (`ClassType`) after the first
+    // (design/inlining.md 7.1): one check and two lookups in `Twice` (bytecode.md 2.23). The
+    // keys are parameters, so that nothing else between the lookups keeps the check.
+    #[test]
+    fn hash_lookup_keeps_the_check_of_its_instance() {
+        for (idx, (ty, a, b)) in [("Integer", "1", "2"), ("string", "'ab'", "'cd'")]
+            .into_iter()
+            .enumerate()
+        {
+            let src = format!(
+                "program T;
+uses TestStd;
+procedure Twice(T: TTable<{ty}>; const A, B: {ty});
+begin
+  WriteLn(T.FindKey(A) + T.FindKey(B));
+end;
+var
+  X: TTable<{ty}>;
+  K: {ty};
+begin
+  X := TTable<{ty}>.Create;
+  K := {a};
+  X.Put(K, KeyHash(K));
+  Twice(X, K, {b});
+end.
+"
+            );
+            assert_eq!(out_std(&src), "-1\n", "{idx}");
+            let mut provider = MemorySourceProvider::new();
+            let out = crate::driver::compile_with_stdlib(
+                "t.pas",
+                src.into_bytes(),
+                &mut provider,
+                &CompileOptions::default(),
+                &[TEST_STDLIB],
+            );
+            let module = out.stages.module.as_ref().expect("module");
+            let text = crate::bytecode::disassemble(module);
+            let twice: Vec<&str> = text
+                .lines()
+                .skip_while(|l| !(l.starts_with(".func") && l.contains("T.Twice ")))
+                .skip(1)
+                .take_while(|l| !l.starts_with(".func"))
+                .collect();
+            let count = |name: &str| twice.iter().filter(|l| l.contains(name)).count();
+            let lookup = if ty == "string" {
+                "HashLookupStr"
+            } else {
+                "HashLookupInt"
+            };
+            assert_eq!(
+                (count("ClassType"), count(lookup)),
+                (1, 2),
+                "{idx}\n{}",
+                twice.join("\n")
+            );
+        }
     }
 
     // `IsOverridden(M)` tells whether the class of the instance replaced the method `M` in its
@@ -5838,6 +6657,7 @@ end.
                 handlers: Vec::new(),
                 outer: None,
                 shared_by: Vec::new(),
+                inlines: Vec::new(),
             }],
             globals: Vec::new(),
             entry: 0,
@@ -5877,21 +6697,29 @@ end.
             },
         )
         .unwrap();
-        iso.regs = regs;
+        iso.task.regs = regs;
         iso
     }
 
     /// Runs the body of `opc` with `rB` = `b` and `rC` = `c` (registers 1 and 2) under the hash
     /// seed `seed`, and returns `rA` (register 0).
-    fn exec_value(seed: u64, opc: u8, b: Slot, c: Slot) -> Slot {
+    fn exec_value(seed: u64, opc: u16, b: Slot, c: Slot) -> Slot {
         let mut iso = isolate_with_regs(seed, vec![0, b, c]);
         exec_one(&mut iso, opc, 1, 2);
-        iso.regs[0]
+        iso.task.regs[0]
     }
 
     /// Runs the body of `opc` into register 0 from registers `rb` and `rc`, which must succeed.
-    fn exec_one(iso: &mut Isolate, opc: u8, rb: usize, rc: usize) {
-        let r = iso.exec_op(opc, 0, rb, rc, rb, rc, 0);
+    fn exec_one(iso: &mut Isolate, opc: u16, rb: usize, rc: usize) {
+        let r = iso.exec_op(
+            u8::try_from(opc).expect("an instruction below 256"),
+            0,
+            rb,
+            rc,
+            rb,
+            rc,
+            0,
+        );
         assert!(matches!(r, Some(Ok(()))), "{opc}");
     }
 
@@ -5957,37 +6785,37 @@ end.
         }
     }
 
-    // `HashStr` is SipHash-1-3 of the code units, two bytes each (`docs/spec/equality.md` 2.3,
-    // 7.2; values worked out from the definitions), and the same for a one-byte and a UTF-16
+    // `HashStr` is the low 32 bits of SipHash-1-3 of the code units, two bytes each
+    // (`docs/spec/equality.md` 2.3, 7.2; values worked out from the definitions), and the same for a one-byte and a UTF-16
     // string of the same content.
     #[test]
     fn hash_str_follows_the_definition_in_any_representation() {
         let cases: [(u64, &str, i64); 6] = [
-            (0, "", 1608770706723824086),
-            (0, "abc", -6954989992501808302),
-            (0, "a\u{e9}", -833247799512226250),
-            (0x1234, "", 1497946723746701034),
-            (0x1234, "abc", 1378609642288518874),
-            (0x1234, "a\u{e9}", -3104470838196448427),
+            (0, "", 592699862),
+            (0, "abc", 1887990610),
+            (0, "a\u{e9}", 2217911862),
+            (0x1234, "", 3647069930),
+            (0x1234, "abc", 1552488154),
+            (0x1234, "a\u{e9}", 2310918997),
         ];
         for (seed, text, expected) in cases {
             let units: Vec<u16> = text.encode_utf16().collect();
             let mut iso = isolate_with_regs(seed, vec![0; 3]);
             let utf16 = iso.heap.alloc_str(PStr::Utf16(units.clone())).unwrap();
-            iso.regs[1] = utf16;
+            iso.task.regs[1] = utf16;
             if units.iter().all(|u| *u < 0x80) {
                 let bytes = units.iter().map(|u| *u as u8).collect();
-                iso.regs[2] = iso.heap.alloc_str(PStr::Ascii(bytes)).unwrap();
+                iso.task.regs[2] = iso.heap.alloc_str(PStr::Ascii(bytes)).unwrap();
             } else {
-                iso.regs[2] = utf16;
+                iso.task.regs[2] = utf16;
             }
             for r in [1, 2] {
                 exec_one(&mut iso, op::HASH_STR, r, 0);
-                assert_eq!(iso.regs[0], expected, "{seed} {text:?} register {r}");
+                assert_eq!(iso.task.regs[0], expected, "{seed} {text:?} register {r}");
             }
         }
         // The empty string is 0, and hashes like an empty string block
-        assert_eq!(exec_value(0, op::HASH_STR, 0, 0), 1608770706723824086);
+        assert_eq!(exec_value(0, op::HASH_STR, 0, 0), 592699862);
     }
 
     // `HashF64` makes `-0.0` hash as `0.0` and every NaN as one NaN; `KeyEqF64` makes two NaNs
@@ -6079,11 +6907,11 @@ end.
     /// Runs the intrinsic `id` with `r1` = `b` and `r2` = `c` in an isolate made by
     /// [`started_isolate`] with that one instruction, and returns `r0`.
     fn intrinsic_value(iso: &mut Isolate, b: Slot, c: Slot) -> Slot {
-        iso.frames.last_mut().expect("main runs").pc = 0;
-        iso.regs[1] = b;
-        iso.regs[2] = c;
+        iso.task.frames.last_mut().expect("main runs").pc = 0;
+        iso.task.regs[1] = b;
+        iso.task.regs[2] = c;
         step_through(iso, 1);
-        iso.regs[0]
+        iso.task.regs[0]
     }
 
     // `ObjAlive` (`docs/spec/equality.md` 8.1) is 1 for a live instance and one being destroyed,
@@ -6139,20 +6967,20 @@ end.
         }
     }
 
-    // `HashUtf8` is SipHash-1-3 of the bytes of a `UTF8String` (`docs/spec/equality.md` 2.3,
-    // 7.2; values worked out from the definitions outside this implementation), and the empty
+    // `HashUtf8` is the low 32 bits of SipHash-1-3 of the bytes of a `UTF8String`
+    // (`docs/spec/equality.md` 2.3, 7.2; values worked out from the definitions outside this implementation), and the empty
     // `UTF8String` (0) hashes like no bytes.
     #[test]
     fn hash_utf8_follows_the_definition() {
         let cases: [(u64, &str, i64); 8] = [
-            (0, "", 1608770706723824086),
-            (0, "abc", -1978507953145983409),
-            (0, "a\u{e9}", -7403763063956341074),
-            (0, "日本語の文字列テスト", 9087527130865421541),
-            (0x1234, "", 1497946723746701034),
-            (0x1234, "abc", -3925963626378372356),
-            (0x1234, "a\u{e9}", 2362596546122589204),
-            (0x1234, "日本語の文字列テスト", -7026351037526572900),
+            (0, "", 592699862),
+            (0, "abc", 3413298767),
+            (0, "a\u{e9}", 1538883246),
+            (0, "日本語の文字列テスト", 435506405),
+            (0x1234, "", 3647069930),
+            (0x1234, "abc", 3902593788),
+            (0x1234, "a\u{e9}", 2268308500),
+            (0x1234, "日本語の文字列テスト", 1695023260),
         ];
         for (seed, text, expected) in cases {
             let mut iso =
@@ -6198,17 +7026,17 @@ end.
         ];
         for (idx, (small, large, eq, h_small, h_large)) in cases.into_iter().enumerate() {
             let mut iso = started_isolate(0x1234, types.clone(), code.clone());
-            iso.regs[1] = iso.heap.alloc_set(64, small).unwrap().unwrap();
-            iso.regs[2] = iso.heap.alloc_set(65, large).unwrap().unwrap();
+            iso.task.regs[1] = iso.heap.alloc_set(64, small).unwrap().unwrap();
+            iso.task.regs[2] = iso.heap.alloc_set(65, large).unwrap().unwrap();
             step_through(&mut iso, 3);
-            assert_eq!(iso.regs[0], eq, "{idx} SetEq");
-            assert_eq!(iso.regs[3], h_small, "{idx} small");
-            assert_eq!(iso.regs[4], h_large, "{idx} large");
+            assert_eq!(iso.task.regs[0], eq, "{idx} SetEq");
+            assert_eq!(iso.task.regs[3], h_small, "{idx} small");
+            assert_eq!(iso.task.regs[4], h_large, "{idx} large");
         }
         // The empty set as 0 hashes like an empty block
         let mut iso = started_isolate(0x1234, types, code);
         step_through(&mut iso, 3);
-        assert_eq!(iso.regs[3], -594279027983241470);
+        assert_eq!(iso.task.regs[3], -594279027983241470);
     }
 
     /// A callable value block on `iso`'s heap.
@@ -6354,9 +7182,9 @@ end.
         };
         let mut iso = Isolate::new(module, host(), IsolateConfig::default()).unwrap();
         assert_eq!(iso.hash_keys, hash::HashKeys::new(0x1234));
-        iso.regs = vec![0, 0];
+        iso.task.regs = vec![0, 0];
         exec_one(&mut iso, op::HASH_INT, 1, 0);
-        assert_eq!(iso.regs[0], -594279027983241470);
+        assert_eq!(iso.task.regs[0], -594279027983241470);
     }
 
     #[test]
@@ -6507,6 +7335,42 @@ end.
         match run_code(consts, 1, code) {
             RunOutcome::Finished(status) => assert_eq!(status.kind, ExitKind::Code(42)),
             other => panic!("{other:?}"),
+        }
+    }
+
+    // An instruction after `Ext` runs as the one numbered past 255, not as the instruction its
+    // `op` names (`TestExt` holds the `op` of `AddInt`), short and with `Wide`, and the code after
+    // it goes on (`docs/spec/bytecode.md` 1.2).
+    #[test]
+    fn ext_instruction_runs() {
+        use crate::bytecode::{encode, encode_ext};
+
+        for wide in [false, true] {
+            let mut code = vec![
+                encode(op::LOAD_INT, 1, 50, 0),
+                encode(op::LOAD_INT, 2, 8, 0),
+            ];
+            if wide {
+                // r300 := r1 - r2, then r0 := r300
+                code.extend([
+                    encode(op::WIDE, 0, 0, 0),
+                    encode(op::EXT, 0, 0, 0),
+                    encode(op::TEST_EXT, 300, 1, 2),
+                    encode_ext(300, 1, 2),
+                    encode(op::WIDE, 0, 0, 0),
+                    encode(op::MOVE, 0, 300, 0),
+                    encode_ext(0, 300, 0),
+                ]);
+            } else {
+                code.extend([encode(op::EXT, 0, 0, 0), encode(op::TEST_EXT, 0, 1, 2)]);
+            }
+            code.push(encode(op::HALT, 0, 0, 0));
+            match run_code(Vec::new(), 301, code) {
+                RunOutcome::Finished(status) => {
+                    assert_eq!(status.kind, ExitKind::Code(42), "{wide}")
+                }
+                other => panic!("{wide}: {other:?}"),
+            }
         }
     }
 
@@ -7005,7 +7869,7 @@ end.
         let mut module = Module::decode(&bytes, crate::VERSION).unwrap();
         let code = &mut module.funcs[module.entry as usize].code;
         let last = code.len() - 1;
-        assert_eq!(bytecode::decode(code[last]).0, op::RET_VOID);
+        assert_eq!(bytecode::decode(code[last]).0, op::word::RET_VOID);
         code[last] = bytecode::encode(op::NOP, 0, 0, 0);
         let config = IsolateConfig {
             hash_seed: HashSeed::Fixed(0),
@@ -7109,12 +7973,12 @@ end.
             .iter()
             .position(|&w| {
                 let (opc, _, _, c) = bytecode::decode(w);
-                opc == op::INTRINSIC && c == u32::from(op::intr::AS_CLASS_REF)
+                opc == op::word::INTRINSIC && c == u32::from(op::intr::AS_CLASS_REF)
             })
             .expect("AsClassRef");
         // The `LoadInt` of the target before it: type index 12 (`TArray<Exception>`)
         let (opc, a, _, _) = bytecode::decode(code[at - 1]);
-        assert_eq!(opc, op::LOAD_INT);
+        assert_eq!(opc, op::word::LOAD_INT);
         code[at - 1] = bytecode::encode(op::LOAD_INT, a, 12, 0);
         let config = IsolateConfig {
             hash_seed: HashSeed::Fixed(0),
@@ -7155,7 +8019,7 @@ end.
             .iter()
             .position(|&w| {
                 let (opc, ..) = bytecode::decode(w);
-                opc == op::NEW && bytecode::decode_bx(w, None) == ebox
+                opc == op::word::NEW && bytecode::decode_bx(w, None) == ebox
             })
             .expect("New of EBox");
         let (_, a, _, _) = bytecode::decode(code[at]);
@@ -7387,25 +8251,35 @@ end.
     }
 
     // Adding and removing in turn leaves holes that are squeezed out from time to time; that
-    // stays O(1) on average per operation (collections.md 11.3 (5))
+    // stays O(1) on average per operation, also when the capacity is far larger than the entries
+    // (the capacity grows with n here, so a squeeze costing the capacity makes the ratio about 16)
+    // (collections.md 7.3, 11.3 (5))
     #[test]
     fn dictionary_add_remove_in_turn_is_constant_on_average() {
-        let src = "program T;
-                   uses System.SysUtils, System.Generics.Collections;
-                   var D: TDictionary<Integer, Integer>; I: Integer;
+        let cases = [
+            ("Create", "D.Capacity <= 128"),
+            ("Create(8 * {N})", "D.Capacity = 8 * {N}"),
+        ];
+        for (idx, (create, capacity)) in cases.iter().enumerate() {
+            let src = format!(
+                "program T;
+                 uses System.SysUtils, System.Generics.Collections;
+                 var D: TDictionary<Integer, Integer>; I: Integer;
+                 begin
+                   D := TDictionary<Integer, Integer>.{create};
+                   for I := 1 to 50 do D.Add(-I, I);
+                   for I := 1 to {{N}} do
                    begin
-                     D := TDictionary<Integer, Integer>.Create;
-                     for I := 1 to 50 do D.Add(-I, I);
-                     for I := 1 to {N} do
-                     begin
-                       D.Add(I, I);
-                       D.Remove(I);
-                     end;
-                     WriteLn(D.Count, ' ', D.Capacity <= 128);
-                     D.Free;
-                   end.";
-        let ratio = executed_ratio(src, 2000, |_| "50 TRUE\n".to_string());
-        assert!(ratio < 6.0, "{ratio}");
+                     D.Add(I, I);
+                     D.Remove(I);
+                   end;
+                   WriteLn(D.Count, ' ', {capacity});
+                   D.Free;
+                 end."
+            );
+            let ratio = executed_ratio(&src, 2000, |_| "50 TRUE\n".to_string());
+            assert!(ratio < 6.0, "{idx} {create}: {ratio}");
+        }
     }
 
     // TList<T>.Sort is O(n log n) (collections.md 10.3, 11.2): from n to 4n items the executed
@@ -7708,6 +8582,1247 @@ end.
             assert!(ratio < 6.0, "{idx} {place}: {ratio}");
         }
     }
+
+    // ---- Hash table instructions (`docs/spec/bytecode.md` 2.23; M4-113) ----
+
+    /// The code of a `<main>` that makes `r0` a dynamic array (type 64) of the integers `values`,
+    /// with `r1` and `r2` as scratch registers.
+    fn int_array(values: &[i32]) -> Vec<u32> {
+        use crate::bytecode::encode;
+        let mut code = vec![
+            word_bx(op::LOAD_INT, 0, values.len() as i32),
+            word_bx(op::NEW_ARR, 0, 64),
+        ];
+        for (i, v) in values.iter().enumerate() {
+            code.extend([
+                word_bx(op::LOAD_INT, 1, i as i32),
+                word_bx(op::LOAD_INT, 2, *v),
+                encode(op::DYN_SET, 0, 1, 2),
+            ]);
+        }
+        code
+    }
+
+    /// Runs `code` after making `r10` the buckets, `r11` the hashes and `r12` the next entries
+    /// of a hash table (dynamic arrays of type 64; `r0` to `r2` are scratch registers), and `r19`
+    /// an instance (type 66) whose slots 1 to 4 are the buckets, the hashes, the next entries
+    /// and, as the keys, the hashes again (slot 0 is an integer, 0), with the managed registers
+    /// `r10` to `r12` and `r20` to `r29` free for `code`. Type 65 is a dynamic array of two-slot
+    /// records and constant 0 the string `'ab'`.
+    fn hash_table_run(buckets: &[i32], hashes: &[i32], next: &[i32], code: &[u32]) -> RunOutcome {
+        use crate::bytecode::{
+            SLOT_PLAIN, SLOT_REF, TOBJECT_TYPE, TOBJECT_VMT, TYPE_CLASS, TYPE_DYNARRAY, TypeEntry,
+            encode,
+        };
+        let mut all = Vec::new();
+        for (r, values) in [(10, buckets), (11, hashes), (12, next)] {
+            all.extend(int_array(values));
+            all.push(encode(op::MOVE_REF, r, 0, 0));
+        }
+        all.push(word_bx(op::NEW, 19, 66));
+        for (slot, r) in [(1, 10), (2, 11), (3, 12), (4, 11)] {
+            all.push(encode(op::OBJ_SET_REF, 19, slot, r));
+        }
+        all.extend_from_slice(code);
+        let types = vec![
+            TypeEntry {
+                kind: TYPE_DYNARRAY,
+                refs: vec![SLOT_PLAIN],
+                width: 1,
+                name: "array of Int64".into(),
+                ..TypeEntry::default()
+            },
+            flat_types().remove(1),
+            TypeEntry {
+                kind: TYPE_CLASS,
+                slots: 5,
+                refs: vec![SLOT_PLAIN, SLOT_REF, SLOT_REF, SLOT_REF, SLOT_REF],
+                name: "Test.TTable".into(),
+                parent: Some(TOBJECT_TYPE),
+                vmt: TOBJECT_VMT.to_vec(),
+                ..TypeEntry::default()
+            },
+        ];
+        let mut iso = funcs_isolate(
+            types,
+            vec![ConstEntry::Str("ab".into())],
+            vec![TestFunc {
+                params: 0,
+                regs: 30,
+                managed: &[0, 10, 11, 12],
+                code: all,
+            }],
+        );
+        iso.run(10_000)
+    }
+
+    /// `rA := rB[i]` for the array in `rB` with `r1` as scratch.
+    fn elem(a: u32, b: u32, i: i32) -> [u32; 2] {
+        [
+            word_bx(op::LOAD_INT, 1, i),
+            crate::bytecode::encode(op::DYN_GET, a, b, 1),
+        ]
+    }
+
+    #[test]
+    // `HashRelink` links each entry that is not a hole at the front of the chain of its bucket
+    // (the later entries first), and `HashFind` follows a chain from its bucket or after an
+    // entry.
+    fn hash_table_instructions_link_and_follow() {
+        use crate::bytecode::encode;
+        // Hashes 5, 9, 2, 13 (buckets 1, 1, 2, 1 of 4), the third entry a hole (-2)
+        let mut code = vec![
+            // HashRelink(Buckets, Hashes, Next, 4)
+            encode(op::MOVE, 20, 11, 0),
+            encode(op::MOVE, 21, 12, 0),
+            word_bx(op::LOAD_INT, 22, 4),
+            encode(op::INTRINSIC, 10, 20, u32::from(op::intr::HASH_RELINK)),
+        ];
+        // Buckets[1], Next[3], Next[1], Next[0], Next[2], Buckets[2]
+        code.extend(elem(3, 10, 1));
+        code.extend(elem(4, 12, 3));
+        code.extend(elem(5, 12, 1));
+        code.extend(elem(6, 12, 0));
+        code.extend(elem(7, 12, 2));
+        code.extend(elem(8, 10, 2));
+        code.extend([
+            // HashFind(9, ..., -1), HashFind(9, ..., 1), HashFind(2, ..., -1)
+            word_bx(op::LOAD_INT, 20, 9),
+            encode(op::MOVE, 21, 10, 0),
+            encode(op::MOVE, 22, 11, 0),
+            encode(op::MOVE, 23, 12, 0),
+            word_bx(op::LOAD_INT, 24, -1),
+            encode(op::HASH_FIND, 13, 20, 0),
+            word_bx(op::LOAD_INT, 24, 1),
+            encode(op::HASH_FIND, 14, 20, 0),
+            word_bx(op::LOAD_INT, 20, 2),
+            word_bx(op::LOAD_INT, 24, -1),
+            encode(op::HASH_FIND, 15, 20, 0),
+        ]);
+        // Buckets[1] = 3 → Next[3] = 1 → Next[1] = 0 → Next[0] = -1; the hole keeps its -2, and
+        // Buckets[2] stays empty; then the lookups
+        let expected = [
+            (3, 3),
+            (4, 1),
+            (5, 0),
+            (6, -1),
+            (7, -2),
+            (8, -1),
+            (13, 1),
+            (14, -1),
+            (15, -1),
+        ];
+        code.extend(halt_unless(&expected));
+        match hash_table_run(&[0, 0, 0, 0], &[5, 9, 2, 13], &[0, 0, -2, 0], &code) {
+            RunOutcome::Finished(st) => assert_eq!(st.kind, ExitKind::Code(0)),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    // A table the standard library does not make stops the isolate (`Fatal`): buckets whose
+    // length is not a power of 2, a chain that goes round, an entry out of the arrays, and a key
+    // that is not a string looked for as a string.
+    fn hash_table_instructions_refuse_bad_tables() {
+        use crate::bytecode::encode;
+        let find = [
+            word_bx(op::LOAD_INT, 20, 9),
+            encode(op::MOVE, 21, 10, 0),
+            encode(op::MOVE, 22, 11, 0),
+            encode(op::MOVE, 23, 12, 0),
+            word_bx(op::LOAD_INT, 24, -1),
+            encode(op::HASH_FIND, 13, 20, 0),
+            encode(op::HALT, 13, 0, 0),
+        ];
+        let lookup_str = [
+            encode(op::MOVE, 20, 19, 0),
+            word_bx(op::LOAD_INT, 21, 9),
+            encode(op::HASH_LOOKUP_STR, 13, 20, 1),
+            encode(op::HALT, 13, 0, 0),
+        ];
+        let relink = [
+            encode(op::MOVE, 20, 11, 0),
+            encode(op::MOVE, 21, 12, 0),
+            word_bx(op::LOAD_INT, 22, 2),
+            encode(op::INTRINSIC, 10, 20, u32::from(op::intr::HASH_RELINK)),
+            encode(op::HALT, 22, 0, 0),
+        ];
+        // The buckets, the hashes, the next entries, the code and a part of the message
+        type Case<'a> = (&'a [i32], &'a [i32], &'a [i32], &'a [u32], &'a str);
+        let cases: [Case; 6] = [
+            (&[0, 0, 0], &[9], &[-1], &find, "not a power of 2"),
+            (&[0], &[1, 1], &[1, 0], &find, "goes round"),
+            (&[5], &[9], &[-1], &find, "out of range"),
+            // The key 9 is no heap block
+            (&[0], &[9], &[-1], &lookup_str, "heap reference 9"),
+            (&[0, 0, 0], &[9, 9], &[0, 0], &relink, "not a power of 2"),
+            (&[], &[9, 9], &[0, 0], &relink, "no bucket"),
+        ];
+        for (i, (buckets, hashes, next, code, what)) in cases.into_iter().enumerate() {
+            match hash_table_run(buckets, hashes, next, code) {
+                RunOutcome::Fatal(e) => assert!(e.message.contains(what), "{i}: {}", e.message),
+                other => panic!("{i}: {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    // `HashLookupInt` / `HashLookupStr` read the fields of their instance as `ObjGet` does: a
+    // block that is no instance and a slot past the instance's (`C + 3` of 5 slots) stop the
+    // isolate (`Fatal`), and `nil` and a destroyed instance raise `EAccessViolation`
+    // (bytecode.md 2.23, objects.md 14.4).
+    fn hash_lookup_checks_its_instance() {
+        use crate::bytecode::encode;
+        // The code that leaves the instance in `r20`, and the slot of the first field
+        let run = |instance: &[u32], slot: u32, opc: u16| {
+            let mut code = instance.to_vec();
+            // The key 0 (also the empty string)
+            code.extend([
+                encode(op::LOAD_ZERO, 21, 0, 0),
+                encode(opc, 13, 20, slot),
+                encode(op::HALT, 13, 0, 0),
+            ]);
+            hash_table_run(&[0, 0], &[9], &[-1], &code)
+        };
+        let this = [encode(op::MOVE, 20, 19, 0)];
+        let freed = [
+            encode(op::MOVE, 20, 19, 0),
+            encode(op::INTRINSIC, 19, 0, u32::from(op::intr::FREE)),
+        ];
+        for (idx, opc) in [op::HASH_LOOKUP_INT, op::HASH_LOOKUP_STR]
+            .into_iter()
+            .enumerate()
+        {
+            // The table read from its fields: nothing found, an exit code of 255 (-1)
+            match run(&this, 1, opc) {
+                RunOutcome::Finished(st) => assert_eq!(st.kind, ExitKind::Code(255), "{idx}"),
+                other => panic!("{idx}: {other:?}"),
+            }
+            let fatal: [(&[u32], u32, &str); 2] = [
+                // A dynamic array (the buckets)
+                (
+                    &[encode(op::MOVE, 20, 10, 0)],
+                    1,
+                    "does not refer to an instance",
+                ),
+                (&this, 2, "slot 5 out of range"),
+            ];
+            for (case, (instance, slot, what)) in fatal.into_iter().enumerate() {
+                match run(instance, slot, opc) {
+                    RunOutcome::Fatal(e) => {
+                        assert!(e.message.contains(what), "{idx} {case}: {}", e.message)
+                    }
+                    other => panic!("{idx} {case}: {other:?}"),
+                }
+            }
+            let raised: [(&[u32], &str); 2] = [
+                (&[encode(op::LOAD_ZERO, 20, 0, 0)], NIL_ACCESS),
+                (&freed, FREED_ACCESS),
+            ];
+            for (case, (instance, message)) in raised.into_iter().enumerate() {
+                match run(instance, 1, opc) {
+                    RunOutcome::Finished(st) => match st.kind {
+                        ExitKind::UncaughtException(e) => assert_eq!(
+                            (e.class.as_str(), e.message.as_str()),
+                            ("EAccessViolation", message),
+                            "{idx} {case}"
+                        ),
+                        other => panic!("{idx} {case}: {other:?}"),
+                    },
+                    other => panic!("{idx} {case}: {other:?}"),
+                }
+            }
+        }
+    }
+
+    #[test]
+    // Each array of a hash table that is not a dynamic array of one-slot elements stops the
+    // isolate (`Fatal`) naming the array, in whichever operand of `HashFind` and `HashRelink` or
+    // field of the instance of `HashLookupInt` it is: a string, an array of two-slot elements,
+    // and no heap block.
+    fn hash_table_instructions_refuse_arrays_of_wrong_shape() {
+        use crate::bytecode::encode;
+        // The code that leaves the wrong array in `r0`, and a part of the message
+        let bad: [(&[u32], &str); 3] = [
+            (&[encode(op::LOAD_CONST, 0, 0, 0)], "not a dynamic array"),
+            (
+                &[word_bx(op::LOAD_INT, 0, 1), word_bx(op::NEW_ARR, 0, 65)],
+                "not a dynamic array",
+            ),
+            (&[word_bx(op::LOAD_INT, 0, 9)], "heap reference 9"),
+        ];
+        // The code before the wrong array is put in, the instruction that puts it (from `r0`),
+        // the code after it and the name of the array in the message
+        let find_head = [
+            word_bx(op::LOAD_INT, 20, 9),
+            encode(op::MOVE, 21, 10, 0),
+            encode(op::MOVE, 22, 11, 0),
+            encode(op::MOVE, 23, 12, 0),
+            word_bx(op::LOAD_INT, 24, -1),
+        ];
+
+        let relink_head = [
+            encode(op::MOVE, 26, 10, 0),
+            encode(op::MOVE, 20, 11, 0),
+            encode(op::MOVE, 21, 12, 0),
+            word_bx(op::LOAD_INT, 22, 1),
+        ];
+        let find = [encode(op::HASH_FIND, 13, 20, 0), encode(op::HALT, 13, 0, 0)];
+        // The field written without counting, so that a value that is no heap block goes in
+        let lookup = [
+            encode(op::MOVE, 20, 19, 0),
+            word_bx(op::LOAD_INT, 21, 9),
+            encode(op::HASH_LOOKUP_INT, 13, 20, 1),
+            encode(op::HALT, 13, 0, 0),
+        ];
+        let reg = |r| encode(op::MOVE, r, 0, 0);
+        let field = |slot| encode(op::OBJ_SET, 19, slot, 0);
+        let relink = [
+            encode(op::INTRINSIC, 26, 20, u32::from(op::intr::HASH_RELINK)),
+            encode(op::HALT, 22, 0, 0),
+        ];
+        type Place<'a> = (&'a [u32], u32, &'a [u32], &'a str);
+        let places: [Place; 10] = [
+            (&find_head, reg(21), &find, "the buckets"),
+            (&find_head, reg(22), &find, "the hashes"),
+            (&find_head, reg(23), &find, "the next entries"),
+            (&[], field(1), &lookup, "the buckets"),
+            (&[], field(2), &lookup, "the hashes"),
+            (&[], field(3), &lookup, "the next entries"),
+            (&[], field(4), &lookup, "the keys"),
+            (&relink_head, reg(26), &relink, "the buckets"),
+            (&relink_head, reg(20), &relink, "the hashes"),
+            (&relink_head, reg(21), &relink, "the next entries"),
+        ];
+        for (p, (head, put, tail, name)) in places.into_iter().enumerate() {
+            for (b, (make, what)) in bad.iter().enumerate() {
+                let mut code = make.to_vec();
+                code.extend_from_slice(head);
+                code.push(put);
+                code.extend_from_slice(tail);
+                match hash_table_run(&[0, 0], &[9], &[-1], &code) {
+                    RunOutcome::Fatal(e) => {
+                        assert!(e.message.contains(what), "{p} {b}: {}", e.message);
+                        // An invalid reference is named as a read of it, as elsewhere
+                        if b != 2 {
+                            assert!(e.message.starts_with(name), "{p} {b}: {}", e.message);
+                        }
+                    }
+                    other => panic!("{p} {b}: {other:?}"),
+                }
+            }
+        }
+    }
+
+    /// An isolate whose `<main>` makes `r10` a dynamic array of `values` (type 64, `Int64`), or
+    /// with `flat` of `values.len()` two-slot records (type 65), then runs `ArraySortRange` on all
+    /// of it with the comparison `kind` (`I96`) and halts; stopped before its first instruction.
+    /// Returns the isolate and the number of instructions before the sort.
+    fn sort_isolate(values: &[i32], kind: i32, flat: bool) -> (Isolate, usize) {
+        use crate::bytecode::{SLOT_PLAIN, TYPE_DYNARRAY, TypeEntry, encode};
+        let mut code = if flat {
+            vec![
+                word_bx(op::LOAD_INT, 0, values.len() as i32),
+                word_bx(op::NEW_ARR, 0, 65),
+            ]
+        } else {
+            int_array(values)
+        };
+        code.extend([
+            encode(op::MOVE_REF, 10, 0, 0),
+            word_bx(op::LOAD_INT, 20, 0),
+            word_bx(op::LOAD_INT, 21, values.len() as i32),
+            word_bx(op::LOAD_INT, 22, kind),
+        ]);
+        let before = code.len();
+        code.extend([
+            encode(op::INTRINSIC, 10, 20, u32::from(op::intr::ARRAY_SORT_RANGE)),
+            encode(op::LOAD_ZERO, 20, 0, 0),
+            encode(op::HALT, 20, 0, 0),
+        ]);
+        let types = vec![
+            TypeEntry {
+                kind: TYPE_DYNARRAY,
+                refs: vec![SLOT_PLAIN],
+                width: 1,
+                name: "array of Int64".into(),
+                ..TypeEntry::default()
+            },
+            flat_types().remove(1),
+        ];
+        let iso = funcs_isolate(
+            types,
+            vec![ConstEntry::Str("ab".into())],
+            vec![TestFunc {
+                params: 0,
+                regs: 30,
+                managed: &[0, 10],
+                code,
+            }],
+        );
+        (iso, before)
+    }
+
+    #[test]
+    // `ArraySortRange` (`I96`) takes 1 + (comparisons / 16) of the budget, and runs to the end
+    // even when that is more than what is left (bytecode.md 1.3, 2.22; design/vm.md 3.17).
+    fn array_sort_range_takes_budget_by_comparisons() {
+        // 64 sorted elements take 63 comparisons (7 in each run of 8, then 4, 2, 1 merges that
+        // see the runs in order): 1 + 63 / 16 = 4. One element compares nothing: 1.
+        for (idx, (values, left)) in [((0..64).collect::<Vec<i32>>(), 96), (vec![7], 99)]
+            .into_iter()
+            .enumerate()
+        {
+            let (mut iso, before) = sort_isolate(&values, 0, false);
+            step_through(&mut iso, before);
+            let mut budget = 100;
+            assert!(matches!(iso.step(&mut budget), Step::Continue), "{idx}");
+            assert_eq!(budget, left, "{idx}");
+        }
+        // Descending, with 2 left: sorted all the same, and the budget is used up
+        let values: Vec<i32> = (0..64).rev().collect();
+        let (mut iso, before) = sort_isolate(&values, 0, false);
+        step_through(&mut iso, before);
+        let mut budget = 2;
+        assert!(matches!(iso.step(&mut budget), Step::Continue));
+        assert_eq!(budget, 0);
+        let sorted: Vec<i64> = (0..64).collect();
+        assert_eq!(iso.heap.elems(iso.task.regs[10]).unwrap(), &sorted[..]);
+    }
+
+    #[test]
+    // An `ArraySortRange` the standard library does not make stops the isolate (`Fatal`): a
+    // comparison outside 0..5, an array whose elements take two slots, and elements that are not
+    // strings compared as strings (bytecode.md 2.22).
+    fn array_sort_range_refuses_bad_operands() {
+        let cases: [(&[i32], i32, bool, &str); 5] = [
+            (&[2, 1], 6, false, "unknown comparison 6"),
+            (&[2, 1], -1, false, "unknown comparison -1"),
+            (&[2, 1], 0, true, "one-slot elements"),
+            // 9 is no heap block
+            (&[9, 0], 4, false, "heap reference 9"),
+            (&[0, 9], 5, false, "heap reference 9"),
+        ];
+        for (i, (values, kind, flat, what)) in cases.into_iter().enumerate() {
+            let (mut iso, _) = sort_isolate(values, kind, flat);
+            match iso.run(10_000) {
+                RunOutcome::Fatal(e) => assert!(e.message.contains(what), "{i}: {}", e.message),
+                other => panic!("{i}: {other:?}"),
+            }
+        }
+    }
+
+    /// Code that halts with `k + 1` for the first `k` whose register `expected[k].0` does not
+    /// hold `expected[k].1`, and with 0 when all do (`r18` and `r19` are scratch).
+    fn halt_unless(expected: &[(u32, i32)]) -> Vec<u32> {
+        use crate::bytecode::encode;
+        let mut code = Vec::new();
+        for (k, (r, v)) in expected.iter().enumerate() {
+            code.extend([
+                word_bx(op::LOAD_INT, 19, *v),
+                // Over the `LoadInt` and the `Halt`
+                encode(op::JMP_IF_EQ_INT, *r, 19, 2),
+                word_bx(op::LOAD_INT, 18, k as i32 + 1),
+                encode(op::HALT, 18, 0, 0),
+            ]);
+        }
+        code.extend([encode(op::LOAD_ZERO, 18, 0, 0), encode(op::HALT, 18, 0, 0)]);
+        code
+    }
+
+    // ---- Flat places (`docs/spec/bytecode.md` 2.8; M4-63) ----
+
+    /// A function of a hand-made module for [`run_funcs`]: its parameters, registers, managed
+    /// registers (heap references) and code.
+    struct TestFunc {
+        params: u16,
+        regs: u16,
+        managed: &'static [u16],
+        code: Vec<u32>,
+    }
+
+    /// Runs a verified module of `funcs` (the first is `<main>`, the others `Test.F1`, `Test.F2`,
+    /// …) with the type section `types`, the constants `consts` and one global variable `G` (a
+    /// heap reference) to the end of its finishing stage, with leak checking: the status of the
+    /// program (its exit code or uncaught exception) with the blocks left at the end.
+    fn run_funcs(
+        types: Vec<crate::bytecode::TypeEntry>,
+        consts: Vec<ConstEntry>,
+        funcs: Vec<TestFunc>,
+    ) -> ExitStatus {
+        let mut iso = funcs_isolate(types, consts, funcs);
+        let program = match iso.run(10_000) {
+            RunOutcome::Finished(st) => st,
+            other => panic!("{other:?}"),
+        };
+        iso.finish();
+        ExitStatus {
+            leaks: final_status(iso.run(1000)).leaks,
+            ..program
+        }
+    }
+
+    /// The isolate of [`run_funcs`], with `<main>` started.
+    fn funcs_isolate(
+        types: Vec<crate::bytecode::TypeEntry>,
+        consts: Vec<ConstEntry>,
+        funcs: Vec<TestFunc>,
+    ) -> Isolate {
+        use crate::bytecode::{
+            Function, GLOBAL_REF, GlobalEntry, MANAGED_HEAP_REF, ManagedReg, UnitEntry,
+        };
+
+        let funcs = funcs
+            .into_iter()
+            .enumerate()
+            .map(|(i, f)| Function {
+                name: if i == 0 {
+                    "Test.<main>".into()
+                } else {
+                    format!("Test.F{i}")
+                },
+                params: f.params,
+                regs: f.regs,
+                code: f.code,
+                lines: vec![(0, 1)],
+                locals: Vec::new(),
+                managed: f
+                    .managed
+                    .iter()
+                    .map(|r| ManagedReg {
+                        reg: *r,
+                        kind: MANAGED_HEAP_REF,
+                    })
+                    .collect(),
+                file: 0,
+                handlers: Vec::new(),
+                outer: None,
+                shared_by: Vec::new(),
+                inlines: Vec::new(),
+            })
+            .collect();
+        let module = Module {
+            types,
+            intf_calls: Vec::new(),
+            consts,
+            funcs,
+            globals: vec![GlobalEntry {
+                name: "G".into(),
+                kind: GLOBAL_REF,
+            }],
+            entry: 0,
+            units: vec![UnitEntry {
+                name: "Test".into(),
+                path: "t.pas".into(),
+                init: None,
+                fini: None,
+                first_global: 0,
+                global_count: 1,
+            }],
+            hosts: Vec::new(),
+        };
+        let module = Module::decode(&module.encode(crate::VERSION), crate::VERSION).unwrap();
+        module.verify().expect("valid module");
+        let config = IsolateConfig {
+            hash_seed: HashSeed::Fixed(0),
+            leak_check: true,
+            ..Default::default()
+        };
+        let mut iso = Isolate::new(Arc::new(module), HostSet::empty(), config).unwrap();
+        iso.start_main(vec!["t.pas".into()]).unwrap();
+        iso
+    }
+
+    /// The types of the tests of flat places: 64 `Test.TPair` (an `Integer` and a `string`), 65
+    /// a dynamic array of it laid out flat (2 slots an element).
+    fn flat_types() -> Vec<crate::bytecode::TypeEntry> {
+        use crate::bytecode::{SLOT_PLAIN, SLOT_REF, TYPE_DYNARRAY, TYPE_RECORD, TypeEntry};
+
+        vec![
+            TypeEntry {
+                kind: TYPE_RECORD,
+                slots: 2,
+                refs: vec![SLOT_PLAIN, SLOT_REF],
+                name: "Test.TPair".into(),
+                ..TypeEntry::default()
+            },
+            TypeEntry {
+                kind: TYPE_DYNARRAY,
+                refs: vec![SLOT_PLAIN, SLOT_REF],
+                width: 2,
+                name: "array of Test.TPair".into(),
+                ..TypeEntry::default()
+            },
+        ]
+    }
+
+    /// The constants of the tests of flat places: `'ab'` and `'z'`.
+    fn flat_consts() -> Vec<ConstEntry> {
+        vec![ConstEntry::Str("ab".into()), ConstEntry::Str("z".into())]
+    }
+
+    /// `op A Bx` (or `op A sBx`) with the 16-bit `bx`.
+    fn word_bx(opc: u16, a: u32, bx: i32) -> u32 {
+        let bx = bx as u32 & 0xFFFF;
+        crate::bytecode::encode(opc, a, bx & 0xFF, bx >> 8)
+    }
+
+    /// The code of a `<main>` that makes `G` an array of two `Test.TPair`, sets `G[1]` to
+    /// `(x, 'ab')`, lends `G[1]` as a flat place to `F1` and ends the loan (`r5` holds `'ab'`,
+    /// `r1` 1 and `r6` the array, uncounted, afterwards).
+    fn lend_g1_to_f1(x: i32) -> Vec<u32> {
+        use crate::bytecode::encode;
+
+        vec![
+            word_bx(op::LOAD_INT, 0, 2),
+            word_bx(op::NEW_ARR, 0, 65),
+            word_bx(op::STORE_GLOBAL_REF, 0, 0),
+            encode(op::RELEASE, 0, 0, 0),
+            word_bx(op::LOAD_GLOBAL, 6, 0),
+            word_bx(op::LOAD_INT, 1, 1),
+            encode(op::ELEM_AT, 2, 6, 1),
+            word_bx(op::LOAD_INT, 14, x),
+            encode(op::SLOT_SET, 2, 0, 14),
+            word_bx(op::LOAD_CONST, 5, 0),
+            encode(op::SLOT_SET_REF, 2, 1, 5),
+            // G[1] as a flat place, passed to F1
+            word_bx(op::MAKE_GLOBAL_REF, 7, 0),
+            word_bx(op::LOAD_INT, 9, 1),
+            encode(op::LEND_PLACE, 8, 7, 1),
+            64,
+            encode(op::MOVE, 12, 8, 0),
+            word_bx(op::CALL, 12, 1),
+            encode(op::UNLEND, 0, 0, 0),
+            word_bx(op::LOAD_GLOBAL, 6, 0),
+        ]
+    }
+
+    /// The end of a `<main>` after [`lend_g1_to_f1`]: exits with `G[1].X`, plus 100 when
+    /// `G[1].S` is the constant `k` (`''` for `None`).
+    fn exit_with_g1(k: Option<i32>) -> Vec<u32> {
+        use crate::bytecode::encode;
+
+        let mut code = vec![
+            encode(op::ELEM_AT, 2, 6, 1),
+            encode(op::SLOT_GET, 9, 2, 0),
+            encode(op::SLOT_GET_REF, 4, 2, 1),
+        ];
+        match k {
+            Some(k) => code.push(word_bx(op::LOAD_CONST, 10, k)),
+            None => code.push(encode(op::LOAD_ZERO, 10, 0, 0)),
+        }
+        code.extend([
+            encode(op::EQ_STR, 11, 4, 10),
+            encode(op::MUL_INT_I, 11, 11, 100),
+            encode(op::ADD_INT, 9, 9, 11),
+            encode(op::HALT, 9, 0, 0),
+        ]);
+        code
+    }
+
+    /// Runs `<main>` = [`lend_g1_to_f1`] (`G[1] = (x, 'ab')`) and [`exit_with_g1`] (with the
+    /// constant `k` for `S`) with `f1` as `F1` (a `var` parameter of `Test.TPair`) and the other
+    /// functions `more`.
+    fn run_lent_g1(x: i32, k: Option<i32>, f1: TestFunc, more: Vec<TestFunc>) -> ExitStatus {
+        let mut main = lend_g1_to_f1(x);
+        main.extend(exit_with_g1(k));
+        let mut funcs = vec![
+            TestFunc {
+                params: 0,
+                regs: 16,
+                managed: &[4, 5, 10],
+                code: main,
+            },
+            f1,
+        ];
+        funcs.extend(more);
+        run_funcs(flat_types(), flat_consts(), funcs)
+    }
+
+    #[test]
+    // `ElemAt` makes a cursor to an element of an array whose elements take two slots, and
+    // `SlotGet` / `SlotSet` (and their counted forms) read and write the slots of that element;
+    // `ArrLen` counts elements, not slots (`docs/spec/bytecode.md` 2.8, 2.9).
+    fn cursors_read_and_write_the_slots_of_flat_elements() {
+        use crate::bytecode::encode;
+
+        let code = vec![
+            word_bx(op::LOAD_INT, 0, 3),
+            word_bx(op::NEW_ARR, 0, 65),
+            word_bx(op::LOAD_INT, 1, 1),
+            encode(op::ELEM_AT, 2, 0, 1),
+            word_bx(op::LOAD_INT, 4, 7),
+            encode(op::SLOT_SET, 2, 0, 4),
+            word_bx(op::LOAD_CONST, 5, 0),
+            encode(op::SLOT_SET_REF, 2, 1, 5),
+            encode(op::SLOT_GET, 6, 2, 0),
+            encode(op::ARR_LEN, 7, 0, 0),
+            encode(op::SLOT_GET_REF, 8, 2, 1),
+            encode(op::EQ_STR, 9, 8, 5),
+            // 10 X + Length + 100 (S = 'ab')
+            encode(op::MUL_INT_I, 6, 6, 10),
+            encode(op::ADD_INT, 6, 6, 7),
+            encode(op::MUL_INT_I, 9, 9, 100),
+            encode(op::ADD_INT, 6, 6, 9),
+            encode(op::HALT, 6, 0, 0),
+        ];
+        let st = run_funcs(
+            flat_types(),
+            flat_consts(),
+            vec![TestFunc {
+                params: 0,
+                regs: 10,
+                managed: &[0, 5, 8],
+                code,
+            }],
+        );
+        assert_eq!(st.kind, ExitKind::Code(173));
+        assert_eq!(st.leaks, Vec::<(String, u64)>::new());
+    }
+
+    #[test]
+    // `ElemAt` checks the index against the number of elements (3 elements are 6 slots), with
+    // the message of an index out of a dynamic array, and 0 is an empty array.
+    fn elem_at_checks_the_number_of_elements() {
+        use crate::bytecode::encode;
+
+        for (idx, (len, index, message)) in [
+            (3, 3, "array index 3 is out of range 0..2"),
+            (3, -1, "array index -1 is out of range 0..2"),
+            (0, 0, "array index 0 is out of range 0..-1"),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let code = vec![
+                word_bx(op::LOAD_INT, 0, len),
+                word_bx(op::NEW_ARR, 0, 65),
+                word_bx(op::LOAD_INT, 1, index),
+                encode(op::ELEM_AT, 2, 0, 1),
+                encode(op::RET_VOID, 0, 0, 0),
+            ];
+            let st = run_funcs(
+                flat_types(),
+                Vec::new(),
+                vec![TestFunc {
+                    params: 0,
+                    regs: 4,
+                    managed: &[0],
+                    code,
+                }],
+            );
+            match st.kind {
+                ExitKind::UncaughtException(e) => {
+                    assert_eq!(
+                        (e.class.as_str(), e.message.as_str()),
+                        ("ERangeError", message),
+                        "{idx}"
+                    );
+                }
+                other => panic!("{idx}: {other:?}"),
+            }
+            assert_eq!(st.leaks, Vec::<(String, u64)>::new(), "{idx}");
+        }
+    }
+
+    #[test]
+    // `AggLoad` reads a flat element into a record value: 0 when every slot is 0 (letting go of
+    // the old value), the block the register holds alone when it is of the type (no new block),
+    // a new block otherwise; `AggStore` writes a record value into a flat element, counting its
+    // string (`docs/design/records.md` 3.5).
+    fn agg_load_and_store_copy_flat_values() {
+        use crate::bytecode::encode;
+
+        let code = vec![
+            word_bx(op::LOAD_INT, 0, 2),
+            word_bx(op::NEW_ARR, 0, 65),
+            word_bx(op::UNIQUE, 10, 64),
+            word_bx(op::LOAD_INT, 1, 0),
+            encode(op::ELEM_AT, 2, 0, 1),
+            // A[0] is default: r10 := 0
+            encode(op::AGG_LOAD, 10, 2, 0),
+            64,
+            encode(op::LOAD_ZERO, 17, 0, 0),
+            encode(op::EQ_INT, 16, 10, 17),
+            word_bx(op::LOAD_INT, 4, 5),
+            encode(op::SLOT_SET, 2, 0, 4),
+            word_bx(op::LOAD_CONST, 5, 0),
+            encode(op::SLOT_SET_REF, 2, 1, 5),
+            // r10 := A[0], a new block; A[1] := r10
+            encode(op::AGG_LOAD, 10, 2, 0),
+            64,
+            word_bx(op::LOAD_INT, 1, 1),
+            encode(op::ELEM_AT, 6, 0, 1),
+            encode(op::AGG_STORE, 6, 10, 0),
+            64,
+            // r10 := A[1] into the same block
+            encode(op::MOVE, 11, 10, 0),
+            encode(op::AGG_LOAD, 10, 6, 0),
+            64,
+            encode(op::EQ_INT, 12, 10, 11),
+            encode(op::SLOT_GET, 13, 6, 0),
+            encode(op::SLOT_GET_REF, 14, 6, 1),
+            encode(op::EQ_STR, 15, 14, 5),
+            encode(op::FIELD_GET, 9, 10, 0),
+            // A[1].X + r10.X + 100 (same block) + 50 (A[1].S = 'ab') + 20 (0 at first)
+            encode(op::ADD_INT, 13, 13, 9),
+            encode(op::MUL_INT_I, 12, 12, 100),
+            encode(op::ADD_INT, 13, 13, 12),
+            encode(op::MUL_INT_I, 15, 15, 50),
+            encode(op::ADD_INT, 13, 13, 15),
+            encode(op::MUL_INT_I, 16, 16, 20),
+            encode(op::ADD_INT, 13, 13, 16),
+            encode(op::HALT, 13, 0, 0),
+        ];
+        let st = run_funcs(
+            flat_types(),
+            flat_consts(),
+            vec![TestFunc {
+                params: 0,
+                regs: 18,
+                managed: &[0, 5, 10, 14],
+                code,
+            }],
+        );
+        assert_eq!(st.kind, ExitKind::Code(180));
+        assert_eq!(st.leaks, Vec::<(String, u64)>::new());
+    }
+
+    #[test]
+    // The array built-ins count elements of two slots: `Copy`, `+`, `Insert` (of a record
+    // value, whose slots are copied), `Delete`, `ArrayMoveRange` and `SetLength` (growing and
+    // shrinking in place, letting go of the strings of the dropped elements).
+    fn array_built_ins_move_flat_elements() {
+        use crate::bytecode::encode;
+
+        // rX := A[i].X for the array in `arr`
+        let x_of = |x: u32, arr: u32, i: i32| {
+            vec![
+                word_bx(op::LOAD_INT, 21, i),
+                encode(op::ELEM_AT, 22, arr, 21),
+                encode(op::SLOT_GET, x, 22, 0),
+            ]
+        };
+        let mut code = vec![word_bx(op::LOAD_INT, 0, 3), word_bx(op::NEW_ARR, 0, 65)];
+        // A := [1, 2, 3]
+        for i in 0..3 {
+            code.extend([
+                word_bx(op::LOAD_INT, 1, i),
+                encode(op::ELEM_AT, 2, 0, 1),
+                word_bx(op::LOAD_INT, 4, i + 1),
+                encode(op::SLOT_SET, 2, 0, 4),
+            ]);
+        }
+        code.extend([
+            // B := Copy(A, 1, 2) = [2, 3]
+            encode(op::MOVE, 13, 0, 0),
+            word_bx(op::LOAD_INT, 14, 1),
+            word_bx(op::LOAD_INT, 15, 2),
+            word_bx(op::ARR_COPY, 13, 65),
+            // C := A + B = [1, 2, 3, 2, 3]
+            encode(op::MOVE, 16, 0, 0),
+            encode(op::MOVE, 17, 13, 0),
+            word_bx(op::ARR_CONCAT, 16, 65),
+            // Insert((9, 'ab'), A, 0): A = [9, 1, 2, 3]
+            encode(op::LOAD_ZERO, 1, 0, 0),
+            word_bx(op::UNIQUE, 1, 64),
+            word_bx(op::LOAD_INT, 4, 9),
+            encode(op::FIELD_SET, 1, 0, 4),
+            word_bx(op::LOAD_CONST, 5, 0),
+            encode(op::FIELD_SET_REF, 1, 1, 5),
+            word_bx(op::LOAD_INT, 2, 0),
+            word_bx(op::ARR_INSERT, 0, 65),
+            encode(op::RELEASE, 1, 0, 0),
+            // Delete(A, 1, 1): A = [9, 2, 3]
+            word_bx(op::LOAD_INT, 1, 1),
+            word_bx(op::LOAD_INT, 2, 1),
+            word_bx(op::ARR_DELETE, 0, 65),
+            // ArrayMoveRange(A, 0, 2, 1): A = [2, 3, 9]
+            word_bx(op::LOAD_INT, 1, 0),
+            word_bx(op::LOAD_INT, 2, 2),
+            word_bx(op::LOAD_INT, 3, 1),
+            encode(op::INTRINSIC, 0, 1, u32::from(op::intr::ARRAY_MOVE_RANGE)),
+            // SetLength(A, 4), then SetLength(A, 2): A = [2, 3], dropping the 'ab' of 9
+            word_bx(op::LOAD_INT, 1, 4),
+            word_bx(op::SET_LEN, 0, 65),
+            word_bx(op::LOAD_INT, 1, 2),
+            word_bx(op::SET_LEN, 0, 65),
+        ]);
+        code.extend(x_of(6, 0, 0));
+        code.extend(x_of(7, 0, 1));
+        code.extend(x_of(8, 13, 0));
+        code.extend(x_of(9, 16, 3));
+        code.extend([
+            encode(op::ARR_LEN, 10, 0, 0),
+            encode(op::ARR_LEN, 11, 16, 0),
+            // 10 A[0] + A[1] + 20 B[0] + 30 C[3] + 20 Length(C) + Length(A)
+            encode(op::MUL_INT_I, 6, 6, 10),
+            encode(op::ADD_INT, 6, 6, 7),
+            encode(op::MUL_INT_I, 8, 8, 20),
+            encode(op::ADD_INT, 6, 6, 8),
+            encode(op::MUL_INT_I, 9, 9, 30),
+            encode(op::ADD_INT, 6, 6, 9),
+            encode(op::MUL_INT_I, 11, 11, 20),
+            encode(op::ADD_INT, 6, 6, 11),
+            encode(op::ADD_INT, 6, 6, 10),
+            encode(op::HALT, 6, 0, 0),
+        ]);
+        let st = run_funcs(
+            flat_types(),
+            flat_consts(),
+            vec![TestFunc {
+                params: 0,
+                regs: 24,
+                managed: &[0, 5, 13, 16],
+                code,
+            }],
+        );
+        assert_eq!(st.kind, ExitKind::Code(225));
+        assert_eq!(st.leaks, Vec::<(String, u64)>::new());
+    }
+
+    #[test]
+    // A cursor's container may be an instance's handle (a flat field of an instance): its slots
+    // are read and written in place, and a destroyed instance is refused with
+    // `EAccessViolation` (`docs/spec/bytecode.md` 2.8).
+    fn cursors_into_an_instance() {
+        use crate::bytecode::{
+            SLOT_PLAIN, SLOT_REF, TOBJECT_TYPE, TOBJECT_VMT, TYPE_CLASS, TypeEntry, encode,
+        };
+
+        let mut types = flat_types();
+        types.push(TypeEntry {
+            kind: TYPE_CLASS,
+            slots: 2,
+            refs: vec![SLOT_PLAIN, SLOT_REF],
+            name: "Test.TObj".into(),
+            parent: Some(TOBJECT_TYPE),
+            vmt: TOBJECT_VMT.to_vec(),
+            ..TypeEntry::default()
+        });
+        let common = vec![
+            word_bx(op::NEW, 0, 66),
+            word_bx(op::LOAD_INT, 1, 0),
+            encode(op::MOVE, 2, 0, 0),
+            word_bx(op::LOAD_INT, 4, 7),
+            encode(op::SLOT_SET, 1, 0, 4),
+            word_bx(op::LOAD_CONST, 5, 0),
+            encode(op::SLOT_SET_REF, 1, 1, 5),
+            encode(op::AGG_LOAD, 6, 1, 0),
+            64,
+            encode(op::FIELD_GET, 7, 6, 0),
+            encode(op::FIELD_GET_REF, 8, 6, 1),
+            encode(op::EQ_STR, 9, 8, 5),
+            encode(op::MUL_INT_I, 9, 9, 100),
+            encode(op::ADD_INT, 7, 7, 9),
+            encode(op::INTRINSIC, 0, 0, u32::from(op::intr::FREE)),
+        ];
+        let mut halt = common.clone();
+        halt.push(encode(op::HALT, 7, 0, 0));
+        let mut freed = common;
+        freed.extend([encode(op::SLOT_GET, 9, 1, 0), encode(op::RET_VOID, 0, 0, 0)]);
+        let run = |code| {
+            run_funcs(
+                types.clone(),
+                flat_consts(),
+                vec![TestFunc {
+                    params: 0,
+                    regs: 10,
+                    managed: &[5, 6, 8],
+                    code,
+                }],
+            )
+        };
+        let st = run(halt);
+        assert_eq!(st.kind, ExitKind::Code(107));
+        assert_eq!(st.leaks, Vec::<(String, u64)>::new());
+        let st = run(freed);
+        match st.kind {
+            ExitKind::UncaughtException(e) => assert_eq!(
+                (e.class.as_str(), e.message.as_str()),
+                ("EAccessViolation", FREED_ACCESS)
+            ),
+            other => panic!("{other:?}"),
+        }
+        assert_eq!(st.leaks, Vec::<(String, u64)>::new());
+    }
+
+    /// `F1(var It: Test.TPair)`: `It.X := It.X + 1; It.S := 'z'`.
+    fn bump_f1() -> TestFunc {
+        use crate::bytecode::encode;
+
+        TestFunc {
+            params: 1,
+            regs: 3,
+            managed: &[2],
+            code: vec![
+                encode(op::REF_FIELD_GET, 1, 0, 0),
+                encode(op::ADD_INT_I, 1, 1, 1),
+                encode(op::REF_FIELD_SET, 0, 0, 1),
+                64,
+                word_bx(op::LOAD_CONST, 2, 1),
+                encode(op::REF_FIELD_SET_REF, 0, 1, 2),
+                64,
+                encode(op::RET_VOID, 0, 0, 0),
+            ],
+        }
+    }
+
+    #[test]
+    // `LendPlace` lends a flat element to a `var` parameter as a reference slot of kind 4: the
+    // callee's `RefFieldGet` / `RefFieldSet` read and write the element's slots in place, and
+    // `Unlend` finds them where they were (`docs/design/records.md` 3.7 B, 3.8).
+    fn lend_place_lets_the_callee_write_the_element() {
+        let st = run_lent_g1(41, Some(1), bump_f1(), Vec::new());
+        assert_eq!(st.kind, ExitKind::Code(142));
+        assert_eq!(st.leaks, Vec::<(String, u64)>::new());
+    }
+
+    #[test]
+    // When the array holding a lent flat place goes (replaced by another while the callee runs),
+    // the place's values move to a block of their own, the callee goes on writing there, and
+    // `Unlend` puts them in the element the path leads to now (`docs/design/records.md` 3.7 B).
+    fn lent_place_moves_out_when_its_array_goes() {
+        use crate::bytecode::encode;
+
+        let f1 = TestFunc {
+            params: 1,
+            regs: 4,
+            managed: &[1],
+            code: vec![
+                word_bx(op::LOAD_INT, 2, 5),
+                encode(op::REF_FIELD_SET, 0, 0, 2),
+                64,
+                word_bx(op::LOAD_INT, 1, 2),
+                word_bx(op::NEW_ARR, 1, 65),
+                word_bx(op::STORE_GLOBAL_REF, 1, 0),
+                encode(op::REF_FIELD_GET, 2, 0, 0),
+                encode(op::ADD_INT_I, 2, 2, 1),
+                encode(op::REF_FIELD_SET, 0, 0, 2),
+                64,
+                encode(op::RET_VOID, 0, 0, 0),
+            ],
+        };
+        let st = run_lent_g1(41, Some(0), f1, Vec::new());
+        assert_eq!(st.kind, ExitKind::Code(106));
+        assert_eq!(st.leaks, Vec::<(String, u64)>::new());
+    }
+
+    #[test]
+    // When the element holding a lent flat place is dropped (`SetLength` of the array, which
+    // holds its only reference, to fewer elements or none), its values move out and `Unlend`,
+    // not finding the element again, lets go of them and raises `ERangeError`.
+    fn lent_place_of_a_dropped_element_is_let_go() {
+        use crate::bytecode::encode;
+
+        for (len, message) in [
+            (1, "array index 1 is out of range 0..0"),
+            (0, "array index 1 is out of range 0..-1"),
+        ] {
+            let f1 = TestFunc {
+                params: 1,
+                regs: 4,
+                managed: &[],
+                code: vec![
+                    word_bx(op::LOAD_INT, 2, 5),
+                    encode(op::REF_FIELD_SET, 0, 0, 2),
+                    64,
+                    word_bx(op::LOAD_GLOBAL, 1, 0),
+                    word_bx(op::LOAD_INT, 2, len),
+                    word_bx(op::SET_LEN, 1, 65),
+                    word_bx(op::STORE_GLOBAL, 1, 0),
+                    encode(op::RET_VOID, 0, 0, 0),
+                ],
+            };
+            let st = run_lent_g1(41, Some(0), f1, Vec::new());
+            match st.kind {
+                ExitKind::UncaughtException(e) => {
+                    assert_eq!(
+                        (e.class.as_str(), e.message.as_str()),
+                        ("ERangeError", message),
+                        "{len}"
+                    );
+                }
+                other => panic!("{len}: {other:?}"),
+            }
+            assert_eq!(st.leaks, Vec::<(String, u64)>::new(), "{len}");
+        }
+    }
+
+    #[test]
+    // While a flat place is lent, reading one of its slots through another path is refused, and
+    // so is copying the place (`EAliasError`; `docs/spec/types.md` chapter 3).
+    fn lent_place_refuses_other_paths() {
+        use crate::bytecode::encode;
+
+        for (idx, (last, ty_word, message)) in [
+            (
+                encode(op::SLOT_GET, 1, 3, 0),
+                None,
+                "array element 1 is passed to a var parameter of a call in progress",
+            ),
+            (
+                encode(op::AGG_LOAD, 1, 3, 0),
+                Some(64),
+                "a value containing a location passed to a var parameter of a call in progress \
+                 cannot be copied",
+            ),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let mut code = vec![
+                word_bx(op::LOAD_GLOBAL, 1, 0),
+                word_bx(op::LOAD_INT, 2, 1),
+                encode(op::ELEM_AT, 3, 1, 2),
+                encode(op::LOAD_ZERO, 1, 0, 0),
+                last,
+            ];
+            code.extend(ty_word);
+            code.push(encode(op::RET_VOID, 0, 0, 0));
+            let f1 = TestFunc {
+                params: 1,
+                regs: 5,
+                managed: &[1],
+                code,
+            };
+            let st = run_lent_g1(41, Some(0), f1, Vec::new());
+            match st.kind {
+                ExitKind::UncaughtException(e) => {
+                    assert_eq!(
+                        (e.class.as_str(), e.message.as_str()),
+                        ("EAliasError", message),
+                        "{idx}"
+                    );
+                }
+                other => panic!("{idx}: {other:?}"),
+            }
+            assert_eq!(st.leaks, Vec::<(String, u64)>::new(), "{idx}");
+        }
+    }
+
+    #[test]
+    // A flat place lent through a reference to another one (a `LendPlace` whose root is of kind 4)
+    // keeps its values when their array goes during the inner call: the inner place moves out
+    // before the outer one, so the inner callee reads the values and its writes reach the
+    // element the outer path leads to afterwards.
+    fn place_lent_through_a_place_moves_out_first() {
+        use crate::bytecode::encode;
+
+        // F1(var It: TPair): F2(It)
+        let f1 = TestFunc {
+            params: 1,
+            regs: 8,
+            managed: &[],
+            code: vec![
+                word_bx(op::LOAD_INT, 3, 0),
+                encode(op::LEND_PLACE, 2, 0, 1),
+                64,
+                encode(op::MOVE, 6, 2, 0),
+                word_bx(op::CALL, 6, 2),
+                encode(op::UNLEND, 0, 0, 0),
+                encode(op::RET_VOID, 0, 0, 0),
+            ],
+        };
+        // F2(var R: TPair): G := another array; R.X := R.X + 1
+        let f2 = TestFunc {
+            params: 1,
+            regs: 4,
+            managed: &[1],
+            code: vec![
+                word_bx(op::LOAD_INT, 1, 2),
+                word_bx(op::NEW_ARR, 1, 65),
+                word_bx(op::STORE_GLOBAL_REF, 1, 0),
+                encode(op::REF_FIELD_GET, 2, 0, 0),
+                encode(op::ADD_INT_I, 2, 2, 1),
+                encode(op::REF_FIELD_SET, 0, 0, 2),
+                64,
+                encode(op::RET_VOID, 0, 0, 0),
+            ],
+        };
+        let st = run_lent_g1(41, Some(0), f1, vec![f2]);
+        assert_eq!(st.kind, ExitKind::Code(142));
+        assert_eq!(st.leaks, Vec::<(String, u64)>::new());
+    }
+
+    #[test]
+    // A `Lend` whose root is a reference to a flat place (kind 4) takes a slot of the place out
+    // (its path starts with the slot number in the place) and gives it back there.
+    fn lend_through_a_place_reference() {
+        use crate::bytecode::encode;
+
+        let f1 = TestFunc {
+            params: 1,
+            regs: 8,
+            managed: &[],
+            code: vec![
+                word_bx(op::LOAD_INT, 3, 0),
+                encode(op::LEND, 2, 0, 1),
+                encode(op::MAKE_REF, 6, 2, 0),
+                word_bx(op::CALL, 6, 2),
+                encode(op::UNLEND, 0, 0, 0),
+                encode(op::RET_VOID, 0, 0, 0),
+            ],
+        };
+        // F2(var N: Integer): N := N + 10
+        let f2 = TestFunc {
+            params: 1,
+            regs: 2,
+            managed: &[],
+            code: vec![
+                encode(op::LOAD_REF, 1, 0, 0),
+                encode(op::ADD_INT_I, 1, 1, 10),
+                encode(op::STORE_REF, 0, 1, 0),
+                encode(op::RET_VOID, 0, 0, 0),
+            ],
+        };
+        let st = run_lent_g1(1, Some(0), f1, vec![f2]);
+        assert_eq!(st.kind, ExitKind::Code(111));
+        assert_eq!(st.leaks, Vec::<(String, u64)>::new());
+    }
+
+    #[test]
+    // Through a reference to a flat place, `LoadRefRef` reads the whole place into a record value,
+    // `StoreRefRef` writes a record value into it and `ClearRef` makes it default (counting the
+    // strings in and out).
+    fn whole_place_through_a_reference() {
+        use crate::bytecode::encode;
+
+        // It2 := It; It := (9, ''); It.X := It.X + It2.X
+        let store = TestFunc {
+            params: 1,
+            regs: 8,
+            managed: &[1, 3],
+            code: vec![
+                encode(op::LOAD_REF_REF, 1, 0, 0),
+                encode(op::FIELD_GET, 2, 1, 0),
+                word_bx(op::UNIQUE, 3, 64),
+                word_bx(op::LOAD_INT, 4, 9),
+                encode(op::FIELD_SET, 3, 0, 4),
+                encode(op::STORE_REF_REF, 0, 3, 0),
+                encode(op::REF_FIELD_GET, 5, 0, 0),
+                encode(op::ADD_INT, 5, 5, 2),
+                encode(op::REF_FIELD_SET, 0, 0, 5),
+                64,
+                encode(op::RET_VOID, 0, 0, 0),
+            ],
+        };
+        let st = run_lent_g1(41, None, store, Vec::new());
+        assert_eq!(st.kind, ExitKind::Code(150));
+        assert_eq!(st.leaks, Vec::<(String, u64)>::new());
+        let clear = TestFunc {
+            params: 1,
+            regs: 2,
+            managed: &[],
+            code: vec![
+                encode(op::CLEAR_REF, 0, 0, 0),
+                encode(op::RET_VOID, 0, 0, 0),
+            ],
+        };
+        let st = run_lent_g1(41, None, clear, Vec::new());
+        assert_eq!(st.kind, ExitKind::Code(100));
+        assert_eq!(st.leaks, Vec::<(String, u64)>::new());
+    }
 }
 
 /// The number of instructions the VM ran on this thread, for the tests of the complexity
@@ -7723,6 +9838,12 @@ pub(crate) mod executed {
 
     pub(super) fn add_one() {
         TOTAL.with(|t| t.set(t.get() + 1));
+    }
+
+    /// Adds the work done inside one instruction: the entries the hash table instructions
+    /// followed or linked (`docs/spec/collections.md` 11.3).
+    pub(super) fn add(n: u64) {
+        TOTAL.with(|t| t.set(t.get() + n));
     }
 
     /// The total so far.
@@ -7770,11 +9891,11 @@ fn fast_method_callee(
     bx: usize,
 ) -> Option<usize> {
     let ty = heap.obj_class_fast(h)?;
-    if opc == op::CALL_METHOD {
+    if opc == op::word::CALL_METHOD {
         return Some(bx);
     }
     let entry = heap.type_entry(ty)?;
-    let target = if opc == op::CALL_INTF {
+    let target = if opc == op::word::CALL_INTF {
         // `docs/spec/objects.md` 14.7: the interface's entry, found by its type index
         let (intf, k) = *module.intf_calls.get(bx)?;
         *entry.intf_entry(intf)?.funcs.get(k as usize)?
@@ -7791,7 +9912,7 @@ fn fast_method_callee(
 /// not in the table.
 #[inline(always)]
 fn fast_value_callee(heap: &heap::Heap, module: &Module, opc: u8, v: i64) -> Option<(usize, bool)> {
-    let (f, closure) = if opc == op::CALL_INDIRECT {
+    let (f, closure) = if opc == op::word::CALL_INDIRECT {
         (u32::try_from(v.checked_sub(1)?).ok()?, false)
     } else {
         heap.plain_callee(v)?

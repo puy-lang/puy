@@ -1,0 +1,25 @@
+error[E0736]: enumeration value `kTwo` must be qualified with its type
+   --> main.pas:12:15
+    |
+ 12 |   WriteLn(Ord(kTwo));
+    |               ^^^^
+    |
+    = fix: replace with `TKind.kTwo`
+
+error[E0736]: enumeration value `cBlue` must be qualified with its type
+   --> main.pas:13:15
+    |
+ 13 |   WriteLn(Ord(cBlue));
+    |               ^^^^^
+    |
+    = fix: replace with `C.TColor.cBlue`
+
+error[E0736]: enumeration value `kOne` must be qualified with its type
+   --> src/Impl.pas:13:17
+    |
+ 13 |   Result := Ord(kOne);
+    |                 ^^^^
+    |
+    = fix: replace with `TKind.kOne`
+
+error: aborting due to 3 errors

@@ -24,9 +24,9 @@ program DumpGenericRoutines
   assign @31 R+
     var v2 Result
     builtin Length Integer
-      call f2 TUtil.Twice<U>: TArray<U>
+      call f5 TUtil.Twice<U>: TArray<U>
         var v3 Copy: U
-.routine f3 Max(const A: Double; const B: Double): Double
+.routine f0 Max(const A: Double; const B: Double): Double
   .var v0 A: Double const param
   .var v1 B: Double const param
   .var v2 Result: Double result
@@ -59,7 +59,7 @@ program DumpGenericRoutines
     else
       assign @53 R+
         var v3 Result
-        call f5 Max#2<T>.Second: T
+        call f6 Max#2<T>.Second: T
 .routine - Max#2<T>.Second(): T
   .var v0 Result: T result
   .var v1 B: T outer v1 up=1
@@ -68,7 +68,7 @@ program DumpGenericRoutines
     var v1 B: T
 .instance TBox<string>
 .instance Max#2<Integer>
-.routine f7 Max#2<Integer>(const A: Integer; const B: Integer; First: Boolean): Integer
+.routine f1 Max#2<Integer>(const A: Integer; const B: Integer; First: Boolean): Integer
   .var v0 A: Integer const param
   .var v1 B: Integer const param
   .var v2 First: Boolean param
@@ -83,15 +83,15 @@ program DumpGenericRoutines
     else
       assign @53 R+
         var v3 Result
-        call f9 Max#2<Integer>.Second: Integer
-.routine f9 Max#2<Integer>.Second(): Integer
+        call f2 Max#2<Integer>.Second: Integer
+.routine f2 Max#2<Integer>.Second(): Integer
   .var v0 Result: Integer result
   .var v1 B: Integer outer v1 up=1
   assign @46 R+
     var v0 Result
     var v1 B: Integer
 .instance TBox<string>.Pair<Integer>
-.routine f8 TBox<string>.Pair<Integer>(const Other: Integer): Integer
+.routine f3 TBox<string>.Pair<Integer>(const Other: Integer): Integer
   .var v0 Self: TBox<string> self
   .var v1 Other: Integer const param
   .var v2 Result: Integer result
@@ -102,10 +102,10 @@ program DumpGenericRoutines
   assign @31 R+
     var v2 Result
     builtin Length Integer
-      call f10 TUtil.Twice<Integer>: TArray<Integer>
+      call f4 TUtil.Twice<Integer>: TArray<Integer>
         var v3 Copy: Integer
 .instance TUtil.Twice<Integer>
-.routine f10 TUtil.Twice<Integer>(const A: Integer): TArray<Integer>
+.routine f4 TUtil.Twice<Integer>(const A: Integer): TArray<Integer>
   .var v0 A: Integer const param
   .var v1 Result: TArray<Integer> result
   assign @23 R+
@@ -116,13 +116,13 @@ program DumpGenericRoutines
 .routine <main>
   writeln @59
     arg
-      call f3 Max: Double
+      call f0 Max: Double
         const Double 1.5
         const Double 2.5
     arg
       const Char #32
     arg
-      call f7 Max#2<Integer>: Integer
+      call f1 Max#2<Integer>: Integer
         const Integer 1
         const Integer 2
         const Boolean True
@@ -131,7 +131,7 @@ program DumpGenericRoutines
     create TBox<string> builtin
   writeln @61
     arg
-      method f8 TBox<string>.Pair<Integer>: Integer
+      method f3 TBox<string>.Pair<Integer>: Integer
         global g0 B: TBox<string>
         const Integer 3
   free @62

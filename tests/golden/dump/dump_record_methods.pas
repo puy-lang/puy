@@ -1,7 +1,7 @@
 program DumpRecordMethods;
 
 // The three ways `Self` of a record method is passed (objects.md chapter 6): a variable by
-// reference (`MakeRef`), an element taken out and put back (`Lend` / `Unlend`), and a `const`
+// reference (`MakeRef`), an element lent where it is (`LendPlace` / `Unlend`), and a `const`
 // parameter or a function's result copied to a temporary whose reference is passed; and a record
 // constructor running on a temporary that becomes the value.
 

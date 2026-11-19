@@ -98,8 +98,9 @@
   0003  LoadConst    r5, k6
   0004  ConcatStr    r3, r3, r5
   0005  CallHost     r3, h0
+  0006  Release      r3
   .line 27
-  0006  RetVoid
+  0007  RetVoid
 .finally r3, r4, r5
 .func 2 DumpCallArgs.TBase.Put params=4 regs=7
   .local r0 Self
@@ -113,8 +114,10 @@
   0003  LoadConst    r6, k6
   0004  ConcatStr    r4, r4, r6
   0005  CallHost     r4, h0
+  0006  Release      r5
+  0007  Release      r4
   .line 32
-  0006  RetVoid
+  0008  RetVoid
 .finally r4, r5, r6
 .func 3 DumpCallArgs.TBase.Plain params=2 regs=4
   .local r0 Self
@@ -124,8 +127,9 @@
   0001  LoadConst    r3, k6
   0002  ConcatStr    r2, r2, r3
   0003  CallHost     r2, h0
+  0004  Release      r2
   .line 37
-  0004  RetVoid
+  0005  RetVoid
 .finally r2, r3
 .func 4 DumpCallArgs.TBase.Make params=2 regs=4
   .local r0 Self
@@ -135,6 +139,7 @@
   0001  LoadConst    r3, k6
   0002  ConcatStr    r2, r2, r3
   0003  CallHost     r2, h0
+  0004  Release      r2
   .line 42
-  0004  RetVoid
+  0005  RetVoid
 .finally r2, r3

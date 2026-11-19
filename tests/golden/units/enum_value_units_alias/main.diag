@@ -1,0 +1,9 @@
+error[E0736]: enumeration value `kTwo` must be qualified with its type
+   --> main.pas:10:15
+    |
+ 10 |   WriteLn(Ord(kTwo))
+    |               ^^^^
+    |
+    = fix: replace with `TK.kTwo`
+
+error: aborting due to 1 error

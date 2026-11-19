@@ -65,13 +65,13 @@ program DumpGenericConstraintOps
     var v1 Result
     create T -
 .instance TPair<TNode>
-.routine f8 TPair<TNode>.Make(): TNode
+.routine f3 TPair<TNode>.Make(): TNode
   .var v0 Self: TPair<TNode> self
   .var v1 Result: TNode result
   assign @45 R+
     var v1 Result
     create TNode builtin
-.routine f6 TPair<TNode>.Same(): Boolean
+.routine f4 TPair<TNode>.Same(): Boolean
   .var v0 Self: TPair<TNode> self
   .var v1 Result: Boolean result
   assign @35 R+
@@ -82,7 +82,7 @@ program DumpGenericConstraintOps
       = Boolean ref
         objfield TNode FB #1
           self TPair<TNode>
-.routine f7 TPair<TNode>.HasA(): Boolean
+.routine f5 TPair<TNode>.HasA(): Boolean
   .var v0 Self: TPair<TNode> self
   .var v1 Result: Boolean result
   assign @40 R+
@@ -99,7 +99,7 @@ program DumpGenericConstraintOps
   assign @52 R+
     objfield TNode FA #0
       global g0 P: TPair<TNode>
-    method f8 TPair<TNode>.Make: TNode
+    method f3 TPair<TNode>.Make: TNode
       global g0 P: TPair<TNode>
   assign @53 R+
     objfield TNode FB #1
@@ -115,12 +115,12 @@ program DumpGenericConstraintOps
     arg
       const Char #32
     arg
-      method f6 TPair<TNode>.Same: Boolean
+      method f4 TPair<TNode>.Same: Boolean
         global g0 P: TPair<TNode>
     arg
       const Char #32
     arg
-      method f7 TPair<TNode>.HasA: Boolean
+      method f5 TPair<TNode>.HasA: Boolean
         global g0 P: TPair<TNode>
   free @55
     global g0 P: TPair<TNode>

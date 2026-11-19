@@ -41,12 +41,7 @@ pub fn generate(m: &ir::Module, sink: &mut DiagnosticSink) -> Option<Module> {
     let mut failed = false;
     let mut funcs = Vec::with_capacity(m.funcs.len());
     let mut func_values = Vec::with_capacity(m.funcs.len());
-    for f in &m.funcs {
-        let f = {
-            let temp_regs = temp_registers(f);
-            let phys = |r: Reg| register(f, &temp_regs, r);
-            ir::opt::optimize(f, &m.types, &m.globals, &phys)
-        };
+    for f in inline_and_optimize(m) {
         let mut g = FuncGen::new(&f, &mut consts);
         match g.generate() {
             Ok((func, values)) => {
@@ -101,6 +96,73 @@ pub fn generate(m: &ir::Module, sink: &mut DiagnosticSink) -> Option<Module> {
     let origins: Vec<Option<&GenericOrigin>> = m.funcs.iter().map(|f| f.origin.as_ref()).collect();
     share::share(&mut module, &origins, &func_values);
     Some(module)
+}
+
+/// The functions of `m` with the calls of small routines inlined (`ir::inline`) and optimized
+/// (`ir::opt`), in function table order. Callees go first, so that a caller inlines a callee
+/// with the calls inlined into it.
+fn inline_and_optimize(m: &ir::Module) -> Vec<ir::Function> {
+    let n = m.funcs.len();
+    let (order, recursive) = ir::inline::call_order(m);
+    let mut is_outer = vec![false; n];
+    for f in &m.funcs {
+        if let Some(o) = f.outer {
+            is_outer[o as usize] = true;
+        }
+    }
+    // Per function: its IR with the calls inlined, kept while it may be inlined itself
+    let mut inlinable: Vec<Option<ir::Function>> = vec![None; n];
+    let mut optimized: Vec<Option<ir::Function>> = vec![None; n];
+    for i in order {
+        let optimize = |f: &ir::Function| {
+            let temp_regs = temp_registers(f);
+            let phys = |r: Reg| register(f, &temp_regs, r);
+            ir::opt::optimize(f, &m.types, &m.globals, &phys)
+        };
+        let mut f = ir::inline::inline_calls(&m.funcs[i], &|g| inlinable[g as usize].as_ref());
+        let mut o = optimize(&f);
+        let candidate = !recursive[i] && ir::inline::may_inline(&f, &m.types, is_outer[i]);
+        let size = |o: &ir::Function| instruction_count(m, o);
+        if candidate && size(&o) > ir::inline::MAX_SIZE && !f.inlines.is_empty() {
+            // Small without the calls inlined into it: it keeps its calls and stays small
+            // enough to be inlined (`docs/design/inlining.md` 3.5)
+            let own = optimize(&m.funcs[i]);
+            if size(&own) <= ir::inline::MAX_SIZE {
+                f = m.funcs[i].clone();
+                o = own;
+            }
+        }
+        if candidate && size(&o) <= ir::inline::MAX_SIZE {
+            inlinable[i] = Some(f);
+        }
+        optimized[i] = Some(o);
+    }
+    optimized
+        .into_iter()
+        .map(|f| f.expect("every function is optimized"))
+        .collect()
+}
+
+/// The size of an optimized function for the inlining (`docs/design/inlining.md` 3.5): the
+/// number of instructions codegen lays out for it (not counting `Wide`, `Ext` and type words).
+/// `u32::MAX` if it cannot be generated.
+fn instruction_count(m: &ir::Module, f: &ir::Function) -> u32 {
+    let mut scratch = ConstPool {
+        entries: Vec::new(),
+        types: Vec::new(),
+        type_ids: Vec::new(),
+        table: &m.types,
+        func_index: &m.func_index,
+        intf_calls: Vec::new(),
+    };
+    let mut g = FuncGen::new(f, &mut scratch);
+    if g.generate().is_err() {
+        return u32::MAX;
+    }
+    g.instrs
+        .iter()
+        .filter(|(i, _)| !matches!(i, Instr::TypeWord(_)))
+        .count() as u32
 }
 
 /// The constant pool and the type section (entries are shared in order of first use).
@@ -211,12 +273,12 @@ impl ConstPool<'_> {
                         funcs,
                     });
                 }
-                let refs: Vec<u8> = self
-                    .table
-                    .class_fields(id)
-                    .iter()
-                    .map(|(_, f)| self.table.slot_kind(f.ty))
-                    .collect();
+                // Records and static arrays in fields are laid out flat (`docs/design/records.md`
+                // 3.2)
+                let mut refs = Vec::new();
+                for (_, f) in self.table.class_fields(id) {
+                    self.table.flat_kinds(f.ty, &mut refs);
+                }
                 (crate::bytecode::TYPE_CLASS, refs.len() as u32, refs)
             }
             Ty::Enum(_) => {
@@ -229,9 +291,11 @@ impl ConstPool<'_> {
                 (TYPE_ENUM, 0, Vec::new())
             }
             Ty::Record(_) => {
-                let fields = self.table.fields(ty);
-                let refs = fields.iter().map(|f| self.table.slot_kind(f.ty)).collect();
-                (TYPE_RECORD, fields.len() as u32, refs)
+                let mut refs = Vec::new();
+                for f in self.table.fields(ty) {
+                    self.table.flat_kinds(f.ty, &mut refs);
+                }
+                (TYPE_RECORD, refs.len() as u32, refs)
             }
             Ty::BigSet(_) => (TYPE_SET, self.table.set_bits(ty), Vec::new()),
             Ty::DynArray(_) | Ty::OpenArray(_) => {
@@ -239,18 +303,18 @@ impl ConstPool<'_> {
                     .table
                     .dyn_elem(ty)
                     .expect("a dynamic array type has an element type");
-                (TYPE_DYNARRAY, 0, vec![self.table.slot_kind(elem)])
+                let mut refs = Vec::new();
+                self.table.flat_kinds(elem, &mut refs);
+                (TYPE_DYNARRAY, 0, refs)
             }
             _ => {
                 let (_, lo, hi, elem) = self
                     .table
                     .array(ty)
                     .expect("a type operand is a record or a static array");
-                (
-                    TYPE_ARRAY,
-                    (hi - lo + 1) as u32,
-                    vec![self.table.slot_kind(elem)],
-                )
+                let mut refs = Vec::new();
+                self.table.flat_kinds(elem, &mut refs);
+                (TYPE_ARRAY, (hi - lo + 1) as u32, refs)
             }
         };
         let ty = match ty {
@@ -260,10 +324,16 @@ impl ConstPool<'_> {
         if let Some(i) = self.type_ids.iter().position(|t| *t == ty) {
             return FIRST_TYPE_INDEX + i as u32;
         }
+        // An array's element takes the slots of its kinds (`docs/design/records.md` 3.3)
+        let width = match kind {
+            TYPE_ARRAY | TYPE_DYNARRAY => refs.len() as u32,
+            _ => 0,
+        };
         self.types.push(TypeEntry {
             kind,
             slots,
             refs,
+            width,
             name: self.table.full_name(ty),
             parent,
             values,
@@ -332,6 +402,16 @@ impl ConstPool<'_> {
 
     /// A record or static array constant: its elements first, then the aggregate (3.3).
     fn agg(&mut self, ty: Ty, c: &Const) -> u32 {
+        let mut ks = Vec::new();
+        self.agg_items(ty, c, &mut ks);
+        let t = self.ty(ty);
+        self.add(ConstEntry::Agg { ty: t, items: ks })
+    }
+
+    /// The constants of the slots of a record or static array constant: those of its fields or
+    /// elements, a record or static array laid out flat among them by its own slots
+    /// (`docs/design/records.md` 3.3).
+    fn agg_items(&mut self, ty: Ty, c: &Const, out: &mut Vec<u32>) {
         let Const::Agg(items) = c else {
             unreachable!("an aggregate constant")
         };
@@ -342,13 +422,13 @@ impl ConstPool<'_> {
                 vec![elem; items.len()]
             }
         };
-        let ks: Vec<u32> = items
-            .iter()
-            .zip(slot_types)
-            .map(|(v, t)| self.slot_const(v, t))
-            .collect();
-        let t = self.ty(ty);
-        self.add(ConstEntry::Agg { ty: t, items: ks })
+        for (v, t) in items.iter().zip(slot_types) {
+            if self.table.flat_width(t).is_some() && matches!(v, Const::Agg(_)) {
+                self.agg_items(t, v, out);
+            } else {
+                out.push(self.slot_const(v, t));
+            }
+        }
     }
 
     fn add(&mut self, entry: ConstEntry) -> u32 {
@@ -374,18 +454,21 @@ impl ConstPool<'_> {
 #[derive(Debug, Clone, Copy)]
 enum Instr {
     Plain {
-        op: u8,
+        op: u16,
         a: u32,
         b: u32,
         c: u32,
     },
     /// A jump to the start of a block (`b` is the second register of a compare-and-branch).
     Jump {
-        op: u8,
+        op: u16,
         a: u32,
         b: u32,
         label: BlockId,
     },
+    /// The type word that ends the instruction before it (`docs/spec/bytecode.md` 1.2): one word,
+    /// after the extension word when that instruction is `Wide`.
+    TypeWord(u32),
 }
 
 struct FuncGen<'a, 't> {
@@ -450,17 +533,37 @@ impl<'a, 't> FuncGen<'a, 't> {
         register(self.f, &self.temp_regs, r)
     }
 
-    fn emit(&mut self, op: u8, a: u32, b: u32, c: u32) {
+    fn emit(&mut self, op: u16, a: u32, b: u32, c: u32) {
         self.instrs.push((Instr::Plain { op, a, b, c }, self.line));
     }
 
-    fn emit_bx(&mut self, op: u8, a: u32, bx: u32) {
+    fn emit_bx(&mut self, op: u16, a: u32, bx: u32) {
         self.emit(op, a, bx & 0xFF, bx >> 8);
     }
 
-    fn emit_jump(&mut self, op: u8, a: u32, b: u32, label: BlockId) {
+    fn emit_jump(&mut self, op: u16, a: u32, b: u32, label: BlockId) {
         self.instrs
             .push((Instr::Jump { op, a, b, label }, self.line));
+    }
+
+    /// The type index of a type operand (the type word of `RefFieldSet`, `AggLoad`, ...).
+    fn type_operand(&mut self, o: &Operand) -> u32 {
+        match o {
+            Operand::Type(t) => self.consts.ty(*t),
+            o => unreachable!("the operand is a type, not {o:?}"),
+        }
+    }
+
+    /// The first register of a cursor (`docs/spec/bytecode.md` 1.5), whose two registers lower
+    /// lists one after the other.
+    fn cursor(&self, regs: &[Operand]) -> u32 {
+        let r: Vec<u32> = regs.iter().map(|o| self.reg_operand(o)).collect();
+        assert_eq!(
+            r[1],
+            r[0] + 1,
+            "lower lays out a cursor in consecutive registers"
+        );
+        r[0]
     }
 
     /// An operand that `Wide` widens to 16 bits; a larger one is reported as E3400 at the end.
@@ -507,6 +610,7 @@ impl<'a, 't> FuncGen<'a, 't> {
         }
         let (code, lines, positions) = self.layout();
         let handlers = self.handler_table(&positions);
+        let inlines = self.inline_table(&positions);
         let func_values = self
             .func_values
             .iter()
@@ -520,7 +624,11 @@ impl<'a, 't> FuncGen<'a, 't> {
             .vars
             .iter()
             .enumerate()
-            .filter(|(_, v)| v.kind != VarKind::Hidden)
+            // An expanded record has no value of its own: its fields are named variables
+            // (`docs/design/records.md` 3.9)
+            .filter(|(_, v)| {
+                v.kind != VarKind::Hidden && !matches!(v.expand, ir::VarExpand::Whole { .. })
+            })
             .map(|(i, v)| (self.reg(Reg::Var(i as u32)) as u16, v.name.clone()))
             .collect();
         Ok((
@@ -547,6 +655,7 @@ impl<'a, 't> FuncGen<'a, 't> {
                 file: self.f.file,
                 handlers,
                 shared_by: Vec::new(),
+                inlines,
             },
             func_values,
         ))
@@ -560,6 +669,42 @@ impl<'a, 't> FuncGen<'a, 't> {
         } else {
             bytecode::MANAGED_HEAP_REF
         }
+    }
+
+    /// The word position of the start of a block (the end of the code past the last block).
+    fn block_position(&self, positions: &[usize], b: BlockId) -> u32 {
+        let i = match self.labels.get(b as usize) {
+            Some(l) => l.expect("every block is laid out"),
+            None => self.instrs.len(),
+        };
+        positions[i] as u32
+    }
+
+    /// The inline table (`docs/spec/bytecode.md` 3.2) from the IR's inlined blocks. A site whose
+    /// code came out empty is left out (and so are the sites inside it).
+    fn inline_table(&self, positions: &[usize]) -> Vec<bytecode::InlineEntry> {
+        let mut index: Vec<Option<u32>> = Vec::with_capacity(self.f.inlines.len());
+        let mut out = Vec::new();
+        for s in &self.f.inlines {
+            let start = self.block_position(positions, s.blocks.0);
+            let end = self.block_position(positions, s.blocks.1 + 1);
+            if start == end {
+                index.push(None);
+                continue;
+            }
+            let outer = s
+                .outer
+                .map(|o| index[o as usize].expect("the site around a site with code has code"));
+            index.push(Some(out.len() as u32));
+            out.push(bytecode::InlineEntry {
+                start,
+                end,
+                func: s.callee,
+                line: s.line,
+                outer,
+            });
+        }
+        out
     }
 
     /// The handler table (`docs/spec/exceptions.md` 6.3) from the IR's block ranges. `positions`
@@ -748,7 +893,7 @@ impl<'a, 't> FuncGen<'a, 't> {
     }
 
     /// Encodes a plain instruction's operands into its fields (by the instruction's shape).
-    fn plain(&mut self, opc: u8, operands: &[Operand]) {
+    fn plain(&mut self, opc: u16, operands: &[Operand]) {
         let shape = op::info(opc)
             .expect("IR instructions use bytecode opcodes")
             .shape;
@@ -810,7 +955,10 @@ impl<'a, 't> FuncGen<'a, 't> {
                 self.emit(opc, reg(self, 0), reg(self, 1), imm(2) as i8 as u8 as u32)
             }
             op::Shape::AOuter => self.emit(opc, reg(self, 0), imm(1) as u32, imm(2) as u32),
-            op::Shape::ABRange2 | op::Shape::ABRange3 | op::Shape::ABRange4 => {
+            op::Shape::ABRange2
+            | op::Shape::ABRange3
+            | op::Shape::ABRange4
+            | op::Shape::ABRange5 => {
                 let b = reg(self, 1);
                 for i in 2..operands.len() {
                     assert_eq!(
@@ -820,6 +968,18 @@ impl<'a, 't> FuncGen<'a, 't> {
                     );
                 }
                 self.emit(opc, reg(self, 0), b, 0);
+            }
+            // `HashLookupInt` / `HashLookupStr` (`docs/spec/bytecode.md` 2.23): the instance and
+            // the key in consecutive registers, then the slot of the first field
+            op::Shape::ABRange2Slot => {
+                let b = reg(self, 1);
+                assert_eq!(
+                    reg(self, 2),
+                    b + 1,
+                    "lower lays out a register range contiguously"
+                );
+                let slot = self.small_operand(imm(3) as u32, "a record has more than 65536 fields");
+                self.emit(opc, reg(self, 0), b, slot);
             }
             op::Shape::ASBxImm => {
                 // A type index loaded as an integer (`DtorEnter`; `docs/spec/objects.md` 14.8)
@@ -849,6 +1009,12 @@ impl<'a, 't> FuncGen<'a, 't> {
             op::Shape::ASlotC => {
                 let slot = self.small_operand(imm(1) as u32, "a record has more than 65536 fields");
                 self.emit(opc, reg(self, 0), slot, reg(self, 2))
+            }
+            op::Shape::ASlotCType => {
+                let slot = self.small_operand(imm(1) as u32, "a record has more than 65536 fields");
+                let t = self.type_operand(&operands[3]);
+                self.emit(opc, reg(self, 0), slot, reg(self, 2));
+                self.instrs.push((Instr::TypeWord(t), self.line));
             }
             op::Shape::ABk => {
                 let k = match &operands[2] {
@@ -894,7 +1060,33 @@ impl<'a, 't> FuncGen<'a, 't> {
                 let n = self.small_operand(n, "a concatenation has more than 65536 operands");
                 self.emit(opc, reg(self, 0), b, n);
             }
-            op::Shape::ABPath => {
+            // The instructions of flat places (`docs/spec/bytecode.md` 2.8): a cursor is two
+            // registers, both listed (the second one after the first)
+            op::Shape::ACursorBC => {
+                let a = self.cursor(&operands[..2]);
+                self.emit(opc, a, reg(self, 2), reg(self, 3));
+            }
+            op::Shape::ABCursorSlot => {
+                let b = self.cursor(&operands[1..3]);
+                self.emit(opc, reg(self, 0), b, imm(3) as u32);
+            }
+            op::Shape::ACursorSlotC => {
+                let a = self.cursor(&operands[..2]);
+                self.emit(opc, a, imm(2) as u32, reg(self, 3));
+            }
+            op::Shape::ABCursorType => {
+                let b = self.cursor(&operands[1..3]);
+                let t = self.type_operand(&operands[3]);
+                self.emit(opc, reg(self, 0), b, 0);
+                self.instrs.push((Instr::TypeWord(t), self.line));
+            }
+            op::Shape::ACursorBType => {
+                let a = self.cursor(&operands[..2]);
+                let t = self.type_operand(&operands[3]);
+                self.emit(opc, a, reg(self, 2), 0);
+                self.instrs.push((Instr::TypeWord(t), self.line));
+            }
+            op::Shape::ABPath | op::Shape::ABPathType => {
                 let a = reg(self, 0);
                 let n = imm(2) as u32;
                 for i in 0..n as usize {
@@ -905,6 +1097,10 @@ impl<'a, 't> FuncGen<'a, 't> {
                     );
                 }
                 self.emit(opc, a, reg(self, 1), n);
+                if shape == op::Shape::ABPathType {
+                    let t = self.type_operand(&operands[3 + n as usize]);
+                    self.instrs.push((Instr::TypeWord(t), self.line));
+                }
             }
             op::Shape::ABx => {
                 let x = match &operands[1] {
@@ -970,10 +1166,15 @@ impl<'a, 't> FuncGen<'a, 't> {
                 }
             })
             .collect();
+        // `Ext` adds a word to an instruction numbered past 255 (`docs/spec/bytecode.md` 1.2)
         let size = |f: Form, i: &Instr| -> usize {
+            let ext = match i {
+                Instr::Plain { op, .. } => usize::from(bytecode::needs_ext(*op)),
+                _ => 0,
+            };
             match (f, i) {
-                (Form::Short, _) => 1,
-                (Form::Wide, _) => 3,
+                (Form::Short, _) => 1 + ext,
+                (Form::Wide, _) => 3 + ext,
                 (Form::Expanded, _) => 6,
                 (Form::Loop3, _) => 3,
                 (Form::Loop9, _) => 9,
@@ -1062,8 +1263,11 @@ impl<'a, 't> FuncGen<'a, 't> {
             }
             match ins {
                 Instr::Plain { op, a, b, c } => {
+                    // The prefixes in their order: `Wide`, then `Ext` (1.2)
+                    let ext = bytecode::needs_ext(*op).then(|| bytecode::encode(op::EXT, 0, 0, 0));
                     if forms[i] == Form::Wide {
                         code.push(bytecode::encode(op::WIDE, 0, 0, 0));
+                        code.extend(ext);
                         code.push(bytecode::encode(*op, *a, *b, *c));
                         // A table index continues with the upper 16 bits; a signed immediate is sign-extended from its original width.
                         let (ext_b, ext_c) = match op::info(*op).unwrap().shape {
@@ -1080,10 +1284,13 @@ impl<'a, 't> FuncGen<'a, 't> {
                         };
                         code.push(bytecode::encode_ext(*a, ext_b, ext_c));
                     } else {
+                        code.extend(ext);
                         code.push(bytecode::encode(*op, *a, *b, *c));
                     }
                 }
+                Instr::TypeWord(t) => code.push(*t),
                 Instr::Jump { op, a, b, label } => {
+                    debug_assert!(!bytecode::needs_ext(*op), "a jump has no `Ext` form");
                     let target = positions[self.labels[*label as usize].unwrap()] as i64;
                     let fused = op::info(*op)
                         .is_some_and(|i| matches!(i.shape, op::Shape::ABsC | op::Shape::AsBsC));
@@ -1206,11 +1413,15 @@ fn register(f: &ir::Function, temp_regs: &[u32], r: Reg) -> u32 {
     }
 }
 
-/// Whether an instruction's operand does not fit in 8 bits.
+/// Whether an instruction's operand does not fit in 8 bits. A cursor fits when its second
+/// register does (`docs/spec/bytecode.md` 1.2).
 fn plain_needs_wide(i: &Instr) -> bool {
     match i {
         Instr::Plain { op: opc, a, b, c } => {
             let shape = op::info(*opc).map(|i| i.shape).unwrap_or(op::Shape::None);
+            if shape.cursor_end(*a, *b).is_some_and(|r| r > 255) {
+                return true;
+            }
             match shape {
                 op::Shape::ABx => *a > 255 || (b | (c << 8)) > 0xFFFF,
                 op::Shape::ASBxImm => *a > 255,
@@ -1218,12 +1429,12 @@ fn plain_needs_wide(i: &Instr) -> bool {
                 _ => *a > 255 || *b > 255 || *c > 255,
             }
         }
-        Instr::Jump { .. } => false,
+        Instr::Jump { .. } | Instr::TypeWord(_) => false,
     }
 }
 
 /// The inverted condition of a compare-and-branch.
-fn invert_fused(opc: u8, a: u32, b: u32) -> (u8, u32, u32) {
+fn invert_fused(opc: u16, a: u32, b: u32) -> (u16, u32, u32) {
     match opc {
         op::JMP_IF_EQ_INT => (op::JMP_IF_NE_INT, a, b),
         op::JMP_IF_NE_INT => (op::JMP_IF_EQ_INT, a, b),
@@ -1264,6 +1475,63 @@ pub(crate) mod tests {
             out.diagnostics
         );
         crate::bytecode::disassemble(out.stages.module.as_ref().expect("module"))
+    }
+
+    /// A program whose routine `Bump` declares `pad` integer variables before its own, so that
+    /// with `pad` past 255 the values it writes to the fields of its `var` parameter are in
+    /// registers that do not fit in 8 bits (`RefFieldSet` / `RefFieldSetRef` in the `Wide` form;
+    /// `vm::tests` runs it).
+    pub(crate) fn padded_ref_fields(pad: usize) -> String {
+        let mut src = String::from(
+            "program WideRef;
+             type
+  TItem = record
+    Count: Integer;
+    Name: string;
+  end;
+             procedure Bump(var It: TItem);
+var
+",
+        );
+        for i in 0..pad {
+            src.push_str(&format!(
+                "  V{i}: Integer;
+"
+            ));
+        }
+        src.push_str(
+            "  K: Integer;
+  S: string;
+             begin
+  K := It.Count + 1;
+  S := It.Name + 'x';
+  It.Count := K;
+  It.Name := S;
+end;
+             var
+  R: TItem;
+             begin
+  Bump(R);
+  Bump(R);
+  WriteLn(R.Count, ' ', R.Name);
+end.
+",
+        );
+        src
+    }
+
+    #[test]
+    // A value in a register past 255 makes `RefFieldSet` / `RefFieldSetRef` `Wide`: the `Wide`
+    // word, the instruction, the extension word and then the type word (spec/bytecode.md 1.2).
+    fn wide_ref_field_writes_end_with_the_type_word() {
+        let d = dump(&padded_ref_fields(300));
+        let wide = "  0012  w.RefFieldSet r0, 0, r301, ty64\n  .line 315\n  \
+                    0016  w.RefFieldSetRef r0, 1, r302, ty64\n  .line 316\n  001a  RetVoid\n";
+        assert!(d.contains(wide), "{d}");
+        let d = dump(&padded_ref_fields(0));
+        let short = "  0006  RefFieldSet  r0, 0, r1, ty64\n  .line 15\n  \
+                     0008  RefFieldSetRef r0, 1, r2, ty64\n  .line 16\n  000a  RetVoid\n";
+        assert!(d.contains(short), "{d}");
     }
 
     /// A program whose routine `Run` declares `pad` integer variables before its own, so that with
@@ -1420,7 +1688,8 @@ pub(crate) mod tests {
         assert!(d.contains(".func 1 P.<init>"));
         assert!(d.contains("MulInt       r1, r0, r0"));
         assert!(d.contains("NarrowOvf    r1, r1, 4"));
-        assert!(d.contains("Call         r3, f2"));
+        // `Sq` is small: its call is inlined (`docs/design/inlining.md`)
+        assert!(d.contains("  .inline f2 P.Sq line=8\n"), "{d}");
         assert!(d.contains("StoreGlobal  r0, g0") || d.contains("StoreGlobal  r1, g0"));
     }
 
@@ -1489,6 +1758,8 @@ pub(crate) mod tests {
             }],
             finally: Vec::new(),
             tries: Vec::new(),
+            lifecycle: false,
+            inlines: Vec::new(),
         };
         let table = TypeTable::default();
         let mut consts = ConstPool {
@@ -1506,7 +1777,7 @@ pub(crate) mod tests {
     #[test]
     fn wide_table_operands() {
         // Table indices above 16 bits are carried by the Wide extension word
-        let operand = |opc: u8, idx: u32| match opc {
+        let operand = |opc: u16, idx: u32| match opc {
             op::LOAD_GLOBAL | op::STORE_GLOBAL | op::MAKE_GLOBAL_REF => Operand::Global(idx),
             op::CALL => Operand::Func(idx),
             _ => Operand::Host(idx),
@@ -1544,6 +1815,37 @@ pub(crate) mod tests {
                 assert_eq!(code[2], (1 << 8) | (idx & 0xFFFF_0000), "{opc} {idx}");
             }
         }
+    }
+
+    // An instruction numbered past 255 is written after `Ext`, and with `Wide` the prefixes come
+    // in the order `Wide`, `Ext` (`docs/spec/bytecode.md` 1.2).
+    #[test]
+    fn ext_instructions_get_their_prefix() {
+        let test_ext = |a: u32| ir::Inst {
+            op: op::TEST_EXT,
+            kind: InstKind::Plain(vec![
+                Operand::Reg(Reg::Var(a)),
+                Operand::Reg(Reg::Var(1)),
+                Operand::Reg(Reg::Var(2)),
+            ]),
+            line: 1,
+        };
+        // `Ext`, `TestExt r0, r1, r2` (the `op` of its word is 16), `RetVoid`
+        assert_eq!(
+            encode_one(test_ext(0)),
+            [0x0000_00FE, 0x0201_0010, 0x0000_0073]
+        );
+        // `Wide`, `Ext`, `TestExt r300, r1, r2`, the extension word, `RetVoid`
+        assert_eq!(
+            encode_one(test_ext(300)),
+            [
+                0x0000_0001,
+                0x0000_00FE,
+                0x0201_2C10,
+                0x0000_0100,
+                0x0000_0073
+            ]
+        );
     }
 
     #[test]

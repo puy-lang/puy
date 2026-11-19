@@ -1,0 +1,43 @@
+[
+  {
+    "schema": "puy.diagnostics/1",
+    "diagnostics": [
+      {
+        "code": "E0702",
+        "severity": "error",
+        "name": null,
+        "message": "type mismatch: expected `Integer`, found `record`",
+        "primary": {
+          "file": "main.pas",
+          "start": 227,
+          "end": 232,
+          "line": 11,
+          "column": 8,
+          "end_line": 11,
+          "end_column": 13,
+          "label": ""
+        },
+        "secondary": [
+          {
+            "file": "src/Shared.pas",
+            "start": 38,
+            "end": 44,
+            "line": 6,
+            "column": 10,
+            "end_line": 6,
+            "end_column": 16,
+            "label": "record type declared here"
+          }
+        ],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0702]: type mismatch: expected `Integer`, found `record`\n   --> main.pas:11:8\n    |\n 11 |   N := Point;\n    |        ^^^^^\n   ::: src/Shared.pas:6:10\n  6 |   Point: record\n    |          ------ record type declared here"
+      }
+    ],
+    "summary": {
+      "errors": 1,
+      "warnings": 0,
+      "notes": 0
+    }
+  }
+]

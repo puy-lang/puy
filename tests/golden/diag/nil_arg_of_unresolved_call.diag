@@ -1,0 +1,73 @@
+error[E0700]: undeclared identifier `TFoo`
+   --> nil_arg_of_unresolved_call.pas:15:3
+    |
+ 15 |   TFoo.Create(nil);
+    |   ^^^^
+
+error[E0700]: undeclared identifier `TFoo`
+   --> nil_arg_of_unresolved_call.pas:16:8
+    |
+ 16 |   O := TFoo.Create(nil);
+    |        ^^^^
+
+error[E0700]: undeclared identifier `Foo`
+   --> nil_arg_of_unresolved_call.pas:17:3
+    |
+ 17 |   Foo(nil, (nil), Missing);
+    |   ^^^
+
+error[E0700]: undeclared identifier `Missing`
+   --> nil_arg_of_unresolved_call.pas:17:19
+    |
+ 17 |   Foo(nil, (nil), Missing);
+    |                   ^^^^^^^
+
+error[E0700]: undeclared identifier `Foo`
+   --> nil_arg_of_unresolved_call.pas:18:8
+    |
+ 18 |   O := Foo(nil);
+    |        ^^^
+
+error[E0743]: `Create` is private to `TDictionary<string, Integer>.TKeyCollection`
+    --> nil_arg_of_unresolved_call.pas:19:3
+     |
+  19 |   TDictionary<string, Integer>.TKeyCollection.Create(nil);
+     |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ::: <stdlib>/System.Generics.Collections.pas:339:21
+ 339 |         constructor Create(ADict: TDictionary<K, V>);
+     |                     ------ declared here
+
+error[E0743]: `Create` is private to `TDictionary<string, Integer>.TKeyCollection`
+    --> nil_arg_of_unresolved_call.pas:20:8
+     |
+  20 |   O := TDictionary<string, Integer>.TKeyCollection.Create(nil);
+     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ::: <stdlib>/System.Generics.Collections.pas:339:21
+ 339 |         constructor Create(ADict: TDictionary<K, V>);
+     |                     ------ declared here
+
+error[E0705]: wrong number of arguments: expected 0, found 1
+   --> nil_arg_of_unresolved_call.pas:21:3
+    |
+ 21 |   TObject.Create(nil);
+    |   ^^^^^^^^^^^^^^^^^^^
+
+error[E0700]: undeclared identifier `Foo`
+   --> nil_arg_of_unresolved_call.pas:22:3
+    |
+ 22 |   Foo([1, 2]);
+    |   ^^^
+
+error[E0705]: wrong number of arguments: expected 0, found 1
+   --> nil_arg_of_unresolved_call.pas:23:3
+    |
+ 23 |   TObject.Create([1]);
+    |   ^^^^^^^^^^^^^^^^^^^
+
+error[E0705]: wrong number of arguments: expected 1, found 2
+   --> nil_arg_of_unresolved_call.pas:24:3
+    |
+ 24 |   FreeAndNil(nil, O);
+    |   ^^^^^^^^^^^^^^^^^^
+
+error: aborting due to 11 errors

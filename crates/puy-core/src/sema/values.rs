@@ -417,6 +417,26 @@ impl Values<'_> {
                 self.expr(to, cur);
                 self.expr(count, cur);
             }
+            StmtKind::ArraySortRange {
+                target,
+                index,
+                count,
+            } => {
+                self.place_read(target, cur);
+                self.expr(index, cur);
+                self.expr(count, cur);
+            }
+            StmtKind::HashRelink {
+                buckets,
+                hashes,
+                next,
+                count,
+            } => {
+                self.place_read(buckets, cur);
+                self.expr(hashes, cur);
+                self.place_read(next, cur);
+                self.expr(count, cur);
+            }
             StmtKind::FreeAndNil { target } => self.place_read(target, cur),
             StmtKind::Delete {
                 target,
@@ -701,7 +721,7 @@ impl Values<'_> {
 
     fn expr(&mut self, e: &Expr, cur: &mut Cursor) {
         match &e.kind {
-            ExprKind::Const | ExprKind::Global(_) => {}
+            ExprKind::Const { .. } | ExprKind::Global(_) => {}
             ExprKind::Error => {
                 for i in 0..self.sema_reads.len() {
                     let (id, at) = self.sema_reads[i];

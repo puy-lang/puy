@@ -148,12 +148,13 @@ impl<'a, 's> Sema<'a, 's> {
             let range = name_tok.text_range();
             let scope = self.declare_member_hints(decl.syntax(), &[name_tok]);
             self.begin_names_hints(scope);
-            let (value, ty) = self.eval_const_decl(decl.type_ref(), decl.value(), false);
+            let (value, ty, explicit) = self.eval_const_decl(decl.type_ref(), decl.value(), false);
             self.end_names_hints(scope);
             if self.class_duplicate(&lower, range) {
                 continue;
             }
             self.note_typed_const(decl.type_ref().is_some(), range);
+            self.note_explicit_const(explicit, range);
             let kind = match value {
                 Some(v) => StaticKind::Const(v, ty),
                 None => StaticKind::Const(super::types::Const::Int(0), Ty::Error),
@@ -254,25 +255,31 @@ impl<'a, 's> Sema<'a, 's> {
 
     /// The class a dotted name such as `TOuter.TInner` names (no diagnostics).
     pub(super) fn class_named(&mut self, text: &str) -> Option<TypeId> {
+        self.owner_named(text).filter(|&c| !self.types.is_record(c))
+    }
+
+    /// The class or record a dotted name such as `TOuter.TInner` or `TRec.TInner` names (no
+    /// diagnostics): a type whose nested types and constants are named through it.
+    pub(super) fn owner_named(&mut self, text: &str) -> Option<TypeId> {
         let mut parts = text.split('.');
         let first = parts.next()?;
-        let Some(Some(Ty::Class(mut c))) = self.lookup_type_symbol(&first.to_ascii_lowercase())
-        else {
+        let Some(Some(mut ty)) = self.lookup_type_symbol(&first.to_ascii_lowercase()) else {
             return None;
         };
         for p in parts {
+            let c = nested_owner(ty)?;
             match self.find_static(c, p) {
                 Some((
                     _,
                     ClassStatic {
-                        kind: StaticKind::Type(Ty::Class(n)),
+                        kind: StaticKind::Type(t),
                         ..
                     },
-                )) => c = n,
+                )) => ty = t,
                 _ => return None,
             }
         }
-        Some(c)
+        nested_owner(ty)
     }
 
     /// The resolution of a class member that is not part of the instances.
@@ -307,8 +314,14 @@ impl<'a, 's> Sema<'a, 's> {
                 value: None,
                 span,
             }),
-            Resolved::Const { value, ty, .. } if !ty.is_error() => Expr {
-                kind: ExprKind::Const,
+            Resolved::Const {
+                value,
+                ty,
+                span: decl,
+            } if !ty.is_error() => Expr {
+                kind: ExprKind::Const {
+                    explicit: self.is_explicit_const(decl),
+                },
                 ty,
                 value: Some(value),
                 span,
@@ -327,7 +340,8 @@ impl<'a, 's> Sema<'a, 's> {
     }
 
     /// `TOuter.TInner.TItem` after `TOuter`: the nested types named by the rest of a qualified
-    /// type name (E0700 for a name the class does not have, E0708 for one that is not a type).
+    /// type name, through classes and records (E0700 for a name the type does not have, E0708
+    /// for one that is not a type).
     pub(super) fn nested_type(
         &mut self,
         mut ty: Ty,
@@ -335,7 +349,7 @@ impl<'a, 's> Sema<'a, 's> {
         whole: TextRange,
     ) -> Ty {
         for (name, range) in rest {
-            let Ty::Class(c) = ty else {
+            let Some(c) = nested_owner(ty) else {
                 let text = self.src(whole);
                 self.error(Code::E(708), format!("`{text}` is not a type"), whole);
                 return Ty::Error;
@@ -354,7 +368,7 @@ impl<'a, 's> Sema<'a, 's> {
                     return Ty::Error;
                 }
                 None => {
-                    let t = self.types.name(Ty::Class(c));
+                    let t = self.tn(ty);
                     self.error(
                         Code::E(700),
                         format!("`{t}` has no member `{name}`"),
@@ -373,7 +387,7 @@ impl<'a, 's> Sema<'a, 's> {
     /// its nested type is then the definition's, or else one its parent declares (the parent
     /// may be such an instantiation too), with the type parameters replaced: the same type the
     /// instantiation gets when its members are made (`TF = TBox<T>; TE = TF.TInner;`).
-    fn static_of(&mut self, c: TypeId, name: &str) -> Option<(TypeId, ClassStatic)> {
+    pub(super) fn static_of(&mut self, c: TypeId, name: &str) -> Option<(TypeId, ClassStatic)> {
         if let Some(found) = self.find_static(c, name) {
             return Some(found);
         }
@@ -401,5 +415,14 @@ impl<'a, 's> Sema<'a, 's> {
             s.kind = StaticKind::Type(self.with_inst(|i| i.subst(t, &env)));
         }
         Some((owner, s))
+    }
+}
+
+/// The class or record whose nested types a name after it reaches (`TOuter.TInner`,
+/// `TRec.TInner`; `docs/spec/objects.md` 2.2, `docs/spec/generics.md` 2.5).
+pub(super) fn nested_owner(ty: Ty) -> Option<TypeId> {
+    match ty {
+        Ty::Class(c) | Ty::Record(c) => Some(c),
+        _ => None,
     }
 }

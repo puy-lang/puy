@@ -1,0 +1,7 @@
+error[E0400]: expected `;`, found `<`
+   --> generic_heading_two_param_lists_method.pas:11:18
+    |
+ 11 | procedure TA.M<T><U>;
+    |                  ^
+
+error: aborting due to 1 error

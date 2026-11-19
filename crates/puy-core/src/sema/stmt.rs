@@ -36,11 +36,12 @@ impl<'a, 's> Sema<'a, 's> {
                 let name = self.text(&name_tok).to_string();
                 let lower = name.to_ascii_lowercase();
                 let range = name_tok.text_range();
-                let (value, ty) = self.eval_const_decl(c.type_ref(), c.value(), false);
+                let (value, ty, explicit) = self.eval_const_decl(c.type_ref(), c.value(), false);
                 if self.check_duplicate(&lower, range) {
                     return None;
                 }
                 self.note_typed_const(c.type_ref().is_some(), range);
+                self.note_explicit_const(explicit, range);
                 let sym = LSym::Const {
                     ty: if value.is_some() { ty } else { Ty::Error },
                     value: value.unwrap_or(Const::Int(0)),
@@ -323,8 +324,8 @@ impl<'a, 's> Sema<'a, 's> {
         Some(StmtKind::For {
             var,
             var_span: fv.syntax().text_range(),
-            from,
-            to,
+            from: Box::new(from),
+            to: Box::new(to),
             downto: f.is_downto(),
             body: Box::new(body),
             checks,
@@ -404,7 +405,7 @@ impl<'a, 's> Sema<'a, 's> {
         Some(StmtKind::ForIn {
             var,
             var_span: fv.syntax().text_range(),
-            coll,
+            coll: Box::new(coll),
             coll_var,
             idx_var,
             elem,
@@ -495,7 +496,7 @@ impl<'a, 's> Sema<'a, 's> {
         Some(StmtKind::ForIn {
             var,
             var_span: fv.syntax().text_range(),
-            coll,
+            coll: Box::new(coll),
             coll_var,
             idx_var: calls.var,
             elem,
@@ -675,7 +676,7 @@ impl<'a, 's> Sema<'a, 's> {
                     )
                     .with_primary(self.span(at), "the loop variable of the enclosing routine")
                     .with_secondary(self.span(range), "used as the loop variable here")
-                    .with_note("a nested routine or an anonymous method cannot write a variable its enclosing routine uses as a `for` loop variable");
+                    .with_note(super::LOOP_VAR_WRITE_NOTE);
                     self.push(d);
                     // No W0001 piles on
                     self.cur_mut().vars[id.0 as usize].is_loop_var = true;
@@ -1266,7 +1267,12 @@ impl<'a, 's> Sema<'a, 's> {
                 {
                     inner = e;
                 }
-                self.lower_value(&inner);
+                if let ast::Expr::Call(c) = &inner {
+                    // `(P());`: a call is not used as a value either
+                    self.lower_call(c, ast::trimmed_range(inner.syntax()), false);
+                } else {
+                    self.lower_value(&inner);
+                }
                 return None;
             }
         };
@@ -1289,10 +1295,13 @@ impl<'a, 's> Sema<'a, 's> {
         if self.exception_free_and_nil(&callee, &args).is_some() {
             return None;
         }
-        if matches!(callee, ast::Expr::Paren(_)) {
-            // `(F)()`, `(procedure begin … end)()`: typed as the call expression it is (no name to
-            // resolve), so its errors are reported and a call of a value is kept
-            let call = self.lower_expr(&expr);
+        if let ast::Expr::Call(c) = &expr
+            && matches!(callee, ast::Expr::Paren(_) | ast::Expr::Call(_))
+        {
+            // `(F)()`, `(procedure begin … end)()`, `O.H()()`: typed as the call it is (no name to
+            // resolve), so its errors are reported (E0725 for calling the result of a procedure)
+            // and a call of a value is kept
+            let call = self.lower_call(c, span, false);
             return matches!(call.kind, ExprKind::CallValue { .. }).then_some(StmtKind::Expr(call));
         }
         let (r, name, range) = self.resolve_name_expr(&callee)?;
@@ -1484,11 +1493,13 @@ impl<'a, 's> Sema<'a, 's> {
                 None
             }
             Resolved::Error => {
+                // The name has been diagnosed: the arguments have no parameters to take a type
+                // from (no E0702 for `nil`, no E0729 for a constructor)
                 for a in &args {
                     if let Some(v) = a.value()
                         && !self.bare_routine_arg(&v)
                     {
-                        self.lower_expr(&v);
+                        self.lower_expr_unchecked_ctor(&v);
                     }
                 }
                 None
@@ -1698,7 +1709,7 @@ impl<'a, 's> Sema<'a, 's> {
                 Some(StmtKind::IncDec {
                     target: place,
                     target_ty: ty,
-                    delta,
+                    delta: delta.map(Box::new),
                     negative: p == BuiltinProc::Dec,
                     calc,
                     checks,
@@ -1745,8 +1756,8 @@ impl<'a, 's> Sema<'a, 's> {
                 }
                 let text = ast::source_text_normalized(c.syntax());
                 Some(StmtKind::Assert {
-                    cond,
-                    message,
+                    cond: Box::new(cond),
+                    message: message.map(Box::new),
                     text,
                 })
             }
@@ -1863,6 +1874,8 @@ impl<'a, 's> Sema<'a, 's> {
             }
             BuiltinProc::Exchange => self.lower_exchange(args, span),
             BuiltinProc::ArrayMoveRange => self.lower_array_move_range(args, span),
+            BuiltinProc::ArraySortRange => self.lower_array_sort_range(args, span),
+            BuiltinProc::HashRelink => self.lower_hash_relink(args, span),
             BuiltinProc::FreeIfClass => self.lower_stdlib_value_proc(args, false, span),
             BuiltinProc::CheckDefaultOrder => self.lower_stdlib_value_proc(args, true, span),
             BuiltinProc::CheckClassType => self.lower_check_class_type(args, span),
@@ -2218,8 +2231,8 @@ impl Sema<'_, '_> {
         let second = index(self, &values[2]);
         Some(StmtKind::Exchange {
             target: place,
-            first: first?,
-            second: second?,
+            first: Box::new(first?),
+            second: Box::new(second?),
             span,
         })
     }
@@ -2227,6 +2240,33 @@ impl Sema<'_, '_> {
     /// `ArrayMoveRange(var A, FromIndex, ToIndex, Count)` (`docs/spec/bytecode.md` 2.22; the
     /// units of the standard library only): `A` is a dynamic array, the others `Integer`s.
     fn lower_array_move_range(&mut self, args: &[ast::Arg], span: TextRange) -> Option<StmtKind> {
+        let (target, [from, to, count]) = self.lower_array_range_args(args, span)?;
+        Some(StmtKind::ArrayMoveRange {
+            target,
+            from: Box::new(from),
+            to: Box::new(to),
+            count: Box::new(count),
+        })
+    }
+
+    /// `ArraySortRange(var A, Index, Count)` (`docs/spec/bytecode.md` 2.22; the units of the
+    /// standard library only): `A` is a dynamic array, the others `Integer`s.
+    fn lower_array_sort_range(&mut self, args: &[ast::Arg], span: TextRange) -> Option<StmtKind> {
+        let (target, [index, count]) = self.lower_array_range_args(args, span)?;
+        Some(StmtKind::ArraySortRange {
+            target,
+            index: Box::new(index),
+            count: Box::new(count),
+        })
+    }
+
+    /// The arguments of `ArrayMoveRange` / `ArraySortRange`: the variable of a dynamic array `A`,
+    /// then `N` `Integer`s.
+    fn lower_array_range_args<const N: usize>(
+        &mut self,
+        args: &[ast::Arg],
+        span: TextRange,
+    ) -> Option<(Place, [Expr; N])> {
         self.check_no_width_pub(args);
         let values: Vec<ast::Expr> = args.iter().filter_map(|a| a.value()).collect();
         let lower_rest = |this: &mut Self, from: usize| {
@@ -2234,19 +2274,20 @@ impl Sema<'_, '_> {
                 this.lower_expr_unchecked_ctor(v);
             }
         };
-        if args.len() != 4 {
+        if args.len() != N + 1 {
             lower_rest(self, 0);
             self.error(
                 Code::E(705),
                 format!(
-                    "wrong number of arguments: expected 4, found {}",
+                    "wrong number of arguments: expected {}, found {}",
+                    N + 1,
                     args.len()
                 ),
                 span,
             );
             return None;
         }
-        if values.len() != 4 {
+        if values.len() != N + 1 {
             lower_rest(self, 0);
             return None;
         }
@@ -2279,14 +2320,95 @@ impl Sema<'_, '_> {
             );
             return None;
         }
-        let from = self.dyn_index(&values[1]);
-        let to = self.dyn_index(&values[2]);
-        let count = self.dyn_index(&values[3]);
-        Some(StmtKind::ArrayMoveRange {
-            target: place,
-            from: from?,
-            to: to?,
-            count: count?,
+        // Every index is lowered (and reports its errors) before a failure is returned
+        let ints: Vec<Option<Expr>> = values[1..].iter().map(|v| self.dyn_index(v)).collect();
+        let ints: Vec<Expr> = ints.into_iter().collect::<Option<_>>()?;
+        Some((place, ints.try_into().ok()?))
+    }
+
+    /// `HashRelink(var Buckets, const Hashes, var Next, Count)` (`docs/spec/bytecode.md` 2.23; the
+    /// units of the standard library only): `Buckets` and `Next` are variables of dynamic arrays
+    /// of `Integer`, `Hashes` a dynamic array of `Int64`, `Count` an `Integer`.
+    fn lower_hash_relink(&mut self, args: &[ast::Arg], span: TextRange) -> Option<StmtKind> {
+        self.check_no_width_pub(args);
+        let values: Vec<ast::Expr> = args.iter().filter_map(|a| a.value()).collect();
+        if args.len() != 4 || values.len() != 4 {
+            for v in &values {
+                self.lower_expr_unchecked_ctor(v);
+            }
+            if args.len() != 4 {
+                self.error(
+                    Code::E(705),
+                    format!(
+                        "wrong number of arguments: expected 4, found {}",
+                        args.len()
+                    ),
+                    span,
+                );
+            }
+            return None;
+        }
+        let mismatch = |this: &mut Self, ty: Ty, elem: Ty, i: usize, name: &str, r: TextRange| {
+            let (found, elem) = (this.tn(ty), this.tn(elem));
+            this.error(
+                Code::E(702),
+                format!(
+                    "type mismatch: expected a dynamic array of `{elem}`, found `{found}` (argument {i}, parameter `{name}`)"
+                ),
+                r,
+            );
+        };
+        let mut places = Vec::new();
+        for (i, name) in [(0, "Buckets"), (2, "Next")] {
+            let a = &values[i];
+            let Some((place, ty)) = self.lower_place(a, PlaceUse::IncDec) else {
+                if let Some(super::expr::PlaceResult::NotVariable(r)) =
+                    self.last_place_result.take()
+                {
+                    self.error(
+                        Code::E(706),
+                        format!(
+                            "argument {} must be a variable (parameter `{name}` is `var`)",
+                            i + 1
+                        ),
+                        r,
+                    );
+                }
+                return None;
+            };
+            if ty.is_error() {
+                return None;
+            }
+            if !matches!(ty, Ty::DynArray(_)) || self.types.elem_of(ty) != Some(Ty::Integer) {
+                mismatch(
+                    self,
+                    ty,
+                    Ty::Integer,
+                    i + 1,
+                    name,
+                    ast::trimmed_range(a.syntax()),
+                );
+                return None;
+            }
+            places.push(place);
+        }
+        let hashes = self.lower_expr(&values[1]);
+        if hashes.ty.is_error() {
+            return None;
+        }
+        if !matches!(hashes.ty, Ty::DynArray(_)) || self.types.elem_of(hashes.ty) != Some(Ty::Int64)
+        {
+            mismatch(self, hashes.ty, Ty::Int64, 2, "Hashes", hashes.span);
+            return None;
+        }
+        let count = self.dyn_index(&values[3])?;
+        let next = places.pop().expect("two places");
+        let buckets = places.pop().expect("two places");
+        Some(StmtKind::HashRelink {
+            buckets,
+            hashes: Box::new(hashes),
+            next,
+            count: Box::new(count),
         })
     }
 
@@ -2355,7 +2477,10 @@ impl Sema<'_, '_> {
         if value.ty.is_error() || what.ty.is_error() {
             return None;
         }
-        Some(StmtKind::CheckClassType { value, what })
+        Some(StmtKind::CheckClassType {
+            value: Box::new(value),
+            what: Box::new(what),
+        })
     }
 
     /// `Insert(Source, var S, Index)` / `Delete(var S, Index, Count)` (`docs/spec/semantics.md`
@@ -2454,8 +2579,8 @@ impl Sema<'_, '_> {
             let count = int_arg(self, &values[2], 3, "Count");
             return Some(StmtKind::Delete {
                 target: place,
-                index: index?,
-                count: count?,
+                index: Box::new(index?),
+                count: Box::new(count?),
             });
         }
         let source = if let Ty::DynArray(_) = ty {
@@ -2477,9 +2602,9 @@ impl Sema<'_, '_> {
         let index = int_arg(self, &values[2], 3, "Index");
         let (source, whole) = source?;
         Some(StmtKind::Insert {
-            source,
+            source: Box::new(source),
             target: place,
-            index: index?,
+            index: Box::new(index?),
             whole,
         })
     }

@@ -1,0 +1,19 @@
+error[E0400]: expected `:`, found `<`
+  --> generic_heading_two_param_lists.pas:7:14
+   |
+ 7 | function F<T><U>(x: T): T;
+   |              ^
+
+error[E0400]: expected `;`, found `)`
+  --> generic_heading_two_param_lists.pas:7:22
+   |
+ 7 | function F<T><U>(x: T): T;
+   |                      ^
+
+error[E0700]: undeclared identifier `x`
+  --> generic_heading_two_param_lists.pas:9:13
+   |
+ 9 |   Result := x;
+   |             ^
+
+error: aborting due to 3 errors

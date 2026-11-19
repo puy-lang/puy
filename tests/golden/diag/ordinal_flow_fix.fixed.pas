@@ -13,12 +13,17 @@ type
 
 procedure Show;
 var
-  C: TColor = TColor.Red;
-  L: TLevel = TLevel.Low;
-  D: TDigit = 5;
-  T: TLetter = #97;
-  W: TWarm = TColor.Green;
+  C: TColor;
+  L: TLevel;
+  D: TDigit;
+  T: TLetter;
+  W: TWarm;
 begin
+  C := TColor.Red;
+  L := TLevel.Low;
+  D := 5;
+  T := #97;
+  W := TColor.Green;
   WriteLn(Ord(C), Ord(L), D, T, Ord(W));
 end;
 

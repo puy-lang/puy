@@ -1,0 +1,49 @@
+error[E2502]: `TC` is declared in several units; qualify it
+   --> main.pas:10:6
+    |
+ 10 |   K: TC.TG<Integer>;
+    |      ^^
+   ::: src/Left.pas:6:3
+  6 |   TC = class
+    |   -- declared here
+   ::: src/Right.pas:6:3
+  6 |   TC = class
+    |   -- declared here
+    |
+    = note: Puy does not let a later unit in `uses` hide an earlier one
+    = suggestion: replace with `Left.TC`
+    = suggestion: replace with `Right.TC`
+
+error[E2502]: `TC` is declared in several units; qualify it
+   --> main.pas:13:8
+    |
+ 13 |   O := TC.TG<Integer>.Create;
+    |        ^^
+   ::: src/Left.pas:6:3
+  6 |   TC = class
+    |   -- declared here
+   ::: src/Right.pas:6:3
+  6 |   TC = class
+    |   -- declared here
+    |
+    = note: Puy does not let a later unit in `uses` hide an earlier one
+    = suggestion: replace with `Left.TC`
+    = suggestion: replace with `Right.TC`
+
+error[E2502]: `TC` is declared in several units; qualify it
+   --> main.pas:14:16
+    |
+ 14 |   WriteLn(O is TC.TG<Integer>);
+    |                ^^
+   ::: src/Left.pas:6:3
+  6 |   TC = class
+    |   -- declared here
+   ::: src/Right.pas:6:3
+  6 |   TC = class
+    |   -- declared here
+    |
+    = note: Puy does not let a later unit in `uses` hide an earlier one
+    = suggestion: replace with `Left.TC`
+    = suggestion: replace with `Right.TC`
+
+error: aborting due to 3 errors

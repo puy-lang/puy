@@ -1,0 +1,55 @@
+error[E0716]: cannot mix `UInt64` and signed integers
+   --> int_cast_const_uint64_mix.pas:18:13
+    |
+ 18 |   WriteLn(V + UInt64(1));
+    |             ^
+    |
+    = suggestion: convert the `UInt64` operand to `Int64`
+    = suggestion: convert the signed operand to `UInt64`
+
+error[E0716]: cannot mix `UInt64` and signed integers
+   --> int_cast_const_uint64_mix.pas:19:10
+    |
+ 19 |   B := V < UInt64(2);
+    |          ^
+    |
+    = suggestion: convert the `UInt64` operand to `Int64`
+    = suggestion: convert the signed operand to `UInt64`
+
+error[E0716]: cannot mix `UInt64` and signed integers
+   --> int_cast_const_uint64_mix.pas:22:13
+    |
+ 22 |   WriteLn(U + SmallInt(1));
+    |             ^
+    |
+    = suggestion: convert the `UInt64` operand to `Int64`
+    = suggestion: convert the signed operand to `UInt64`
+
+error[E0716]: cannot mix `UInt64` and signed integers
+   --> int_cast_const_uint64_mix.pas:23:13
+    |
+ 23 |   WriteLn(U + High(ShortInt));
+    |             ^
+    |
+    = suggestion: convert the `UInt64` operand to `Int64`
+    = suggestion: convert the signed operand to `UInt64`
+
+error[E0716]: cannot mix `UInt64` and signed integers
+   --> int_cast_const_uint64_mix.pas:24:13
+    |
+ 24 |   WriteLn(U + Integer(1));
+    |             ^
+    |
+    = suggestion: convert the `UInt64` operand to `Int64`
+    = suggestion: convert the signed operand to `UInt64`
+
+error[E0716]: cannot mix `UInt64` and signed integers
+   --> int_cast_const_uint64_mix.pas:25:13
+    |
+ 25 |   WriteLn(U + High(Integer));
+    |             ^
+    |
+    = suggestion: convert the `UInt64` operand to `Int64`
+    = suggestion: convert the signed operand to `UInt64`
+
+error: aborting due to 6 errors

@@ -1,0 +1,33 @@
+error[E0764]: generic instantiation `TDeep<TArray<TArray<TArray<…>>>>` is nested too deeply (limit 32)
+   --> generic_routine_nesting_limit.pas:66:11
+    |
+ 66 |   D: TDeep<Integer>;
+    |           ^^^^^^^^^
+    |
+    = note: instantiated through `TDeep<Integer>`, `K<Integer>`, `TDeep<TArray<Integer>>`, `K<TArray<Integer>>`, …
+
+error[E0764]: generic instantiation `F<TArray<TArray<TArray<…>>>>` is nested too deeply (limit 32)
+   --> generic_routine_nesting_limit.pas:68:12
+    |
+ 68 |   WriteLn(F<Integer>(1, 3));
+    |            ^^^^^^^^^
+    |
+    = note: instantiated through `F<Integer>`, `F<TArray<Integer>>`, `F<TArray<TArray<Integer>>>`, `F<TArray<TArray<TArray<…>>>>`, …
+
+error[E0764]: generic instantiation `TU.G<TArray<TArray<TArray<…>>>>` is nested too deeply (limit 32)
+   --> generic_routine_nesting_limit.pas:69:15
+    |
+ 69 |   WriteLn(TU.G<Integer>(1, 3));
+    |               ^^^^^^^^^
+    |
+    = note: instantiated through `TU.G<Integer>`, `TU.G<TArray<Integer>>`, `TU.G<TArray<TArray<Integer>>>`, `TU.G<TArray<TArray<TArray<…>>>>`, …
+
+error[E0764]: generic instantiation `H<TArray<TArray<TArray<…>>>>` is nested too deeply (limit 32)
+   --> generic_routine_nesting_limit.pas:70:12
+    |
+ 70 |   WriteLn(H<Integer>(3));
+    |            ^^^^^^^^^
+    |
+    = note: instantiated through `H<Integer>`, `TBox<Integer>`, `H<TArray<Integer>>`, `TBox<TArray<Integer>>`, …
+
+error: aborting due to 4 errors

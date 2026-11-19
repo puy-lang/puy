@@ -2,7 +2,7 @@
 
 use super::builtins::{self, builtin_name, builtin_signature};
 use super::hir::*;
-use super::overload::Pick;
+use super::overload::{Pick, strip_parens};
 use super::reals::{TRUNC_ROUND_NOTE, is_fractional, real_calc_type};
 use super::types::{Const, MAX_STRING_LEN, SelfKind, Ty, bound_text};
 use super::{Resolved, Sema};
@@ -40,10 +40,66 @@ fn fold_steps(acc: Expr, first_expr: &mut Option<Expr>, steps: &mut Vec<BinStep>
 
 fn const_expr(value: Const, ty: Ty, span: TextRange) -> Expr {
     Expr {
-        kind: ExprKind::Const,
+        kind: ExprKind::Const { explicit: false },
         ty,
         value: Some(value),
         span,
+    }
+}
+
+/// A constant whose type was written rather than taken from its value (`docs/spec/semantics.md`
+/// 3.2): a conversion (`Integer(1)`), `High` / `Low`, a constant declared with a type.
+pub(super) fn explicit_const(value: Const, ty: Ty, span: TextRange) -> Expr {
+    Expr {
+        kind: ExprKind::Const { explicit: true },
+        ty,
+        value: Some(value),
+        span,
+    }
+}
+
+/// Whether an operand keeps a folded integer constant in its type: an `Int64` / `UInt64`
+/// constant that keeps its own type (`Int64(1) + 1` is `Int64`; `docs/spec/semantics.md` 3.6).
+fn keeps_wide_int_type(e: &Expr) -> bool {
+    matches!(e.value, Some(Const::Int(_)))
+        && matches!(e.ty, Ty::Int64 | Ty::UInt64)
+        && keeps_int_type(e)
+}
+
+/// The constant folded from an operation (`docs/spec/semantics.md` 3.6). An integer arithmetic
+/// result takes its type from its value (2.2), as a literal would, unless an operand is an
+/// `Int64` / `UInt64` constant that keeps its type (`keeps_wide`): `Cardinal(5) + 1` is the
+/// `Integer` 6 and `4000000000 - 3999999999` the `Integer` 1, but `Int64(1) + 1` the `Int64` 2.
+fn folded_const(
+    value: Const,
+    ty: Ty,
+    calc: &Calc,
+    op: BinOp,
+    keeps_wide: bool,
+    span: TextRange,
+) -> Expr {
+    match (&value, calc) {
+        (Const::Int(v), Calc::Int(_)) if !op.is_comparison() => {
+            if keeps_wide {
+                explicit_const(value, ty, span)
+            } else {
+                let ty = Ty::of_literal(*v);
+                const_expr(value, ty, span)
+            }
+        }
+        _ => const_expr(value, ty, span),
+    }
+}
+
+/// Whether an integer constant keeps its own type in the computation-type table rather than
+/// taking the other operand's (`docs/spec/semantics.md` 3.2): its type was written, or is not the
+/// type its value would have as a literal (2.2).
+pub(super) fn keeps_int_type(e: &Expr) -> bool {
+    match &e.value {
+        Some(Const::Int(v)) => {
+            matches!(e.kind, ExprKind::Const { explicit: true }) || e.ty != Ty::of_literal(*v)
+        }
+        _ => true,
     }
 }
 
@@ -198,10 +254,12 @@ impl<'a, 's> Sema<'a, 's> {
     }
 
     /// Types an expression whose use has already been diagnosed: a constructor only has its
-    /// elements typed (no E0729 on top).
+    /// elements typed (no E0729 on top), and `nil`, which has no type without its use, is not
+    /// reported (no E0702 on top; `docs/spec/diagnostics.md` chapter 2).
     pub(super) fn lower_expr_unchecked_ctor(&mut self, e: &ast::Expr) {
         match e {
             ast::Expr::ArrayCtor(ac) => self.lower_ctor_elements_quietly(ac),
+            _ if matches!(strip_parens(e), ast::Expr::Nil(_)) => {}
             _ => {
                 self.lower_expr(e);
             }
@@ -393,9 +451,15 @@ impl<'a, 's> Sema<'a, 's> {
                 value: None,
                 span,
             }),
-            Resolved::Const { value, ty, .. } => {
+            Resolved::Const {
+                value,
+                ty,
+                span: decl,
+            } => {
                 if ty.is_error() {
                     err_expr(span)
+                } else if self.is_explicit_const(decl) {
+                    explicit_const(value, ty, span)
                 } else {
                     const_expr(value, ty, span)
                 }
@@ -513,7 +577,7 @@ impl<'a, 's> Sema<'a, 's> {
             // Only constructors the code cannot see (E0743; `docs/spec/objects.md` 2.5)
             for a in args {
                 if let Some(v) = a.value() {
-                    self.lower_expr(&v);
+                    self.lower_expr_unchecked_ctor(&v);
                 }
             }
             let owner_name = self.types.name(Ty::Class(owner));
@@ -534,11 +598,10 @@ impl<'a, 's> Sema<'a, 's> {
         if set.is_empty() {
             // The built-in `TObject.Create`
             self.check_no_width(args);
-            let values: Vec<Expr> = args
-                .iter()
-                .filter_map(|a| a.value())
-                .map(|v| self.lower_expr(&v))
-                .collect();
+            let values: Vec<ast::Expr> = args.iter().filter_map(|a| a.value()).collect();
+            for v in &values {
+                self.lower_expr_unchecked_ctor(v);
+            }
             if named && self.check_abstract_create(id, span) {
                 return err_expr(span);
             }
@@ -643,19 +706,7 @@ impl<'a, 's> Sema<'a, 's> {
         let is_self = self_up.is_some();
         if info.ret.is_none() {
             // A procedure used in an expression
-            let n = info.name.clone();
-            let name_span = self.routine_decl_span(id);
-            let mut d = Diagnostic::error(
-                Code::E(725),
-                format!("procedure `{n}` has no value"),
-                Stage::Sema,
-            )
-            .with_primary(self.span(range), "")
-            .with_secondary(name_span, "declared here");
-            if let Some(note) = self.procedure_value_note(id) {
-                d = d.with_note(note);
-            }
-            self.push(d);
+            self.routine_no_value(id, range);
             return err_expr(span);
         }
         if is_self {
@@ -1086,7 +1137,13 @@ impl<'a, 's> Sema<'a, 's> {
             }
             return err_expr(span);
         };
-        let (b, declared) = self.lower_expr_declared(&base);
+        // A procedural value whose result has no such member is not called: it has no members
+        // (`docs/spec/objects.md` 9.11)
+        let (b, declared) = if self.member_of_procedural(&base, self.text(&field)) {
+            self.lower_procedural_base(&base)
+        } else {
+            self.lower_expr_declared(&base)
+        };
         if b.ty.is_error() {
             return err_expr(span);
         }
@@ -1714,12 +1771,13 @@ impl<'a, 's> Sema<'a, 's> {
                 acc = self.convert_u8(acc, Ty::String);
             }
             let step_span = TextRange::new(acc.span.start(), rhs.span.end());
+            let keeps_wide = keeps_wide_int_type(&acc) || keeps_wide_int_type(&rhs);
             match self.binary_step(&acc, op, rhs, op_range, node) {
                 Some((step, value)) => {
                     let ty = step.ty;
                     if let Some(v) = value {
                         // If everything so far is constant, fold it and use it as the left operand of the next step (3.6)
-                        acc = const_expr(v, ty, step_span);
+                        acc = folded_const(v, ty, &step.calc, op, keeps_wide, step_span);
                         first_expr = None;
                         steps.clear();
                         continue;
@@ -2456,8 +2514,11 @@ impl<'a, 's> Sema<'a, 's> {
     /// Computation type of an integer binary operation (the table in 3.2). Mixing `UInt64` with signed types is E0716.
     fn int_calc_type(&mut self, lhs: &Expr, rhs: &Expr, op_range: TextRange) -> Option<Ty> {
         let effective = |e: &Expr, other: Ty| -> Ty {
-            // A constant whose value fits the other operand's type is treated as that type
+            // A constant whose type comes from its value (a literal, or a constant folded from
+            // such constants) and fits the other operand's type is treated as that type; a
+            // constant whose type was written (`Int64(1)`, `Integer(1)`) keeps it
             if let Some(Const::Int(v)) = &e.value
+                && !keeps_int_type(e)
                 && other.is_integer()
                 && other.contains(*v)
             {
@@ -3265,7 +3326,31 @@ impl<'a, 's> Sema<'a, 's> {
 
     // ---- Calls ----
 
+    /// E0725 for a call of the procedure `id` used as a value; the name is written at `range`.
+    pub(super) fn routine_no_value(&mut self, id: RoutineId, range: TextRange) {
+        let n = self.routines[id.0 as usize].name.clone();
+        let mut d = Diagnostic::error(
+            Code::E(725),
+            format!("procedure `{n}` has no value"),
+            Stage::Sema,
+        )
+        .with_primary(self.span(range), "")
+        .with_secondary(self.routine_decl_span(id), "declared here");
+        if let Some(note) = self.procedure_value_note(id) {
+            d = d.with_note(note);
+        }
+        self.push(d);
+    }
+
+    /// A call written in an expression, whose value is used: a call of a procedure is E0725
+    /// (`docs/spec/semantics.md` 4.3, `docs/spec/objects.md` 9.4).
     fn lower_call_expr(&mut self, c: &ast::CallExpr, span: TextRange) -> Expr {
+        self.lower_call(c, span, true)
+    }
+
+    /// A call `c`; with `value`, its value is used and a call of a procedure is E0725. A statement
+    /// (`(P)();`, `F()();`) passes `false`.
+    pub(super) fn lower_call(&mut self, c: &ast::CallExpr, span: TextRange, value: bool) -> Expr {
         let Some(callee) = c.callee() else {
             return err_expr(span);
         };
@@ -3274,7 +3359,23 @@ impl<'a, 's> Sema<'a, 's> {
             && let Some(v) = self.procedural_callee(&callee)
         {
             // A call of a procedural value (`docs/spec/objects.md` 9.4)
-            return self.call_value(v, &args, span);
+            let call = self.call_value(v, &args, span);
+            if value
+                && let ExprKind::CallValue { callee, .. } = &call.kind
+                && self
+                    .types
+                    .proc_sig(callee.ty)
+                    .is_some_and(|(_, _, ret)| ret.is_none())
+            {
+                let text = self.src(callee.span);
+                self.error(
+                    Code::E(725),
+                    format!("procedure `{text}` has no value"),
+                    span,
+                );
+                return err_expr(span);
+            }
+            return call;
         }
         let Some((r, name, range)) = self.resolve_name_expr(&callee) else {
             // An expression that cannot be called
@@ -3306,7 +3407,15 @@ impl<'a, 's> Sema<'a, 's> {
             Resolved::Routine(id) => match self.pick_overload(id, &args, span, false) {
                 Pick::Routine(c) => {
                     self.routine_hint_use(c, range);
-                    self.lower_routine_call(c, &args, span)
+                    let call = self.lower_routine_call(c, &args, span);
+                    if value
+                        && matches!(call.kind, ExprKind::Call { .. })
+                        && self.routines[c.0 as usize].ret.is_none()
+                    {
+                        self.routine_no_value(c, range);
+                        return err_expr(span);
+                    }
+                    call
                 }
                 Pick::Failed => err_expr(span),
             },
@@ -3376,7 +3485,7 @@ impl<'a, 's> Sema<'a, 's> {
                 member,
                 inherited,
                 Some(&args),
-                true,
+                value,
                 range,
                 span,
             ),
@@ -3586,7 +3695,7 @@ impl<'a, 's> Sema<'a, 's> {
             Ty::Boolean => Const::Bool(v != 0),
             _ => Const::Int(v),
         };
-        const_expr(value, distinct.unwrap_or(vty), span)
+        explicit_const(value, distinct.unwrap_or(vty), span)
     }
 
     /// `SizeOf(T)` (`docs/spec/semantics.md` 5.3), or `None` for a type without a memory layout
@@ -3827,10 +3936,8 @@ impl<'a, 's> Sema<'a, 's> {
         let name = self.routines[id.0 as usize].name.clone();
         let min = self.routines[id.0 as usize].min_args();
         if args.len() < min || args.len() > params.len() {
-            for a in args {
-                if let Some(v) = a.value() {
-                    self.lower_expr(&v);
-                }
+            if self.lower_miscounted_args(args) {
+                return err_expr(span);
             }
             let expected = if min == params.len() {
                 min.to_string()
@@ -3975,7 +4082,7 @@ impl<'a, 's> Sema<'a, 's> {
         let (place, found) = self.ref_place(v, param, is_out, decl)?;
         let open_ok = matches!(ty, Ty::OpenArray(_)) && self.open_array_accepts(ty, found);
         if !found.is_error() && !ty.is_error() && found != ty && !open_ok {
-            let mode = if is_out { "out" } else { "var" };
+            let mode = if is_out { "an `out`" } else { "a `var`" };
             let r = ast::trimmed_range(v.syntax());
             let d = Diagnostic::error(
                 Code::E(702),
@@ -3990,7 +4097,7 @@ impl<'a, 's> Sema<'a, 's> {
             )
             .with_primary(self.span(r), "")
             .with_note(format!(
-                "a `{mode}` parameter needs a variable of exactly the same type"
+                "{mode} parameter needs a variable of exactly the same type"
             ));
             self.push(d);
             return None;
@@ -4134,6 +4241,156 @@ impl<'a, 's> Sema<'a, 's> {
         }
     }
 
+    /// `HashFind` / `HashLookup` / `IsPlainKey` (`docs/spec/bytecode.md` 2.23; the units of the
+    /// standard library only): the integers converted to their parameter types, the arrays
+    /// checked against theirs, and a key of any type (the keys of `HashLookup` are of its type,
+    /// and its arrays four consecutive fields of `Self`); lower expands the call by the type of
+    /// the key.
+    fn hash_table_call(&mut self, f: Builtin, args: &[ast::Arg], span: TextRange) -> Expr {
+        let (sig, ret) = builtin_signature(f);
+        if args.len() != sig.len() {
+            for a in args {
+                if let Some(v) = a.value() {
+                    self.lower_expr(&v);
+                }
+            }
+            self.error(
+                Code::E(705),
+                format!(
+                    "wrong number of arguments: expected {}, found {}",
+                    sig.len(),
+                    args.len()
+                ),
+                span,
+            );
+            return err_expr(span);
+        }
+        let checks = self.checks_at(span.start());
+        let mut lowered = Vec::new();
+        for (i, (a, (name, ty))) in args.iter().zip(sig).enumerate() {
+            let Some(v) = a.value() else {
+                return err_expr(span);
+            };
+            let e = if ty.is_error() {
+                self.lower_expr(&v)
+            } else {
+                let e = self.lower_expected(&v, *ty);
+                if e.ty.is_error() {
+                    return err_expr(span);
+                }
+                self.coerce(e, *ty, checks.range, Some((i + 1, name)))
+            };
+            if e.ty.is_error() {
+                return err_expr(span);
+            }
+            lowered.push(e);
+        }
+        // The arrays: the buckets and the next entries of `Integer`, the hashes of `Int64`, the
+        // keys of the type of the key
+        let arrays: &[(usize, Option<Ty>)] = match f {
+            Builtin::HashFind => &[
+                (1, Some(Ty::Integer)),
+                (2, Some(Ty::Int64)),
+                (3, Some(Ty::Integer)),
+            ],
+            Builtin::HashLookup => &[
+                (1, Some(Ty::Integer)),
+                (2, Some(Ty::Int64)),
+                (3, Some(Ty::Integer)),
+                (4, Some(lowered[0].ty)),
+            ],
+            _ => &[],
+        };
+        for &(i, elem) in arrays {
+            let e = &lowered[i];
+            let fits = matches!(e.ty, Ty::DynArray(_))
+                && elem.is_none_or(|t| self.types.elem_of(e.ty) == Some(t));
+            if !fits {
+                let expected = match elem {
+                    Some(t) => format!("a dynamic array of `{}`", self.tn(t)),
+                    None => "a dynamic array".into(),
+                };
+                self.error(
+                    Code::E(702),
+                    format!(
+                        "type mismatch: expected {expected}, found `{}` (argument {}, parameter `{}`)",
+                        self.tn(e.ty),
+                        i + 1,
+                        sig[i].0
+                    ),
+                    e.span,
+                );
+                return err_expr(span);
+            }
+        }
+        if f == Builtin::HashLookup {
+            return self.hash_lookup(args, lowered, span);
+        }
+        Expr {
+            kind: ExprKind::Builtin {
+                func: f,
+                args: lowered,
+            },
+            ty: ret,
+            value: None,
+            span,
+        }
+    }
+
+    /// `HashLookup(Key, Buckets, Hashes, Next, Keys)` once its arguments have their types
+    /// (`docs/spec/bytecode.md` 2.23): the arrays must be fields of `Self` named without `Self.`,
+    /// declared one after another in this order (E0702), which the instruction reads from the
+    /// slot of the first. The key is passed as `KeyHash(Key)`, which lower evaluates for a key
+    /// the instruction does not hash itself.
+    fn hash_lookup(&mut self, args: &[ast::Arg], mut lowered: Vec<Expr>, span: TextRange) -> Expr {
+        let this = self.self_var().map(|(v, _)| v);
+        let mut first = None;
+        for (i, (a, e)) in args.iter().zip(&lowered).enumerate().skip(1) {
+            let named = matches!(a.value(), Some(ast::Expr::NameRef(_)));
+            let slot = match &e.kind {
+                ExprKind::ObjField { base, slot, .. }
+                    if named
+                        && matches!((&base.kind, this), (ExprKind::Var(b), Some(v)) if *b == v) =>
+                {
+                    Some(*slot)
+                }
+                _ => None,
+            };
+            let first = *first.get_or_insert(slot);
+            let fits = matches!((first, slot), (Some(f), Some(s)) if s == f + i as u32 - 1);
+            if !fits {
+                self.error(
+                    Code::E(702),
+                    "type mismatch: expected four consecutive fields of `Self`".to_string(),
+                    e.span,
+                );
+                return err_expr(span);
+            }
+        }
+        let key = lowered.remove(0);
+        self.instances.key_used = true;
+        let hash = Expr {
+            kind: ExprKind::Key {
+                op: KeyOp::Hash,
+                args: vec![key],
+                func: None,
+            },
+            ty: Ty::Int64,
+            value: None,
+            span,
+        };
+        lowered.insert(0, hash);
+        Expr {
+            kind: ExprKind::Builtin {
+                func: Builtin::HashLookup,
+                args: lowered,
+            },
+            ty: Ty::Integer,
+            value: None,
+            span,
+        }
+    }
+
     /// A call to a built-in function.
     fn lower_builtin_call(
         &mut self,
@@ -4146,6 +4403,12 @@ impl<'a, 's> Sema<'a, 's> {
         self.check_no_width(args);
         if f == Builtin::IsOverridden {
             return self.is_overridden(args, span);
+        }
+        if matches!(
+            f,
+            Builtin::HashFind | Builtin::HashLookup | Builtin::IsPlainKey | Builtin::IsPlainOrder
+        ) {
+            return self.hash_table_call(f, args, span);
         }
         let (sig, ret) = builtin_signature(f);
         let shown = builtin_name(f);
@@ -4842,7 +5105,13 @@ impl<'a, 's> Sema<'a, 's> {
         let Some(v) = args[0].value() else {
             return err_expr(span);
         };
-        let x = self.lower_expr(&v);
+        // A procedural value converted to a procedural type is not called
+        // (`docs/spec/objects.md` 9.4)
+        let x = if t.is_procedural() {
+            self.lower_value(&v)
+        } else {
+            self.lower_expr(&v)
+        };
         if x.ty.is_error() || t.is_error() {
             return err_expr(span);
         }
@@ -4917,6 +5186,10 @@ impl<'a, 's> Sema<'a, 's> {
         if x.ty == t {
             let mut e = x;
             e.span = span;
+            // `Integer(1)` is an `Integer` constant by its conversion, not by its value (3.2)
+            if let (ExprKind::Const { explicit }, Some(Const::Int(_))) = (&mut e.kind, &e.value) {
+                *explicit = true;
+            }
             return e;
         }
         if let Some(p) = super::Sema::param_of(x.ty).or(super::Sema::param_of(t)) {
@@ -4970,7 +5243,7 @@ impl<'a, 's> Sema<'a, 's> {
                         }
                         return err_expr(span);
                     }
-                    return const_expr(Const::Int(*val), t, span);
+                    return explicit_const(Const::Int(*val), t, span);
                 }
                 let (lo, hi) = t.range().unwrap();
                 let (slo, shi) = s.range().unwrap();
@@ -5047,7 +5320,7 @@ impl<'a, 's> Sema<'a, 's> {
                         self.const_out_of_range(*v, t, span);
                         return err_expr(span);
                     }
-                    return const_expr(Const::Int(*v), t, span);
+                    return explicit_const(Const::Int(*v), t, span);
                 }
                 let (lo, hi) = t.range().unwrap();
                 let (slo, shi) = self.types.ord_range(s).unwrap_or((0, 0));
@@ -5230,7 +5503,8 @@ impl<'a, 's> Sema<'a, 's> {
                     ty,
                 ))
             }
-            ast::Expr::NameRef(_) | ast::Expr::Field(_) => {
+            // `inherited P` names the parent's property (`docs/spec/objects.md` 2.4)
+            ast::Expr::NameRef(_) | ast::Expr::Field(_) | ast::Expr::Inherited(_) => {
                 let (r, name, range) = self.resolve_name_expr(e)?;
                 match r {
                     Resolved::Var(id) => {

@@ -10,5 +10,5 @@ other: ok
 argument: array element 0 is passed to a var parameter of a call in progress
 5
 4
-field: a record field is passed to a var parameter of a call in progress
+field: array element 0 is passed to a var parameter of a call in progress
 3

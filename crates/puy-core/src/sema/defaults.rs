@@ -418,7 +418,7 @@ impl<'a, 's> Sema<'a, 's> {
             return None;
         };
         let one = Expr {
-            kind: ExprKind::Const,
+            kind: ExprKind::Const { explicit: false },
             ty: Ty::Integer,
             value: Some(super::types::Const::Int(1)),
             span,

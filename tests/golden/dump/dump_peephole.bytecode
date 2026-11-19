@@ -78,23 +78,22 @@
   0016  AddInt32I    r1, r1, 4
   .line 33
   0017  LoadInt      r2, 1
-  0018  Move         r5, r0
-  0019  JmpIfLtInt   r5, r2, -> 001c
+  0018  JmpIfLtInt   r0, r2, -> 001b
   .line 34
-  001a  AddInt32     r1, r1, r2
+  0019  AddInt32     r1, r1, r2
   .line 33
-  001b  ForLoopUp    r2, r5, -> 001a
+  001a  ForLoopUp    r2, r0, -> 0019
   .line 35
-  001c  Move         r2, r0
-  001d  LoadInt      r5, 1
-  001e  JmpIfLtInt   r2, r5, -> 0021
+  001b  Move         r2, r0
+  001c  LoadInt      r5, 1
+  001d  JmpIfLtInt   r2, r5, -> 0020
   .line 36
-  001f  AddInt32I    r1, r1, -1
+  001e  AddInt32I    r1, r1, -1
   .line 35
-  0020  ForLoopDown  r2, r5, -> 001f
+  001f  ForLoopDown  r2, r5, -> 001e
   .line 37
-  0021  TruncF64     r6, r4
-  0022  AddInt       r1, r1, r6
-  0023  Narrow       r1, r1, 4
+  0020  TruncF64     r6, r4
+  0021  AddInt       r1, r1, r6
+  0022  Narrow       r1, r1, 4
   .line 38
-  0024  Ret          r1
+  0023  Ret          r1

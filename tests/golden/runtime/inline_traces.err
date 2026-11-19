@@ -1,0 +1,2 @@
+error: uncaught exception EAccessViolation: access to a nil reference
+  at InlineTraces.<main> (inline_traces.pas:114)

@@ -1,5 +1,7 @@
 //! Heap: one slab of reference-counted blocks, and usage accounting (`docs/design/vm.md` 3.3, 3.11; requirements §5.5).
 
+use super::hash::HashKeys;
+use super::sort;
 use crate::bytecode::{
     SLOT_OBJ, SLOT_PLAIN, SLOT_REF, TYPE_ARRAY, TYPE_DYNARRAY, TYPE_SET, TypeEntry,
 };
@@ -822,32 +824,64 @@ impl Body {
     }
 }
 
-/// The stack trace of an exception object (`docs/spec/exceptions.md` 6.1): (function index, word
-/// position) from the innermost frame, at most 32 (16 innermost + 16 outermost), and the number of
-/// frames omitted between them.
+/// The stack trace of an exception object (`docs/spec/exceptions.md` 6.1): (function index, line)
+/// from the innermost frame (an inlined call is a frame of its own), at most 32 (16 innermost +
+/// 16 outermost), and the number of frames omitted between them.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Trace {
     pub frames: Vec<(u32, u32)>,
     pub omitted: usize,
 }
 
-/// One location lent to a `var` / `out` parameter (`Lend`; `docs/design/lifetime.md` 3.7), an
-/// entry of the lending table.
+/// One location lent to a `var` / `out` parameter (`Lend`, `LendPlace`;
+/// `docs/design/lifetime.md` 3.7), an entry of the lending table.
 #[derive(Debug, Clone, Copy)]
 pub struct Loan {
-    /// The register (absolute position) holding the value taken out.
+    /// The register (absolute position) holding the value taken out (`Lend`), the reference
+    /// to the flat place (`LendPlace`), or the block it was taken out into (`PlaceBox`).
     pub value: usize,
-    /// The root: a reference slot of kind 1 or 2.
+    /// The root: a reference slot (kind 1 to 4), or an instance's handle.
     pub root: i64,
     /// The first register (absolute position) of the path and its length.
     pub path: usize,
     pub len: usize,
     /// The number of frames when the location was lent (the frame of the call).
     pub depth: usize,
-    /// The lent slot (block, slot number), `None` once the block was freed or the slot dropped.
+    /// The lent slots: the block and the first slot number, `None` once the block of a lent
+    /// value was freed or the slot dropped. A flat place is never `None`: when its block goes,
+    /// its slots move to a block of their own ([`Loan::evacuated`]).
     pub loc: Option<(StrRef, usize)>,
-    /// The first of its containers in the containers list ([`Heap::loan_containers`]).
+    /// The number of slots lent from `loc`: 1 for a value, the width of a flat place.
+    pub width: usize,
+    /// The type of a flat place (`LendPlace`; `docs/spec/bytecode.md` 2.8), `None` for a value.
+    pub place: Option<u32>,
+    /// The kind of the slot of a lent value ([`SLOT_PLAIN`], [`SLOT_REF`], [`SLOT_OBJ`]), for
+    /// letting go of it when it cannot be given back.
+    pub kind: u8,
+    /// Whether the slots of the flat place were moved out of a block that was freed or shrunk
+    /// into a block of the place's type that the loan holds (`loc` names it, at slot 0).
+    pub evacuated: bool,
+    /// Whether the values of the flat place were taken out into a block in the register
+    /// `value` (`PlaceBox`; `docs/spec/bytecode.md` 2.8): the loan then lends `loc` as `Lend`
+    /// lends a value, and gives the block's slots back.
+    pub boxed: bool,
+    /// The first of its containers in the containers list ([`Heap::loan_containers`]) and their
+    /// number.
     pub containers: usize,
+    pub ncontainers: usize,
+}
+
+impl Loan {
+    /// Whether slot `i` of the block `r` is one of the lent slots.
+    #[inline]
+    pub fn covers(&self, r: StrRef, i: usize) -> bool {
+        matches!(self.loc, Some((b, s)) if b == r && i >= s && i - s < self.width)
+    }
+
+    /// Whether one of the slots `start..end` of the block `r` is one of the lent slots.
+    pub fn overlaps(&self, r: StrRef, start: usize, end: usize) -> bool {
+        matches!(self.loc, Some((b, s)) if b == r && start < s + self.width && s < end)
+    }
 }
 
 /// A container walked by `Lend`, from the root: the block (`None` once freed), its type, and
@@ -897,7 +931,22 @@ struct Block {
     /// each time the block is freed, so a handle to a freed instance no longer matches) and the
     /// kind in the lower 8 ([`TAG_OBJ_MANUAL`], …).
     tag: u32,
+    /// The hash a string or `UTF8String` block remembers (`HashStr` / `HashUtf8`;
+    /// `docs/design/vm.md` 3.18), or 0 when it has none: set to 0 when the block is placed and
+    /// whenever its content is rewritten ([`Block::body_to_rewrite`]). It fills the padding
+    /// between the head and the body, so the block is no larger.
+    hash: u32,
     body: Option<Body>,
+}
+
+impl Block {
+    /// The body, to change a string's or `UTF8String`'s content in place: the remembered hash is
+    /// forgotten first, as it no longer matches (`docs/spec/bytecode.md` 2.21). Every in-place
+    /// rewrite of a text goes through here.
+    fn body_to_rewrite(&mut self) -> &mut Option<Body> {
+        self.hash = 0;
+        &mut self.body
+    }
 }
 
 /// The kind in a block's tag of a block that is not an instance.
@@ -929,6 +978,9 @@ pub enum BadHandle {
     /// range: only forged bytecode does this (F0001).
     Fatal(String),
 }
+
+/// The `next` of an entry of a hash table that was removed (a hole; `docs/spec/bytecode.md` 2.23).
+pub const HASH_HOLE: i64 = -2;
 
 /// The slab index of a heap reference or a handle: its lower 32 bits less 1 (a handle's
 /// generation is in the bits above; `docs/spec/objects.md` 14.1). `None` for 0.
@@ -965,6 +1017,10 @@ pub struct Heap {
     /// ([`Heap::destruction_runs_code`]), by type index; computed once, as freeing an instance
     /// asks it each time.
     runs_code: Vec<bool>,
+    /// Whether each type index is a dynamic array whose elements take one slot, the arrays the
+    /// hash table instructions read ([`Heap::hash_arrays`]); computed once, as each of those
+    /// instructions asks it of 3 or 4 arrays.
+    hash_types: Vec<bool>,
     /// The slot boxes of freed instances kept for reuse, by length less 1 (at most
     /// [`SLOT_POOL_LENS`] slots, [`SLOT_POOL_KEEP`] boxes per length), so that an instance made
     /// right after one of the same size is freed does not go to the allocator. Not counted in
@@ -994,6 +1050,9 @@ pub struct Heap {
     /// marked block can forget it.
     loans: Vec<Loan>,
     loan_containers: Vec<LoanContainer>,
+    /// The loans whose flat places move out of a block being freed (kept empty between calls
+    /// and reused; [`Heap::forget_loaned_block`]).
+    evacuating: Vec<(usize, usize)>,
 }
 
 /// One value of a release job's work (`docs/design/objects.md` 3.8).
@@ -1117,11 +1176,16 @@ impl Heap {
         types.extend_from_slice(section);
         let ancestors = class_ancestors(&types);
         let runs_code = types.iter().map(entry_runs_code).collect();
+        let hash_types = types
+            .iter()
+            .map(|t| t.kind == TYPE_DYNARRAY && t.elem_width() == 1)
+            .collect();
         Heap {
             blocks: Vec::new(),
             types,
             ancestors,
             runs_code,
+            hash_types,
             slot_pool: (0..SLOT_POOL_LENS).map(|_| Vec::new()).collect(),
             free: Vec::new(),
             reuse,
@@ -1133,6 +1197,7 @@ impl Heap {
             open: false,
             loans: Vec::new(),
             loan_containers: Vec::new(),
+            evacuating: Vec::new(),
         }
     }
 
@@ -1208,12 +1273,18 @@ impl Heap {
     /// index. A reused index keeps its generation.
     fn place_tagged(&mut self, body: Body, kind: u32) -> usize {
         self.used += body.size();
+        // An instance's handle has a generation of 1 or more, so that it never reads as the
+        // reference of a record or array block (a cursor's container may be either; `docs/spec/
+        // bytecode.md` 1.5): a stale handle then fails the generation check
+        let first = if kind == TAG_PLAIN { 0 } else { 1 << 8 };
         match self.free.pop() {
             Some(i) => {
                 let block = &mut self.blocks[i];
                 block.rc = 1;
                 block.lent = 0;
-                block.tag = (block.tag & !TAG_KIND) | kind;
+                let generation = (block.tag & !TAG_KIND).max(first);
+                block.tag = generation | kind;
+                block.hash = 0;
                 block.body = Some(body);
                 i
             }
@@ -1221,7 +1292,8 @@ impl Heap {
                 self.blocks.push(Block {
                     rc: 1,
                     lent: 0,
-                    tag: kind,
+                    tag: first | kind,
+                    hash: 0,
                     body: Some(body),
                 });
                 self.blocks.len() - 1
@@ -1322,7 +1394,8 @@ impl Heap {
     }
 
     /// The class of the live instance a handle refers to, or `None` when the handle does not
-    /// check (the fast path of the method calls; [`Heap::obj_class`] reports why).
+    /// check (the fast path of the method calls and of `IsClass` / `AsClass`; [`Heap::obj_class`]
+    /// reports why).
     #[inline(always)]
     pub fn obj_class_fast(&self, h: i64) -> Option<u32> {
         let block = self.blocks.get(slab_index(h)?)?;
@@ -1333,6 +1406,18 @@ impl Heap {
             Body::Obj { ty, .. } => Some(*ty),
             _ => None,
         }
+    }
+
+    /// Whether the instance `h` is of the class `ty` or a descendant (`IsClass`; `nil` is not),
+    /// or `None` when the handle does not check (the fast path of `IsClass` / `AsClass`). Not
+    /// inlined: inlined into `run_loop`, it left one more instruction in the dispatch of every
+    /// instruction (`docs/notes/benchmark-m4c.md`, M4-60).
+    #[inline(never)]
+    pub fn is_class_fast(&self, h: i64, ty: u32) -> Option<bool> {
+        if h == 0 {
+            return Some(false);
+        }
+        Some(self.class_inherits(self.obj_class_fast(h)?, ty))
     }
 
     /// The class (type index) of the live instance a handle refers to (`docs/spec/objects.md`
@@ -1380,6 +1465,15 @@ impl Heap {
     #[inline(always)]
     pub fn obj_get_fast(&mut self, h: i64, i: usize) -> Option<i64> {
         self.obj_slots_fast(h)?.get(i).copied()
+    }
+
+    /// Slots `i` to `i + N - 1` of the instance `h` (the fields `HashLookupInt` /
+    /// `HashLookupStr` read; `docs/spec/bytecode.md` 2.23), or `None` under the same conditions
+    /// as [`Heap::obj_get_fast`]: the block is looked at once for all of them.
+    #[inline(always)]
+    pub fn obj_fields_fast<const N: usize>(&mut self, h: i64, i: usize) -> Option<[i64; N]> {
+        let slots = self.obj_slots_fast(h)?;
+        slots.get(i..i.checked_add(N)?)?.try_into().ok()
     }
 
     /// Writes `v` to slot `i` of the instance `h` (`ObjSet` of an unmanaged slot), or `None` with
@@ -1478,10 +1572,10 @@ impl Heap {
         let block = &mut self.blocks[index];
         let lent = std::mem::take(&mut block.lent);
         let tomb = block.tag & TAG_KIND == TAG_OBJ_COUNTED && block.rc > 0;
-        let body = block.body.take().expect("obj_index returns live blocks");
+        let mut body = block.body.take().expect("obj_index returns live blocks");
         self.used -= body.size();
         if lent != 0 {
-            self.forget_loaned_block(index as StrRef + 1);
+            self.forget_loaned_block(index as StrRef + 1, &mut body);
         }
         if tomb {
             let block = &mut self.blocks[index];
@@ -1591,6 +1685,57 @@ impl Heap {
         }
     }
 
+    /// `HashStr` of the string `r` (0 is empty; `docs/spec/bytecode.md` 2.21): the hash its block
+    /// remembers, or else worked out from its code units and remembered.
+    pub fn str_hash(&mut self, r: StrRef, keys: &HashKeys) -> Result<u32, BadRef> {
+        self.text_hash(r, keys, |body| match body {
+            Body::Str(s) => Some(keys.units(s.iter_units())),
+            _ => None,
+        })
+    }
+
+    /// `HashUtf8` of the `UTF8String` `r` (0 is empty), remembered as by [`Heap::str_hash`].
+    pub fn u8_hash(&mut self, r: StrRef, keys: &HashKeys) -> Result<u32, BadRef> {
+        self.text_hash(r, keys, |body| match body {
+            Body::U8(b) => Some(keys.bytes(b)),
+            _ => None,
+        })
+    }
+
+    /// The hash the text block `r` remembers, or else `hash` of its body remembered (`None` for a
+    /// block of another kind, which reads as empty as in [`Heap::get`]; nothing is remembered). A
+    /// remembered 0 cannot be told from none, so a text hashing to 0 is worked out each time
+    /// (`docs/design/vm.md` 3.18).
+    #[inline(always)]
+    fn text_hash(
+        &mut self,
+        r: StrRef,
+        keys: &HashKeys,
+        hash: impl FnOnce(&Body) -> Option<u32>,
+    ) -> Result<u32, BadRef> {
+        let Some(block) = usize::try_from(r - 1)
+            .ok()
+            .and_then(|i| self.blocks.get_mut(i))
+        else {
+            return Ok(keys.empty_text);
+        };
+        let Some(body) = &block.body else {
+            return Err(BadRef {
+                message: format!("read of a freed heap block {r}"),
+            });
+        };
+        if block.hash != 0 {
+            return Ok(block.hash);
+        }
+        Ok(match hash(body) {
+            Some(h) => {
+                block.hash = h;
+                h
+            }
+            None => keys.empty_text,
+        })
+    }
+
     /// The live block a non-zero reference points to (for reading).
     fn block(&self, r: StrRef, what: &str) -> Result<&Block, BadRef> {
         let block = slab_index(r)
@@ -1637,11 +1782,12 @@ impl Heap {
         let entry = self.type_entry(ty).ok_or_else(|| BadRef {
             message: format!("type {ty} out of range"),
         })?;
-        // A big set holds its bits in words of 64 (`docs/spec/types.md` 8.3)
-        let n = if entry.kind == TYPE_SET {
-            set_words(entry.slots)
-        } else {
-            entry.slots as usize
+        // A big set holds its bits in words of 64 (`docs/spec/types.md` 8.3); a static array
+        // its elements times their width
+        let n = match entry.kind {
+            TYPE_SET => set_words(entry.slots),
+            TYPE_ARRAY => entry.slots as usize * entry.elem_width(),
+            _ => entry.slots as usize,
         };
         if !self.fits(n * 8) {
             return Ok(Err(OutOfMemory));
@@ -1738,6 +1884,255 @@ impl Heap {
         self.agg(r, "read").map(|(_, s)| s)
     }
 
+    /// The elements of the dynamic arrays `refs` (0 is empty) whose elements take one slot each,
+    /// for the hash table instructions (`docs/spec/bytecode.md` 2.23); anything else is an error
+    /// naming the array by its entry of `whats`. One look at each block and at the table of the
+    /// types that qualify ([`Heap::hash_types`]), so that an instruction checks all its arrays
+    /// at once.
+    pub fn hash_arrays<const N: usize>(
+        &self,
+        refs: [StrRef; N],
+        whats: [&str; N],
+    ) -> Result<[&[i64]; N], BadRef> {
+        let mut out: [&[i64]; N] = [&[]; N];
+        for (k, &r) in refs.iter().enumerate() {
+            if r == 0 {
+                continue;
+            }
+            match self.hash_slots(r) {
+                Some(slots) => out[k] = slots,
+                None => return Err(self.hash_array_error(r, whats[k])),
+            }
+        }
+        Ok(out)
+    }
+
+    /// The slots of the block `r` (not 0) if it is a dynamic array of one-slot elements.
+    #[inline]
+    fn hash_slots(&self, r: StrRef) -> Option<&[i64]> {
+        if (r as u64) >> 32 != 0 {
+            return None;
+        }
+        match self.blocks.get(slab_index(r)?)?.body.as_ref()? {
+            Body::Agg { ty, slots } if self.hash_types.get(*ty as usize) == Some(&true) => {
+                Some(slots)
+            }
+            _ => None,
+        }
+    }
+
+    /// The error of [`Heap::hash_arrays`] for the block `r` that is not a dynamic array of
+    /// one-slot elements: an invalid or freed reference as [`Heap::block`] names it, otherwise
+    /// the kind of the block.
+    #[cold]
+    fn hash_array_error(&self, r: StrRef, what: &str) -> BadRef {
+        let bad = || BadRef {
+            message: format!(
+                "{what} of a hash table: heap block {r} is not a dynamic array of one-slot elements"
+            ),
+        };
+        if (r as u64) >> 32 != 0 {
+            return bad();
+        }
+        match self.block(r, "read") {
+            Err(e) => e,
+            Ok(_) => bad(),
+        }
+    }
+
+    /// The string `r` (0 is empty) for the key comparison of `HashLookupStr`
+    /// (`docs/spec/bytecode.md` 2.23); a block that is not a string is an error (unlike
+    /// [`Heap::get`]).
+    pub fn hash_key_str(&self, r: StrRef) -> Result<&PStr, BadRef> {
+        if r == 0 {
+            return Ok(&self.empty);
+        }
+        match &self.block(r, "read")?.body {
+            Some(Body::Str(s)) => Ok(s),
+            _ => Err(BadRef {
+                message: format!("key of a hash table: heap block {r} is not a string"),
+            }),
+        }
+    }
+
+    /// `HashRelink` (`docs/spec/bytecode.md` 2.23): sets every bucket of `buckets` to -1, then
+    /// links the first `n` entries that are not holes (their `next` is not -2) into the chains
+    /// of their buckets, writing `buckets` and `next` in place (while shared, as a dynamic array
+    /// is written). Returns the number of entries linked. The three arrays must be distinct
+    /// blocks.
+    pub fn hash_relink(
+        &mut self,
+        buckets: StrRef,
+        hashes: StrRef,
+        next: StrRef,
+        n: i64,
+    ) -> Result<usize, BadRef> {
+        let fail = |message: String| Err(BadRef { message });
+        let lens = self
+            .hash_arrays(
+                [buckets, hashes, next],
+                ["the buckets", "the hashes", "the next entries"],
+            )?
+            .map(<[i64]>::len);
+        if lens[0] != 0 && !lens[0].is_power_of_two() {
+            return fail(format!(
+                "the buckets of a hash table: length {} is not a power of 2",
+                lens[0]
+            ));
+        }
+        let Some(n) = usize::try_from(n)
+            .ok()
+            .filter(|n| *n <= lens[1].min(lens[2]))
+        else {
+            return fail(format!(
+                "`HashRelink` of {n} entries out of range 0..{}",
+                lens[1].min(lens[2])
+            ));
+        };
+        let distinct = [buckets, hashes, next];
+        for (i, a) in distinct.iter().enumerate() {
+            if *a != 0 && distinct[i + 1..].contains(a) {
+                return fail(format!("`HashRelink` of the heap block {a} twice"));
+            }
+        }
+        // The two arrays written are taken out of their blocks while the chains are made (the
+        // blocks are distinct, so the hashes are read from their own), and put back after
+        let take = |heap: &mut Heap, r: StrRef| -> Vec<i64> {
+            if r == 0 {
+                return Vec::new();
+            }
+            match heap.blocks[slab_index(r).expect("checked above")]
+                .body
+                .as_mut()
+            {
+                Some(Body::Agg { slots, .. }) => std::mem::take(slots),
+                _ => unreachable!("checked above"),
+            }
+        };
+        let put = |heap: &mut Heap, r: StrRef, v: Vec<i64>| {
+            if r != 0
+                && let Some(Body::Agg { slots, .. }) = heap.blocks
+                    [slab_index(r).expect("checked above")]
+                .body
+                .as_mut()
+            {
+                *slots = v;
+            }
+        };
+        let mut b = take(self, buckets);
+        let mut x = take(self, next);
+        let [h] = self.hash_arrays([hashes], ["the hashes"])?;
+        b.fill(-1);
+        let mut linked = 0;
+        let mut result: Result<(), BadRef> = Ok(());
+        for i in 0..n {
+            if x[i] == HASH_HOLE {
+                continue;
+            }
+            if b.is_empty() {
+                result = Err(BadRef {
+                    message: "`HashRelink` of an entry with no bucket".into(),
+                });
+                break;
+            }
+            let k = (h[i] as u64 & (b.len() as u64 - 1)) as usize;
+            x[i] = b[k];
+            b[k] = i as i64;
+            linked += 1;
+        }
+        put(self, buckets, b);
+        put(self, next, x);
+        result.map(|()| linked)
+    }
+
+    /// `ArraySortRange` (`I96`; `docs/spec/bytecode.md` 2.22): sorts the elements `lo..hi` of the
+    /// dynamic array `r` of one-slot elements stably by `kind` (`bytecode::SORT_INT` ...), in
+    /// place (while shared, as a dynamic array is written; the values only change places, so no
+    /// count changes). Returns the number of comparisons, or `OutOfMemory` (nothing moved) when
+    /// the room of the merges (`hi - lo` slots, counted as a Pascal value against the usage
+    /// limit while the sort runs) cannot be had. The caller has checked the kind (one of
+    /// `SORT_INT..=SORT_UTF8`; anything past `SORT_STR` compares as `SORT_UTF8`), the range and
+    /// the loans; an element that is not a string of the kind is an internal error.
+    pub fn sort_slots(
+        &mut self,
+        r: StrRef,
+        lo: usize,
+        hi: usize,
+        kind: i64,
+    ) -> Result<Result<u64, OutOfMemory>, BadRef> {
+        use crate::bytecode::{SORT_DOUBLE, SORT_INT, SORT_SINGLE, SORT_STR, SORT_UINT, SORT_UTF8};
+        let index = slab_index(r).expect("the caller checked the array");
+        let elems = match &self.blocks[index].body {
+            Some(Body::Agg { slots, .. }) => slots.get(lo..hi),
+            _ => None,
+        }
+        .ok_or_else(|| BadRef {
+            message: format!("`ArraySortRange` of the slots {lo}..{hi} of heap block {r}"),
+        })?;
+        if kind == SORT_STR || kind == SORT_UTF8 {
+            for &x in elems {
+                let fits = x == 0
+                    || (x as u64) >> 32 == 0
+                        && matches!(
+                            (kind, &self.block(x, "read")?.body),
+                            (SORT_STR, Some(Body::Str(_))) | (SORT_UTF8, Some(Body::U8(_)))
+                        );
+                if !fits {
+                    return Err(BadRef {
+                        message: format!(
+                            "`ArraySortRange` of heap block {r}: element {x} is not a {}",
+                            if kind == SORT_STR {
+                                "string"
+                            } else {
+                                "`UTF8String`"
+                            }
+                        ),
+                    });
+                }
+            }
+        }
+        let n = hi - lo;
+        let size = n * std::mem::size_of::<i64>();
+        let mut work = Vec::new();
+        if !self.fits(size) || try_reserve(&mut work, n).is_err() {
+            return Ok(Err(OutOfMemory));
+        }
+        work.resize(n, 0);
+        // The slots are taken out of their block while they are sorted (the strings they point to
+        // are other blocks, read in place), and put back after
+        let Some(Body::Agg { slots, .. }) = self.blocks[index].body.as_mut() else {
+            unreachable!("checked above");
+        };
+        let mut slots = std::mem::take(slots);
+        self.used += size;
+        let v = &mut slots[lo..hi];
+        let count = match kind {
+            SORT_INT => sort::merge_sort(v, &mut work, |a, b| a.cmp(&b)),
+            SORT_UINT => sort::merge_sort(v, &mut work, |a, b| (a as u64).cmp(&(b as u64))),
+            SORT_SINGLE => sort::merge_sort(v, &mut work, |a, b| {
+                sort::cmp_f32(f32::from_bits(a as u32), f32::from_bits(b as u32))
+            }),
+            SORT_DOUBLE => sort::merge_sort(v, &mut work, |a, b| {
+                sort::cmp_f64(f64::from_bits(a as u64), f64::from_bits(b as u64))
+            }),
+            // The same comparisons as `CmpStr` and `CmpU8`; the elements were checked above
+            SORT_STR => sort::merge_sort(v, &mut work, |a, b| {
+                let s = |x| self.get(x).expect("checked above");
+                s(a).compare(s(b))
+            }),
+            // `SORT_UTF8`
+            _ => sort::merge_sort(v, &mut work, |a, b| {
+                let s = |x| self.get_u8(x).expect("checked above");
+                s(a).cmp(s(b))
+            }),
+        };
+        self.used -= size;
+        if let Some(Body::Agg { slots: back, .. }) = self.blocks[index].body.as_mut() {
+            *back = slots;
+        }
+        Ok(Ok(count))
+    }
+
     /// The slots of the live record or array block `r` for the fast paths of the slot reads and
     /// writes (`DynGet` / `FieldGet` / `ValGet`, the `Set` forms and the counted forms), or `None`
     /// when `r` is not a live record or array block, one of its slots is lent (only then does
@@ -1745,6 +2140,10 @@ impl Heap {
     /// dynamic array (the body reports why).
     #[inline(always)]
     fn elems_fast(&mut self, r: StrRef, write: bool) -> Option<&mut [i64]> {
+        // An instance's handle (a cursor's container may be one) has its generation above
+        if (r as u64) >> 32 != 0 {
+            return None;
+        }
         let index = slab_index(r)?;
         let block = self.blocks.get(index)?;
         if block.lent != 0 {
@@ -1763,6 +2162,23 @@ impl Heap {
             Body::Agg { slots, .. } => Some(slots),
             _ => None,
         }
+    }
+
+    /// `ElemAt` on the fast path: the first slot of element `i` of the array block `r`, or `None`
+    /// when `r` is not a plain array block or `i` is out of range.
+    #[inline(always)]
+    pub fn elem_at_fast(&self, r: StrRef, i: i64) -> Option<i64> {
+        let index = self.plain_index(r)?;
+        let Some(Body::Agg { ty, slots }) = &self.blocks.get(index)?.body else {
+            return None;
+        };
+        let t = self.types.get(*ty as usize)?;
+        if !matches!(t.kind, TYPE_ARRAY | TYPE_DYNARRAY) {
+            return None;
+        }
+        let w = t.elem_width();
+        let i = usize::try_from(i).ok().filter(|i| *i < slots.len() / w)?;
+        Some((i * w) as i64)
     }
 
     /// Element `i` of the array `r` (`DynGet`), or `None` as [`Heap::elems_fast`] says or when `i`
@@ -1878,6 +2294,85 @@ impl Heap {
         }
     }
 
+    // ---- Flat places (`docs/spec/bytecode.md` 2.8; `docs/design/records.md` 3.4) ----
+
+    /// The type and slots of the live record, array or instance block `r` (an instance by its
+    /// slab index + 1).
+    pub fn any_slots(&self, r: StrRef) -> Result<(u32, &[i64]), BadRef> {
+        match &self.block(r, "read")?.body {
+            Some(Body::Agg { ty, slots }) => Ok((*ty, slots)),
+            Some(Body::Obj { ty, slots, .. }) => Ok((*ty, slots)),
+            _ => Err(Self::bad("read", r)),
+        }
+    }
+
+    /// Slot `i` of the live record, array or instance block `r`.
+    pub fn any_slot(&self, r: StrRef, i: usize) -> Result<i64, BadRef> {
+        self.any_slots(r)?.1.get(i).copied().ok_or_else(|| BadRef {
+            message: format!("slot {i} out of range in heap block {r}"),
+        })
+    }
+
+    /// The slots of the live record, array or instance block `r` for writing: a record or static
+    /// array must hold its only reference (made unique by `Unique`), as for [`Heap::slot_mut`];
+    /// a dynamic array and an instance are written while shared.
+    pub fn any_slots_mut(&mut self, r: StrRef) -> Result<&mut [i64], BadRef> {
+        let (ty, _) = self.any_slots(r)?;
+        let shared_ok = self.is_dyn_type(ty);
+        let block = self.block_mut(r, "write")?;
+        match &mut block.body {
+            Some(Body::Agg { slots, .. }) if block.rc == 1 || shared_ok => Ok(slots),
+            Some(Body::Obj { slots, .. }) => Ok(slots),
+            Some(Body::Agg { .. }) => Err(BadRef {
+                message: format!("write to the shared heap block {r}"),
+            }),
+            _ => Err(Self::bad("write", r)),
+        }
+    }
+
+    /// Slot `i` of the live record, array or instance block `r` for writing
+    /// ([`Heap::any_slots_mut`]).
+    pub fn any_slot_mut(&mut self, r: StrRef, i: usize) -> Result<&mut i64, BadRef> {
+        self.any_slots_mut(r)?.get_mut(i).ok_or_else(|| BadRef {
+            message: format!("slot {i} out of range in heap block {r}"),
+        })
+    }
+
+    /// The block the container of a cursor names (`docs/spec/bytecode.md` 2.8): `None` for 0 (a
+    /// record or array at its default value), the block of a live record or array, or the block
+    /// (slab index + 1) of the live instance a handle refers to (checked against its generation,
+    /// so a destroyed instance is refused).
+    pub fn cursor_block(&self, c: i64) -> Result<Option<StrRef>, BadHandle> {
+        if c == 0 {
+            return Ok(None);
+        }
+        let plain = (c as u64) >> 32 == 0
+            && matches!(
+                slab_index(c).and_then(|i| self.blocks.get(i)),
+                Some(Block {
+                    body: Some(Body::Agg { .. }),
+                    ..
+                })
+            );
+        if plain {
+            return Ok(Some(c));
+        }
+        // An instance, or a block that is no record or array: `obj_index` says which
+        Ok(Some(self.obj_index(c)? as StrRef + 1))
+    }
+
+    /// Whether `r` is a record or static array block of type `ty` that only one register holds
+    /// and that contains no lent location, so `AggLoad` may write a value into it in place of
+    /// making another (`docs/design/records.md` 3.5 B).
+    pub fn reusable_box(&self, r: StrRef, ty: u32) -> bool {
+        self.plain_index(r).is_some_and(|i| {
+            let block = &self.blocks[i];
+            block.rc == 1
+                && block.lent == 0
+                && matches!(&block.body, Some(Body::Agg { ty: t, .. }) if *t == ty)
+        })
+    }
+
     /// The kind of slot `i` of a block of type `ty` ([`SLOT_PLAIN`], [`SLOT_REF`], [`SLOT_OBJ`]).
     pub fn slot_kind(&self, ty: u32, i: usize) -> u8 {
         self.types
@@ -1953,12 +2448,20 @@ impl Heap {
         self.unique(r, ty)
     }
 
-    /// The number of elements of an array block (0 is an empty dynamic array).
+    /// The number of elements of an array block (0 is an empty dynamic array): its slots over
+    /// the width of an element.
     pub fn len(&self, r: StrRef) -> Result<usize, BadRef> {
         if r == 0 {
             return Ok(0);
         }
-        self.slot_count(r)
+        let (ty, slots) = self.agg(r, "read")?;
+        Ok(slots.len() / self.width_of(ty))
+    }
+
+    /// The number of slots an element of an array of type `ty` takes (1 for any other type).
+    #[inline]
+    pub fn width_of(&self, ty: u32) -> usize {
+        self.types.get(ty as usize).map_or(1, TypeEntry::elem_width)
     }
 
     /// A new dynamic array of type `ty` with `n` default elements, holding one reference (0 for
@@ -1970,7 +2473,7 @@ impl Heap {
         if n > MAX_STRING_LEN {
             return Err(OutOfMemory);
         }
-        self.alloc_slots(ty, &[], n)
+        self.alloc_slots(ty, &[], n * self.width_of(ty))
     }
 
     /// A block of type `ty` with copies of the given slots, padded with defaults to `n` (each
@@ -1986,10 +2489,10 @@ impl Heap {
         self.alloc_agg(ty, slots)
     }
 
-    /// `SetLength` of a dynamic array of type `ty` (`docs/spec/types.md` 2.3): returns the value that
-    /// takes the place of `r`. A block holding its only reference is resized in place (dropped
-    /// elements are released); a shared one is copied (the copy counts its elements, the original
-    /// loses one reference). The length 0 is the empty array (0).
+    /// `SetLength` of a dynamic array of type `ty` (`docs/spec/types.md` 2.3) to `n` elements:
+    /// returns the value that takes the place of `r`. A block holding its only reference is
+    /// resized in place (dropped elements are released); a shared one is copied (the copy counts
+    /// its elements, the original loses one reference). The length 0 is the empty array (0).
     pub fn set_len(
         &mut self,
         r: StrRef,
@@ -2010,7 +2513,8 @@ impl Heap {
             let (t, s) = self.agg(r, "resize")?;
             (t, s.len())
         };
-        let refs = self.slot_kind(bty, 0);
+        // In slots (an element of a flat record takes several; `docs/spec/bytecode.md` 3.2)
+        let n = n * self.width_of(bty);
         if self.block(r, "resize")?.rc == 1 {
             // Grown in place with capacity to spare, so that growing one element at a time is
             // amortized O(1) (`docs/spec/types.md` 9.1); shrunk in place, giving the capacity
@@ -2035,21 +2539,17 @@ impl Heap {
                     Ok((dropped, before, slots.capacity()))
                 }
             };
-            let Ok((dropped, before, after)) = resized else {
+            let Ok((mut dropped, before, after)) = resized else {
                 return Ok(Err(OutOfMemory));
             };
             self.used = self.used - before * 8 + after * 8;
             // A lent element dropped here is lent no more: an element grown back in its place
-            // is a new one (`docs/spec/types.md` chapter 3)
+            // is a new one (`docs/spec/types.md` chapter 3). A lent flat place moves out first
             if n < old && self.block(r, "resize")?.lent != 0 {
-                for loan in &mut self.loans {
-                    if matches!(loan.loc, Some((b, i)) if b == r && i >= n) {
-                        loan.loc = None;
-                    }
-                }
+                self.forget_lent_slots(r, n, &mut dropped);
             }
-            for v in dropped {
-                self.release_kind(v, refs)?;
+            for (k, v) in dropped.into_iter().enumerate() {
+                self.release_kind(v, self.slot_kind(bty, n + k))?;
             }
             return Ok(Ok(r));
         }
@@ -2062,8 +2562,8 @@ impl Heap {
             Ok(c) => c,
             Err(e) => return Ok(Err(e)),
         };
-        for v in kept {
-            self.add_ref_kind(v, refs)?;
+        for (i, v) in kept.into_iter().enumerate() {
+            self.add_ref_kind(v, self.slot_kind(bty, i))?;
         }
         self.release(r)?;
         Ok(Ok(copy))
@@ -2090,13 +2590,17 @@ impl Heap {
 
     /// A new dynamic array of type `ty` made of the given pieces in order (`ArrConcat`,
     /// `ArrInsert`, `ArrDelete`; `docs/spec/types.md` 8.6): the elements are counted, the pieces
-    /// themselves are only borrowed. An empty result is 0. A length above 2^31 - 1 is
-    /// `OutOfMemory`, decided before anything is allocated.
+    /// themselves are only borrowed. A range is in elements of its array, whose element width
+    /// must be that of `ty`; an element of an array whose elements are flat records or static
+    /// arrays (width 2 or more) is the value of that record or array (0 is the default), whose
+    /// slots are copied. An empty result is 0. A length above 2^31 - 1 is `OutOfMemory`, decided
+    /// before anything is allocated.
     pub fn build_dyn(
         &mut self,
         ty: u32,
         pieces: &[Piece],
     ) -> Result<Result<StrRef, OutOfMemory>, BadRef> {
+        let w = self.width_of(ty);
         let mut n: usize = 0;
         for p in pieces {
             n = n.saturating_add(match *p {
@@ -2111,16 +2615,32 @@ impl Heap {
             return Ok(Ok(0));
         }
         let mut items: Vec<i64> = Vec::new();
-        if try_reserve(&mut items, n).is_err() {
+        if try_reserve(&mut items, n * w).is_err() {
             return Ok(Err(OutOfMemory));
         }
         for p in pieces {
             match *p {
                 Piece::Range(r, start, end) if end > start => {
-                    items.extend_from_slice(&self.agg(r, "copy")?.1[start..end]);
+                    let (rty, slots) = self.agg(r, "copy")?;
+                    if self.width_of(rty) != w {
+                        return Err(BadRef {
+                            message: format!("elements of heap block {r} have another width"),
+                        });
+                    }
+                    items.extend_from_slice(&slots[start * w..end * w]);
                 }
                 Piece::Range(..) => {}
-                Piece::Elem(v) => items.push(v),
+                Piece::Elem(v) if w == 1 => items.push(v),
+                Piece::Elem(0) => items.resize(items.len() + w, 0),
+                Piece::Elem(v) => {
+                    let (_, slots) = self.agg(v, "copy")?;
+                    if slots.len() != w {
+                        return Err(BadRef {
+                            message: format!("heap block {v} is not an element of width {w}"),
+                        });
+                    }
+                    items.extend_from_slice(slots);
+                }
             }
         }
         // The usage limit is checked before the elements are counted, so a failure has nothing
@@ -2129,10 +2649,9 @@ impl Heap {
         if !self.fits(body.size()) {
             return Ok(Err(OutOfMemory));
         }
-        let refs = self.slot_kind(ty, 0);
         if let Body::Agg { slots, .. } = &body {
-            for v in slots.iter() {
-                self.add_ref_kind(*v, refs)?;
+            for (i, v) in slots.iter().enumerate() {
+                self.add_ref_kind(*v, self.slot_kind(ty, i))?;
             }
         }
         Ok(Ok(self.place(body)))
@@ -2145,9 +2664,12 @@ impl Heap {
             return Ok(None);
         }
         let block = self.block_mut(r, "write")?;
-        match (block.rc, &mut block.body) {
-            (1, Some(Body::Str(s))) => Ok(Some(s)),
-            _ => Ok(None),
+        if block.rc != 1 || !matches!(block.body, Some(Body::Str(_))) {
+            return Ok(None);
+        }
+        match block.body_to_rewrite() {
+            Some(Body::Str(s)) => Ok(Some(s)),
+            _ => unreachable!("checked to be a string above"),
         }
     }
 
@@ -2248,11 +2770,15 @@ impl Heap {
         Ok(PStr::join(parts).map(Joined::New))
     }
 
-    /// Takes the body out of a live block, to change it while reading other blocks; it must be
-    /// put back with [`Heap::put_body`] before anything else looks at the block.
+    /// Takes the body out of a live block, to change it while reading other blocks (forgetting
+    /// the hash it remembers); it must be put back with [`Heap::put_body`] before anything else
+    /// looks at the block.
     fn take_body(&mut self, r: StrRef, what: &str) -> Result<Body, BadRef> {
         let block = self.block_mut(r, what)?;
-        Ok(block.body.take().expect("a live block has a body"))
+        Ok(block
+            .body_to_rewrite()
+            .take()
+            .expect("a live block has a body"))
     }
 
     fn put_body(&mut self, r: StrRef, body: Body) {
@@ -2270,6 +2796,13 @@ impl Heap {
     /// The lending table, oldest first.
     pub fn loans(&self) -> &[Loan] {
         &self.loans
+    }
+
+    /// Marks the loan at position `j` of the table as taken out into a block (`PlaceBox`) in
+    /// the register `value` (absolute position).
+    pub fn set_loan_boxed(&mut self, j: usize, value: usize) {
+        self.loans[j].boxed = true;
+        self.loans[j].value = value;
     }
 
     /// The containers list of the lending table.
@@ -2360,10 +2893,11 @@ impl Heap {
             return None;
         };
         let ty = *ty;
-        if i >= slots.len() || (block.rc != 1 && !self.is_dyn_type(ty)) {
+        // An element of a flat record takes more than one slot: the path reads differently
+        if i >= slots.len() || (block.rc != 1 && !self.is_dyn_type(ty)) || self.width_of(ty) != 1 {
             return None;
         }
-        if block.lent != 0 && self.loans.iter().any(|l| l.loc == Some((r, i))) {
+        if block.lent != 0 && self.loans.iter().any(|l| l.covers(r, i)) {
             return None;
         }
         let Some(Body::Agg { slots, .. }) = &mut self.blocks[index].body else {
@@ -2371,7 +2905,9 @@ impl Heap {
         };
         let value = std::mem::take(&mut slots[i]);
         loan.containers = self.loan_containers.len();
+        loan.ncontainers = 1;
         loan.loc = Some((r, i));
+        loan.kind = self.slot_kind(ty, i);
         self.loan_containers.push(LoanContainer {
             block: Some(r),
             ty,
@@ -2380,6 +2916,108 @@ impl Heap {
         self.loans.push(loan);
         self.mark_containers(loan.containers);
         Some(value)
+    }
+
+    /// `LendPlace` on the fast path: lends the flat place of `width` slots (of type `place`)
+    /// that the step `step` (an element index), followed by `inner` (the slot number in the
+    /// element) when given, selects in the dynamic array `r`, when the element is in range, no
+    /// loan holds a slot of it and the tables have room. Returns the loan's position in the table,
+    /// or `None` with nothing changed (the general path then raises what it must).
+    pub fn lend_place_fast(
+        &mut self,
+        r: StrRef,
+        step: i64,
+        inner: Option<i64>,
+        width: usize,
+        place: u32,
+        mut loan: Loan,
+    ) -> Option<usize> {
+        if self.loans.len() == self.loans.capacity()
+            || self.loan_containers.len() == self.loan_containers.capacity()
+        {
+            return None;
+        }
+        let index = self.plain_index(r)?;
+        let block = &self.blocks[index];
+        let Some(Body::Agg { ty, slots }) = &block.body else {
+            return None;
+        };
+        let ty = *ty;
+        if !self.is_dyn_type(ty) {
+            return None;
+        }
+        let w = self.width_of(ty);
+        let step = usize::try_from(step)
+            .ok()
+            .filter(|s| *s < slots.len() / w)?;
+        let inner = match inner {
+            Some(k) => usize::try_from(k).ok().filter(|k| *k < w && w > 1)?,
+            None => 0,
+        };
+        let start = step * w + inner;
+        if start + width > slots.len() {
+            return None;
+        }
+        if block.lent != 0
+            && self
+                .loans
+                .iter()
+                .any(|l| l.overlaps(r, start, start + width))
+        {
+            return None;
+        }
+        loan.containers = self.loan_containers.len();
+        loan.ncontainers = 1;
+        loan.loc = Some((r, start));
+        loan.width = width;
+        loan.place = Some(place);
+        loan.kind = SLOT_PLAIN;
+        self.loan_containers.push(LoanContainer {
+            block: Some(r),
+            ty,
+            marked: false,
+        });
+        self.loans.push(loan);
+        self.mark_containers(loan.containers);
+        Some(self.loans.len() - 1)
+    }
+
+    /// Whether the flat place a loan lends from slot `start` of the block `r` is where its path
+    /// (the element `step`, then `inner` in it when given) leads in the dynamic array `r` again, so
+    /// that `Unlend` has nothing to move (the fast path).
+    pub fn place_back_ready(&self, r: StrRef, start: usize, step: i64, inner: Option<i64>) -> bool {
+        let Some(index) = self.plain_index(r) else {
+            return false;
+        };
+        let Some(Body::Agg { ty, .. }) = &self.blocks[index].body else {
+            return false;
+        };
+        if !self.is_dyn_type(*ty) {
+            return false;
+        }
+        let w = self.width_of(*ty) as i64;
+        step * w + inner.unwrap_or(0) == start as i64
+    }
+
+    /// Slot `i` of the flat place loan `j` lends (`RefFieldGet` / `RefFieldSet` through a reference
+    /// slot of kind 4 on the fast path), when `j` is the newest loan (no later one can hold a slot
+    /// of the place) and the place's block is a plain record or array block.
+    #[inline(always)]
+    pub fn place_slot_fast(&mut self, j: usize, i: i64) -> Option<&mut i64> {
+        if j + 1 != self.loans.len() {
+            return None;
+        }
+        let loan = &self.loans[j];
+        if loan.place.is_none() || loan.boxed {
+            return None;
+        }
+        let (r, start) = loan.loc?;
+        let i = usize::try_from(i).ok().filter(|i| *i < loan.width)?;
+        let index = self.plain_index(r)?;
+        match self.blocks[index].body.as_mut()? {
+            Body::Agg { slots, .. } => slots.get_mut(start + i),
+            _ => None,
+        }
     }
 
     /// Whether slot `i` of the block `r` takes back a lent value as `Unlend` would without
@@ -2407,6 +3045,10 @@ impl Heap {
             let loan = self.loans[k];
             let (r, i) = loan.loc.expect("give_back_ready accepted the lent slot");
             let value = take(&loan);
+            // A flat place was written where it is
+            if loan.place.is_some() {
+                continue;
+            }
             let index = self
                 .plain_index(r)
                 .expect("give_back_ready accepted the block");
@@ -2451,29 +3093,102 @@ impl Heap {
         }));
     }
 
-    /// Forgets a freed block in the lending table, so that its index can be reused.
-    fn forget_loaned_block(&mut self, r: StrRef) {
+    /// Forgets a freed block in the lending table, so that its index can be reused. Its slots
+    /// are `body`'s: the slots of a flat place lent from it move to a block of their own
+    /// ([`Heap::forget_lent_slots`]).
+    fn forget_loaned_block(&mut self, r: StrRef, body: &mut Body) {
         for c in &mut self.loan_containers {
             if c.block == Some(r) {
                 c.block = None;
             }
         }
-        for loan in &mut self.loans {
-            if matches!(loan.loc, Some((b, _)) if b == r) {
-                loan.loc = None;
+        let slots: &mut [i64] = match body {
+            Body::Agg { slots, .. } => slots,
+            Body::Obj { slots, .. } => slots,
+            _ => &mut [],
+        };
+        let mut moved = std::mem::take(&mut self.evacuating);
+        // Newest first: a place lent through another one takes its values out before the outer
+        // place moves out (leaving 0 where the inner one was)
+        for (k, loan) in self.loans.iter().enumerate().rev() {
+            if let Some((b, start)) = loan.loc
+                && b == r
+            {
+                moved.push((k, start));
+            }
+        }
+        for &(k, start) in &moved {
+            self.evacuate(k, slots, start);
+        }
+        moved.clear();
+        self.evacuating = moved;
+    }
+
+    /// Forgets the slots from `from` on of the block `r`, which `dropped` holds (the slots
+    /// `SetLength` dropped from a dynamic array resized in place): a value lent from one is lent
+    /// no more, and a flat place lent from them moves to a block of its own.
+    fn forget_lent_slots(&mut self, r: StrRef, from: usize, dropped: &mut [i64]) {
+        // Newest first, as in `forget_loaned_block`
+        for k in (0..self.loans.len()).rev() {
+            let loan = self.loans[k];
+            match loan.loc {
+                Some((b, start)) if b == r && start >= from => {
+                    if loan.place.is_some() && !loan.boxed {
+                        self.evacuate(k, dropped, start - from);
+                    } else {
+                        self.loans[k].loc = None;
+                    }
+                }
+                _ => {}
             }
         }
     }
 
+    /// Moves the slots of the flat place lent by loan `k` from `slots` (where they start at
+    /// `start`) to a new block of the place's type, which the loan holds from then on: its
+    /// container goes away, and `Unlend` gives the values back from there
+    /// (`docs/design/records.md` 3.7 B). A value loan is only forgotten. The block is made beyond
+    /// the usage limit, as moving out cannot fail (it still counts toward the usage).
+    fn evacuate(&mut self, k: usize, slots: &mut [i64], start: usize) {
+        let loan = self.loans[k];
+        let Some(ty) = loan.place.filter(|_| !loan.boxed) else {
+            self.loans[k].loc = None;
+            return;
+        };
+        let mut own = vec![0; loan.width];
+        if let Some(range) = slots.get_mut(start..start + loan.width) {
+            own.copy_from_slice(range);
+            range.fill(0);
+        }
+        let b = self.place(Body::Agg { ty, slots: own });
+        let loan = &mut self.loans[k];
+        loan.loc = Some((b, 0));
+        loan.evacuated = true;
+    }
+
     /// The loan of slot `i` of the block `r`, if it is lent.
     pub fn loan_of(&self, r: StrRef, i: usize) -> Option<&Loan> {
+        self.loan_after(r, i, None).map(|(_, l)| l)
+    }
+
+    /// The newest loan of slot `i` of the block `r` (with its position in the table) among those
+    /// after position `after` (all with `None`). Reached through the flat place of loan `j`,
+    /// the loans up to `j` holding the slot are `j` and the places it was lent from, so only
+    /// the loans after `j` refuse it.
+    pub fn loan_after(&self, r: StrRef, i: usize, after: Option<usize>) -> Option<(usize, &Loan)> {
         if self.loans.is_empty() || r == 0 {
             return None;
         }
-        if self.block(r, "read").ok()?.lent == 0 {
+        if self.block(r, "read").ok()?.lent == 0 && after.is_none() {
             return None;
         }
-        self.loans.iter().find(|l| l.loc == Some((r, i)))
+        let first = after.map_or(0, |j| j + 1);
+        self.loans
+            .iter()
+            .enumerate()
+            .skip(first)
+            .rev()
+            .find(|(_, l)| l.covers(r, i))
     }
 
     /// Refuses reading or writing slot `i` of the container `r` while it is lent.
@@ -2497,14 +3212,14 @@ impl Heap {
         {
             return Aliased::ObjField { twice };
         }
-        let kind = self
+        let entry = self
             .agg(r, "read")
             .ok()
-            .and_then(|(ty, _)| self.type_entry(ty))
-            .map(|t| t.kind);
-        match kind {
+            .and_then(|(ty, _)| self.type_entry(ty));
+        match entry.map(|t| t.kind) {
+            // The element holding the slot (an element of a flat record takes several)
             Some(TYPE_DYNARRAY) => Aliased::Elem {
-                index: Some(i),
+                index: Some(i / entry.map_or(1, |t| t.elem_width() as i64)),
                 twice,
             },
             Some(TYPE_ARRAY) => Aliased::Elem { index: None, twice },
@@ -2535,22 +3250,45 @@ impl Heap {
         if self.loans.is_empty() || r == 0 || start >= end {
             return Ok(());
         }
+        let Ok(Block {
+            body: Some(Body::Agg { ty, .. }),
+            ..
+        }) = self.block(r, "copy")
+        else {
+            return Ok(());
+        };
+        let w = self.width_of(*ty);
+        self.check_copy_slots(r, start * w, end * w)
+    }
+
+    /// Refuses copying the slots `start..end` of the record or array block `r` when one of them
+    /// is lent or holds a value containing a lent location (`AggLoad`, `check_copy`).
+    pub fn check_copy_slots(&self, r: StrRef, start: usize, end: usize) -> Result<(), Aliased> {
+        if self.loans.is_empty() || r == 0 || start >= end {
+            return Ok(());
+        }
         let Ok(block) = self.block(r, "copy") else {
             return Ok(());
         };
-        if block.lent != 0
-            && self
-                .loans
-                .iter()
-                .any(|l| matches!(l.loc, Some((b, i)) if b == r && (start..end).contains(&i)))
-        {
+        if block.lent != 0 && self.loans.iter().any(|l| l.overlaps(r, start, end)) {
             return Err(Aliased::Copy);
         }
-        let Some(Body::Agg { ty, slots }) = &block.body else {
-            return Ok(());
+        let ty = match &block.body {
+            Some(Body::Agg { ty, .. } | Body::Obj { ty, .. }) => *ty,
+            _ => return Ok(()),
         };
-        if self.slot_kind(*ty, 0) != SLOT_PLAIN {
-            for v in &slots[start..end.min(slots.len())] {
+        let slots = match &block.body {
+            Some(Body::Agg { slots, .. }) => &slots[..],
+            Some(Body::Obj { slots, .. }) => &slots[..],
+            _ => return Ok(()),
+        };
+        for (i, v) in slots
+            .iter()
+            .enumerate()
+            .take(end.min(slots.len()))
+            .skip(start)
+        {
+            if self.slot_kind(ty, i) == SLOT_REF {
                 self.check_share(*v)?;
             }
         }
@@ -3096,10 +3834,10 @@ impl Heap {
         }
         let block = &mut self.blocks[index];
         let lent = std::mem::take(&mut block.lent);
-        let body = block.body.take().expect("a live block");
+        let mut body = block.body.take().expect("a live block");
         self.used -= body.size();
         if lent != 0 {
-            self.forget_loaned_block(index as StrRef + 1);
+            self.forget_loaned_block(index as StrRef + 1, &mut body);
         }
         self.retire(index);
         Ok(Dec::Freed(body))
@@ -3314,10 +4052,10 @@ impl Heap {
                 "a frameless destruction of a referenced instance"
             );
             let lent = std::mem::take(&mut block.lent);
-            let body = block.body.take().expect("a live instance");
+            let mut body = block.body.take().expect("a live instance");
             self.used -= body.size();
             if lent != 0 {
-                self.forget_loaned_block(index as StrRef + 1);
+                self.forget_loaned_block(index as StrRef + 1, &mut body);
             }
             self.retire(index);
             self.push_children(&body, work);
@@ -3664,8 +4402,9 @@ mod tests {
         Heap::new(None, true, &[])
     }
 
-    // The generation word sits in the block without making it larger than before: the exception
-    // object's trace and `Suppressed` moved into a box (`docs/design/objects.md` 3.2 B).
+    // The generation word and the remembered hash of a text sit in the block without making it
+    // larger than before: the exception object's trace and `Suppressed` moved into a box
+    // (`docs/design/objects.md` 3.2 B), and the hash fills the padding (`docs/design/vm.md` 3.18).
     #[test]
     #[cfg(target_pointer_width = "64")]
     fn block_stays_small() {
@@ -3674,6 +4413,30 @@ mod tests {
             "{}",
             std::mem::size_of::<Block>()
         );
+    }
+
+    // A string block remembers its hash once worked out, and forgets it when its content is
+    // rewritten in place, so that the next `HashStr` sees the new content (`docs/spec/bytecode.md`
+    // 2.21).
+    #[test]
+    fn a_string_block_remembers_its_hash_until_rewritten() {
+        let keys = HashKeys::new(0);
+        let mut h = heap();
+        let s = h.alloc_str(PStr::Utf16(vec![0x61, 0x62])).unwrap();
+        let x = h.alloc_str(PStr::Utf16(vec![0x63])).unwrap();
+        let remembered = |h: &Heap| h.blocks[(s - 1) as usize].hash;
+        assert_eq!(remembered(&h), 0);
+        let ab = h.str_hash(s, &keys).unwrap();
+        assert_eq!(remembered(&h), ab);
+        assert_eq!(h.str_hash(s, &keys).unwrap(), ab);
+        h.append_str(s, x).unwrap().unwrap();
+        assert_eq!(remembered(&h), 0);
+        assert_eq!(
+            h.str_hash(s, &keys).unwrap(),
+            keys.units([0x61, 0x62, 0x63].into_iter())
+        );
+        assert!(h.unique_str_mut(s).unwrap().is_some());
+        assert_eq!(remembered(&h), 0);
     }
 
     // A short string kept in place makes the string value no larger than one holding a buffer, so

@@ -57,6 +57,20 @@ impl IgnoreCategory {
         }
     }
 
+    /// Whether the directive changes the meaning of the program in other compilers (`docs/spec/directives.md` 2.3).
+    /// Removing such a directive is only a `suggestion`: the source may be shared with them.
+    pub fn changes_meaning(self) -> bool {
+        matches!(
+            self,
+            IgnoreCategory::TextBlock
+                | IgnoreCategory::BoolEval
+                | IgnoreCategory::WriteableConst
+                | IgnoreCategory::Rtti
+                | IgnoreCategory::ScopedEnums
+                | IgnoreCategory::HintsWarnings
+        )
+    }
+
     pub fn is_fpc(self) -> bool {
         matches!(self, IgnoreCategory::Fpc | IgnoreCategory::PushPop)
     }

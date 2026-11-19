@@ -1,0 +1,41 @@
+error[E0757]: a helper cannot be declared inside a generic routine
+   --> generic_local_helper_errors.pas:15:16
+    |
+ 15 |   TLocHelper = record helper for TLoc
+    |                ^^^^^^^^^^^^^
+    |
+    = note: a helper is not copied for each instantiation; declare it outside the routine
+
+error[E0757]: a helper cannot be declared inside a generic routine
+   --> generic_local_helper_errors.pas:33:18
+    |
+ 33 |     TIntHelper = record helper for Integer
+    |                  ^^^^^^^^^^^^^
+    |
+    = note: a helper is not copied for each instantiation; declare it outside the routine
+
+error[E0757]: a helper cannot be declared inside a generic routine
+   --> generic_local_helper_errors.pas:59:21
+    |
+ 59 |     TNestedHelper = class helper for TObject
+    |                     ^^^^^^^^^^^^
+    |
+    = note: a helper is not copied for each instantiation; declare it outside the routine
+
+error[E0757]: a helper cannot be declared inside a method of a generic type
+   --> generic_local_helper_errors.pas:71:20
+    |
+ 71 |     TInnerHelper = class helper for TObject
+    |                    ^^^^^^^^^^^^
+    |
+    = note: a helper is not copied for each instantiation; declare it outside the method
+
+error[E0757]: a helper cannot be declared inside a method of a generic type
+   --> generic_local_helper_errors.pas:75:16
+    |
+ 75 |   TObjHelper = class helper for TObject
+    |                ^^^^^^^^^^^^
+    |
+    = note: a helper is not copied for each instantiation; declare it outside the method
+
+error: aborting due to 5 errors

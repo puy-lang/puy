@@ -30,6 +30,7 @@ bb0:
   LoadConst    t1, ":"
   ConcatStr    t0, t0, t1
   CallHost     -, h0(t0)
+  Release      t0
   .line 19
   AssignRef    v3, v1
   LoadInt      v4, -1

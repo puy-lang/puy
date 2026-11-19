@@ -2,13 +2,13 @@ program DumpInterfaceChecks uses=System.SysUtils
 .type IShape = interface(IInterface)
   .method #0 Area: Integer
 .type TSquare = class(TRefObject) ref
-  .method f1 Area
+  .method f0 Area
   .implements IInterface
-  .implements IShape #0=f1
+  .implements IShape #0=f0
 .global g0 O: TObject
 .global g1 S: IShape
 .global g2 Q: TSquare
-.routine f1 TSquare.Area(): Integer
+.routine f0 TSquare.Area(): Integer
   .var v0 Self: TSquare self
   .var v1 Result: Integer result
   assign @23 R+

@@ -1,0 +1,17 @@
+error[E2502]: `TC` is declared in several units; qualify it
+  --> main.pas:9:6
+   |
+ 9 |   I: TC.TI;
+   |      ^^
+  ::: src/Left.pas:6:3
+ 6 |   TC = class
+   |   -- declared here
+  ::: src/Right.pas:6:3
+ 6 |   TC = class
+   |   -- declared here
+   |
+   = note: Puy does not let a later unit in `uses` hide an earlier one
+   = suggestion: replace with `Left.TC`
+   = suggestion: replace with `Right.TC`
+
+error: aborting due to 1 error

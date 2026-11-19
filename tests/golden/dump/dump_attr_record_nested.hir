@@ -1,0 +1,20 @@
+program DumpAttrRecordNested
+.type TRec.TMarkAttribute = class(TCustomAttribute) ref
+  .method f0 Create constructor
+.type TRec = record
+.type TOuter.TTagAttribute = class(TCustomAttribute) ref
+.type TOuter = class(TObject)
+.type TA = class(TObject)
+  .attr DumpAttrRecordNested.TRec.TMarkAttribute f0
+    const Integer 1
+.type TB = class(TObject)
+  .attr DumpAttrRecordNested.TRec.TMarkAttribute f0
+    const Integer 2
+  .attr DumpAttrRecordNested.TOuter.TTagAttribute builtin
+.routine f0 TMarkAttribute.Create(N: Integer)
+  .var v0 Self: TMarkAttribute self
+  .var v1 N: Integer param
+.routine <main>
+  writeln @37
+    arg
+      const string "ok"

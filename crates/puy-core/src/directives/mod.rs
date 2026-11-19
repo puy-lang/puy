@@ -155,7 +155,8 @@ pub struct DirectiveOutput {
     /// The token sequence after folding `INACTIVE`.
     pub tokens: Vec<Token>,
     pub switches: SwitchTable,
-    /// Start positions and kinds of `DIRECTIVE` / `INACTIVE` tokens (ascending order of position).
+    /// Start positions and kinds of `DIRECTIVE` / `INACTIVE` tokens (ascending order of position;
+    /// one entry per token, so the positions are unique).
     pub placements: Vec<(TextSize, Placement)>,
     /// Ranges of conditional compilation blocks (from the opening directive to the end of the matching `{$ENDIF}`; to the end of the file if unclosed).
     pub blocks: Vec<TextRange>,
@@ -353,6 +354,10 @@ impl<'c, 'a> FileProcessor<'c, 'a> {
         let out = std::mem::take(&mut self.out);
         let mut placements = std::mem::take(&mut self.placements);
         placements.sort_by_key(|(p, _)| *p);
+        debug_assert!(
+            placements.windows(2).all(|w| w[0].0 < w[1].0),
+            "one placement per directive token"
+        );
         let blocks = std::mem::take(&mut self.blocks);
         (out, placements, blocks, suppress)
     }
@@ -622,6 +627,12 @@ impl<'c, 'a> FileProcessor<'c, 'a> {
     }
 
     fn ignored(&mut self, tok: Token, category: IgnoreCategory) {
+        self.ignored_with(tok, category, category.changes_meaning());
+    }
+
+    /// W0004 for a directive ignored as a whole. `changes_meaning` decides the fix (2.3):
+    /// directives that change meaning in other compilers are removed only by a `suggestion`.
+    fn ignored_with(&mut self, tok: Token, category: IgnoreCategory, changes_meaning: bool) {
         let text = self.directive_text(tok);
         let msg = if category.is_fpc() {
             format!("FPC-only directive `{text}` is ignored")
@@ -631,7 +642,8 @@ impl<'c, 'a> FileProcessor<'c, 'a> {
         let range = crate::diagnostics::deletion_range(&self.bytes, tok.range);
         let mut d = Diagnostic::warning(Code::W(4), msg, Stage::Directives)
             .with_primary(self.span_of(tok.range), "")
-            .with_fix(Fix::safe(
+            .with_fix(ignored_fix(
+                changes_meaning,
                 format!("remove `{text}`"),
                 vec![TextEdit::delete(self.file, range)],
             ));
@@ -904,6 +916,7 @@ impl<'c, 'a> FileProcessor<'c, 'a> {
         }
         let mut changed = false;
         let mut ignored: Option<IgnoreCategory> = None;
+        let mut changes_meaning = false;
         let mut kept: Vec<String> = Vec::new();
         let mut dropped: Vec<String> = Vec::new();
         for (letter, on) in items {
@@ -938,9 +951,11 @@ impl<'c, 'a> FileProcessor<'c, 'a> {
                     }
                 }
                 "I" => self.iochecks(tok, on, "{$I-}"),
-                "M" => ignored = ignored.or(Some(IgnoreCategory::Rtti)),
+                "M" => note_ignored(&mut ignored, &mut changes_meaning, IgnoreCategory::Rtti),
                 _ => match table::lookup(&letter) {
-                    Some(table::Handling::Ignored(cat)) => ignored = ignored.or(Some(cat)),
+                    Some(table::Handling::Ignored(cat)) => {
+                        note_ignored(&mut ignored, &mut changes_meaning, cat)
+                    }
                     Some(_) => {}
                     None => {
                         self.e0213(tok, first);
@@ -954,7 +969,7 @@ impl<'c, 'a> FileProcessor<'c, 'a> {
         }
         if let Some(cat) = ignored {
             if kept.is_empty() {
-                self.ignored(tok, cat);
+                self.ignored_with(tok, cat, changes_meaning);
             } else {
                 // Effective and ignored switches are mixed: remove only the ignored part (chapter 1)
                 let text = self.directive_text(tok);
@@ -965,7 +980,8 @@ impl<'c, 'a> FileProcessor<'c, 'a> {
                     Stage::Directives,
                 )
                 .with_primary(self.span_of(tok.range), "")
-                .with_fix(Fix::safe(
+                .with_fix(ignored_fix(
+                    changes_meaning,
                     format!("replace with `{rebuilt}`"),
                     vec![TextEdit::replace(self.file, tok.range, rebuilt)],
                 ));
@@ -1455,6 +1471,29 @@ pub fn resolve_include_path(including: &str, arg: &str) -> String {
     }
     let cut = including.rfind(['/', '\\']).map(|i| i + 1).unwrap_or(0);
     format!("{}{}", &including[..cut], arg)
+}
+
+/// Records an ignored switch of the comma form. The category for the notes is the first one, except that
+/// the first one that changes meaning takes over, so the notes explain why the fix is a `suggestion`.
+fn note_ignored(
+    ignored: &mut Option<IgnoreCategory>,
+    changes_meaning: &mut bool,
+    cat: IgnoreCategory,
+) {
+    if ignored.is_none() || (cat.changes_meaning() && !*changes_meaning) {
+        *ignored = Some(cat);
+    }
+    *changes_meaning |= cat.changes_meaning();
+}
+
+/// The fix of W0004 (`docs/spec/directives.md` 2.3): `safe`, except a `suggestion` when the removed
+/// part changes meaning in other compilers that may share the source.
+fn ignored_fix(changes_meaning: bool, title: String, edits: Vec<TextEdit>) -> Fix {
+    if changes_meaning {
+        Fix::suggestion(title, edits)
+    } else {
+        Fix::safe(title, edits)
+    }
 }
 
 fn parse_on_off(args: &str) -> Option<bool> {

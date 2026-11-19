@@ -12,6 +12,7 @@ ERangeError: list index 5 is out of range 0..2
 ERangeError: list index 4 is out of range 0..3
 ERangeError: list index -1 is out of range 0..3
 ERangeError: list index 5 is out of range 0..3
+ERangeError: list index 9 is out of range 0..3
 ERangeError: list index 3 is out of range 0..2
 ERangeError: list index 7 is out of range 0..2
 ERangeError: list index 3 is out of range 0..2

@@ -272,7 +272,6 @@ impl<'a, 's> Sema<'a, 's> {
                 continue;
             };
             match strip_parens(&v) {
-                ast::Expr::Nil(_) => {}
                 ast::Expr::Anon(an) => {
                     self.signature_of(an.params(), an.is_function(), an.return_type());
                 }

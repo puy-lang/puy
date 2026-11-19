@@ -22,10 +22,6 @@ pub(super) struct InputBuf {
     ahead: Option<Vec<u16>>,
     /// `Console.read_line` returned `None` (the end of input; not asked again).
     eof: bool,
-    /// The `ReadLn` statements being run (between `ReadLnBegin` and `ReadLnEnd`), as the frame
-    /// depth each runs in. Words and `Char`s read in the frame of the innermost one stay within
-    /// the line; a `Read` in a routine called from its indices does not.
-    readln: Vec<usize>,
 }
 
 /// What an instruction needs before it can go on.
@@ -61,10 +57,9 @@ impl InputBuf {
         Ok(Some((line, &mut self.pos)))
     }
 
-    /// A word for a number: blanks are skipped (in `Read`, line ends too), then up to the next
-    /// blank or line end. `''` when there is none (or at the end of input).
-    fn word(&mut self, depth: usize) -> Result<Result<PStr, OutOfMemory>, Need> {
-        let cross = !self.in_readln(depth);
+    /// A word for a number: blanks are skipped (line ends too when `cross`: in `Read`), then up
+    /// to the next blank or line end. `''` when there is none (or at the end of input).
+    fn word(&mut self, cross: bool) -> Result<Result<PStr, OutOfMemory>, Need> {
         loop {
             let Some((line, pos)) = self.current()? else {
                 return Ok(PStr::from_units(&[]));
@@ -95,9 +90,8 @@ impl InputBuf {
     }
 
     /// One code unit; the line break at the end of a line (`Read` then goes on with the next
-    /// line). `None` at the end of input.
-    fn char(&mut self, depth: usize) -> Result<Option<u16>, Need> {
-        let consume = !self.in_readln(depth);
+    /// line, when `consume`: in `Read`). `None` at the end of input.
+    fn char(&mut self, consume: bool) -> Result<Option<u16>, Need> {
         let Some((line, pos)) = self.current()? else {
             return Ok(None);
         };
@@ -118,27 +112,12 @@ impl InputBuf {
         if self.current()?.is_some() {
             self.line = None;
         }
-        self.readln.pop();
         Ok(())
     }
 
-    /// Whether code at frame depth `depth` runs inside a `ReadLn` statement of its own frame.
-    fn in_readln(&self, depth: usize) -> bool {
-        self.readln.last() == Some(&depth)
-    }
-
-    /// An exception was caught by a handler at frame depth `depth` (`None`: not caught). Each
-    /// `ReadLn` statement it left (run at that depth or deeper) ends, and the rest of the line is
-    /// dropped, so that a loop reading again after a bad input does not stop on the same line.
-    pub(super) fn exception_left(&mut self, depth: Option<usize>) {
-        let keep = match depth {
-            Some(d) => self.readln.iter().take_while(|f| **f < d).count(),
-            None => 0,
-        };
-        if keep < self.readln.len() {
-            self.readln.truncate(keep);
-            self.line = None;
-        }
+    /// Drops the rest of the current line (an exception left a `ReadLn` statement; [`super::task::Task::readln_left`]).
+    pub(super) fn drop_line(&mut self) {
+        self.line = None;
     }
 
     /// `Eof`: nothing left to read in the buffer and no next line. In a line read from already,
@@ -214,23 +193,26 @@ impl Isolate {
             if let Err(e) = self.flush_stdout() {
                 return Step::Error(host_error_to_rt(e));
             }
-            self.frames.last_mut().expect("a frame runs").pc = next;
+            self.task.frames.last_mut().expect("a frame runs").pc = next;
             return Step::Continue;
         }
-        let depth = self.frames.len();
+        let depth = self.task.frames.len();
         let r: Result<Out, Need> = match id {
-            op::intr::READ_WORD => self.input.word(depth).map(Out::Str),
+            op::intr::READ_WORD => self.input.word(!self.task.in_readln(depth)).map(Out::Str),
             op::intr::READ_REST => self.input.rest().map(Out::Str),
             op::intr::READ_LN_BEGIN => {
-                self.input.readln.push(depth);
+                self.task.readln.push(depth);
                 Ok(Out::Nothing)
             }
-            op::intr::READ_CHAR => match self.input.char(depth) {
+            op::intr::READ_CHAR => match self.input.char(!self.task.in_readln(depth)) {
                 Ok(Some(u)) => Ok(Out::Int(u as i64)),
                 Ok(None) => return Step::Error(input_error("read past end of input".into())),
                 Err(n) => Err(n),
             },
-            op::intr::READ_LN_END => self.input.end_line().map(|()| Out::Nothing),
+            op::intr::READ_LN_END => self.input.end_line().map(|()| {
+                self.task.readln.pop();
+                Out::Nothing
+            }),
             op::intr::IN_EOF => self.input.at_eof().map(|b| Out::Int(b as i64)),
             op::intr::IN_EOLN => self.input.at_eoln().map(|b| Out::Int(b as i64)),
             _ => return Step::Fatal(format!("unknown input intrinsic {id}")),
@@ -239,7 +221,7 @@ impl Isolate {
             Ok(out) => {
                 match out {
                     Out::Nothing => {}
-                    Out::Int(v) => self.regs[ra] = v,
+                    Out::Int(v) => self.task.regs[ra] = v,
                     Out::Str(text) => {
                         let s = match text.map_err(|_| oom()).and_then(|p| self.alloc_string(p)) {
                             Ok(s) => s,
@@ -250,7 +232,7 @@ impl Isolate {
                         }
                     }
                 }
-                self.frames.last_mut().expect("a frame runs").pc = next;
+                self.task.frames.last_mut().expect("a frame runs").pc = next;
                 Step::Continue
             }
             Err(Need::Line { ahead }) => self.request_line(ahead, pc),
@@ -270,7 +252,7 @@ impl Isolate {
             ));
         };
         let fut = console.read_line();
-        self.pending = Some(PendingHost {
+        self.task.pending = Some(PendingHost {
             kind: PendingKind::ReadLine { fut, ahead },
             resume_pc: pc,
         });

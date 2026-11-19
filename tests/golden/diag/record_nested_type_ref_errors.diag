@@ -1,0 +1,37 @@
+error[E0700]: `TRec` has no member `TMissing`
+   --> record_nested_type_ref_errors.pas:28:11
+    |
+ 28 |   A: TRec.TMissing;
+    |           ^^^^^^^^
+
+error[E0708]: `TRec.Max` is not a type
+   --> record_nested_type_ref_errors.pas:29:6
+    |
+ 29 |   B: TRec.Max;
+    |      ^^^^^^^^
+
+error[E0700]: `TRec` has no member `A`
+   --> record_nested_type_ref_errors.pas:30:11
+    |
+ 30 |   C: TRec.A;
+    |           ^
+
+error[E0700]: `TInner` has no member `X`
+   --> record_nested_type_ref_errors.pas:31:18
+    |
+ 31 |   D: TRec.TInner.X;
+    |                  ^
+
+error[E0700]: `TBox<Integer>` has no member `TNone`
+   --> record_nested_type_ref_errors.pas:32:20
+    |
+ 32 |   E: TBox<Integer>.TNone;
+    |                    ^^^^^
+
+error[E0761]: `TCell` is not generic
+   --> record_nested_type_ref_errors.pas:33:20
+    |
+ 33 |   F: TBox<Integer>.TCell<string>;
+    |                    ^^^^^^^^^^^^^
+
+error: aborting due to 6 errors

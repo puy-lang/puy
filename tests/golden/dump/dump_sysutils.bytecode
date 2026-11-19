@@ -39,15 +39,15 @@
   000f  LoadInt      r28, 8
   0010  LoadInt      r29, 99
   0011  Format       r1, r19, 5
-  0012  LoadConst    r4, k3
-  0013  ConcatStr    r1, r1, r4
-  0014  CallHost     r1, h0
+  0012  Release      r3
+  0013  LoadConst    r4, k3
+  0014  ConcatStr    r1, r1, r4
+  0015  CallHost     r1, h0
   .line 18
-  0015  LoadConst    r5, k4
-  0016  Move         r20, r5
-  0017  TryStrToInt  r19, r20
-  0018  Move         r22, r21
-  0019  StoreGlobal  r22, g0
+  0016  LoadConst    r5, k4
+  0017  Move         r20, r5
+  0018  TryStrToInt  r19, r20
+  0019  StoreGlobal  r21, g0
   001a  JmpIfFalse   r19, -> 0020
   .line 19
   001b  LoadGlobal   r19, g0

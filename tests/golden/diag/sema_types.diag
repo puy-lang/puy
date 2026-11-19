@@ -50,7 +50,7 @@ error[E0702]: type mismatch: expected `string`, found `Char` (argument 1, parame
  26 |   O(C);
     |     ^
     |
-    = note: a `out` parameter needs a variable of exactly the same type
+    = note: an `out` parameter needs a variable of exactly the same type
 
 error[E0703]: operator `+` cannot be applied to `string` and `Integer`
    --> sema_types.pas:27:10

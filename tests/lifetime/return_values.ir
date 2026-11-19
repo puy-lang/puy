@@ -34,6 +34,7 @@ bb0:
   LoadConst    t4, "\n"
   ConcatStr    t3, t3, t4
   CallHost     -, h0(t3)
+  Release      t3
   .line 31
   LoadGlobalRef t7, g0
   Move         t6, t7

@@ -16,39 +16,51 @@
   .line 59
   0000  LoadConst    r7, k0
   0001  LoadConst    r8, k1
-  0002  Call         r7, f1
-  0003  Move         r6, r7
-  0004  F64ToStr     r0, r6
-  0005  LoadConst    r1, k2
-  0006  ConcatStr    r0, r0, r1
-  0007  LoadInt      r8, 1
-  0008  LoadInt      r9, 2
-  0009  LoadInt      r10, 1
-  000a  Call         r8, f2
-  000b  Move         r7, r8
-  000c  IntToStr     r2, r7
-  000d  ConcatStr    r0, r0, r2
-  000e  LoadConst    r3, k3
-  000f  ConcatStr    r0, r0, r3
-  0010  CallHost     r0, h0
+  .inline f1 DumpGenericRoutines.Max line=59
+  .line 36
+  0002  LtF64        r10, r8, r7
+  0003  JmpIfFalse   r10, -> 0006
+  .line 37
+  0004  Move         r9, r7
+  .line 36
+  0005  Jmp          -> 0007
+  .line 39
+  0006  Move         r9, r8
+  .line 40
+  0007  Move         r6, r9
+  .endinline
+  .line 59
+  0008  F64ToStr     r0, r6
+  0009  LoadConst    r1, k2
+  000a  ConcatStr    r0, r0, r1
+  000b  LoadInt      r8, 1
+  000c  LoadInt      r9, 2
+  000d  LoadInt      r10, 1
+  000e  Call         r8, f2
+  000f  Move         r7, r8
+  0010  IntToStr     r2, r7
+  0011  ConcatStr    r0, r0, r2
+  0012  LoadConst    r3, k3
+  0013  ConcatStr    r0, r0, r3
+  0014  CallHost     r0, h0
   .line 60
-  0011  LoadZero     r6
-  0012  New          r6, ty64
-  0013  StoreGlobal  r6, g0
+  0015  LoadZero     r6
+  0016  New          r6, ty64
+  0017  StoreGlobal  r6, g0
   .line 61
-  0014  Move         r7, r6
-  0015  LoadInt      r8, 3
-  0016  CallMethod   r7, f4
-  0017  Move         r6, r7
-  0018  IntToStr     r4, r6
-  0019  LoadConst    r5, k3
-  001a  ConcatStr    r4, r4, r5
-  001b  CallHost     r4, h0
+  0018  Move         r7, r6
+  0019  LoadInt      r8, 3
+  001a  CallMethod   r7, f4
+  001b  Move         r6, r7
+  001c  IntToStr     r4, r6
+  001d  LoadConst    r5, k3
+  001e  ConcatStr    r4, r4, r5
+  001f  CallHost     r4, h0
   .line 62
-  001c  LoadGlobal   r6, g0
-  001d  Free         r6
+  0020  LoadGlobal   r6, g0
+  0021  Free         r6
   .line 63
-  001e  RetVoid
+  0022  RetVoid
 .finally r0, r1, r2, r3, r4, r5
 .func 1 DumpGenericRoutines.Max params=2 regs=4
   .local r0 A

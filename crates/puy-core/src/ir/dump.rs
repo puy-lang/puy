@@ -34,7 +34,19 @@ fn function(out: &mut String, index: usize, f: &Function, types: &TypeTable) {
     for (i, v) in f.vars.iter().enumerate() {
         let name = if v.name.is_empty() { "-" } else { &v.name };
         let kind = var_kind_text(v.kind, v.is_for_var);
-        let _ = writeln!(out, "  .reg v{i} {name}: {} {kind}", types.name(v.ty));
+        // A local record expanded into registers, and its fields (`docs/design/records.md` 3.9)
+        let expand = match v.expand {
+            VarExpand::No => String::new(),
+            VarExpand::Whole { first, count } => {
+                format!(" expanded v{first}..v{}", first + count - 1)
+            }
+            VarExpand::Field { of } => format!(" field v{of}"),
+        };
+        let _ = writeln!(
+            out,
+            "  .reg v{i} {name}: {} {kind}{expand}",
+            types.name(v.ty)
+        );
     }
     for (i, t) in f.temps.iter().enumerate() {
         let ty = t.ty.map(|t| types.name(t)).unwrap_or_else(|| "-".into());
@@ -182,11 +194,11 @@ fn function(out: &mut String, index: usize, f: &Function, types: &TypeTable) {
 }
 
 /// One instruction line: the name padded to 12 columns, then the operands (5).
-fn instruction(out: &mut String, opc: u8, operands: &str) {
+fn instruction(out: &mut String, opc: u16, operands: &str) {
     named(out, op_name(opc), operands);
 }
 
-fn op_name(opc: u8) -> &'static str {
+fn op_name(opc: u16) -> &'static str {
     op::info(opc)
         .expect("IR instructions use bytecode opcodes")
         .name

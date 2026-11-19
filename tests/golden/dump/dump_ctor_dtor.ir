@@ -75,6 +75,7 @@ bb0:
   LoadConst    t3, "\n"
   ConcatStr    t1, t1, t3
   CallHost     -, h0(t1)
+  Release      t2
   .line 28
   RetVoid
 .finally t1, t2, t3
@@ -91,6 +92,7 @@ bb0:
   LoadConst    t2, "\n"
   ConcatStr    t0, t0, t2
   CallHost     -, h0(t0)
+  Release      t1
   .line 33
   RetVoid
 .finally t0, t1, t2

@@ -1,0 +1,20 @@
+2 6 120
+finally ran
+ERangeError: array index 5 is out of range 0..2
+  at InlineTraces.At (inline_traces.pas:32)
+  at InlineTraces.AtTwice (inline_traces.pas:37)
+  at InlineTraces.Guarded (inline_traces.pas:64)
+  at InlineTraces.<main> (inline_traces.pas:79)
+10
+ERangeError: list index 3 is out of range 0..0
+  at System.Generics.Collections.TList<T>.CheckIndex (<stdlib>/System.Generics.Collections.pas:784)
+  at System.Generics.Collections.TList<T>.GetItem (<stdlib>/System.Generics.Collections.pas:833)
+  at InlineTraces.<main> (inline_traces.pas:88)
+EIntOverflow: integer overflow in Integer arithmetic
+  at InlineTraces.AddChecked (inline_traces.pas:51)
+  at InlineTraces.<main> (inline_traces.pas:95)
+42
+ERangeError: list index 1 is out of range 0..0
+  at System.Generics.Collections.TList<T>.CheckIndex (<stdlib>/System.Generics.Collections.pas:784)
+  at System.Generics.Collections.TList<T>.GetItem (<stdlib>/System.Generics.Collections.pas:833)
+  at InlineTraces.<main> (inline_traces.pas:106)

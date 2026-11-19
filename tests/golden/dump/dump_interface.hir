@@ -6,28 +6,28 @@ program DumpInterface
 .type IShape2 = interface(IShape)
   .method #2 Scale(Integer)
 .type TBase = class(TRefObject) ref abstract
-  .method f3 GetName
+  .method f0 GetName
   .method - Area virtual 6
-  .method f5 Scale
+  .method f1 Scale
   .implements IInterface
-  .implements IShape #0=- #1=f3
-  .implements IShape2 #0=- #1=f3 #2=f5
+  .implements IShape #0=- #1=f0
+  .implements IShape2 #0=- #1=f0 #2=f1
 .type TSquare = class(TBase) ref
-  .method f6 Area override 6
+  .method f2 Area override 6
   .implements IInterface
-  .implements IShape #0=virtual 6 #1=f3
-  .implements IShape2 #0=virtual 6 #1=f3 #2=f5
+  .implements IShape #0=virtual 6 #1=f0
+  .implements IShape2 #0=virtual 6 #1=f0 #2=f1
 .global g0 S: IShape2
-.routine f3 TBase.GetName(): string
+.routine f0 TBase.GetName(): string
   .var v0 Self: TBase self
   .var v1 Result: string result
   assign @34 R+
     var v1 Result
     const string "shape"
-.routine f5 TBase.Scale(F: Integer)
+.routine f1 TBase.Scale(F: Integer)
   .var v0 Self: TBase self
   .var v1 F: Integer param
-.routine f6 TSquare.Area(): Integer
+.routine f2 TSquare.Area(): Integer
   .var v0 Self: TSquare self
   .var v1 Result: Integer result
   assign @43 R+

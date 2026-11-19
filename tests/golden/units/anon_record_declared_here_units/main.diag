@@ -1,0 +1,10 @@
+error[E0702]: type mismatch: expected `Integer`, found `record`
+   --> main.pas:11:8
+    |
+ 11 |   N := Point;
+    |        ^^^^^
+   ::: src/Shared.pas:6:10
+  6 |   Point: record
+    |          ------ record type declared here
+
+error: aborting due to 1 error

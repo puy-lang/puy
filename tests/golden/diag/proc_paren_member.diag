@@ -1,0 +1,103 @@
+error[E0700]: `TAction` has no member `Foo`
+   --> proc_paren_member.pas:28:7
+    |
+ 28 |   (A).Foo;
+    |       ^^^
+
+error[E0700]: `TAction` has no member `Invoke`
+   --> proc_paren_member.pas:29:7
+    |
+ 29 |   (A).Invoke;
+    |       ^^^^^^
+
+error[E0700]: `TAction` has no member `Invoke`
+   --> proc_paren_member.pas:30:9
+    |
+ 30 |   ((A)).Invoke;
+    |         ^^^^^^
+
+error[E0700]: `TRun` has no member `Invoke`
+   --> proc_paren_member.pas:31:7
+    |
+ 31 |   (V).Invoke;
+    |       ^^^^^^
+
+error[E0700]: `TFn` has no member `Invoke`
+   --> proc_paren_member.pas:32:7
+    |
+ 32 |   (F).Invoke;
+    |       ^^^^^^
+
+error[E0700]: `TRun` has no member `Invoke`
+   --> proc_paren_member.pas:33:11
+    |
+ 33 |   TRun(V).Invoke;
+    |           ^^^^^^
+
+error[E0700]: `TAction` has no member `Foo`
+   --> proc_paren_member.pas:34:14
+    |
+ 34 |   TAction(A).Foo;
+    |              ^^^
+
+error[E0700]: `TRun` has no member `Invoke`
+   --> proc_paren_member.pas:35:8
+    |
+ 35 |   Rc.P.Invoke;
+    |        ^^^^^^
+    |
+    = note: call the value as `Rc.P()`
+
+error[E0700]: `TAction` has no member `Foo`
+   --> proc_paren_member.pas:36:8
+    |
+ 36 |   Rc.A.Foo;
+    |        ^^^
+
+error[E0700]: `TFn` has no member `Invoke`
+   --> proc_paren_member.pas:37:8
+    |
+ 37 |   Rc.F.Invoke;
+    |        ^^^^^^
+    |
+    = note: call the value as `Rc.F()`
+
+error[E0700]: `TRun` has no member `Invoke`
+   --> proc_paren_member.pas:38:10
+    |
+ 38 |   (Rc).P.Invoke;
+    |          ^^^^^^
+    |
+    = note: call the value as `(Rc).P()`
+
+error[E0700]: `TFn` has no member `Foo`
+   --> proc_paren_member.pas:39:12
+    |
+ 39 |   X := (F).Foo;
+    |            ^^^
+
+error[E0700]: `TFn` has no member `Foo`
+   --> proc_paren_member.pas:40:13
+    |
+ 40 |   X := Rc.F.Foo;
+    |             ^^^
+
+error[E0700]: `TFn` has no member `Foo`
+   --> proc_paren_member.pas:41:10
+    |
+ 41 |   X := F.Foo;
+    |          ^^^
+
+error[E0700]: `TObjFn` has no member `Foo`
+   --> proc_paren_member.pas:42:5
+    |
+ 42 |   G.Foo;
+    |     ^^^
+
+error[E0700]: `TObjFn` has no member `Foo`
+   --> proc_paren_member.pas:43:12
+    |
+ 43 |   X := (G).Foo;
+    |            ^^^
+
+error: aborting due to 16 errors

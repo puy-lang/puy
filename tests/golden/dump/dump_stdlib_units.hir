@@ -1,7 +1,7 @@
 program DumpStdlibUnits uses=System.SysUtils,System.Generics.Collections
 .global g0 P: TPair<string, Integer>
 .instance TPair<string, Integer>
-.routine f629 TPair<string, Integer>.Create(const AKey: string; const AValue: Integer)
+.routine f0 TPair<string, Integer>.Create(const AKey: string; const AValue: Integer)
   .var v0 Self: TPair<string, Integer> var self
   .var v1 AKey: string const param
   .var v2 AValue: Integer const param
@@ -16,7 +16,7 @@ program DumpStdlibUnits uses=System.SysUtils,System.Generics.Collections
 .routine <main>
   assign @10 R+
     global g0 P
-    create TPair<string, Integer> f629
+    create TPair<string, Integer> f0
       const string "a"
       const Integer 1
   writeln @11

@@ -8,7 +8,7 @@ error[E2000]: variable `C` may be read before it is assigned
     |               ^ read here
     |
     = note: Puy requires every local variable to be assigned before it is read
-    = fix: add an initial value: `var C: TColor = TColor.Red;`
+    = fix: add `C := TColor.Red; L := TLevel.Low; D := 5; T := #97; W := TColor.Green;` at the start of the body
 
 error[E2000]: variable `L` may be read before it is assigned
    --> ordinal_flow_fix.pas:22:23
@@ -20,7 +20,7 @@ error[E2000]: variable `L` may be read before it is assigned
     |                       ^ read here
     |
     = note: Puy requires every local variable to be assigned before it is read
-    = fix: add an initial value: `var L: TLevel = TLevel.Low;`
+    = fix: add `C := TColor.Red; L := TLevel.Low; D := 5; T := #97; W := TColor.Green;` at the start of the body
 
 error[E2000]: variable `D` may be read before it is assigned
    --> ordinal_flow_fix.pas:22:27
@@ -32,7 +32,7 @@ error[E2000]: variable `D` may be read before it is assigned
     |                           ^ read here
     |
     = note: Puy requires every local variable to be assigned before it is read
-    = fix: add an initial value: `var D: TDigit = 5;`
+    = fix: add `C := TColor.Red; L := TLevel.Low; D := 5; T := #97; W := TColor.Green;` at the start of the body
 
 error[E2000]: variable `T` may be read before it is assigned
    --> ordinal_flow_fix.pas:22:30
@@ -44,7 +44,7 @@ error[E2000]: variable `T` may be read before it is assigned
     |                              ^ read here
     |
     = note: Puy requires every local variable to be assigned before it is read
-    = fix: add an initial value: `var T: TLetter = #97;`
+    = fix: add `C := TColor.Red; L := TLevel.Low; D := 5; T := #97; W := TColor.Green;` at the start of the body
 
 error[E2000]: variable `W` may be read before it is assigned
    --> ordinal_flow_fix.pas:22:37
@@ -56,6 +56,6 @@ error[E2000]: variable `W` may be read before it is assigned
     |                                     ^ read here
     |
     = note: Puy requires every local variable to be assigned before it is read
-    = fix: add an initial value: `var W: TWarm = TColor.Green;`
+    = fix: add `C := TColor.Red; L := TLevel.Low; D := 5; T := #97; W := TColor.Green;` at the start of the body
 
 error: aborting due to 5 errors

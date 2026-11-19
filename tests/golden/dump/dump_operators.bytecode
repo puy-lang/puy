@@ -11,7 +11,7 @@
 .host
   0: Console.Write params=1 ret=0
 .unit DumpOperators file="dump_operators.pas" init=- fini=- entry=0
-.func 0 DumpOperators.<main> params=0 regs=19
+.func 0 DumpOperators.<main> params=0 regs=20
   .line 52
   0000  LoadInt      r16, 1
   0001  Call         r16, f2
@@ -31,36 +31,42 @@
   .line 54
   000e  LoadGlobalRef r5, g0
   000f  Move         r17, r5
-  0010  Call         r17, f3
-  0011  Move         r16, r17
-  0012  IntToStr     r4, r16
-  0013  LoadConst    r6, k0
-  0014  ConcatStr    r4, r4, r6
-  0015  CallHost     r4, h0
-  0016  Release      r5
+  .inline f3 DumpOperators.TVec.explicit line=54
+  .line 35
+  0010  FieldGet     r16, r17, 0
+  .endinline
+  .line 54
+  0011  IntToStr     r4, r16
+  0012  LoadConst    r6, k0
+  0013  ConcatStr    r4, r4, r6
+  0014  CallHost     r4, h0
+  0015  Release      r5
   .line 55
-  0017  New          r7, ty64
-  0018  StoreGlobalRef r7, g1
+  0016  New          r7, ty64
+  0017  StoreGlobalRef r7, g1
   .line 56
-  0019  LoadGlobalRef r9, g1
-  001a  Move         r17, r9
-  001b  LoadGlobalRef r10, g1
-  001c  Move         r18, r10
-  001d  Call         r17, f4
-  001e  Move         r16, r17
-  001f  BoolToStr    r8, r16
-  0020  LoadConst    r11, k1
-  0021  ConcatStr    r8, r8, r11
-  0022  LoadGlobalRef r13, g1
-  0023  Release      r14
-  0024  EqInt        r17, r13, r14
-  0025  BoolToStr    r12, r17
-  0026  ConcatStr    r8, r8, r12
-  0027  LoadConst    r15, k0
-  0028  ConcatStr    r8, r8, r15
-  0029  CallHost     r8, h0
+  0018  LoadGlobalRef r9, g1
+  0019  Move         r17, r9
+  001a  LoadGlobalRef r10, g1
+  001b  Move         r18, r10
+  .inline f4 DumpOperators.TNode.Equal line=56
+  .line 40
+  001c  LoadInt      r16, 1
+  .endinline
+  .line 56
+  001d  BoolToStr    r8, r16
+  001e  LoadConst    r11, k1
+  001f  ConcatStr    r8, r8, r11
+  0020  LoadGlobalRef r13, g1
+  0021  Release      r14
+  0022  EqInt        r17, r13, r14
+  0023  BoolToStr    r12, r17
+  0024  ConcatStr    r8, r8, r12
+  0025  LoadConst    r15, k0
+  0026  ConcatStr    r8, r8, r15
+  0027  CallHost     r8, h0
   .line 57
-  002a  RetVoid
+  0028  RetVoid
 .finally r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15
 .func 1 DumpOperators.TVec.Add params=2 regs=5
   .local r0 A
@@ -111,7 +117,7 @@
   0000  LoadZero     r1
   .line 46
   0001  Ret          r1
-.func 6 DumpOperators.TNode.Equals params=2 regs=6
+.func 6 DumpOperators.TNode.Equals params=2 regs=7
   .local r0 Self
   .local r1 Obj
   .local r2 Result
@@ -119,12 +125,14 @@
   0000  Move         r4, r1
   0001  IsClass      r4, ty64
   0002  Move         r2, r4
-  0003  JmpIfFalse   r2, -> 000a
-  0004  Move         r4, r0
-  0005  AssignObj    r3, r1
-  0006  AsClass      r3, ty64
-  0007  Move         r5, r3
-  0008  Call         r4, f4
-  0009  Move         r2, r4
-  000a  Ret          r2
+  0003  JmpIfFalse   r2, -> 0008
+  0004  AssignObj    r3, r1
+  0005  AsClass      r3, ty64
+  0006  Move         r5, r3
+  .inline f4 DumpOperators.TNode.Equal line=17
+  .line 40
+  0007  LoadInt      r2, 1
+  .endinline
+  .line 17
+  0008  Ret          r2
 .finally r3

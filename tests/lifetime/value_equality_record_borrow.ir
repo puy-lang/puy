@@ -8,45 +8,41 @@
   .reg t1: THolder temp
   .reg t2: THolder temp
   .reg t3: string temp
-  .reg t4: TEntry temp
-  .reg t5: THolder temp
-  .reg t6: string temp
-  .reg t7: TEntry temp
+  .reg t4: THolder temp
+  .reg t5: string temp
+  .reg t6: TTag temp
+  .reg t7: THolder temp
   .reg t8: TTag temp
   .reg t9: THolder temp
   .reg t10: TTag temp
-  .reg t11: TEntry temp
-  .reg t12: THolder temp
-  .reg t13: TTag temp
-  .reg t14: TEntry temp
+  .reg t11: string temp
+  .reg t12: string temp
+  .reg t13: Integer temp
+  .reg t14: TTag temp
   .reg t15: string temp
   .reg t16: string temp
-  .reg t17: Integer temp
-  .reg t18: TTag temp
-  .reg t19: string temp
-  .reg t20: string temp
-  .reg t21: Boolean temp
-  .reg t22: THolder temp
-  .reg t23: TObject temp
-  .reg t24: TObject temp
-  .reg t25: Int64 temp
-  .reg t26: string temp
-  .reg t27: string temp
-  .reg t28: Boolean temp
-  .reg t29: THolder temp
-  .reg t30: Int64 temp
-  .reg t31: THolder temp
-  .reg t32: string temp
+  .reg t17: Boolean temp
+  .reg t18: THolder temp
+  .reg t19: TObject temp
+  .reg t20: TObject temp
+  .reg t21: Int64 temp
+  .reg t22: string temp
+  .reg t23: string temp
+  .reg t24: Boolean temp
+  .reg t25: THolder temp
+  .reg t26: Int64 temp
+  .reg t27: THolder temp
+  .reg t28: string temp
+  .reg t29: string temp
+  .reg t30: string temp
+  .reg t31: Integer temp
+  .reg t32: TTag temp
   .reg t33: string temp
-  .reg t34: string temp
-  .reg t35: Integer temp
-  .reg t36: TTag temp
-  .reg t37: string temp
-  .reg t38: TTag temp
-  .reg t39: THolder temp
-  .reg t40: string temp
-  .reg t41: THolder temp
-  .reg t42: string temp
+  .reg t34: TTag temp
+  .reg t35: THolder temp
+  .reg t36: string temp
+  .reg t37: THolder temp
+  .reg t38: string temp
 bb0:
   .line 35
   LoadZero     t0
@@ -59,89 +55,77 @@ bb0:
   .line 37
   LoadGlobal   t2, g0
   LoadConst    t3, "x"
-  ObjGet       t4, t2, 0
-  Unique       t4, ValueEqualityRecordBorrow.TEntry
-  ObjSet       t2, 0, t4
-  FieldSetRef  t4, 0, t3
+  ObjSetRef    t2, 0, t3
   .line 38
-  LoadGlobal   t5, g1
-  LoadConst    t6, "x"
-  ObjGet       t7, t5, 0
-  Unique       t7, ValueEqualityRecordBorrow.TEntry
-  ObjSet       t5, 0, t7
-  FieldSetRef  t7, 0, t6
+  LoadGlobal   t4, g1
+  LoadConst    t5, "x"
+  ObjSetRef    t4, 0, t5
   .line 39
-  New          t8, ValueEqualityRecordBorrow.TTag
-  StoreGlobalRef t8, g2
+  New          t6, ValueEqualityRecordBorrow.TTag
+  StoreGlobalRef t6, g2
   .line 40
-  LoadGlobal   t9, g0
-  LoadGlobalRef t10, g2
-  ObjGet       t11, t9, 0
-  Unique       t11, ValueEqualityRecordBorrow.TEntry
-  ObjSet       t9, 0, t11
-  FieldSetRef  t11, 1, t10
+  LoadGlobal   t7, g0
+  LoadGlobalRef t8, g2
+  ObjSetRef    t7, 1, t8
   .line 41
-  LoadGlobal   t12, g1
-  LoadGlobalRef t13, g2
-  ObjGet       t14, t12, 0
-  Unique       t14, ValueEqualityRecordBorrow.TEntry
-  ObjSet       t12, 0, t14
-  FieldSetRef  t14, 1, t13
+  LoadGlobal   t9, g1
+  LoadGlobalRef t10, g2
+  ObjSetRef    t9, 1, t10
   .line 42
-  LoadConst    t15, "before: "
-  LoadGlobal   t18, g2
-  RefCount     t17, t18
-  IntToStr     t16, t17
-  ConcatStr    t15, t15, t16
-  LoadConst    t19, "\n"
-  ConcatStr    t15, t15, t19
-  CallHost     -, h0(t15)
+  LoadConst    t11, "before: "
+  LoadGlobal   t14, g2
+  RefCount     t13, t14
+  IntToStr     t12, t13
+  ConcatStr    t11, t11, t12
+  LoadConst    t15, "\n"
+  ConcatStr    t11, t11, t15
+  CallHost     -, h0(t11)
   .line 43
-  LoadGlobal   t22, g0
-  LoadGlobal   t25, g1
-  AssignObj    t24, t25
-  Move         t23, t24
-  CallVirtual  t21, ValueEqualityRecordBorrow.THolder.Equals[4](t22, t23)
-  BoolToStr    t20, t21
-  LoadConst    t26, " "
-  ConcatStr    t20, t20, t26
-  LoadGlobal   t29, g0
-  CallVirtual  t28, ValueEqualityRecordBorrow.THolder.GetHashCode[5](t29)
-  LoadGlobal   t31, g1
-  CallVirtual  t30, ValueEqualityRecordBorrow.THolder.GetHashCode[5](t31)
-  EqInt        t28, t28, t30
-  BoolToStr    t27, t28
-  ConcatStr    t20, t20, t27
-  LoadConst    t32, "\n"
-  ConcatStr    t20, t20, t32
-  CallHost     -, h0(t20)
+  LoadGlobal   t18, g0
+  LoadGlobal   t21, g1
+  AssignObj    t20, t21
+  Move         t19, t20
+  CallVirtual  t17, ValueEqualityRecordBorrow.THolder.Equals[4](t18, t19)
+  BoolToStr    t16, t17
+  LoadConst    t22, " "
+  ConcatStr    t16, t16, t22
+  LoadGlobal   t25, g0
+  CallVirtual  t24, ValueEqualityRecordBorrow.THolder.GetHashCode[5](t25)
+  LoadGlobal   t27, g1
+  CallVirtual  t26, ValueEqualityRecordBorrow.THolder.GetHashCode[5](t27)
+  EqInt        t24, t24, t26
+  BoolToStr    t23, t24
+  ConcatStr    t16, t16, t23
+  LoadConst    t28, "\n"
+  ConcatStr    t16, t16, t28
+  CallHost     -, h0(t16)
   .line 44
-  LoadConst    t33, "after: "
-  LoadGlobal   t36, g2
-  RefCount     t35, t36
-  IntToStr     t34, t35
-  ConcatStr    t33, t33, t34
-  LoadConst    t37, "\n"
-  ConcatStr    t33, t33, t37
-  CallHost     -, h0(t33)
+  LoadConst    t29, "after: "
+  LoadGlobal   t32, g2
+  RefCount     t31, t32
+  IntToStr     t30, t31
+  ConcatStr    t29, t29, t30
+  LoadConst    t33, "\n"
+  ConcatStr    t29, t29, t33
+  CallHost     -, h0(t29)
   .line 45
-  Release      t38
-  StoreGlobalRef t38, g2
+  Release      t34
+  StoreGlobalRef t34, g2
   .line 46
-  LoadGlobal   t39, g0
-  Free         t39
+  LoadGlobal   t35, g0
+  Free         t35
   .line 47
-  LoadConst    t40, "A freed\n"
-  CallHost     -, h0(t40)
+  LoadConst    t36, "A freed\n"
+  CallHost     -, h0(t36)
   .line 48
-  LoadGlobal   t41, g1
-  Free         t41
+  LoadGlobal   t37, g1
+  Free         t37
   .line 49
-  LoadConst    t42, "B freed\n"
-  CallHost     -, h0(t42)
+  LoadConst    t38, "B freed\n"
+  CallHost     -, h0(t38)
   .line 50
   RetVoid
-.finally t3, t6, t8, t10, t13, t15, t16, t19, t20, t24:obj, t26, t27, t32, t33, t34, t37, t38, t40, t42
+.finally t3, t5, t6, t8, t10, t11, t12, t15, t16, t20:obj, t22, t23, t28, t29, t30, t33, t34, t36, t38
 .func f1 ValueEqualityRecordBorrow.TTag.Destroy params=1
   .reg v0 Self: TTag self
   .reg t0: Integer temp
@@ -168,7 +152,11 @@ bb0:
   .reg t4: TEntry temp
   .reg t5: TEntry temp
   .reg t6: TEntry temp
-  .reg t7: TEntry temp
+  .reg t7: Int64 temp
+  .reg t8: THolder temp
+  .reg t9: TEntry temp
+  .reg t10: Int64 temp
+  .reg t11: THolder temp
 bb0:
   .line 20
   Move         t0, v1
@@ -189,10 +177,14 @@ bb3:
   AssignObj    t3, v1
   AsClass      t3, ValueEqualityRecordBorrow.THolder
   Move         v3, t3
-  ObjGetRef    t6, v0, 0
+  LoadZero     t7
+  Move         t8, v0
+  AggLoad      t6, t7, t8, ValueEqualityRecordBorrow.TEntry
   Move         t4, t6
-  ObjGetRef    t7, v3, 0
-  Move         t5, t7
+  LoadZero     t10
+  Move         t11, v3
+  AggLoad      t9, t10, t11, ValueEqualityRecordBorrow.TEntry
+  Move         t5, t9
   Call         v2, f4(t4, t5)
   Jmp          bb5
 bb4:
@@ -201,7 +193,7 @@ bb4:
 bb5:
   .line 20
   Ret          v2
-.finally t3:obj, t6, t7
+.finally t3:obj, t6, t9
 .func f3 ValueEqualityRecordBorrow.THolder.GetHashCode params=1
   .reg v0 Self: THolder self
   .reg v1 Result: Int64 result
@@ -210,11 +202,15 @@ bb5:
   .reg t2: Int64 temp
   .reg t3: TEntry temp
   .reg t4: TEntry temp
+  .reg t5: Int64 temp
+  .reg t6: THolder temp
 bb0:
   .line 20
   LoadInt      t0, 1
   HashInt      v1, t0
-  ObjGetRef    t4, v0, 0
+  LoadZero     t5
+  Move         t6, v0
+  AggLoad      t4, t5, t6, ValueEqualityRecordBorrow.TEntry
   Move         t3, t4
   Call         t2, f5(t3)
   HashMix      t1, v1, t2
@@ -263,6 +259,8 @@ bb5:
   Jmp          bb6
 bb6:
   .line 14
+  Release      t1
+  Release      t0
   Ret          v2
 .finally t0, t1, t2, t3
 .func f5 <hash:ValueEqualityRecordBorrow.TEntry> params=1
@@ -285,6 +283,7 @@ bb0:
   HashStr      t2, t3
   HashMix      t1, v1, t2
   Move         v1, t1
+  Release      t3
   FieldGetRef  t6, v0, 1
   ObjAlive     t7, t6
   JmpIfFalse   t7, bb2, bb1

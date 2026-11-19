@@ -1,0 +1,96 @@
+error[E0734]: ambiguous call to overloaded `TList<Integer>.Create`
+    --> stdlib_collections_create_errors.pas:26:8
+     |
+  26 |   L := TList<Integer>.Create(nil);
+     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ::: <stdlib>/System.Generics.Collections.pas:107:17
+ 107 |     constructor Create(const AComparer: IComparer<T>); overload;
+     |                 ------ candidate
+ 108 |     constructor Create(const Values: array of T); overload;
+     |                 ------ candidate
+ 109 |     constructor Create(const Source: TEnumerable<T>); overload;
+     |                 ------ candidate
+
+error[E0734]: ambiguous call to overloaded `TObjectList<TFoo>.Create`
+    --> stdlib_collections_create_errors.pas:27:8
+     |
+  27 |   O := TObjectList<TFoo>.Create(nil);
+     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ::: <stdlib>/System.Generics.Collections.pas:547:17
+ 547 |     constructor Create(const AComparer: IComparer<T>); overload;
+     |                 ------ candidate
+ 548 |     constructor Create(const AComparer: IComparer<T>; AOwnsObjects: Boolean); overload;
+ 549 |     constructor Create(const Values: array of T); overload;
+     |                 ------ candidate
+ 550 |     constructor Create(const Values: array of T; AOwnsObjects: Boolean); overload;
+ 551 |     constructor Create(const Source: TEnumerable<T>); overload;
+     |                 ------ candidate
+
+error[E0734]: ambiguous call to overloaded `TDictionary<string, Integer>.Create`
+    --> stdlib_collections_create_errors.pas:28:8
+     |
+  28 |   D := TDictionary<string, Integer>.Create(nil);
+     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ::: <stdlib>/System.Generics.Collections.pas:465:17
+ 465 |     constructor Create(const AComparer: IEqualityComparer<K>); overload;
+     |                 ------ candidate
+ 466 |     constructor Create(ACapacity: Integer; const AComparer: IEqualityComparer<K>); overload;
+ 467 |     constructor Create(const Values: array of TPair<K, V>); overload;
+     |                 ------ candidate
+ 468 |     constructor Create(const Source: TEnumerable<TPair<K, V>>); overload;
+     |                 ------ candidate
+
+error[E0734]: ambiguous call to overloaded `THashSet<Integer>.Create`
+    --> stdlib_collections_create_errors.pas:29:8
+     |
+  29 |   H := THashSet<Integer>.Create(nil);
+     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ::: <stdlib>/System.Generics.Collections.pas:510:17
+ 510 |     constructor Create(const AComparer: IEqualityComparer<T>); overload;
+     |                 ------ candidate
+ 511 |     constructor Create(const Values: array of T); overload;
+     |                 ------ candidate
+ 512 |     constructor Create(const Source: TEnumerable<T>); overload;
+     |                 ------ candidate
+
+error[E0734]: ambiguous call to overloaded `TStack<Integer>.Create`
+    --> stdlib_collections_create_errors.pas:30:8
+     |
+  30 |   S := TStack<Integer>.Create(nil);
+     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ::: <stdlib>/System.Generics.Collections.pas:199:17
+ 199 |     constructor Create(const Values: array of T); overload;
+     |                 ------ candidate
+ 200 |     constructor Create(const Source: TEnumerable<T>); overload;
+     |                 ------ candidate
+
+error[E0734]: ambiguous call to overloaded `TQueue<Integer>.Create`
+    --> stdlib_collections_create_errors.pas:31:8
+     |
+  31 |   Q := TQueue<Integer>.Create(nil);
+     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ::: <stdlib>/System.Generics.Collections.pas:265:17
+ 265 |     constructor Create(const Values: array of T); overload;
+     |                 ------ candidate
+ 266 |     constructor Create(const Source: TEnumerable<T>); overload;
+     |                 ------ candidate
+
+error[E0743]: `Create` is private to `TDictionary<string, Integer>.TKeyCollection`
+    --> stdlib_collections_create_errors.pas:39:11
+     |
+  39 |   WriteLn(TDictionary<string, Integer>.TKeyCollection.Create(D).Count);
+     |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ::: <stdlib>/System.Generics.Collections.pas:339:21
+ 339 |         constructor Create(ADict: TDictionary<K, V>);
+     |                     ------ declared here
+
+error[E0743]: `Create` is private to `TDictionary<string, Integer>.TValueCollection`
+    --> stdlib_collections_create_errors.pas:40:11
+     |
+  40 |   WriteLn(TDictionary<string, Integer>.TValueCollection.Create(D).Count);
+     |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ::: <stdlib>/System.Generics.Collections.pas:352:21
+ 352 |         constructor Create(ADict: TDictionary<K, V>);
+     |                     ------ declared here
+
+error: aborting due to 8 errors

@@ -58,6 +58,6 @@ error[E2000]: variable `N` may be read before it is assigned
     |        ^^^^ captured here
     |
     = note: Puy requires every local variable to be assigned before it is read
-    = fix: add an initial value: `var N: Integer = 0;`
+    = fix: add `N := 0;` at the start of the body
 
 error: aborting due to 3 errors; 2 warnings emitted

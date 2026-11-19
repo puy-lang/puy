@@ -74,24 +74,24 @@
         ],
         "fixes": [
           {
-            "title": "add an initial value: `var A: TColors = [];`",
+            "title": "add `A := []; B := []; C := [];` at the start of the body",
             "applicability": "safe",
             "edits": [
               {
                 "file": "set_flow_fix.pas",
-                "start": 408,
-                "end": 408,
-                "line": 18,
-                "column": 13,
-                "end_line": 18,
-                "end_column": 13,
+                "start": 451,
+                "end": 451,
+                "line": 21,
+                "column": 6,
+                "end_line": 21,
+                "end_column": 6,
                 "original": "",
-                "replacement": " = []"
+                "replacement": "\n  A := [];\n  B := [];\n  C := [];"
               }
             ]
           }
         ],
-        "rendered": "error[E2000]: variable `A` may be read before it is assigned\n   --> set_flow_fix.pas:23:25\n    |\n 18 |   A: TColors;\n    |   - declared here\n...\n 23 |   WriteLn(TColor.Red in A, 1 in B, 'a' in C, 2 in D, TColor.Green in Pick);\n    |                         ^ read here\n    |\n    = note: Puy requires every local variable to be assigned before it is read\n    = fix: add an initial value: `var A: TColors = [];`"
+        "rendered": "error[E2000]: variable `A` may be read before it is assigned\n   --> set_flow_fix.pas:23:25\n    |\n 18 |   A: TColors;\n    |   - declared here\n...\n 23 |   WriteLn(TColor.Red in A, 1 in B, 'a' in C, 2 in D, TColor.Green in Pick);\n    |                         ^ read here\n    |\n    = note: Puy requires every local variable to be assigned before it is read\n    = fix: add `A := []; B := []; C := [];` at the start of the body"
       },
       {
         "code": "E2000",
@@ -125,24 +125,24 @@
         ],
         "fixes": [
           {
-            "title": "add an initial value: `var B: set of Byte = [];`",
+            "title": "add `A := []; B := []; C := [];` at the start of the body",
             "applicability": "safe",
             "edits": [
               {
                 "file": "set_flow_fix.pas",
-                "start": 426,
-                "end": 426,
-                "line": 19,
-                "column": 17,
-                "end_line": 19,
-                "end_column": 17,
+                "start": 451,
+                "end": 451,
+                "line": 21,
+                "column": 6,
+                "end_line": 21,
+                "end_column": 6,
                 "original": "",
-                "replacement": " = []"
+                "replacement": "\n  A := [];\n  B := [];\n  C := [];"
               }
             ]
           }
         ],
-        "rendered": "error[E2000]: variable `B` may be read before it is assigned\n   --> set_flow_fix.pas:23:33\n    |\n 19 |   B: set of Byte;\n    |   - declared here\n...\n 23 |   WriteLn(TColor.Red in A, 1 in B, 'a' in C, 2 in D, TColor.Green in Pick);\n    |                                 ^ read here\n    |\n    = note: Puy requires every local variable to be assigned before it is read\n    = fix: add an initial value: `var B: set of Byte = [];`"
+        "rendered": "error[E2000]: variable `B` may be read before it is assigned\n   --> set_flow_fix.pas:23:33\n    |\n 19 |   B: set of Byte;\n    |   - declared here\n...\n 23 |   WriteLn(TColor.Red in A, 1 in B, 'a' in C, 2 in D, TColor.Green in Pick);\n    |                                 ^ read here\n    |\n    = note: Puy requires every local variable to be assigned before it is read\n    = fix: add `A := []; B := []; C := [];` at the start of the body"
       },
       {
         "code": "E2000",
@@ -176,24 +176,24 @@
         ],
         "fixes": [
           {
-            "title": "add an initial value: `var C: set of Char = [];`",
+            "title": "add `A := []; B := []; C := [];` at the start of the body",
             "applicability": "safe",
             "edits": [
               {
                 "file": "set_flow_fix.pas",
-                "start": 444,
-                "end": 444,
-                "line": 20,
-                "column": 17,
-                "end_line": 20,
-                "end_column": 17,
+                "start": 451,
+                "end": 451,
+                "line": 21,
+                "column": 6,
+                "end_line": 21,
+                "end_column": 6,
                 "original": "",
-                "replacement": " = []"
+                "replacement": "\n  A := [];\n  B := [];\n  C := [];"
               }
             ]
           }
         ],
-        "rendered": "error[E2000]: variable `C` may be read before it is assigned\n   --> set_flow_fix.pas:23:43\n    |\n 20 |   C: set of Char;\n    |   - declared here\n...\n 23 |   WriteLn(TColor.Red in A, 1 in B, 'a' in C, 2 in D, TColor.Green in Pick);\n    |                                           ^ read here\n    |\n    = note: Puy requires every local variable to be assigned before it is read\n    = fix: add an initial value: `var C: set of Char = [];`"
+        "rendered": "error[E2000]: variable `C` may be read before it is assigned\n   --> set_flow_fix.pas:23:43\n    |\n 20 |   C: set of Char;\n    |   - declared here\n...\n 23 |   WriteLn(TColor.Red in A, 1 in B, 'a' in C, 2 in D, TColor.Green in Pick);\n    |                                           ^ read here\n    |\n    = note: Puy requires every local variable to be assigned before it is read\n    = fix: add `A := []; B := []; C := [];` at the start of the body"
       },
       {
         "code": "E2000",

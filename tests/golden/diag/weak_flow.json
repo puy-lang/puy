@@ -34,24 +34,24 @@
         ],
         "fixes": [
           {
-            "title": "add an initial value: `var V: TNode = nil;`",
+            "title": "add `V := nil; K := nil;` at the start of the body",
             "applicability": "safe",
             "edits": [
               {
                 "file": "weak_flow.pas",
-                "start": 421,
-                "end": 421,
-                "line": 16,
-                "column": 18,
-                "end_line": 16,
-                "end_column": 18,
+                "start": 445,
+                "end": 445,
+                "line": 18,
+                "column": 6,
+                "end_line": 18,
+                "end_column": 6,
                 "original": "",
-                "replacement": " = nil"
+                "replacement": "\n  V := nil;\n  K := nil;"
               }
             ]
           }
         ],
-        "rendered": "error[E2000]: variable `V` may be read before it is assigned\n   --> weak_flow.pas:19:11\n    |\n 16 |   [weak] V: TNode;\n    |          - declared here\n...\n 19 |   WriteLn(V = nil, K = nil);\n    |           ^ read here\n    |\n    = note: Puy requires every local variable to be assigned before it is read\n    = fix: add an initial value: `var V: TNode = nil;`"
+        "rendered": "error[E2000]: variable `V` may be read before it is assigned\n   --> weak_flow.pas:19:11\n    |\n 16 |   [weak] V: TNode;\n    |          - declared here\n...\n 19 |   WriteLn(V = nil, K = nil);\n    |           ^ read here\n    |\n    = note: Puy requires every local variable to be assigned before it is read\n    = fix: add `V := nil; K := nil;` at the start of the body"
       },
       {
         "code": "E2000",
@@ -85,24 +85,24 @@
         ],
         "fixes": [
           {
-            "title": "add an initial value: `var K: TNodeClass = nil;`",
+            "title": "add `V := nil; K := nil;` at the start of the body",
             "applicability": "safe",
             "edits": [
               {
                 "file": "weak_flow.pas",
-                "start": 438,
-                "end": 438,
-                "line": 17,
-                "column": 16,
-                "end_line": 17,
-                "end_column": 16,
+                "start": 445,
+                "end": 445,
+                "line": 18,
+                "column": 6,
+                "end_line": 18,
+                "end_column": 6,
                 "original": "",
-                "replacement": " = nil"
+                "replacement": "\n  V := nil;\n  K := nil;"
               }
             ]
           }
         ],
-        "rendered": "error[E2000]: variable `K` may be read before it is assigned\n   --> weak_flow.pas:19:20\n    |\n 17 |   K: TNodeClass;\n    |   - declared here\n 18 | begin\n 19 |   WriteLn(V = nil, K = nil);\n    |                    ^ read here\n    |\n    = note: Puy requires every local variable to be assigned before it is read\n    = fix: add an initial value: `var K: TNodeClass = nil;`"
+        "rendered": "error[E2000]: variable `K` may be read before it is assigned\n   --> weak_flow.pas:19:20\n    |\n 17 |   K: TNodeClass;\n    |   - declared here\n 18 | begin\n 19 |   WriteLn(V = nil, K = nil);\n    |                    ^ read here\n    |\n    = note: Puy requires every local variable to be assigned before it is read\n    = fix: add `V := nil; K := nil;` at the start of the body"
       },
       {
         "code": "W0001",

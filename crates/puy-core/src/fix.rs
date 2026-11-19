@@ -359,15 +359,24 @@ fn collect_skipped(
 /// `docs/spec/diagnostics.md` 10.4): those whose `primary` is in `files`, the source files of the
 /// compilation (`CompileOutput::files`). Fixes inside included files are not counted.
 pub fn applicable_fix_count(diags: &[Diagnostic], files: &[FileId]) -> usize {
-    diags
-        .iter()
-        .filter(|d| {
-            d.primary
-                .as_ref()
-                .is_some_and(|p| files.contains(&p.span.file))
-                && d.safe_fix().is_some()
-        })
-        .count()
+    // Fixes with the same edits count once, as `puy fix` applies identical edits once (the E2000
+    // fixes of a routine, or of a variable read in several places; `docs/spec/diagnostics.md` 2.1)
+    let mut seen: Vec<&[TextEdit]> = Vec::new();
+    for d in diags {
+        if !d
+            .primary
+            .as_ref()
+            .is_some_and(|p| files.contains(&p.span.file))
+        {
+            continue;
+        }
+        if let Some(f) = d.safe_fix()
+            && !seen.contains(&f.edits.as_slice())
+        {
+            seen.push(&f.edits);
+        }
+    }
+    seen.len()
 }
 
 #[cfg(test)]
@@ -413,9 +422,47 @@ mod tests {
         let text = String::from_utf8(r.fixed("t.pas").unwrap().to_vec()).unwrap();
         assert_eq!(
             text,
-            "procedure P;\nvar S: string = '';\nbegin\n  S := S + 'x';\n  WriteLn(S);\nend;\n"
+            "procedure P;\nvar S: string;\nbegin\n  S := '';\n  S := S + 'x';\n  WriteLn(S);\nend;\n"
         );
         assert_eq!(r.applied.len(), 2);
+    }
+
+    #[test]
+    fn assigns_all_unassigned_variables_in_one_round() {
+        // The E2000 fixes of a routine insert at the same place, so each assigns all the variables
+        // in the order of declaration and one round applies them
+        let r = run_fix(
+            "function F: Integer;\nvar\n  A, B: Integer;\n  S: string;\nbegin\n  WriteLn(S, B, Result, A);\nend;\n",
+        );
+        let text = String::from_utf8(r.fixed("t.pas").unwrap().to_vec()).unwrap();
+        assert_eq!(
+            text,
+            "function F: Integer;\nvar\n  A, B: Integer;\n  S: string;\nbegin\n  Result := 0;\n  A := 0;\n  B := 0;\n  S := '';\n  WriteLn(S, B, Result, A);\nend;\n"
+        );
+        assert_eq!(r.applied.len(), 1);
+        assert_eq!(r.rounds, 2);
+        assert!(r.converged);
+        assert!(r.diagnostics.is_empty(), "{:?}", r.diagnostics);
+    }
+
+    #[test]
+    fn counts_identical_fixes_once() {
+        // The E2000 fixes of one routine have the same edit, which `puy fix` applies once, so the
+        // count in `help: N fixes can be applied` is one
+        let mut p = MemorySourceProvider::new();
+        let out = compile(
+            "t.pas",
+            b"procedure P;\nvar\n  A, B: Integer;\nbegin\n  WriteLn(A, B, A);\nend;\n".to_vec(),
+            &mut p,
+            &CompileOptions::default(),
+        );
+        let e2000 = out
+            .diagnostics
+            .iter()
+            .filter(|d| d.code.is_some_and(|c| c.to_string() == "E2000"))
+            .count();
+        assert_eq!(e2000, 3, "{:?}", out.diagnostics);
+        assert_eq!(applicable_fix_count(&out.diagnostics, &out.files), 1);
     }
 
     #[test]

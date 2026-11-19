@@ -460,7 +460,9 @@ impl Units<'_> {
         if stdlib.is_some() {
             self.stdlib_files.push(file);
         }
-        let fr = front(file, sources, self.provider, &self.build, sink);
+        let mut fr = front(file, sources, self.provider, &self.build, sink);
+        // Only the main file's tokens are kept (for the token dump); the parse is done with them
+        fr.dir.tokens = Vec::new();
         if fr.invalid_utf8 {
             // E0001 in the file; no E2500 on the item
             self.entries[idx].visit = Visit::Done;
@@ -616,7 +618,7 @@ struct UsesItem {
 fn uses_items(root: &SyntaxNode) -> Vec<UsesItem> {
     use SyntaxKind::*;
     let mut out = Vec::new();
-    for clause in root.descendants().filter(|n| n.kind() == USES_CLAUSE) {
+    for clause in crate::syntax::nodes_of_kind(root, USES_CLAUSE) {
         let ok = clause.parent().is_some_and(|p| {
             matches!(
                 p.kind(),
@@ -686,8 +688,8 @@ pub(crate) fn compile_with_stdlib(
     }
     let mut stages = Stages::default();
 
-    let main = front(file, &mut sources, provider, &opts.build, &mut sink);
-    stages.tokens = Some(main.dir.tokens.clone());
+    let mut main = front(file, &mut sources, provider, &opts.build, &mut sink);
+    stages.tokens = Some(std::mem::take(&mut main.dir.tokens));
     stages.cst = Some(main.root.clone());
     let main_unit = main.root.children().find(|n| n.kind() == SyntaxKind::UNIT);
     let is_unit = main_unit.is_some();

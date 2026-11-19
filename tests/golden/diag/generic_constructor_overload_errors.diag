@@ -1,0 +1,34 @@
+error[E0759]: `THides` does not satisfy the constraint `constructor` of `T` in `TMake<T>`
+   --> generic_constructor_overload_errors.pas:59:12
+    |
+ 29 |   TMake<T: class, constructor> = class
+    |         - type parameter declared here
+...
+ 59 |   H: TMake<THides>;
+    |            ^^^^^^
+    |
+    = note: the type needs a public constructor `Create` without parameters, and must not be abstract
+
+error[E0759]: `TAmbiguous` does not satisfy the constraint `constructor` of `T` in `TMake<T>`
+   --> generic_constructor_overload_errors.pas:60:12
+    |
+ 29 |   TMake<T: class, constructor> = class
+    |         - type parameter declared here
+...
+ 60 |   A: TMake<TAmbiguous>;
+    |            ^^^^^^^^^^
+    |
+    = note: the type needs a public constructor `Create` without parameters, and must not be abstract
+
+error[E0759]: `TProtected` does not satisfy the constraint `constructor` of `T` in `TMake<T>`
+   --> generic_constructor_overload_errors.pas:61:12
+    |
+ 29 |   TMake<T: class, constructor> = class
+    |         - type parameter declared here
+...
+ 61 |   P: TMake<TProtected>;
+    |            ^^^^^^^^^^
+    |
+    = note: the type needs a public constructor `Create` without parameters, and must not be abstract
+
+error: aborting due to 3 errors

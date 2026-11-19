@@ -69,6 +69,7 @@ bb8:
   LoadConst    t15, "\n"
   ConcatStr    t11, t11, t15
   CallHost     -, h0(t11)
+  Release      t11
   .line 22
   Release      t0
   Jmp          bb10

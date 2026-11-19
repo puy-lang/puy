@@ -8,7 +8,7 @@ error[E2000]: variable `F` may be read before it is assigned
     |           ^ read here
     |
     = note: Puy requires every local variable to be assigned before it is read
-    = fix: add an initial value: `var F: TFn = nil;`
+    = fix: add `F := nil; E := nil;` at the start of the body
 
 error[E2000]: variable `E` may be read before it is assigned
    --> proc_flow.pas:17:3
@@ -20,6 +20,6 @@ error[E2000]: variable `E` may be read before it is assigned
     |   ^ read here
     |
     = note: Puy requires every local variable to be assigned before it is read
-    = fix: add an initial value: `var E: TEvent = nil;`
+    = fix: add `F := nil; E := nil;` at the start of the body
 
 error: aborting due to 2 errors

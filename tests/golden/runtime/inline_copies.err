@@ -1,0 +1,4 @@
+error: uncaught exception EIntOverflow: integer overflow in Integer arithmetic
+  at InlineCopies.Add (inline_copies.pas:36)
+  at InlineCopies.Twice (inline_copies.pas:41)
+  at InlineCopies.<main> (inline_copies.pas:128)

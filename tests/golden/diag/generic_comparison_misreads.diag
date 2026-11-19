@@ -1,0 +1,83 @@
+error[E0761]: `a` is not generic
+   --> generic_comparison_misreads.pas:53:8
+    |
+ 53 |   Pair(a < b, c > (d));
+    |        ^^^^^^^^^^
+    |
+    = note: to compare, write `(A < B), C > (D)`
+
+error[E0761]: `a` is not generic
+   --> generic_comparison_misreads.pas:54:11
+    |
+ 54 |   WriteLn(a < b, b > (c));
+    |           ^^^^^^^^^^
+    |
+    = note: to compare, write `(A < B), C > (D)`
+
+error[E0761]: `a` is not generic
+   --> generic_comparison_misreads.pas:55:7
+    |
+ 55 |   o.M(a < b, c > (d));
+    |       ^^^^^^^^^^
+    |
+    = note: to compare, write `(A < B), C > (D)`
+
+error[E0761]: `a` is not generic
+   --> generic_comparison_misreads.pas:57:5
+    |
+ 57 |   P(a < b, c > (d));
+    |     ^^^^^^^^^^
+    |
+    = note: to compare, write `(A < B), C > (D)`
+
+error[E0761]: `a` is not generic
+   --> generic_comparison_misreads.pas:58:20
+    |
+ 58 |   o := TFoo.Create(a < b, c > (d));
+    |                    ^^^^^^^^^^
+    |
+    = note: to compare, write `(A < B), C > (D)`
+
+error[E0761]: `a` is not generic
+   --> generic_comparison_misreads.pas:59:8
+    |
+ 59 |   Over(a < b, c > (d));
+    |        ^^^^^^^^^^
+    |
+    = note: to compare, write `(A < B), C > (D)`
+
+error[E0705]: wrong number of arguments: expected 1, found 2
+   --> generic_comparison_misreads.pas:61:3
+    |
+ 19 | procedure One(X: Boolean);
+    |           --- declared here
+...
+ 61 |   One(Two(a < b, c > (d)), True);
+    |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0761]: `a` is not generic
+   --> generic_comparison_misreads.pas:61:11
+    |
+ 61 |   One(Two(a < b, c > (d)), True);
+    |           ^^^^^^^^^^
+    |
+    = note: to compare, write `(A < B), C > (D)`
+
+error[E0761]: `a` is not generic
+   --> generic_comparison_misreads.pas:63:11
+    |
+ 63 |   WriteLn(a < b > (c));
+    |           ^^^^^^^
+    |
+    = note: to compare, write `(A < B) > (C)`
+
+error[E0761]: `Cnt<Byte>` needs parentheses here
+   --> generic_comparison_misreads.pas:65:6
+    |
+ 65 |   if Cnt<Byte>=2 then
+    |      ^^^^^^^^^
+    |
+    = note: `>=` is read as one operator; to compare with `=`, write a space after `>`
+    = fix: add `()`
+
+error: aborting due to 10 errors

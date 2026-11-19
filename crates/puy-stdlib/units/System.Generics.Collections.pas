@@ -92,6 +92,8 @@ type
     procedure ItemsRemoved(const Items: array of T; From: Integer);
     // Removes the item at Index without telling Notify.
     procedure RemoveAt(Index: Integer);
+    // Clear, and when the list is being freed (not KeepCapacity) also lets go of the array.
+    procedure RemoveAll(KeepCapacity: Boolean);
   protected
     // Told cnAdding before Item enters the list (Add, Insert, AddRange, InsertRange,
     // Items[I] := X; raising refuses it, and the list is left as it was), and cnRemoved after
@@ -171,6 +173,8 @@ type
     // Tells Notify that Items[From..] were removed, in order; when one call raises, the rest are
     // still told, and the exceptions overlap (9.1).
     procedure ItemsRemoved(const Items: array of T; From: Integer);
+    // Clear, and when the stack is being freed (not KeepCapacity) also lets go of the array.
+    procedure RemoveAll(KeepCapacity: Boolean);
   protected
     // Told cnAdding before Item enters the stack (Push; raising refuses it, and the stack is left
     // as it was), and cnRemoved after Item has left it at Clear and when the stack is freed,
@@ -235,6 +239,8 @@ type
     // Tells Notify that Items[From..] were removed, in order; when one call raises, the rest are
     // still told, and the exceptions overlap (9.1).
     procedure ItemsRemoved(const Items: array of T; From: Integer);
+    // Clear, and when the queue is being freed (not KeepCapacity) also lets go of the array.
+    procedure RemoveAll(KeepCapacity: Boolean);
   protected
     // Told cnAdding before Item enters the queue (Enqueue; raising refuses it, and the queue is
     // left as it was), and cnRemoved after Item has left it at Clear and when the queue is freed,
@@ -274,23 +280,17 @@ type
 
   // ===== TDictionary<K, V> (chapter 7) =====
 
-  // A hash table that keeps its entries in insertion order (7.3). The entries live in an array
-  // in the order they were added; removing one leaves a hole there, and the holes are squeezed
-  // out when the entries are placed again. Each bucket holds the first entry of a chain linked
-  // through TEntry.Next. An entry remembers the hash of its key, which placing the entries again
-  // (and, in debug builds, every entry a lookup or an enumeration touches) checks against the
-  // hash of the key as it is now (7.5).
+  // A hash table that keeps its entries in insertion order (7.3). The entries live in four
+  // arrays in the order they were added (the keys, the values, the hashes and the next entries;
+  // entry I is at I in each); removing one leaves a hole there, and the holes are squeezed out
+  // when the entries are placed again. Each bucket holds the first entry of a chain linked
+  // through FNext, which HashFind / HashLookup follow and HashRelink makes again (the layout of
+  // spec/bytecode.md 2.23). An entry remembers the hash of its key, which placing the entries
+  // again (and, in debug builds, every entry a lookup or an enumeration touches) checks against
+  // the hash of the key as it is now, unless the hash of a key of its type cannot change
+  // (IsPlainKey; 7.5).
   TDictionary<K, V> = class(TEnumerable<TPair<K, V>>)
   private
-    type
-      TEntry = record
-        Key: K;
-        Value: V;
-        Hash: Int64;
-        // The next entry in the same bucket (-1 at the end of the chain), or HOLE for an
-        // entry that was removed.
-        Next: Integer;
-      end;
     const
       HOLE = -2;
       // Removing leaves holes; more than this many (and more holes than entries) are squeezed
@@ -331,41 +331,55 @@ type
         property Current: V read GetCurrent;
       end;
 
-      // The keys of a dictionary, as they are now (7.3). Owned by the dictionary.
+      // The keys of a dictionary, as they are now (7.3). Made and owned by the dictionary only.
       TKeyCollection = class(TEnumerable<K>)
       private
         FDict: TDictionary<K, V>;
         function GetCount: Integer;
-      public
         constructor Create(ADict: TDictionary<K, V>);
+      public
         destructor Destroy; override;
         function ToArray: TArray<K>; override;
         function GetEnumerator: TKeyEnumerator;
         property Count: Integer read GetCount;
       end;
 
-      // The values of a dictionary, as they are now (7.3). Owned by the dictionary.
+      // The values of a dictionary, as they are now (7.3). Made and owned by the dictionary only.
       TValueCollection = class(TEnumerable<V>)
       private
         FDict: TDictionary<K, V>;
         function GetCount: Integer;
-      public
         constructor Create(ADict: TDictionary<K, V>);
+      public
         destructor Destroy; override;
         function ToArray: TArray<V>; override;
         function GetEnumerator: TValueEnumerator;
         property Count: Integer read GetCount;
       end;
   private
-    // The entries in insertion order, holes included; the length is the capacity.
-    FEntries: TArray<TEntry>;
-    // How many entries of FEntries are in use (live entries and holes).
+    // The first entry of each bucket (-1 when empty; a power of 2 of them, or none). Then the
+    // entries in insertion order, holes included: four arrays whose length is the capacity, the
+    // hash of each key as it was added, the next entry in the same bucket (-1 at the end of the
+    // chain, or HOLE for an entry that was removed), the keys and the values.
+    // HashLookup reads the first four fields, which must stay declared one after another in
+    // this order (spec/bytecode.md 2.23).
+    FBuckets: TArray<Integer>;
+    FHashes: TArray<Int64>;
+    FNext: TArray<Integer>;
+    FKeyItems: TArray<K>;
+    FValueItems: TArray<V>;
+    // How many entries are in use (live entries and holes).
     FUsed: Integer;
     FCount: Integer;
-    // The first entry of each bucket (-1 when empty). The length is a power of 2, or 0 when the
-    // capacity is 0.
-    FBuckets: TArray<Integer>;
+    // Length(FBuckets) - 1, which takes the bucket of a hash (-1 when there are no buckets), and
+    // Length(FHashes): kept beside the arrays so that adding and removing read no lengths. Set
+    // again wherever the arrays are made again (Place, RemoveAll).
+    FMask: Integer;
+    FCapacity: Integer;
     FComparer: IEqualityComparer<K>;
+    // Whether FComparer is nil (the keys are compared with KeyEquals / KeyHash): kept apart so
+    // that a lookup does not compare the interface with nil.
+    FByKey: Boolean;
     // Changed by every change of the structure (3.3).
     FVersion: Integer;
     // Whether KeyNotify and ValueNotify are called (NOTIFY_*): learned when there is first
@@ -381,20 +395,39 @@ type
     FKind: string;
     function OwnerName: string;
     function HashOf(const Key: K): Int64;
-    function SameKey(const Left, Right: K): Boolean;
     function BucketOf(Hash: Int64): Integer;
+    function ChangedKeyError(Index: Integer): EInvalidOperation;
     procedure CheckEntry(Index: Integer);
     procedure CheckVersion(Version: Integer);
     function Notifies: Boolean;
     procedure EntryAdding(const Key: K; const Value: V);
     procedure Init(ACapacity: Integer; const AComparer: IEqualityComparer<K>);
     function NextLive(Index: Integer): Integer;
-    function Find(const Key: K; Hash: Int64): Integer;
+    // Sets Index to the entry whose key equals Key, or -1, and returns the hash of Key when it is
+    // -1 (adding needs it, even when the dictionary is empty; when it is found, any value).
+    function Find(const Key: K; out Index: Integer): Int64;
+    function FindCompared(const Key: K; out Index: Integer): Int64;
+    // The entry whose key equals Key, or -1: Find without the hash, for the lookups.
+    function IndexOfKey(const Key: K): Integer;
+    // Small enough to be inlined into its callers; making room is left to MakeRoom.
     procedure Append(const Key: K; const Value: V; Hash: Int64);
-    procedure RemoveAt(Index: Integer);
+    procedure MakeRoom;
+    // Removes the entry at Index; when Tell, KeyNotify and ValueNotify hear of it afterwards
+    // (RemoveTelling).
+    procedure RemoveAt(Index: Integer; Tell: Boolean);
+    procedure RemoveTelling(Index: Integer);
+    // Clear, and when the dictionary is being freed (not KeepCapacity) also lets go of the
+    // arrays instead of making new ones.
+    procedure RemoveAll(KeepCapacity: Boolean);
     procedure CheckAll(Skip: Integer);
+    // Moves the live entries to the front in place (their order kept) and lets go of the keys and
+    // values left behind; FUsed becomes FCount. The chains are left to the caller.
+    procedure MoveLiveToFront;
     procedure Place(NewCapacity: Integer);
     procedure Rehash(NewCapacity: Integer);
+    // Squeezes the holes out in place, keeping the capacity: the time is proportional to the
+    // entries in use, not to the capacity, so that removing stays O(1) on average (11.1).
+    procedure SqueezeHoles;
     function GetItem(const Key: K): V;
     procedure SetItem(const Key: K; const Value: V);
     function GetCapacity: Integer;
@@ -598,9 +631,10 @@ type
   // Sorting and binary search of arrays (10.3, 10.4). Only class methods; never instantiated.
   TArray = class
   private
-    // The order to use: Comparer, or the default order of T when it is nil (raising
-    // EInvalidOperation at once when T has none, even before any two values are compared).
-    class function OrderOf<T>(const Comparer: IComparer<T>): IComparer<T>; static;
+    // Whether to compare with the default order of T (KeyCompare): when Comparer is nil, which
+    // raises EInvalidOperation at once when T has none, even before any two values are compared.
+    // The default order is compared directly, not through a comparer object.
+    class function ByDefaultOrder<T>(const Comparer: IComparer<T>): Boolean; static;
     // Sorts Items stably (a bottom-up merge sort over runs sorted by insertion). Every slot is
     // written once per pass from a slot of the previous pass, so a comparer that breaks its
     // contract cannot lose or repeat an item; Items is left in an unspecified state when the
@@ -661,6 +695,15 @@ begin
     Result := Current * 2;
 end;
 
+// Whether RemoveAll (TList<T>, TStack<T>, TQueue<T>) lets go of the whole array rather than
+// writing Default(T) to each of the Count slots in use: always when the container is being freed
+// (not KeepCapacity), and otherwise unless only a few of the Capacity slots are in use, where
+// making a new array of the same capacity would cost more than the writes.
+function ReleasesWholeArray(KeepCapacity: Boolean; Count, Capacity: Integer): Boolean;
+begin
+  Result := not KeepCapacity or (Count > Capacity div 4);
+end;
+
 // The exception for a capacity below the count (3.2). Kind is `stack`, `queue`, ...
 function CapacityError(const Kind: string; Value, Count: Integer): ERangeError;
 begin
@@ -676,7 +719,10 @@ begin
 end;
 
 // The change number after Version (3.3). Wraps round to 0 after MaxInt instead of overflowing
-// under {$Q+}: an enumerator only compares the number for equality.
+// under {$Q+}: an enumerator only compares the number for equality. The most frequent changes
+// (TList<T>.Add, adding to and removing from a dictionary) write the same rule out in place, to
+// save the call; TDictionary<K, V>.Append writes it as (Version + 1) and MaxInt under {$Q-},
+// which gives the same number. A change of the rule changes those places too.
 function NextVersion(Version: Integer): Integer;
 begin
   if Version = MaxInt then
@@ -849,8 +895,11 @@ procedure TList<T>.SetCapacity(Value: Integer);
 begin
   if Value < FCount then
     raise CapacityError('list', Value, FCount);
-  SetLength(FItems, Value);
-  FVersion := NextVersion(FVersion);
+  if Value <> Length(FItems) then
+  begin
+    SetLength(FItems, Value);
+    FVersion := NextVersion(FVersion);
+  end;
 end;
 
 constructor TList<T>.Create;
@@ -884,7 +933,7 @@ end;
 
 destructor TList<T>.Destroy;
 begin
-  Clear;
+  RemoveAll(False);
   inherited Destroy;
 end;
 
@@ -920,7 +969,11 @@ begin
   FItems[FCount] := Value;
   Result := FCount;
   FCount := FCount + 1;
-  FVersion := NextVersion(FVersion);
+  // NextVersion, written out
+  if FVersion = MaxInt then
+    FVersion := 0
+  else
+    FVersion := FVersion + 1;
 end;
 
 procedure TList<T>.AddRange(const Values: array of T);
@@ -1056,19 +1109,49 @@ begin
 end;
 
 procedure TList<T>.Clear;
+begin
+  RemoveAll(True);
+end;
+
+procedure TList<T>.RemoveAll(KeepCapacity: Boolean);
 var
-  I: Integer;
+  I, N, Count: Integer;
+  Tell, WholeArray: Boolean;
   Removed: TArray<T>;
 begin
-  if Notifies then
-    Removed := Copy(FItems, 0, FCount)
+  Tell := Notifies;
+  Count := FCount;
+  // Letting go of the whole array (and making a new one of the same capacity, all Default(T))
+  // writes no item, which is cheaper than writing Default(T) to each one unless only a few of
+  // the slots are in use. The items are let go of in index order either way.
+  N := Length(FItems);
+  WholeArray := ReleasesWholeArray(KeepCapacity, Count, N);
+  // When the slots are written one at a time, the items are copied out first and let go of
+  // from the copy, so that writing a slot lets go of nothing and an item a destructor adds to a
+  // slot is not written over afterwards
+  if Tell or not WholeArray then
+    Removed := Copy(FItems, 0, Count)
   else
     Removed := nil;
-  for I := 0 to FCount - 1 do
-    FItems[I] := Default(T);
+  // The list holds no items while they are let go of, so that a destructor that looks at the
+  // list sees it empty whichever way they go, and the items a destructor adds stay in the list
+  // (collections.md 9.4).
   FCount := 0;
   FVersion := NextVersion(FVersion);
-  ItemsRemoved(Removed, 0);
+  if WholeArray then
+  begin
+    // The field is nil before the array is let go of (an assignment lets go of the old value
+    // after writing), so the items a destructor adds go into an array of their own, which is
+    // kept (it may already be larger than N)
+    FItems := nil;
+    if KeepCapacity and (Length(FItems) < N) then
+      SetLength(FItems, N);
+  end
+  else
+    for I := 0 to Count - 1 do
+      FItems[I] := Default(T);
+  if Tell then
+    ItemsRemoved(Removed, 0);
 end;
 
 function TList<T>.Contains(const Value: T): Boolean;
@@ -1132,11 +1215,20 @@ end;
 
 // Sorts a copy, so that a comparer that raises leaves the list as it was. A comparer that changed
 // the list keeps its changes (the sorted copy is thrown away), and gets EInvalidOperation (10.3).
+// Without a comparer, the elements of a type ordered by a built-in comparison are sorted in place
+// by the VM (ArraySortRange), which runs no Pascal code and raises nothing once it moves them.
 procedure TList<T>.Sort(const AComparer: IComparer<T>);
 var
   Work: TArray<T>;
   Version, I: Integer;
 begin
+  if IsPlainOrder(Default(T)) then
+    if AComparer = nil then
+    begin
+      ArraySortRange(FItems, 0, FCount);
+      FVersion := NextVersion(FVersion);
+      Exit;
+    end;
   Work := Copy(FItems, 0, FCount);
   Version := FVersion;
   TArray.SortItems<T>(Work, AComparer);
@@ -1202,8 +1294,7 @@ end;
 
 procedure TList<T>.TrimExcess;
 begin
-  SetLength(FItems, FCount);
-  FVersion := NextVersion(FVersion);
+  SetCapacity(FCount);
 end;
 
 function TList<T>.GetEnumerator: TEnumerator;
@@ -1247,7 +1338,7 @@ end;
 
 destructor TStack<T>.Destroy;
 begin
-  Clear;
+  RemoveAll(False);
   inherited Destroy;
 end;
 
@@ -1346,19 +1437,41 @@ begin
 end;
 
 procedure TStack<T>.Clear;
+begin
+  RemoveAll(True);
+end;
+
+procedure TStack<T>.RemoveAll(KeepCapacity: Boolean);
 var
-  I: Integer;
+  I, N, Count: Integer;
+  Tell, WholeArray: Boolean;
   Removed: TArray<T>;
 begin
-  if Notifies then
-    Removed := ToArray
+  // The same as TList<T>.RemoveAll: the stack holds no items while they are let go of, bottom
+  // first, and the items a destructor pushes stay in the stack (collections.md 9.4)
+  Tell := Notifies;
+  Count := FCount;
+  N := Length(FItems);
+  WholeArray := ReleasesWholeArray(KeepCapacity, Count, N);
+  if Tell or not WholeArray then
+    Removed := Copy(FItems, 0, Count)
   else
     Removed := nil;
-  for I := 0 to FCount - 1 do
-    FItems[I] := Default(T);
   FCount := 0;
   FVersion := NextVersion(FVersion);
-  ItemsRemoved(Removed, 0);
+  if WholeArray then
+  begin
+    // The field is nil before the array is let go of, so the items a destructor pushes go into
+    // an array of their own, which is kept (it may already be larger than N)
+    FItems := nil;
+    if KeepCapacity and (Length(FItems) < N) then
+      SetCapacity(N);
+  end
+  else
+    for I := 0 to Count - 1 do
+      FItems[I] := Default(T);
+  if Tell then
+    ItemsRemoved(Removed, 0);
 end;
 
 procedure TStack<T>.TrimExcess;
@@ -1423,7 +1536,7 @@ end;
 
 destructor TQueue<T>.Destroy;
 begin
-  Clear;
+  RemoveAll(False);
   inherited Destroy;
 end;
 
@@ -1535,20 +1648,50 @@ begin
 end;
 
 procedure TQueue<T>.Clear;
+begin
+  RemoveAll(True);
+end;
+
+procedure TQueue<T>.RemoveAll(KeepCapacity: Boolean);
 var
-  I: Integer;
+  I, N, Head, Count: Integer;
+  Tell, WholeArray: Boolean;
   Removed: TArray<T>;
 begin
-  if Notifies then
+  // The same as TList<T>.RemoveAll: the queue holds no items while they are let go of, first to
+  // last, and the items a destructor enqueues stay in the queue (collections.md 9.4)
+  Tell := Notifies;
+  Head := FHead;
+  Count := FCount;
+  N := Length(FItems);
+  WholeArray := ReleasesWholeArray(KeepCapacity, Count, N);
+  // Letting go of the whole array goes slot by slot, which is first to last only when the ring
+  // does not wrap round; otherwise the items are copied out in order and let go of from the copy
+  if Tell or not WholeArray or (Head + Count > N) then
     Removed := ToArray
   else
     Removed := nil;
-  for I := 0 to FCount - 1 do
-    FItems[SlotOf(I)] := Default(T);
   FHead := 0;
   FCount := 0;
   FVersion := NextVersion(FVersion);
-  ItemsRemoved(Removed, 0);
+  if WholeArray then
+  begin
+    // The field is nil before the array is let go of, so the items a destructor enqueues go into
+    // an array of their own, which is kept (it may already be larger than N)
+    FItems := nil;
+    if KeepCapacity and (Length(FItems) < N) then
+      SetCapacity(N);
+  end
+  else
+    for I := 0 to Count - 1 do
+    begin
+      FItems[Head] := Default(T);
+      Inc(Head);
+      if Head = N then
+        Head := 0;
+    end;
+  if Tell then
+    ItemsRemoved(Removed, 0);
 end;
 
 procedure TQueue<T>.TrimExcess;
@@ -1595,6 +1738,7 @@ begin
   if ACapacity < 0 then
     raise ERangeError.Create(FKind + ' capacity ' + IntToStr(ACapacity) + ' is out of range');
   FComparer := AComparer;
+  FByKey := AComparer = nil;
   Rehash(ACapacity);
 end;
 
@@ -1647,7 +1791,7 @@ end;
 destructor TDictionary<K, V>.Destroy;
 begin
   try
-    Clear;
+    RemoveAll(False);
   finally
     // A view the user freed by mistake has already set its field back to nil (7.3)
     FKeys.Free;
@@ -1733,39 +1877,43 @@ begin
   Result := FOwner.ClassName;
 end;
 
+// Find writes this out in place.
 function TDictionary<K, V>.HashOf(const Key: K): Int64;
 begin
-  if FComparer = nil then
+  if FByKey then
     Result := KeyHash<K>(Key)
   else
     Result := FComparer.GetHashCode(Key);
 end;
 
-function TDictionary<K, V>.SameKey(const Left, Right: K): Boolean;
-begin
-  if FComparer = nil then
-    Result := KeyEquals<K>(Left, Right)
-  else
-    Result := FComparer.Equals(Left, Right);
-end;
-
+// Append, RemoveAt and SqueezeHoles write this out in place (HashFind, HashLookup and HashRelink
+// take the bucket of a hash the same way).
 function TDictionary<K, V>.BucketOf(Hash: Int64): Integer;
 begin
-  Result := Integer(Hash and Int64(Length(FBuckets) - 1));
+  Result := Integer(Hash and FMask);
 end;
 
-procedure TDictionary<K, V>.CheckEntry(Index: Integer);
+// The exception for the entry at Index, whose key no longer has the hash it was added with.
+function TDictionary<K, V>.ChangedKeyError(Index: Integer): EInvalidOperation;
 var
   I, Position: Integer;
 begin
-  if HashOf(FEntries[Index].Key) = FEntries[Index].Hash then
-    Exit;
   Position := 0;
   for I := 0 to Index - 1 do
-    if FEntries[I].Next <> HOLE then
+    if FNext[I] <> HOLE then
       Inc(Position);
-  raise EInvalidOperation.Create('the key of entry #' + IntToStr(Position) + ' in `' +
+  Result := EInvalidOperation.Create('the key of entry #' + IntToStr(Position) + ' in `' +
     OwnerName + '` was changed after it was added');
+end;
+
+// The keys whose hash cannot change in the dictionary are never checked (IsPlainKey; 7.5).
+procedure TDictionary<K, V>.CheckEntry(Index: Integer);
+begin
+  if FByKey then
+    if IsPlainKey(Default(K)) then
+      Exit;
+  if HashOf(FKeyItems[Index]) <> FHashes[Index] then
+    raise ChangedKeyError(Index);
 end;
 
 procedure TDictionary<K, V>.CheckVersion(Version: Integer);
@@ -1777,90 +1925,177 @@ end;
 function TDictionary<K, V>.NextLive(Index: Integer): Integer;
 begin
   Result := Index;
-  while (Result < FUsed) and (FEntries[Result].Next = HOLE) do
+  while (Result < FUsed) and (FNext[Result] = HOLE) do
     Inc(Result);
 end;
 
-function TDictionary<K, V>.Find(const Key: K; Hash: Int64): Integer;
+// Runs at every lookup. HashLookup hashes and compares the keys of a type whose key equality it
+// knows (spec/bytecode.md 2.23), so that the lookup of such a key is this short body (small enough
+// to be inlined; the hash again only for a key to add); the others go to FindCompared.
+function TDictionary<K, V>.Find(const Key: K; out Index: Integer): Int64;
 begin
-  if FCount = 0 then
-    Exit(-1);
-  Result := FBuckets[BucketOf(Hash)];
-  while Result >= 0 do
+  if IsPlainKey(Key) then
+    if FByKey then
+    begin
+      Index := HashLookup(Key, FBuckets, FHashes, FNext, FKeyItems);
+      if Index < 0 then
+        Exit(KeyHash<K>(Key));
+      Exit(0);
+    end;
+  Result := FindCompared(Key, Index);
+end;
+
+function TDictionary<K, V>.IndexOfKey(const Key: K): Integer;
+begin
+  if IsPlainKey(Key) then
+    if FByKey then
+      Exit(HashLookup(Key, FBuckets, FHashes, FNext, FKeyItems));
+  FindCompared(Key, Result);
+end;
+
+// Find of the keys compared here: HashFind gives each entry with the same hash, whose key is
+// compared with KeyEquals or FComparer.Equals. HashOf and CheckEntry are written out.
+function TDictionary<K, V>.FindCompared(const Key: K; out Index: Integer): Int64;
+var
+  I: Integer;
+begin
+  if FByKey then
   begin
-    if FEntries[Result].Hash = Hash then
+    Result := KeyHash<K>(Key);
+    I := HashFind(Result, FBuckets, FHashes, FNext, -1);
+    while I >= 0 do
     begin
       {$IFDEF DEBUG}
-      CheckEntry(Result);
+      if KeyHash<K>(FKeyItems[I]) <> Result then
+        raise ChangedKeyError(I);
       {$ENDIF}
-      if SameKey(FEntries[Result].Key, Key) then
-        Exit;
+      if KeyEquals<K>(FKeyItems[I], Key) then
+        Break;
+      I := HashFind(Result, FBuckets, FHashes, FNext, I);
     end;
-    Result := FEntries[Result].Next;
+  end
+  else
+  begin
+    Result := FComparer.GetHashCode(Key);
+    I := HashFind(Result, FBuckets, FHashes, FNext, -1);
+    while I >= 0 do
+    begin
+      {$IFDEF DEBUG}
+      if FComparer.GetHashCode(FKeyItems[I]) <> Result then
+        raise ChangedKeyError(I);
+      {$ENDIF}
+      if FComparer.Equals(FKeyItems[I], Key) then
+        Break;
+      I := HashFind(Result, FBuckets, FHashes, FNext, I);
+    end;
   end;
+  Index := I;
 end;
 
 procedure TDictionary<K, V>.Append(const Key: K; const Value: V; Hash: Int64);
 var
-  B: Integer;
+  U: Integer;
+  B: Int64;
 begin
-  if FUsed = Length(FEntries) then
+  U := FUsed;
+  if U = FCapacity then
   begin
-    if FUsed - FCount > FUsed div 2 then
-      Rehash(Length(FEntries))
-    else if Length(FEntries) < 2 then
-      Rehash(4)
-    else
-      Rehash(2 * Length(FEntries));
+    MakeRoom;
+    U := FUsed;
   end;
-  B := BucketOf(Hash);
-  FEntries[FUsed].Key := Key;
-  FEntries[FUsed].Value := Value;
-  FEntries[FUsed].Hash := Hash;
-  FEntries[FUsed].Next := FBuckets[B];
-  FBuckets[B] := FUsed;
-  Inc(FUsed);
+  B := Hash and FMask;
+  FKeyItems[U] := Key;
+  FValueItems[U] := Value;
+  FHashes[U] := Hash;
+  FNext[U] := FBuckets[B];
+  FBuckets[B] := U;
+  // None of these can overflow (FCount <= FUsed < FCapacity, and the version wraps from MaxInt to
+  // 0 by the mask), so they are left unchecked: the checks would make Append too large to be
+  // inlined (design/inlining.md 3.5). The state of {$Q} is restored afterwards.
+  {$IFOPT Q+}{$DEFINE APPEND_Q_ON}{$Q-}{$ENDIF}
+  FUsed := U + 1;
   Inc(FCount);
-  FVersion := NextVersion(FVersion);
+  // NextVersion, written out
+  FVersion := (FVersion + 1) and MaxInt;
+  {$IFDEF APPEND_Q_ON}{$Q+}{$UNDEF APPEND_Q_ON}{$ENDIF}
 end;
 
-procedure TDictionary<K, V>.RemoveAt(Index: Integer);
+// Makes room for one more entry when every entry is in use: the holes are squeezed out when they
+// are more than half, and otherwise the capacity grows.
+procedure TDictionary<K, V>.MakeRoom;
+begin
+  if FUsed - FCount > FUsed div 2 then
+    Rehash(FCapacity)
+  else if FCapacity < 2 then
+    Rehash(4)
+  else
+    Rehash(2 * FCapacity);
+end;
+
+procedure TDictionary<K, V>.RemoveAt(Index: Integer; Tell: Boolean);
 var
-  B, I: Integer;
+  B: Int64;
+  Holes, I, Next: Integer;
   Squeeze: Boolean;
 begin
-  // Whether the removal squeezes the holes out is known beforehand; the keys are checked before
+  if Tell then
+    if (FKeyNotify <> NOTIFY_SKIP) or (FValueNotify <> NOTIFY_SKIP) then
+    begin
+      RemoveTelling(Index);
+      Exit;
+    end;
+  // Whether the removal squeezes the holes out is known beforehand (more than MAX_IDLE_HOLES
+  // holes, and more holes than entries, once this one is removed); the keys are checked before
   // anything changes, so that a changed key leaves the dictionary as it was (3.2, 7.5). The
   // entry being removed was found, so it goes even if its own key changed.
-  Squeeze := (FUsed - FCount + 1 > MAX_IDLE_HOLES) and (FUsed - FCount + 1 > FCount - 1);
+  Holes := FUsed - FCount;
+  Squeeze := (Holes >= MAX_IDLE_HOLES) and (Holes + 2 > FCount);
   if Squeeze then
     CheckAll(Index);
-  B := BucketOf(FEntries[Index].Hash);
-  if FBuckets[B] = Index then
-    FBuckets[B] := FEntries[Index].Next
+  B := FHashes[Index] and FMask;
+  Next := FNext[Index];
+  I := FBuckets[B];
+  if I = Index then
+    FBuckets[B] := Next
   else
   begin
-    I := FBuckets[B];
-    while FEntries[I].Next <> Index do
-      I := FEntries[I].Next;
-    FEntries[I].Next := FEntries[Index].Next;
+    while FNext[I] <> Index do
+      I := FNext[I];
+    FNext[I] := Next;
   end;
-  FEntries[Index].Next := HOLE;
+  FNext[Index] := HOLE;
   Dec(FCount);
-  FVersion := NextVersion(FVersion);
+  // NextVersion, written out
+  if FVersion = MaxInt then
+    FVersion := 0
+  else
+    FVersion := FVersion + 1;
   // Let go of the key and the value only once the table is whole again
-  FEntries[Index].Key := Default(K);
-  FEntries[Index].Value := Default(V);
+  FKeyItems[Index] := Default(K);
+  FValueItems[Index] := Default(V);
   if Squeeze then
-    Place(Length(FEntries));
+    SqueezeHoles;
+end;
+
+procedure TDictionary<K, V>.RemoveTelling(Index: Integer);
+var
+  Removed: TPair<K, V>;
+begin
+  Removed := TPair<K, V>.Create(FKeyItems[Index], FValueItems[Index]);
+  RemoveAt(Index, False);
+  if Notifies then
+    EntryRemoved(Removed.Key, Removed.Value);
 end;
 
 procedure TDictionary<K, V>.CheckAll(Skip: Integer);
 var
   I: Integer;
 begin
+  if FByKey then
+    if IsPlainKey(Default(K)) then
+      Exit;
   for I := 0 to FUsed - 1 do
-    if (I <> Skip) and (FEntries[I].Next <> HOLE) then
+    if (I <> Skip) and (FNext[I] <> HOLE) then
       CheckEntry(I);
 end;
 
@@ -1871,20 +2106,46 @@ begin
   Place(NewCapacity);
 end;
 
-procedure TDictionary<K, V>.Place(NewCapacity: Integer);
+procedure TDictionary<K, V>.MoveLiveToFront;
 var
-  NewEntries: TArray<TEntry>;
-  NewBuckets: TArray<Integer>;
-  I, J, N, B: Integer;
+  I, J: Integer;
 begin
-  SetLength(NewEntries, NewCapacity);
   J := 0;
   for I := 0 to FUsed - 1 do
-    if FEntries[I].Next <> HOLE then
+    if FNext[I] <> HOLE then
     begin
-      NewEntries[J] := FEntries[I];
+      if J < I then
+      begin
+        FKeyItems[J] := FKeyItems[I];
+        FValueItems[J] := FValueItems[I];
+        FHashes[J] := FHashes[I];
+        // Not a hole; the chains are made by the caller
+        FNext[J] := -1;
+      end;
       Inc(J);
     end;
+  // Let go of the keys and values left behind in the entries that are no longer in use (a hole's
+  // were let go of when it was removed)
+  for I := J to FUsed - 1 do
+  begin
+    FKeyItems[I] := Default(K);
+    FValueItems[I] := Default(V);
+  end;
+  FUsed := J;
+end;
+
+procedure TDictionary<K, V>.Place(NewCapacity: Integer);
+var
+  N: Integer;
+begin
+  // The live entries go to the front, then each array keeps its first FUsed entries in the new
+  // capacity (NewCapacity is at least FCount), and the chains are made again
+  if FUsed > FCount then
+    MoveLiveToFront;
+  SetLength(FKeyItems, NewCapacity);
+  SetLength(FValueItems, NewCapacity);
+  SetLength(FHashes, NewCapacity);
+  SetLength(FNext, NewCapacity);
   N := 0;
   if NewCapacity > 0 then
   begin
@@ -1892,26 +2153,38 @@ begin
     while N < NewCapacity do
       N := 2 * N;
   end;
-  SetLength(NewBuckets, N);
-  for I := 0 to N - 1 do
-    NewBuckets[I] := -1;
-  FBuckets := NewBuckets;
-  for I := 0 to J - 1 do
+  SetLength(FBuckets, N);
+  FMask := N - 1;
+  FCapacity := NewCapacity;
+  HashRelink(FBuckets, FHashes, FNext, FUsed);
+end;
+
+procedure TDictionary<K, V>.SqueezeHoles;
+var
+  I, B: Integer;
+begin
+  // Only the buckets of the live entries can be in use (the holes are out of the chains); they
+  // are emptied and the chains made again here rather than by HashRelink, which would empty
+  // every bucket (a time proportional to the capacity)
+  for I := 0 to FUsed - 1 do
+    if FNext[I] <> HOLE then
+      FBuckets[Integer(FHashes[I] and FMask)] := -1;
+  MoveLiveToFront;
+  for I := 0 to FUsed - 1 do
   begin
-    B := BucketOf(NewEntries[I].Hash);
-    NewEntries[I].Next := FBuckets[B];
+    B := Integer(FHashes[I] and FMask);
+    FNext[I] := FBuckets[B];
     FBuckets[B] := I;
   end;
-  FEntries := NewEntries;
-  FUsed := J;
 end;
 
 procedure TDictionary<K, V>.Add(const Key: K; const Value: V);
 var
   Hash: Int64;
+  I: Integer;
 begin
-  Hash := HashOf(Key);
-  if Find(Key, Hash) >= 0 then
+  Hash := Find(Key, I);
+  if I >= 0 then
     raise EListError.Create('duplicate key in `' + OwnerName + '`');
   if (FKeyNotify <> NOTIFY_SKIP) or (FValueNotify <> NOTIFY_SKIP) then
     EntryAdding(Key, Value);
@@ -1921,9 +2194,10 @@ end;
 function TDictionary<K, V>.TryAdd(const Key: K; const Value: V): Boolean;
 var
   Hash: Int64;
+  I: Integer;
 begin
-  Hash := HashOf(Key);
-  Result := Find(Key, Hash) < 0;
+  Hash := Find(Key, I);
+  Result := I < 0;
   if Result then
   begin
     if (FKeyNotify <> NOTIFY_SKIP) or (FValueNotify <> NOTIFY_SKIP) then
@@ -1939,8 +2213,7 @@ var
   Kept: K;
   Old: V;
 begin
-  Hash := HashOf(Key);
-  I := Find(Key, Hash);
+  Hash := Find(Key, I);
   if (FKeyNotify <> NOTIFY_SKIP) or (FValueNotify <> NOTIFY_SKIP) then
     EntryAdding(Key, Value);
   if I < 0 then
@@ -1951,41 +2224,39 @@ begin
   // The key already there stays (9.3)
   if not Notifies then
   begin
-    FEntries[I].Value := Value;
+    FValueItems[I] := Value;
     Exit;
   end;
-  Kept := FEntries[I].Key;
-  Old := FEntries[I].Value;
-  FEntries[I].Value := Value;
+  Kept := FKeyItems[I];
+  Old := FValueItems[I];
+  FValueItems[I] := Value;
   EntryReplaced(Kept, Key, Old, Value);
 end;
 
+// TryRemove without the result, written out so that it is small enough to be inlined.
 procedure TDictionary<K, V>.Remove(const Key: K);
+var
+  I: Integer;
 begin
-  TryRemove(Key);
+  // An empty dictionary asks for no hash
+  if FCount = 0 then
+    Exit;
+  I := IndexOfKey(Key);
+  if I >= 0 then
+    RemoveAt(I, True);
 end;
 
 function TDictionary<K, V>.TryRemove(const Key: K): Boolean;
 var
   I: Integer;
-  Removed: TPair<K, V>;
 begin
   // An empty dictionary asks for no hash
   if FCount = 0 then
     Exit(False);
-  I := Find(Key, HashOf(Key));
+  I := IndexOfKey(Key);
   Result := I >= 0;
-  if not Result then
-    Exit;
-  if (FKeyNotify = NOTIFY_SKIP) and (FValueNotify = NOTIFY_SKIP) then
-  begin
-    RemoveAt(I);
-    Exit;
-  end;
-  Removed := TPair<K, V>.Create(FEntries[I].Key, FEntries[I].Value);
-  RemoveAt(I);
-  if Notifies then
-    EntryRemoved(Removed.Key, Removed.Value);
+  if Result then
+    RemoveAt(I, True);
 end;
 
 function TDictionary<K, V>.ExtractPair(const Key: K): TPair<K, V>;
@@ -1994,17 +2265,24 @@ var
 begin
   I := -1;
   if FCount > 0 then
-    I := Find(Key, HashOf(Key));
+    I := IndexOfKey(Key);
   if I < 0 then
     Exit(TPair<K, V>.Create(Key, Default(V)));
-  Result := TPair<K, V>.Create(FEntries[I].Key, FEntries[I].Value);
-  RemoveAt(I);
+  Result := TPair<K, V>.Create(FKeyItems[I], FValueItems[I]);
+  RemoveAt(I, False);
 end;
 
 procedure TDictionary<K, V>.Clear;
+begin
+  RemoveAll(True);
+end;
+
+procedure TDictionary<K, V>.RemoveAll(KeepCapacity: Boolean);
 var
-  N, I, J: Integer;
+  N, I, J, Used, Mask: Integer;
   Removed: TArray<TPair<K, V>>;
+  OldKeys: TArray<K>;
+  OldValues: TArray<V>;
 begin
   // No hash is asked for, so that a dictionary whose keys changed can always be emptied (7.5).
   // The entries leave first, then KeyNotify and ValueNotify hear of them in insertion order
@@ -2015,20 +2293,59 @@ begin
     SetLength(Removed, FCount);
     J := 0;
     for I := 0 to FUsed - 1 do
-      if FEntries[I].Next <> HOLE then
+      if FNext[I] <> HOLE then
       begin
-        Removed[J] := TPair<K, V>.Create(FEntries[I].Key, FEntries[I].Value);
+        Removed[J] := TPair<K, V>.Create(FKeyItems[I], FValueItems[I]);
         Inc(J);
       end;
   end;
-  N := Length(FEntries);
-  FEntries := nil;
-  SetLength(FEntries, N);
-  for I := 0 to High(FBuckets) do
-    FBuckets[I] := -1;
+  // The dictionary holds no entries while they are let go of, so that a destructor that looks at
+  // it sees it empty (and a lookup finds every bucket empty: they are emptied first). The keys
+  // and values are let go of entry by entry, in insertion order, from the arrays taken out of
+  // the dictionary, so that an entry a destructor adds goes into arrays of their own and stays
+  // (collections.md 9.4).
+  Used := FUsed;
   FUsed := 0;
   FCount := 0;
   FVersion := NextVersion(FVersion);
+  N := FCapacity;
+  Mask := FMask;
+  if KeepCapacity then
+  begin
+    for I := 0 to FMask do
+      FBuckets[I] := -1;
+  end
+  else
+  begin
+    FBuckets := nil;
+    FMask := -1;
+  end;
+  OldKeys := FKeyItems;
+  OldValues := FValueItems;
+  FKeyItems := nil;
+  FValueItems := nil;
+  FHashes := nil;
+  FNext := nil;
+  FCapacity := 0;
+  for I := 0 to Used - 1 do
+  begin
+    OldKeys[I] := Default(K);
+    OldValues[I] := Default(V);
+  end;
+  if KeepCapacity then
+    if (FCapacity = 0) and (FMask = Mask) then
+    begin
+      // Nothing was added or reshaped while the entries were let go of: the buckets are still
+      // empty and of the right size
+      SetLength(FKeyItems, N);
+      SetLength(FValueItems, N);
+      SetLength(FHashes, N);
+      SetLength(FNext, N);
+      FCapacity := N;
+    end
+    else if FCapacity < N then
+      // A destructor added entries: they are kept, and the capacity grows back to N
+      Place(N);
   ItemsRemoved(Removed, 0);
 end;
 
@@ -2036,17 +2353,17 @@ function TDictionary<K, V>.TryGetValue(const Key: K; out Value: V): Boolean;
 var
   I: Integer;
 begin
-  I := Find(Key, HashOf(Key));
+  I := IndexOfKey(Key);
   Result := I >= 0;
   if Result then
-    Value := FEntries[I].Value
+    Value := FValueItems[I]
   else
     Value := Default(V);
 end;
 
 function TDictionary<K, V>.ContainsKey(const Key: K): Boolean;
 begin
-  Result := Find(Key, HashOf(Key)) >= 0;
+  Result := IndexOfKey(Key) >= 0;
 end;
 
 function TDictionary<K, V>.ContainsValue(const Value: V): Boolean;
@@ -2054,7 +2371,7 @@ var
   I: Integer;
 begin
   for I := 0 to FUsed - 1 do
-    if (FEntries[I].Next <> HOLE) and KeyEquals<V>(FEntries[I].Value, Value) then
+    if (FNext[I] <> HOLE) and KeyEquals<V>(FValueItems[I], Value) then
       Exit(True);
   Result := False;
 end;
@@ -2063,10 +2380,10 @@ function TDictionary<K, V>.GetItem(const Key: K): V;
 var
   I: Integer;
 begin
-  I := Find(Key, HashOf(Key));
+  I := IndexOfKey(Key);
   if I < 0 then
     raise EKeyNotFound.Create('key not found in `' + OwnerName + '`');
-  Result := FEntries[I].Value;
+  Result := FValueItems[I];
 end;
 
 procedure TDictionary<K, V>.SetItem(const Key: K; const Value: V);
@@ -2076,14 +2393,14 @@ end;
 
 function TDictionary<K, V>.GetCapacity: Integer;
 begin
-  Result := Length(FEntries);
+  Result := FCapacity;
 end;
 
 procedure TDictionary<K, V>.SetCapacity(Value: Integer);
 begin
   if Value < FCount then
     raise CapacityError(FKind, Value, FCount);
-  if Value <> Length(FEntries) then
+  if Value <> FCapacity then
   begin
     Rehash(Value);
     FVersion := NextVersion(FVersion);
@@ -2102,12 +2419,12 @@ begin
   SetLength(Result, FCount);
   J := 0;
   for I := 0 to FUsed - 1 do
-    if FEntries[I].Next <> HOLE then
+    if FNext[I] <> HOLE then
     begin
       {$IFDEF DEBUG}
       CheckEntry(I);
       {$ENDIF}
-      Result[J] := TPair<K, V>.Create(FEntries[I].Key, FEntries[I].Value);
+      Result[J] := TPair<K, V>.Create(FKeyItems[I], FValueItems[I]);
       Inc(J);
     end;
 end;
@@ -2141,19 +2458,19 @@ begin
   SetLength(Result, FCount);
   J := 0;
   for I := 0 to FUsed - 1 do
-    if FEntries[I].Next <> HOLE then
+    if FNext[I] <> HOLE then
     begin
       {$IFDEF DEBUG}
       CheckEntry(I);
       {$ENDIF}
-      Result[J] := FEntries[I].Key;
+      Result[J] := FKeyItems[I];
       Inc(J);
     end;
 end;
 
 function TDictionary<K, V>.TPairEnumerator.GetCurrent: TPair<K, V>;
 begin
-  Result := TPair<K, V>.Create(FDict.FEntries[FIndex].Key, FDict.FEntries[FIndex].Value);
+  Result := TPair<K, V>.Create(FDict.FKeyItems[FIndex], FDict.FValueItems[FIndex]);
 end;
 
 function TDictionary<K, V>.TPairEnumerator.MoveNext: Boolean;
@@ -2169,7 +2486,7 @@ end;
 
 function TDictionary<K, V>.TKeyEnumerator.GetCurrent: K;
 begin
-  Result := FDict.FEntries[FIndex].Key;
+  Result := FDict.FKeyItems[FIndex];
 end;
 
 function TDictionary<K, V>.TKeyEnumerator.MoveNext: Boolean;
@@ -2185,7 +2502,7 @@ end;
 
 function TDictionary<K, V>.TValueEnumerator.GetCurrent: V;
 begin
-  Result := FDict.FEntries[FIndex].Value;
+  Result := FDict.FValueItems[FIndex];
 end;
 
 function TDictionary<K, V>.TValueEnumerator.MoveNext: Boolean;
@@ -2256,12 +2573,12 @@ begin
   SetLength(Result, FDict.FCount);
   J := 0;
   for I := 0 to FDict.FUsed - 1 do
-    if FDict.FEntries[I].Next <> HOLE then
+    if FDict.FNext[I] <> HOLE then
     begin
       {$IFDEF DEBUG}
       FDict.CheckEntry(I);
       {$ENDIF}
-      Result[J] := FDict.FEntries[I].Value;
+      Result[J] := FDict.FValueItems[I];
       Inc(J);
     end;
 end;
@@ -2690,12 +3007,11 @@ end;
 
 // ===== TArray (10.4) =====
 
-class function TArray.OrderOf<T>(const Comparer: IComparer<T>): IComparer<T>;
+class function TArray.ByDefaultOrder<T>(const Comparer: IComparer<T>): Boolean;
 begin
-  if Comparer <> nil then
-    Exit(Comparer);
-  CheckDefaultOrder(Default(T));
-  Result := TComparer<T>.Default;
+  Result := Comparer = nil;
+  if Result then
+    CheckDefaultOrder(Default(T));
 end;
 
 class procedure TArray.SortItems<T>(var Items: TArray<T>; const Comparer: IComparer<T>);
@@ -2703,14 +3019,27 @@ const
   // The length of the runs sorted by insertion before merging.
   RunLength = 8;
 var
-  Order: IComparer<T>;
-  N, Lo, Mid, Hi, Width, I, J, L, R: Integer;
+  N, Lo, Mid, Hi, Width, I, J, L, R, C: Integer;
   Src, Dst, Swap: TArray<T>;
-  X: T;
-  InOrder: Boolean;
+  A, B: T;
+  ByKey: Boolean;
 begin
-  Order := OrderOf<T>(Comparer);
-  N := Length(Items);
+  // The elements of a type ordered by a built-in comparison are sorted by the VM, the same way.
+  if IsPlainOrder(Default(T)) then
+    if Comparer = nil then
+    begin
+      ArraySortRange(Items, 0, Length(Items));
+      Exit;
+    end;
+  // Each comparison below is `KeyCompare<T>(A, B)` when ByKey, else `Comparer.Compare(A, B)`.
+  // The loops are written once per kind so that the kind is not tested at every comparison.
+  ByKey := ByDefaultOrder<T>(Comparer);
+  // The sort works on local arrays (reading a `var` parameter costs one more load per element).
+  // Items is cleared so that it never holds an array in the middle of a pass; the callers throw
+  // it away when the comparer raises.
+  Src := Items;
+  Items := nil;
+  N := Length(Src);
   Lo := 0;
   while Lo < N do
   begin
@@ -2720,24 +3049,36 @@ begin
       Hi := N;
     for I := Lo + 1 to Hi - 1 do
     begin
-      X := Items[I];
+      B := Src[I];
       J := I - 1;
-      while (J >= Lo) and (Order.Compare(Items[J], X) > 0) do
-      begin
-        Items[J + 1] := Items[J];
-        Dec(J);
-      end;
-      Items[J + 1] := X;
+      if ByKey then
+        while J >= Lo do
+        begin
+          A := Src[J];
+          if KeyCompare<T>(A, B) <= 0 then
+            Break;
+          Src[J + 1] := A;
+          Dec(J);
+        end
+      else
+        while J >= Lo do
+        begin
+          A := Src[J];
+          if Comparer.Compare(A, B) <= 0 then
+            Break;
+          Src[J + 1] := A;
+          Dec(J);
+        end;
+      Src[J + 1] := B;
     end;
     Lo := Hi;
   end;
   if N <= RunLength then
+  begin
+    Items := Src;
     Exit;
-  // Merge pairs of sorted runs from Src into Dst, doubling the width each pass. Items is cleared
-  // so that it never holds an array in the middle of a pass; the callers throw it away when the
-  // comparer raises.
-  Src := Items;
-  Items := nil;
+  end;
+  // Merge pairs of sorted runs from Src into Dst, doubling the width each pass.
   SetLength(Dst, N);
   Width := RunLength;
   while Width < N do
@@ -2756,23 +3097,67 @@ begin
       L := Lo;
       R := Mid;
       I := Lo;
-      // Already in order (one comparison, so sorted input is linear): the runs are copied as
-      // they are, the left one first.
-      InOrder := (Mid < Hi) and (Order.Compare(Src[Mid - 1], Src[Mid]) <= 0);
-      while not InOrder and (L < Mid) and (R < Hi) do
+      if Mid < Hi then
       begin
-        // Ties take the left run first, which keeps the sort stable.
-        if Order.Compare(Src[L], Src[R]) <= 0 then
-        begin
-          Dst[I] := Src[L];
-          Inc(L);
-        end
+        // Already in order (one comparison, so sorted input is linear): the runs are copied as
+        // they are, the left one first.
+        A := Src[Mid - 1];
+        B := Src[Mid];
+        if ByKey then
+          C := KeyCompare<T>(A, B)
         else
+          C := Comparer.Compare(A, B);
+        if C > 0 then
         begin
-          Dst[I] := Src[R];
-          Inc(R);
+          // A and B hold Src[L] and Src[R]; only the side that moved is read again. Ties take
+          // the left run first, which keeps the sort stable. The loop ends when one run is used
+          // up, and the copies below take the rest of the other.
+          A := Src[L];
+          if ByKey then
+            while True do
+            begin
+              if KeyCompare<T>(A, B) <= 0 then
+              begin
+                Dst[I] := A;
+                Inc(I);
+                Inc(L);
+                if L = Mid then
+                  Break;
+                A := Src[L];
+              end
+              else
+              begin
+                Dst[I] := B;
+                Inc(I);
+                Inc(R);
+                if R = Hi then
+                  Break;
+                B := Src[R];
+              end;
+            end
+          else
+            while True do
+            begin
+              if Comparer.Compare(A, B) <= 0 then
+              begin
+                Dst[I] := A;
+                Inc(I);
+                Inc(L);
+                if L = Mid then
+                  Break;
+                A := Src[L];
+              end
+              else
+              begin
+                Dst[I] := B;
+                Inc(I);
+                Inc(R);
+                if R = Hi then
+                  Break;
+                B := Src[R];
+              end;
+            end;
         end;
-        Inc(I);
       end;
       while L < Mid do
       begin
@@ -2802,22 +3187,35 @@ end;
 class function TArray.SearchItems<T>(const Values: array of T; Count: Integer; const Item: T;
   out FoundIndex: Integer; const Comparer: IComparer<T>): Boolean;
 var
-  Order: IComparer<T>;
-  Lo, Hi, Mid: Integer;
+  Lo, Hi, Mid, C: Integer;
+  ByKey: Boolean;
 begin
-  Order := OrderOf<T>(Comparer);
+  // Each comparison below is `KeyCompare<T>(A, B)` when ByKey, else `Comparer.Compare(A, B)`.
+  ByKey := ByDefaultOrder<T>(Comparer);
   Lo := 0;
   Hi := Count;
   while Lo < Hi do
   begin
     Mid := Lo + (Hi - Lo) div 2;
-    if Order.Compare(Values[Mid], Item) < 0 then
+    if ByKey then
+      C := KeyCompare<T>(Values[Mid], Item)
+    else
+      C := Comparer.Compare(Values[Mid], Item);
+    if C < 0 then
       Lo := Mid + 1
     else
       Hi := Mid;
   end;
   FoundIndex := Lo;
-  Result := (Lo < Count) and (Order.Compare(Values[Lo], Item) = 0);
+  Result := False;
+  if Lo < Count then
+  begin
+    if ByKey then
+      C := KeyCompare<T>(Values[Lo], Item)
+    else
+      C := Comparer.Compare(Values[Lo], Item);
+    Result := C = 0;
+  end;
 end;
 
 class procedure TArray.Sort<T>(var Values: array of T);

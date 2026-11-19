@@ -1,0 +1,40 @@
+program DumpOverloadLocalTypes
+.routine f0 P(N: Integer)
+  .type TA = record
+    .field 0 X: Integer
+  .var v0 N: Integer param
+  .var v1 L: TA local
+  assign @12 R+ init
+    var v1 L
+    builtin Default TA
+  assign @14 R+
+    field Integer X #0
+      var v1 L
+    var v0 N: Integer
+  writeln @15
+    arg
+      field Integer X #0
+        var v1 L: TA
+.routine f1 P#2(const S: string)
+  .type TB = record
+    .field 0 Y: string
+  .var v0 S: string const param
+  .var v1 L: TB local
+  assign @24 R+ init
+    var v1 L
+    builtin Default TB
+  assign @26 R+
+    field string Y #0
+      var v1 L
+    var v0 S: string
+  writeln @27
+    arg
+      field string Y #0
+        var v1 L: TB
+.routine <main>
+  expr @31
+    call f0 P: -
+      const Integer 1
+  expr @32
+    call f1 P#2: -
+      const string "a"

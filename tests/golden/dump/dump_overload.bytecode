@@ -7,11 +7,15 @@
 .host
   0: Console.Write params=1 ret=0
 .unit DumpOverload file="dump_overload.pas" init=- fini=- entry=0
-.func 0 DumpOverload.<main> params=0 regs=8
+.func 0 DumpOverload.<main> params=0 regs=10
   .line 17
   0000  LoadInt      r7, 4
-  0001  Call         r7, f1
-  0002  Move         r6, r7
+  .inline f1 DumpOverload.Twice line=17
+  .line 8
+  0001  MulIntI      r6, r7, 2
+  0002  NarrowOvf    r6, r6, 4
+  .endinline
+  .line 17
   0003  IntToStr     r0, r6
   0004  LoadConst    r1, k0
   0005  ConcatStr    r0, r0, r1

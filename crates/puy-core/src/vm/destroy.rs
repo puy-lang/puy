@@ -70,7 +70,7 @@ impl Isolate {
             return step;
         }
         // As after a `Call`: the caller's position is one word before its `pc` (`frame_pos`)
-        self.frames.last_mut().expect("the caller").pc = next as u32;
+        self.task.frames.last_mut().expect("the caller").pc = next as u32;
         self.push_dtor(h, if skip_before { FLAG_SKIP_BEFORE } else { 0 });
         Step::Continue
     }
@@ -87,11 +87,11 @@ impl Isolate {
             Ok(v) => v,
             Err(e) => return RefError::from(e).into_step(),
         };
-        let fr = self.frames.last_mut().expect("the caller");
+        let fr = self.task.frames.last_mut().expect("the caller");
         fr.pc = next as u32;
         // The instruction that started the destruction, as `dtor_end` finds it
         let pc = fr.pc.saturating_sub(1);
-        let depth = self.frames.len() as u32;
+        let depth = self.task.frames.len() as u32;
         self.heap
             .push_fields_job(&remains, JobOrigin::Instr { pc }, depth);
         Step::Continue
@@ -126,7 +126,7 @@ impl Isolate {
     /// The first register of a frame of the procedure pushed now: after the top frame's
     /// registers (0 without frames: the end of the program).
     fn dtor_base(&self) -> usize {
-        self.frames.last().map_or(0, |fr| {
+        self.task.frames.last().map_or(0, |fr| {
             let regs = if fr.func == DTOR_FN {
                 DTOR_REGS
             } else {
@@ -147,12 +147,12 @@ impl Isolate {
     /// registers have room ([`Isolate::dtor_regs`]).
     fn push_dtor(&mut self, h: Slot, flags: i64) {
         let base = self.dtor_base();
-        self.regs[base + R_HANDLE] = h;
-        self.regs[base + R_EXCEPTION] = 0;
-        self.regs[base + R_FLAGS] = flags;
-        self.regs[base + R_CHAINED] = -1;
+        self.task.regs[base + R_HANDLE] = h;
+        self.task.regs[base + R_EXCEPTION] = 0;
+        self.task.regs[base + R_FLAGS] = flags;
+        self.task.regs[base + R_CHAINED] = -1;
         // The procedure's frames are not counted toward the recursion limit (3.3): no check here
-        self.frames.push(Frame {
+        self.task.frames.push(Frame {
             func: DTOR_FN,
             base: base as u32,
             pc: STAGE_START,
@@ -172,15 +172,15 @@ impl Isolate {
     /// Runs the destruction procedure in the top frame until it calls a method or ends.
     #[inline(never)]
     pub(super) fn dtor_step(&mut self) -> Step {
-        let fr = *self.frames.last().expect("the procedure's frame");
+        let fr = *self.task.frames.last().expect("the procedure's frame");
         let base = fr.base as usize;
-        let h = self.regs[base + R_HANDLE];
+        let h = self.task.regs[base + R_HANDLE];
         let mut stage = fr.pc;
         loop {
             match stage {
                 STAGE_START => {
                     stage = STAGE_DESTROY;
-                    if self.regs[base + R_FLAGS] & FLAG_SKIP_BEFORE == 0
+                    if self.task.regs[base + R_FLAGS] & FLAG_SKIP_BEFORE == 0
                         && let Some(f) = self.dtor_entry(h, bytecode::VMT_BEFORE_DESTRUCTION)
                     {
                         return self.dtor_call(f, STAGE_IN_BEFORE);
@@ -203,7 +203,7 @@ impl Isolate {
                         Err(e) => return RefError::from(e).into_step(),
                     };
                     if let Some(r) = recorded
-                        && i64::from(r) != self.regs[base + R_CHAINED]
+                        && i64::from(r) != self.task.regs[base + R_CHAINED]
                         && let Some(f) = self
                             .heap
                             .type_entry(r)
@@ -212,7 +212,7 @@ impl Isolate {
                             .and_then(|p| p.vmt.get(bytecode::VMT_DESTROY as usize).copied())
                             .filter(|&f| f < bytecode::VMT_BUILTIN)
                     {
-                        self.regs[base + R_CHAINED] = i64::from(r);
+                        self.task.regs[base + R_CHAINED] = i64::from(r);
                         return self.dtor_call(f, STAGE_IN_DESTROY);
                     }
                 }
@@ -233,7 +233,7 @@ impl Isolate {
     /// Calls the method `f` on the instance from the procedure's frame, which goes on at `stage`
     /// when it returns (or ends with an exception; [`Isolate::dtor_caught`]).
     fn dtor_call(&mut self, f: u32, stage: u32) -> Step {
-        let fr = self.frames.last_mut().expect("the procedure's frame");
+        let fr = self.task.frames.last_mut().expect("the procedure's frame");
         fr.pc = stage;
         let base = fr.base as usize;
         let module = Arc::clone(&self.module);
@@ -250,7 +250,7 @@ impl Isolate {
         let need = new_base + func.regs as usize;
         // A method the procedure calls counts toward the recursion limit like any other (3.3)
         let bytes = need * std::mem::size_of::<Slot>()
-            + (self.frames.len() + 1) * std::mem::size_of::<Frame>();
+            + (self.task.frames.len() + 1) * std::mem::size_of::<Frame>();
         if bytes > self.config.stack_limit {
             return Step::Error(rt(
                 exc::STACK_OVERFLOW,
@@ -260,9 +260,9 @@ impl Isolate {
         if let Err(e) = self.grow_regs(super::frame_end(new_base, func.regs as usize)) {
             return Step::Error(e);
         }
-        self.regs[new_base] = self.regs[base + R_HANDLE];
-        self.regs[new_base + 1..need].fill(0);
-        self.frames.push(Frame {
+        self.task.regs[new_base] = self.task.regs[base + R_HANDLE];
+        self.task.regs[new_base + 1..need].fill(0);
+        self.task.frames.push(Frame {
             func: f,
             base: new_base as u32,
             pc: 0,
@@ -275,11 +275,11 @@ impl Isolate {
     /// exception go to a release job: the one that started the procedure, or a new one stamped
     /// with the instruction that did (raised there; 8.5).
     fn dtor_end(&mut self) -> Step {
-        let fr = self.frames.pop().expect("the procedure's frame");
+        let fr = self.task.frames.pop().expect("the procedure's frame");
         let base = fr.base as usize;
-        let h = std::mem::take(&mut self.regs[base + R_HANDLE]);
-        let x = std::mem::take(&mut self.regs[base + R_EXCEPTION]);
-        let flags = self.regs[base + R_FLAGS];
+        let h = std::mem::take(&mut self.task.regs[base + R_HANDLE]);
+        let x = std::mem::take(&mut self.task.regs[base + R_EXCEPTION]);
+        let flags = self.task.regs[base + R_FLAGS];
         let remains = match self.heap.end_destroy(h) {
             Ok(v) => v,
             Err(e) => return RefError::from(e).into_step(),
@@ -295,12 +295,16 @@ impl Isolate {
             return Step::Continue;
         }
         // The instruction that started the procedure is the innermost position again
-        let pc = self.frames.last().map_or(0, |c| c.pc.saturating_sub(1));
+        let pc = self
+            .task
+            .frames
+            .last()
+            .map_or(0, |c| c.pc.saturating_sub(1));
         self.heap.push_job(
             VecDeque::new(),
             x,
             JobOrigin::Instr { pc },
-            self.frames.len() as u32,
+            self.task.frames.len() as u32,
         );
         self.heap.job_push_fields(&remains);
         Step::Continue
@@ -310,14 +314,14 @@ impl Isolate {
     /// exception is recorded (the one before goes to its `Suppressed`) and the procedure goes on
     /// with the next step instead of leaving the frame.
     pub(super) fn dtor_caught(&mut self, x: Slot) -> Result<(), BadRef> {
-        let fr = self.frames.last_mut().expect("the procedure's frame");
+        let fr = self.task.frames.last_mut().expect("the procedure's frame");
         fr.pc = match fr.pc {
             STAGE_IN_BEFORE => STAGE_DESTROY,
             STAGE_IN_DESTROY => STAGE_CHAIN,
             _ => STAGE_FIELDS,
         };
         let r = fr.base as usize + R_EXCEPTION;
-        let old = std::mem::replace(&mut self.regs[r], x);
+        let old = std::mem::replace(&mut self.task.regs[r], x);
         self.attach_suppressed(x, old)
     }
 
@@ -325,23 +329,27 @@ impl Isolate {
     /// frames left when the program ends): the memory goes, the fields go to a release job as in
     /// [`Isolate::dtor_end`], and the recorded exception is dropped.
     pub(super) fn dtor_abandon(&mut self) -> Result<(), BadRef> {
-        let fr = self.frames.pop().expect("the procedure's frame");
+        let fr = self.task.frames.pop().expect("the procedure's frame");
         let base = fr.base as usize;
-        let h = std::mem::take(&mut self.regs[base + R_HANDLE]);
-        let x = std::mem::take(&mut self.regs[base + R_EXCEPTION]);
-        let flags = self.regs[base + R_FLAGS];
+        let h = std::mem::take(&mut self.task.regs[base + R_HANDLE]);
+        let x = std::mem::take(&mut self.task.regs[base + R_EXCEPTION]);
+        let flags = self.task.regs[base + R_FLAGS];
         self.heap.release(x)?;
         // A handle that does not match any more was already destroyed: nothing is left to do
         let Ok(remains) = self.heap.end_destroy(h) else {
             return Ok(());
         };
         if flags & FLAG_FROM_JOB == 0 {
-            let pc = self.frames.last().map_or(0, |c| c.pc.saturating_sub(1));
+            let pc = self
+                .task
+                .frames
+                .last()
+                .map_or(0, |c| c.pc.saturating_sub(1));
             self.heap.push_job(
                 VecDeque::new(),
                 0,
                 JobOrigin::Instr { pc },
-                self.frames.len() as u32,
+                self.task.frames.len() as u32,
             );
         }
         self.heap.job_push_fields(&remains);
@@ -354,7 +362,7 @@ impl Isolate {
     /// 3.8): its exception is raised at that instruction.
     pub(super) fn stamp_instr(&mut self, pc: u32) {
         self.heap
-            .stamp_job(JobOrigin::Instr { pc }, self.frames.len() as u32);
+            .stamp_job(JobOrigin::Instr { pc }, self.task.frames.len() as u32);
     }
 
     /// Runs the release jobs of the current frames (`docs/design/objects.md` 3.8), the last first,
@@ -366,7 +374,7 @@ impl Isolate {
             let Some((origin, depth)) = self.heap.top_job() else {
                 return Step::Continue;
             };
-            let frames = self.frames.len() as u32;
+            let frames = self.task.frames.len() as u32;
             if origin == JobOrigin::Open {
                 // Opened by the VM itself between instructions (an exception let go of, …)
                 self.heap.stamp_job(JobOrigin::Nested, frames);
@@ -430,7 +438,7 @@ impl Isolate {
                 if x == 0 {
                     return None;
                 }
-                if let Some(fr) = self.frames.last_mut() {
+                if let Some(fr) = self.task.frames.last_mut() {
                     fr.pc = pc;
                 }
                 Some(Step::Throw(x))
@@ -440,7 +448,7 @@ impl Isolate {
                     return None;
                 }
                 // The result never reaches its destination
-                let v = std::mem::take(&mut self.regs[result as usize]);
+                let v = std::mem::take(&mut self.task.regs[result as usize]);
                 let released = match kind {
                     bytecode::MANAGED_HEAP_REF => self.heap.release(v),
                     bytecode::MANAGED_OBJ => self.heap.release_obj(v),
@@ -449,7 +457,7 @@ impl Isolate {
                 if let Err(b) = released {
                     return Some(Step::Fatal(b.message));
                 }
-                if let Some(fr) = self.frames.last_mut() {
+                if let Some(fr) = self.task.frames.last_mut() {
                     fr.pc = pc;
                 }
                 Some(Step::Throw(x))
@@ -460,7 +468,7 @@ impl Isolate {
                 Step::Throw(x)
             }),
             JobOrigin::Unwind { pc } => {
-                if let (Some(pc), Some(fr)) = (pc, self.frames.last_mut()) {
+                if let (Some(pc), Some(fr)) = (pc, self.task.frames.last_mut()) {
                     fr.pc = pc;
                 }
                 Some(Step::Throw(x))

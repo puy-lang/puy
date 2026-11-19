@@ -49,86 +49,91 @@
   001a  SliceRange   r27, r24
   001b  AddIntI      r24, r24, 1
   001c  StrCopy      r4, r23
-  001d  LoadGlobalRef r7, g0
-  001e  Move         r23, r7
-  001f  StrLen       r27, r23
-  0020  LoadInt      r24, 4
-  0021  Move         r25, r27
-  0022  LoadInt      r26, 1
-  0023  SliceRange   r27, r24
-  0024  AddIntI      r24, r24, 1
-  0025  StrCopy      r6, r23
-  0026  ConcatStr    r4, r4, r6
-  0027  LoadGlobalRef r9, g0
-  0028  Move         r23, r9
-  0029  StrLen       r27, r23
-  002a  LoadInt      r24, 1
-  002b  LoadInt      r25, 2
-  002c  LoadInt      r26, 1
-  002d  SliceRange   r27, r24
-  002e  AddIntI      r24, r24, 1
-  002f  StrCopy      r8, r23
-  0030  ConcatStr    r4, r4, r8
-  0031  LoadGlobalRef r11, g0
-  0032  Move         r23, r11
-  0033  StrLen       r27, r23
-  0034  LoadInt      r24, 1
-  0035  Move         r25, r27
-  0036  LoadInt      r26, 1
-  0037  SliceRange   r27, r24
-  0038  AddIntI      r24, r24, 1
-  0039  StrCopy      r10, r23
-  003a  ConcatStr    r4, r4, r10
-  003b  LoadConst    r12, k2
-  003c  ConcatStr    r4, r4, r12
-  003d  CallHost     r4, h0
+  001d  Release      r5
+  001e  LoadGlobalRef r7, g0
+  001f  Move         r23, r7
+  0020  StrLen       r27, r23
+  0021  LoadInt      r24, 4
+  0022  Move         r25, r27
+  0023  LoadInt      r26, 1
+  0024  SliceRange   r27, r24
+  0025  AddIntI      r24, r24, 1
+  0026  StrCopy      r6, r23
+  0027  Release      r7
+  0028  ConcatStr    r4, r4, r6
+  0029  LoadGlobalRef r9, g0
+  002a  Move         r23, r9
+  002b  StrLen       r27, r23
+  002c  LoadInt      r24, 1
+  002d  LoadInt      r25, 2
+  002e  LoadInt      r26, 1
+  002f  SliceRange   r27, r24
+  0030  AddIntI      r24, r24, 1
+  0031  StrCopy      r8, r23
+  0032  Release      r9
+  0033  ConcatStr    r4, r4, r8
+  0034  LoadGlobalRef r11, g0
+  0035  Move         r23, r11
+  0036  StrLen       r27, r23
+  0037  LoadInt      r24, 1
+  0038  Move         r25, r27
+  0039  LoadInt      r26, 1
+  003a  SliceRange   r27, r24
+  003b  AddIntI      r24, r24, 1
+  003c  StrCopy      r10, r23
+  003d  Release      r11
+  003e  ConcatStr    r4, r4, r10
+  003f  LoadConst    r12, k2
+  0040  ConcatStr    r4, r4, r12
+  0041  CallHost     r4, h0
   .line 20
-  003e  LoadGlobalRef r15, g1
-  003f  Move         r23, r15
-  0040  U8Len        r27, r23
-  0041  LoadInt      r24, 2
-  0042  Move         r25, r27
-  0043  LoadInt      r26, 1
-  0044  SliceRange   r27, r24
-  0045  AddIntI      r24, r24, 1
-  0046  U8Copy       r14, r23
-  0047  U8ToStr      r13, r14
-  0048  LoadConst    r16, k2
-  0049  ConcatStr    r13, r13, r16
-  004a  CallHost     r13, h0
+  0042  LoadGlobalRef r15, g1
+  0043  Move         r23, r15
+  0044  U8Len        r27, r23
+  0045  LoadInt      r24, 2
+  0046  Move         r25, r27
+  0047  LoadInt      r26, 1
+  0048  SliceRange   r27, r24
+  0049  AddIntI      r24, r24, 1
+  004a  U8Copy       r14, r23
+  004b  Release      r15
+  004c  U8ToStr      r13, r14
+  004d  LoadConst    r16, k2
+  004e  ConcatStr    r13, r13, r16
+  004f  CallHost     r13, h0
   .line 21
-  004b  LoadGlobalRef r18, g2
-  004c  Move         r23, r18
-  004d  ArrLen       r27, r23
-  004e  LoadInt      r24, 1
-  004f  Move         r25, r27
-  0050  LoadZero     r26
-  0051  SliceRange   r27, r24
-  0052  ArrCopy      r23, ty64
-  0053  MoveRef      r17, r23
-  0054  StoreGlobalRef r17, g2
-  0055  Release      r18
-  0056  Release      r17
+  0050  LoadGlobalRef r18, g2
+  0051  Move         r23, r18
+  0052  ArrLen       r27, r23
+  0053  LoadInt      r24, 1
+  0054  Move         r25, r27
+  0055  LoadZero     r26
+  0056  SliceRange   r27, r24
+  0057  ArrCopy      r23, ty64
+  0058  MoveRef      r17, r23
+  0059  Release      r18
+  005a  StoreGlobalRef r17, g2
+  005b  Release      r17
   .line 22
-  0057  LoadGlobalRef r20, g3
-  0058  Materialize  r20, ty65
-  0059  Move         r23, r20
-  005a  LoadInt      r27, 5
-  005b  LoadInt      r24, 5
-  005c  LoadInt      r25, 6
-  005d  LoadInt      r26, 5
-  005e  SliceRange   r27, r24
-  005f  ArrCopy      r23, ty64
-  0060  MoveRef      r19, r23
-  0061  StoreGlobalRef r19, g2
-  0062  Release      r19
+  005c  LoadGlobalRef r20, g3
+  005d  Materialize  r20, ty65
+  005e  Move         r23, r20
+  005f  LoadInt      r27, 5
+  0060  LoadInt      r24, 5
+  0061  LoadInt      r25, 6
+  0062  LoadInt      r26, 5
+  0063  SliceRange   r27, r24
+  0064  ArrCopy      r23, ty64
+  0065  MoveRef      r19, r23
+  0066  StoreGlobalRef r19, g2
+  0067  Release      r19
   .line 23
-  0063  LoadGlobal   r24, g2
-  0064  ArrLen       r23, r24
-  0065  IntToStr     r21, r23
-  0066  LoadConst    r22, k2
-  0067  ConcatStr    r21, r21, r22
-  0068  CallHost     r21, h0
+  0068  LoadGlobal   r24, g2
+  0069  ArrLen       r23, r24
+  006a  IntToStr     r21, r23
+  006b  LoadConst    r22, k2
+  006c  ConcatStr    r21, r21, r22
+  006d  CallHost     r21, h0
   .line 24
-  0069  RetVoid
+  006e  RetVoid
 .finally r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16, r17, r18, r19, r20, r21, r22

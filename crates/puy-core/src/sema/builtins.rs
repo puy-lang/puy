@@ -48,6 +48,14 @@ pub enum BuiltinProc {
     /// when the type of `X` is not a class, nothing otherwise. Seen only from the units of the
     /// standard library (`docs/spec/collections.md` 9.3, 12.1).
     CheckClassType,
+    /// `HashRelink(var Buckets, const Hashes, var Next, Count)`: makes the chains of a hash table
+    /// again (`I95`). Seen only from the units of the standard library
+    /// (`docs/spec/bytecode.md` 2.23).
+    HashRelink,
+    /// `ArraySortRange(var A, Index, Count)`: sorts a range of a dynamic array in place by the
+    /// default order of its elements (`I96`). Seen only from the units of the standard library
+    /// (`docs/spec/bytecode.md` 2.22).
+    ArraySortRange,
 }
 
 /// The special variables `Input`, `Output` and `ErrOutput` of `System` (`docs/spec/semantics.md`
@@ -213,6 +221,12 @@ pub fn lookup_stdlib_only(lower: &str) -> Option<SystemName> {
         "objectclassname" => SystemName::Func(Builtin::ObjectClassName),
         "isrefcountedobject" => SystemName::Func(Builtin::IsRefCountedObject),
         "isoverridden" => SystemName::Func(Builtin::IsOverridden),
+        "hashfind" => SystemName::Func(Builtin::HashFind),
+        "hashlookup" => SystemName::Func(Builtin::HashLookup),
+        "isplainkey" => SystemName::Func(Builtin::IsPlainKey),
+        "hashrelink" => SystemName::Proc(BuiltinProc::HashRelink),
+        "isplainorder" => SystemName::Func(Builtin::IsPlainOrder),
+        "arraysortrange" => SystemName::Proc(BuiltinProc::ArraySortRange),
         _ => return None,
     })
 }
@@ -389,6 +403,28 @@ pub fn builtin_signature(func: Builtin) -> (&'static [(&'static str, Ty)], Ty) {
         Builtin::IsSameInstance => (&[("X", Ty::Error), ("Y", Ty::Error)], Ty::Boolean),
         Builtin::ObjectClassName => (&[("X", Ty::Error)], Ty::String),
         Builtin::IsOverridden => (&[("Method", Ty::Error)], Ty::Boolean),
+        Builtin::HashFind => (
+            &[
+                ("Hash", Ty::Int64),
+                ("Buckets", Ty::Error),
+                ("Hashes", Ty::Error),
+                ("Next", Ty::Error),
+                ("Start", Ty::Integer),
+            ],
+            Ty::Integer,
+        ),
+        Builtin::HashLookup => (
+            &[
+                ("Key", Ty::Error),
+                ("Buckets", Ty::Error),
+                ("Hashes", Ty::Error),
+                ("Next", Ty::Error),
+                ("Keys", Ty::Error),
+            ],
+            Ty::Integer,
+        ),
+        Builtin::IsPlainKey => (&[("X", Ty::Error)], Ty::Boolean),
+        Builtin::IsPlainOrder => (&[("X", Ty::Error)], Ty::Boolean),
         Builtin::Succ | Builtin::Pred => (&[("X", Ty::Error)], Ty::Error),
         Builtin::Sqrt => (&[("X", Ty::Double)], Ty::Double),
         Builtin::HashCombine => (&[("H", Ty::Int64), ("X", Ty::Int64)], Ty::Int64),
@@ -483,6 +519,10 @@ pub fn builtin_name(func: Builtin) -> &'static str {
         Builtin::IsSameInstance => "SameInstance",
         Builtin::ObjectClassName => "ObjectClassName",
         Builtin::IsOverridden => "IsOverridden",
+        Builtin::HashFind => "HashFind",
+        Builtin::HashLookup => "HashLookup",
+        Builtin::IsPlainKey => "IsPlainKey",
+        Builtin::IsPlainOrder => "IsPlainOrder",
         Builtin::Succ => "Succ",
         Builtin::Pred => "Pred",
         Builtin::Sqrt => "Sqrt",
@@ -545,6 +585,8 @@ pub fn proc_name(p: BuiltinProc) -> &'static str {
         BuiltinProc::Delete => "Delete",
         BuiltinProc::Exchange => "Exchange",
         BuiltinProc::ArrayMoveRange => "ArrayMoveRange",
+        BuiltinProc::HashRelink => "HashRelink",
+        BuiltinProc::ArraySortRange => "ArraySortRange",
         BuiltinProc::FreeIfClass => "FreeIfClass",
         BuiltinProc::CheckDefaultOrder => "CheckDefaultOrder",
         BuiltinProc::CheckClassType => "CheckClassType",

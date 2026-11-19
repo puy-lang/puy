@@ -1,0 +1,396 @@
+; puy ir 1
+.global
+  g0 Box: TBox<Integer>
+  g1 Box2: TBox<Double>
+.func f0 DumpLocalTypeMethodNames.<main> params=0
+  .reg t0: - temp
+  .reg t1: - temp
+  .reg t2: - temp
+  .reg t3: TBox<Integer> temp
+  .reg t4: TBox<Double> temp
+  .reg t5: string temp
+  .reg t6: Integer temp
+  .reg t7: TBox<Integer> temp
+  .reg t8: Integer temp
+  .reg t9: Integer temp
+  .reg t10: TBox<Double> temp
+  .reg t11: Double temp
+  .reg t12: string temp
+  .reg t13: TBox<Integer> temp
+  .reg t14: TBox<Double> temp
+bb0:
+  .line 115
+  Call         -, f1()
+  .line 116
+  Call         -, f5()
+  .line 117
+  Call         -, f7()
+  .line 118
+  LoadZero     t3
+  New          t3, DumpLocalTypeMethodNames.TBox<Integer>
+  StoreGlobal  t3, g0
+  .line 119
+  LoadZero     t4
+  New          t4, DumpLocalTypeMethodNames.TBox<Double>
+  StoreGlobal  t4, g1
+  .line 120
+  LoadGlobal   t7, g0
+  LoadInt      t8, 5
+  CallMethod   t6, f12(t7, t8)
+  LoadGlobal   t10, g1
+  LoadConst    t11, 0.5
+  CallMethod   t9, f13(t10, t11)
+  AddInt       t6, t6, t9
+  NarrowOvf    t6, t6, 4
+  IntToStr     t5, t6
+  LoadConst    t12, "\n"
+  ConcatStr    t5, t5, t12
+  CallHost     -, h0(t5)
+  .line 121
+  LoadGlobal   t13, g0
+  Free         t13
+  .line 122
+  LoadGlobal   t14, g1
+  Free         t14
+  .line 123
+  RetVoid
+.finally t5, t12
+.func f1 DumpLocalTypeMethodNames.A params=0
+  .reg v0 L: TLoc local
+  .reg t0: Integer temp
+  .reg t1: - ref
+  .reg t2: - temp
+bb0:
+  .line 43
+  Release      v0
+  .line 45
+  LoadInt      t0, 1
+  Unique       v0, DumpLocalTypeMethodNames.A.TLoc
+  FieldSet     v0, 0, t0
+  .line 46
+  MakeRef      t1, v0
+  Call         -, f2(t1)
+  .line 47
+  Call         -, f3()
+  .line 48
+  RetVoid
+.finally v0
+.func f2 DumpLocalTypeMethodNames.A.TLoc.S params=1
+  .reg v0 Self: TLoc var self
+  .reg t0: string temp
+  .reg t1: string temp
+  .reg t2: Integer temp
+  .reg t3: string temp
+bb0:
+  .line 22
+  LoadConst    t0, "A "
+  RefFieldGet  t2, v0, 0
+  IntToStr     t1, t2
+  ConcatStr    t0, t0, t1
+  LoadConst    t3, "\n"
+  ConcatStr    t0, t0, t3
+  CallHost     -, h0(t0)
+  .line 23
+  RetVoid
+.finally t0, t1, t3
+.func f3 DumpLocalTypeMethodNames.A.Inner params=0
+  .reg v0 L: TIn local
+  .reg t0: Integer temp
+  .reg t1: - ref
+bb0:
+  .line 36
+  Release      v0
+  .line 38
+  LoadInt      t0, 3
+  Unique       v0, DumpLocalTypeMethodNames.A.Inner.TIn
+  FieldSet     v0, 0, t0
+  .line 39
+  MakeRef      t1, v0
+  Call         -, f4(t1)
+  .line 40
+  RetVoid
+.finally v0
+.func f4 DumpLocalTypeMethodNames.A.Inner.TIn.S params=1
+  .reg v0 Self: TIn var self
+  .reg t0: string temp
+  .reg t1: string temp
+  .reg t2: Integer temp
+  .reg t3: string temp
+bb0:
+  .line 33
+  LoadConst    t0, "A.Inner "
+  RefFieldGet  t2, v0, 0
+  IntToStr     t1, t2
+  ConcatStr    t0, t0, t1
+  LoadConst    t3, "\n"
+  ConcatStr    t0, t0, t3
+  CallHost     -, h0(t0)
+  .line 34
+  RetVoid
+.finally t0, t1, t3
+.func f5 DumpLocalTypeMethodNames.B params=0
+  .reg v0 L: TLoc local
+  .reg v1 X: TVal local
+  .reg v2 Y: TVal local
+  .reg t0: Integer temp
+  .reg t1: - ref
+  .reg t2: string temp
+  .reg t3: Boolean temp
+  .reg t4: TVal temp
+  .reg t5: TObject temp
+  .reg t6: string temp
+bb0:
+  .line 65
+  Release      v0
+  .line 68
+  LoadInt      t0, 2
+  Unique       v0, DumpLocalTypeMethodNames.B.TLoc
+  FieldSet     v0, 0, t0
+  .line 69
+  MakeRef      t1, v0
+  Call         -, f6(t1)
+  .line 70
+  LoadZero     v1
+  New          v1, DumpLocalTypeMethodNames.B.TVal
+  .line 71
+  LoadZero     v2
+  New          v2, DumpLocalTypeMethodNames.B.TVal
+  .line 72
+  Move         t4, v1
+  Move         t5, v2
+  CallVirtual  t3, DumpLocalTypeMethodNames.B.TVal.Equals[4](t4, t5)
+  BoolToStr    t2, t3
+  LoadConst    t6, "\n"
+  ConcatStr    t2, t2, t6
+  CallHost     -, h0(t2)
+  .line 73
+  Free         v1
+  .line 74
+  Free         v2
+  .line 75
+  RetVoid
+.finally v0, t2, t6
+.func f6 DumpLocalTypeMethodNames.B.TLoc.S params=1
+  .reg v0 Self: TLoc var self
+  .reg t0: string temp
+  .reg t1: string temp
+  .reg t2: Integer temp
+  .reg t3: string temp
+bb0:
+  .line 62
+  LoadConst    t0, "B "
+  RefFieldGet  t2, v0, 0
+  IntToStr     t1, t2
+  ConcatStr    t0, t0, t1
+  LoadConst    t3, "\n"
+  ConcatStr    t0, t0, t3
+  CallHost     -, h0(t0)
+  .line 63
+  RetVoid
+.finally t0, t1, t3
+.func f7 DumpLocalTypeMethodNames.C params=0
+  .reg v0 X: TVal local
+  .reg v1 Y: TVal local
+  .reg t0: Integer temp
+  .reg t1: string temp
+  .reg t2: Boolean temp
+  .reg t3: TVal temp
+  .reg t4: TObject temp
+  .reg t5: string temp
+bb0:
+  .line 86
+  LoadZero     v0
+  New          v0, DumpLocalTypeMethodNames.C.TVal
+  .line 87
+  LoadZero     v1
+  New          v1, DumpLocalTypeMethodNames.C.TVal
+  .line 88
+  LoadInt      t0, 1
+  ObjSet       v1, 0, t0
+  .line 89
+  Move         t3, v0
+  Move         t4, v1
+  CallVirtual  t2, DumpLocalTypeMethodNames.C.TVal.Equals[4](t3, t4)
+  BoolToStr    t1, t2
+  LoadConst    t5, "\n"
+  ConcatStr    t1, t1, t5
+  CallHost     -, h0(t1)
+  .line 90
+  Free         v0
+  .line 91
+  Free         v1
+  .line 92
+  RetVoid
+.finally t1, t5
+.func f8 DumpLocalTypeMethodNames.B.TVal.Equals params=2
+  .reg v0 Self: TVal self
+  .reg v1 Obj: TObject param
+  .reg v2 Result: Boolean result
+  .reg v3 O: TVal local
+  .reg t0: Boolean temp
+  .reg t1: TClass temp
+  .reg t2: TClass temp
+  .reg t3: TObject temp
+  .reg t4: Integer temp
+  .reg t5: Integer temp
+bb0:
+  .line 57
+  Move         t0, v1
+  IsClass      t0, DumpLocalTypeMethodNames.B.TVal
+  Move         v2, t0
+  JmpIfFalse   v2, bb2, bb1
+bb1:
+  .line 57
+  ClassType    t1, v1
+  ClassType    t2, v0
+  EqInt        v2, t1, t2
+  Jmp          bb2
+bb2:
+  .line 57
+  JmpIfFalse   v2, bb4, bb3
+bb3:
+  .line 57
+  AssignObj    t3, v1
+  AsClass      t3, DumpLocalTypeMethodNames.B.TVal
+  Move         v3, t3
+  ObjGet       t4, v0, 0
+  ObjGet       t5, v3, 0
+  EqInt        v2, t4, t5
+  Jmp          bb5
+bb4:
+  .line 57
+  Jmp          bb5
+bb5:
+  .line 57
+  Ret          v2
+.finally t3:obj
+.func f9 DumpLocalTypeMethodNames.B.TVal.GetHashCode params=1
+  .reg v0 Self: TVal self
+  .reg v1 Result: Int64 result
+  .reg t0: Int64 temp
+  .reg t1: Int64 temp
+  .reg t2: Int64 temp
+  .reg t3: Integer temp
+bb0:
+  .line 57
+  LoadInt      t0, 1
+  HashInt      v1, t0
+  ObjGet       t3, v0, 0
+  HashInt      t2, t3
+  HashMix      t1, v1, t2
+  Move         v1, t1
+  Ret          v1
+.finally
+.func f10 DumpLocalTypeMethodNames.C.TVal.Equals params=2
+  .reg v0 Self: TVal self
+  .reg v1 Obj: TObject param
+  .reg v2 Result: Boolean result
+  .reg v3 O: TVal local
+  .reg t0: Boolean temp
+  .reg t1: TClass temp
+  .reg t2: TClass temp
+  .reg t3: TObject temp
+  .reg t4: Integer temp
+  .reg t5: Integer temp
+bb0:
+  .line 80
+  Move         t0, v1
+  IsClass      t0, DumpLocalTypeMethodNames.C.TVal
+  Move         v2, t0
+  JmpIfFalse   v2, bb2, bb1
+bb1:
+  .line 80
+  ClassType    t1, v1
+  ClassType    t2, v0
+  EqInt        v2, t1, t2
+  Jmp          bb2
+bb2:
+  .line 80
+  JmpIfFalse   v2, bb4, bb3
+bb3:
+  .line 80
+  AssignObj    t3, v1
+  AsClass      t3, DumpLocalTypeMethodNames.C.TVal
+  Move         v3, t3
+  ObjGet       t4, v0, 0
+  ObjGet       t5, v3, 0
+  EqInt        v2, t4, t5
+  Jmp          bb5
+bb4:
+  .line 80
+  Jmp          bb5
+bb5:
+  .line 80
+  Ret          v2
+.finally t3:obj
+.func f11 DumpLocalTypeMethodNames.C.TVal.GetHashCode params=1
+  .reg v0 Self: TVal self
+  .reg v1 Result: Int64 result
+  .reg t0: Int64 temp
+  .reg t1: Int64 temp
+  .reg t2: Int64 temp
+  .reg t3: Integer temp
+bb0:
+  .line 80
+  LoadInt      t0, 1
+  HashInt      v1, t0
+  ObjGet       t3, v0, 0
+  HashInt      t2, t3
+  HashMix      t1, v1, t2
+  Move         v1, t1
+  Ret          v1
+.finally
+.func f12 DumpLocalTypeMethodNames.TBox<Integer>.Get params=2
+  .reg v0 Self: TBox<Integer> self
+  .reg v1 X: Integer const param
+  .reg v2 Result: Integer result
+  .reg v3 L: TBox<Integer>.Get.TLoc local
+  .reg t0: - ref
+bb0:
+  .line 105
+  Release      v3
+  .line 107
+  Unique       v3, DumpLocalTypeMethodNames.TBox<Integer>.Get.TLoc
+  FieldSet     v3, 0, v1
+  .line 108
+  MakeRef      t0, v3
+  Call         v2, f14(t0)
+  .line 109
+  Ret          v2
+.finally v3
+.func f13 DumpLocalTypeMethodNames.TBox<Double>.Get params=2
+  .reg v0 Self: TBox<Double> self
+  .reg v1 X: Double const param
+  .reg v2 Result: Integer result
+  .reg v3 L: TBox<Double>.Get.TLoc local
+  .reg t0: - ref
+bb0:
+  .line 105
+  Release      v3
+  .line 107
+  Unique       v3, DumpLocalTypeMethodNames.TBox<Double>.Get.TLoc
+  FieldSet     v3, 0, v1
+  .line 108
+  MakeRef      t0, v3
+  Call         v2, f15(t0)
+  .line 109
+  Ret          v2
+.finally v3
+.func f14 DumpLocalTypeMethodNames.TBox<Integer>.Get.TLoc.S params=1
+  .reg v0 Self: TBox<Integer>.Get.TLoc var self
+  .reg v1 Result: Integer result
+bb0:
+  .line 102
+  LoadInt      v1, 4
+  .line 103
+  Ret          v1
+.finally
+.func f15 DumpLocalTypeMethodNames.TBox<Double>.Get.TLoc.S params=1
+  .reg v0 Self: TBox<Double>.Get.TLoc var self
+  .reg v1 Result: Integer result
+bb0:
+  .line 102
+  LoadInt      v1, 4
+  .line 103
+  Ret          v1
+.finally

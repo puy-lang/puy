@@ -108,6 +108,7 @@ bb0:
   LoadRefRef   v1, v0
   LoadRefRef   t0, v0
   ConcatStr    v1, v1, t0
+  Release      t0
   .line 42
   Ret          v1
 .finally v1, t0

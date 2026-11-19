@@ -1,0 +1,45 @@
+error[E0727]: type `TBar` contains itself
+   --> main.pas:15:3
+    |
+ 11 |     V: T;
+    |     - part of the cycle
+...
+ 15 |   TBar = record
+    |   ^^^^
+ 16 |     A: TFoo<TBar>;
+    |     - part of the cycle
+
+error[E0727]: type `TKeyed` contains itself
+   --> main.pas:18:3
+    |
+ 18 |   TKeyed = record
+    |   ^^^^^^
+ 19 |     P: TPair<Integer, TKeyed>;
+    |     - part of the cycle
+   ::: src/Boxes.pas:8:5
+  8 |     Value: V;
+    |     ----- part of the cycle
+
+error[E0727]: type `TRow` contains itself
+   --> main.pas:21:3
+    |
+ 21 |   TRow = record
+    |   ^^^^
+ 22 |     C: TCells<TRow>;
+    |     - part of the cycle
+   ::: src/Boxes.pas:10:3
+ 10 |   TCells<T> = array[0..1] of T;
+    |   ------ part of the cycle
+
+error[E0727]: type `TInner` contains itself
+   --> main.pas:26:5
+    |
+ 11 |     V: T;
+    |     - part of the cycle
+...
+ 26 |     TInner = record
+    |     ^^^^^^
+ 27 |       A: TFoo<TInner>;
+    |       - part of the cycle
+
+error: aborting due to 4 errors

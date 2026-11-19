@@ -3362,6 +3362,29 @@ impl<'a> Parser<'a> {
                 }
                 self.expect_closing_gt(stop);
                 self.finish_node();
+                // A type nested in the instantiation (`TList<Integer>.TEnumerator`,
+                // `TOuter<A>.TInner<B>`; `docs/spec/grammar.md` 1.3)
+                while self.at(DOT) {
+                    self.start_node_at(cp, NESTED_TYPE_REF);
+                    self.bump(); // .
+                    if self.at(IDENT) {
+                        self.parse_qualified_name();
+                    } else {
+                        self.supply_diag(Code::E(405), "expected an identifier".into(), None);
+                        self.finish_node();
+                        break;
+                    }
+                    if self.at(LT) {
+                        self.bump();
+                        self.parse_type_ref(&[GT, COMMA]);
+                        while self.at(COMMA) {
+                            self.bump();
+                            self.parse_type_ref(&[GT, COMMA]);
+                        }
+                        self.expect_closing_gt(stop);
+                    }
+                    self.finish_node();
+                }
             }
             STRING_KW => {
                 self.start_node(TYPE_REF);
@@ -5219,6 +5242,9 @@ impl<'a> Parser<'a> {
             Dot,
             /// After a whole type argument (a `,` or a `>` may follow).
             Done,
+            /// After the `>` closing nested type arguments (a `.`, a `,` or a `>` may follow:
+            /// `TList<Integer>.TEnumerator`).
+            Closed,
         }
         let mut i = start;
         let mut depth = 0usize;
@@ -5243,18 +5269,18 @@ impl<'a> Parser<'a> {
             state = match (state, k) {
                 (State::Arg, IDENT) | (State::Dot, IDENT) => State::Name,
                 (State::Arg, STRING_KW) => State::Done,
-                (State::Name, DOT) => State::Dot,
+                (State::Name | State::Closed, DOT) => State::Dot,
                 (State::Name, LT) => {
                     depth += 1;
                     State::Arg
                 }
-                (State::Name | State::Done, COMMA) => State::Arg,
-                (State::Name | State::Done, GT) => {
+                (State::Name | State::Done | State::Closed, COMMA) => State::Arg,
+                (State::Name | State::Done | State::Closed, GT) => {
                     depth -= 1;
                     if depth == 0 {
                         return Some(self.index_after(i));
                     }
-                    State::Done
+                    State::Closed
                 }
                 _ => return None,
             };
@@ -5272,13 +5298,14 @@ impl<'a> Parser<'a> {
     }
 
     /// `TYPE_ARGS` in an expression. [`Self::at_expr_type_args`] has checked the form, so this
-    /// reads it without diagnostics; nested type arguments are `GENERIC_TYPE_REF` (the form in
-    /// type positions), read with a stack rather than recursion.
+    /// reads it without diagnostics; nested type arguments are `GENERIC_TYPE_REF` and
+    /// `NESTED_TYPE_REF` (the forms in type positions), read with a stack rather than recursion.
     fn parse_expr_type_args(&mut self) {
         self.start_node(TYPE_ARGS);
         self.bump(); // <
-        // The number of nodes open inside `TYPE_ARGS` (each a `GENERIC_TYPE_REF`)
-        let mut open = 0usize;
+        // Where each node open inside `TYPE_ARGS` starts (a `GENERIC_TYPE_REF`, or a
+        // `NESTED_TYPE_REF` whose last name has type arguments), innermost last
+        let mut open = Vec::new();
         loop {
             // One type argument
             if self.at(STRING_KW) {
@@ -5297,13 +5324,14 @@ impl<'a> Parser<'a> {
                 if self.at(LT) {
                     self.start_node_at(cp, GENERIC_TYPE_REF);
                     self.bump();
-                    open += 1;
+                    open.push(cp);
                     continue;
                 }
                 self.start_node_at(cp, TYPE_REF);
                 self.finish_node();
             }
-            // After a type argument: `,` or the `>` closing one or more lists
+            // After a type argument: `,`, or the `>` closing one or more lists, each closed one
+            // perhaps followed by the names of a nested type (`TList<Integer>.TEnumerator`)
             loop {
                 if self.at(COMMA) {
                     self.bump();
@@ -5312,10 +5340,31 @@ impl<'a> Parser<'a> {
                 debug_assert_eq!(self.current(), GT);
                 self.bump();
                 self.finish_node();
-                if open == 0 {
+                let Some(cp) = open.pop() else {
                     return;
+                };
+                let mut args_follow = false;
+                while self.at(DOT) {
+                    self.start_node_at(cp, NESTED_TYPE_REF);
+                    self.bump(); // .
+                    self.start_node(QUALIFIED_NAME);
+                    self.bump(); // IDENT
+                    while self.at(DOT) {
+                        self.bump();
+                        self.bump(); // IDENT
+                    }
+                    self.finish_node();
+                    if self.at(LT) {
+                        self.bump();
+                        open.push(cp);
+                        args_follow = true;
+                        break;
+                    }
+                    self.finish_node();
                 }
-                open -= 1;
+                if args_follow {
+                    break;
+                }
             }
         }
     }
@@ -5377,17 +5426,14 @@ impl<'a> Parser<'a> {
 
     /// W0005: a directive outside a declaration or statement boundary.
     fn check_placements(&self, root: &SyntaxNode) -> Vec<Diagnostic> {
-        use rowan::NodeOrToken;
         let mut out = Vec::new();
         let mut reported_blocks: Vec<TextSize> = Vec::new();
-        for element in root.descendants_with_tokens() {
-            let NodeOrToken::Token(tok) = element else {
-                continue;
-            };
-            if !matches!(tok.kind(), DIRECTIVE | INACTIVE) {
-                continue;
-            }
-            let Some(placement) = self.directives.placement_at(tok.text_range().start()) else {
+        // Visit the directive tokens with a placement in file order (the placements are sorted by
+        // position) instead of walking every token of the tree
+        for &(pos, placement) in &self.directives.placements {
+            let Some(tok) = root.token_at_offset(pos).find(|t| {
+                matches!(t.kind(), DIRECTIVE | INACTIVE) && t.text_range().start() == pos
+            }) else {
                 continue;
             };
             let Some(parent) = tok.parent() else { continue };

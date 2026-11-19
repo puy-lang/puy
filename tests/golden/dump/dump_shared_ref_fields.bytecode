@@ -1,0 +1,164 @@
+; puyc format 0
+.const
+  0: str "x"
+  1: str " "
+  2: str "\n"
+.type
+  64: record DumpSharedRefFields.TBox<DumpSharedRefFields.TA> slots=2
+  65: record DumpSharedRefFields.TBox<DumpSharedRefFields.TB> slots=2
+  66: record DumpSharedRefFields.TPair<Integer> slots=2
+  67: record DumpSharedRefFields.TPair<Int64> slots=2
+  68: record DumpSharedRefFields.TPair<string> slots=2 refs=0
+.global
+  0: ref X
+  1: ref Y
+  2: ref P
+  3: ref Q
+  4: ref S
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpSharedRefFields file="dump_shared_ref_fields.pas" init=- fini=- entry=0
+.func 0 DumpSharedRefFields.<main> params=0 regs=21
+  .line 39
+  0000  MakeGlobalRef r14, g0
+  .inline f1 DumpSharedRefFields.TBox<T>.Bump line=39
+  .line 23
+  0001  RefFieldGet  r15, r14, 1
+  0002  AddIntI      r15, r15, 1
+  0003  NarrowOvf    r15, r15, 4
+  0004  RefFieldSet  r14, 1, r15, ty64
+  .endinline
+  .line 40
+  0006  MakeGlobalRef r14, g0
+  .inline f1 DumpSharedRefFields.TBox<T>.Bump line=40
+  .line 23
+  0007  RefFieldGet  r15, r14, 1
+  0008  AddIntI      r15, r15, 1
+  0009  NarrowOvf    r15, r15, 4
+  000a  RefFieldSet  r14, 1, r15, ty64
+  .endinline
+  .line 41
+  000c  MakeGlobalRef r14, g1
+  .inline f1 DumpSharedRefFields.TBox<T>.Bump line=41
+  .line 23
+  000d  RefFieldGet  r15, r14, 1
+  000e  AddIntI      r15, r15, 1
+  000f  NarrowOvf    r15, r15, 4
+  0010  RefFieldSet  r14, 1, r15, ty65
+  .endinline
+  .line 42
+  0012  MakeGlobalRef r14, g2
+  0013  LoadInt      r15, 3
+  .inline f2 DumpSharedRefFields.Put<T> line=42
+  .line 28
+  0014  RefFieldSet  r14, 0, r15, ty66
+  .line 29
+  0016  RefFieldGet  r16, r14, 1
+  0017  AddIntI      r16, r16, 1
+  0018  NarrowOvf    r16, r16, 4
+  0019  RefFieldSet  r14, 1, r16, ty66
+  .endinline
+  .line 43
+  001b  MakeGlobalRef r14, g3
+  001c  LoadInt      r15, 4
+  .inline f2 DumpSharedRefFields.Put<T> line=43
+  .line 28
+  001d  RefFieldSet  r14, 0, r15, ty67
+  .line 29
+  001f  RefFieldGet  r16, r14, 1
+  0020  AddIntI      r16, r16, 1
+  0021  NarrowOvf    r16, r16, 4
+  0022  RefFieldSet  r14, 1, r16, ty67
+  .endinline
+  .line 44
+  0024  MakeGlobalRef r14, g4
+  0025  LoadConst    r0, k0
+  0026  Move         r15, r0
+  .inline f3 DumpSharedRefFields.Put<string> line=44
+  .line 28
+  0027  RefFieldSetRef r14, 0, r15, ty68
+  .line 29
+  0029  RefFieldGet  r16, r14, 1
+  002a  AddIntI      r16, r16, 1
+  002b  NarrowOvf    r16, r16, 4
+  002c  RefFieldSet  r14, 1, r16, ty68
+  .endinline
+  .line 45
+  002e  LoadGlobal   r15, g0
+  002f  FieldGet     r14, r15, 1
+  0030  IntToStr     r1, r14
+  0031  LoadConst    r2, k1
+  0032  ConcatStr    r1, r1, r2
+  0033  LoadGlobal   r16, g1
+  0034  FieldGet     r15, r16, 1
+  0035  IntToStr     r3, r15
+  0036  ConcatStr    r1, r1, r3
+  0037  LoadConst    r4, k1
+  0038  ConcatStr    r1, r1, r4
+  0039  LoadGlobal   r17, g2
+  003a  FieldGet     r16, r17, 0
+  003b  IntToStr     r5, r16
+  003c  ConcatStr    r1, r1, r5
+  003d  LoadConst    r6, k1
+  003e  ConcatStr    r1, r1, r6
+  003f  LoadGlobal   r18, g2
+  0040  FieldGet     r17, r18, 1
+  0041  IntToStr     r7, r17
+  0042  ConcatStr    r1, r1, r7
+  0043  LoadConst    r8, k1
+  0044  ConcatStr    r1, r1, r8
+  0045  LoadGlobal   r19, g3
+  0046  FieldGet     r18, r19, 0
+  0047  IntToStr     r9, r18
+  0048  ConcatStr    r1, r1, r9
+  0049  LoadConst    r10, k1
+  004a  ConcatStr    r1, r1, r10
+  004b  LoadGlobal   r19, g4
+  004c  FieldGetRef  r11, r19, 0
+  004d  ConcatStr    r1, r1, r11
+  004e  LoadGlobal   r20, g4
+  004f  FieldGet     r19, r20, 1
+  0050  IntToStr     r12, r19
+  0051  ConcatStr    r1, r1, r12
+  0052  LoadConst    r13, k2
+  0053  ConcatStr    r1, r1, r13
+  0054  CallHost     r1, h0
+  0055  Release      r11
+  .line 46
+  0056  RetVoid
+.finally r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13
+.func 1 DumpSharedRefFields.TBox<T>.Bump params=1 regs=3
+; shared by DumpSharedRefFields.TBox<DumpSharedRefFields.TA>, DumpSharedRefFields.TBox<DumpSharedRefFields.TB>
+  .local r0 Self
+  .line 23
+  0000  RefFieldGet  r1, r0, 1
+  0001  AddIntI      r1, r1, 1
+  0002  NarrowOvf    r1, r1, 4
+  0003  RefFieldSet  r0, 1, r1, ty64
+  .line 24
+  0005  RetVoid
+.func 2 DumpSharedRefFields.Put<T> params=2 regs=4
+; shared by DumpSharedRefFields.Put<Integer>, DumpSharedRefFields.Put<Int64>
+  .local r0 P
+  .local r1 V
+  .line 28
+  0000  RefFieldSet  r0, 0, r1, ty66
+  .line 29
+  0002  RefFieldGet  r2, r0, 1
+  0003  AddIntI      r2, r2, 1
+  0004  NarrowOvf    r2, r2, 4
+  0005  RefFieldSet  r0, 1, r2, ty66
+  .line 30
+  0007  RetVoid
+.func 3 DumpSharedRefFields.Put<string> params=2 regs=4
+  .local r0 P
+  .local r1 V
+  .line 28
+  0000  RefFieldSetRef r0, 0, r1, ty68
+  .line 29
+  0002  RefFieldGet  r2, r0, 1
+  0003  AddIntI      r2, r2, 1
+  0004  NarrowOvf    r2, r2, 4
+  0005  RefFieldSet  r0, 1, r2, ty68
+  .line 30
+  0007  RetVoid

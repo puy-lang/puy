@@ -18,3 +18,13 @@ rustflags = ["-C", "link-arg=-zstack-size=16777216"]
 
 [target.wasm32-unknown-unknown]
 rustflags = ["-C", "link-arg=-zstack-size=16777216"]
+
+# Fix where the machine code of the VM lands (docs/design/vm.md 3.14): on native targets, start
+# every function at a 64-byte boundary and every block that is only entered by a jump (the arms
+# of the dispatch `match` in `Isolate::run_loop`) at a 16-byte boundary. Without this, the speed
+# of `run_loop` changed by 5-20% with where its code landed, even with the same machine code,
+# which hid the effect of changes to the VM in the benchmarks (docs/notes/benchmark-m4c.md,
+# M4-66). The text grows by about 7.5%; a 32-byte boundary for the blocks grew it by 15% and the
+# peak resident set size of `uses System.Generics.Collections` past 10MB.
+[target.'cfg(not(target_family = "wasm"))']
+rustflags = ["-C", "llvm-args=-align-all-functions=6", "-C", "llvm-args=-align-all-nofallthru-blocks=4"]

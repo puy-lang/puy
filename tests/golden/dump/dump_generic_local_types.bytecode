@@ -1,0 +1,200 @@
+; puyc format 0
+.const
+  0: float 2.5
+  1: str "\n"
+.type
+  64: class DumpGenericLocalTypes.TBox<Integer> slots=0 parent=ty19 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+  65: record DumpGenericLocalTypes.Find<Integer>.TLoc slots=2
+  66: record DumpGenericLocalTypes.Find<Double>.TLoc slots=2
+  67: record DumpGenericLocalTypes.TBox<Integer>.Get.TLoc slots=1
+.global
+  0: int B
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpGenericLocalTypes file="dump_generic_local_types.pas" init=- fini=- entry=0
+.func 0 DumpGenericLocalTypes.<main> params=0 regs=7
+  .line 49
+  0000  LoadInt      r5, 1
+  0001  Call         r5, f1
+  0002  Move         r4, r5
+  0003  LoadConst    r6, k0
+  0004  Call         r6, f3
+  0005  AddInt       r4, r4, r6
+  0006  NarrowOvf    r4, r4, 4
+  0007  IntToStr     r0, r4
+  0008  LoadConst    r1, k1
+  0009  ConcatStr    r0, r0, r1
+  000a  CallHost     r0, h0
+  .line 50
+  000b  LoadZero     r4
+  000c  New          r4, ty64
+  000d  StoreGlobal  r4, g0
+  .line 51
+  000e  Move         r5, r4
+  000f  LoadInt      r6, 3
+  0010  CallMethod   r5, f5
+  0011  Move         r4, r5
+  0012  BoolToStr    r2, r4
+  0013  LoadConst    r3, k1
+  0014  ConcatStr    r2, r2, r3
+  0015  CallHost     r2, h0
+  .line 52
+  0016  LoadGlobal   r4, g0
+  0017  Free         r4
+  .line 53
+  0018  RetVoid
+.finally r0, r1, r2, r3
+.func 1 DumpGenericLocalTypes.Find<Integer> params=1 regs=9
+  .local r0 X
+  .local r1 Result
+  .local r2 L
+  .line 25
+  0000  Release      r2
+  .line 27
+  0001  Unique       r2, ty65
+  0002  FieldSet     r2, 0, r0
+  .line 28
+  0003  Move         r4, r2
+  0004  Move         r5, r2
+  .inline f2 <eq:DumpGenericLocalTypes.Find<Integer>.TLoc> line=28
+  .line 15
+  0005  FieldGet     r7, r4, 0
+  0006  FieldGet     r8, r5, 0
+  0007  JmpIfNeInt   r7, r8, -> 0011
+  0008  FieldGet     r7, r4, 1
+  0009  FieldGet     r8, r5, 1
+  000a  JmpIfNeInt   r7, r8, -> 0011
+  .endinline
+  .line 29
+  000b  MakeRef      r3, r2
+  .inline f7 DumpGenericLocalTypes.Find<T>.TLoc.Size line=29
+  .line 22
+  000c  RefFieldGet  r4, r3, 1
+  000d  AddIntI      r4, r4, 1
+  000e  NarrowOvf    r4, r4, 4
+  .line 23
+  000f  Move         r1, r4
+  .endinline
+  .line 28
+  0010  Jmp          -> 0012
+  .line 31
+  0011  LoadZero     r1
+  .line 32
+  0012  Ret          r1
+.finally r2
+.func 2 <eq:DumpGenericLocalTypes.Find<Integer>.TLoc> params=2 regs=5
+  .local r0 A
+  .local r1 B
+  .local r2 Result
+  .line 15
+  0000  FieldGet     r3, r0, 0
+  0001  FieldGet     r4, r1, 0
+  0002  EqInt        r2, r3, r4
+  0003  JmpIfFalse   r2, -> 0007
+  0004  FieldGet     r3, r0, 1
+  0005  FieldGet     r4, r1, 1
+  0006  EqInt        r2, r3, r4
+  0007  Ret          r2
+.func 3 DumpGenericLocalTypes.Find<Double> params=1 regs=9
+  .local r0 X
+  .local r1 Result
+  .local r2 L
+  .line 25
+  0000  Release      r2
+  .line 27
+  0001  Unique       r2, ty66
+  0002  FieldSet     r2, 0, r0
+  .line 28
+  0003  Move         r4, r2
+  0004  Move         r5, r2
+  .inline f4 <eq:DumpGenericLocalTypes.Find<Double>.TLoc> line=28
+  .line 15
+  0005  FieldGet     r7, r4, 0
+  0006  FieldGet     r8, r5, 0
+  0007  KeyEqF64     r6, r7, r8
+  0008  JmpIfFalse   r6, -> 0012
+  0009  FieldGet     r7, r4, 1
+  000a  FieldGet     r8, r5, 1
+  000b  JmpIfNeInt   r7, r8, -> 0012
+  .endinline
+  .line 29
+  000c  MakeRef      r3, r2
+  .inline f7 DumpGenericLocalTypes.Find<T>.TLoc.Size line=29
+  .line 22
+  000d  RefFieldGet  r4, r3, 1
+  000e  AddIntI      r4, r4, 1
+  000f  NarrowOvf    r4, r4, 4
+  .line 23
+  0010  Move         r1, r4
+  .endinline
+  .line 28
+  0011  Jmp          -> 0013
+  .line 31
+  0012  LoadZero     r1
+  .line 32
+  0013  Ret          r1
+.finally r2
+.func 4 <eq:DumpGenericLocalTypes.Find<Double>.TLoc> params=2 regs=5
+  .local r0 A
+  .local r1 B
+  .local r2 Result
+  .line 15
+  0000  FieldGet     r3, r0, 0
+  0001  FieldGet     r4, r1, 0
+  0002  KeyEqF64     r2, r3, r4
+  0003  JmpIfFalse   r2, -> 0007
+  0004  FieldGet     r3, r0, 1
+  0005  FieldGet     r4, r1, 1
+  0006  EqInt        r2, r3, r4
+  0007  Ret          r2
+.func 5 DumpGenericLocalTypes.TBox<Integer>.Get params=2 regs=10
+  .local r0 Self
+  .local r1 X
+  .local r2 Result
+  .local r3 L
+  .line 40
+  0000  Release      r3
+  .line 42
+  0001  Unique       r3, ty67
+  0002  FieldSet     r3, 0, r1
+  .inline f6 <hash:DumpGenericLocalTypes.TBox<Integer>.Get.TLoc> line=43
+  .line 36
+  0003  LoadInt      r6, 1
+  0004  HashInt      r5, r6
+  0005  FieldGet     r8, r3, 0
+  0006  HashInt      r7, r8
+  0007  HashMix      r6, r5, r7
+  0008  Move         r2, r6
+  .endinline
+  .inline f6 <hash:DumpGenericLocalTypes.TBox<Integer>.Get.TLoc> line=43
+  0009  LoadInt      r7, 1
+  000a  HashInt      r6, r7
+  000b  FieldGet     r9, r3, 0
+  000c  HashInt      r8, r9
+  000d  HashMix      r7, r6, r8
+  .endinline
+  .line 43
+  000e  EqInt        r2, r2, r7
+  .line 44
+  000f  Ret          r2
+.finally r3
+.func 6 <hash:DumpGenericLocalTypes.TBox<Integer>.Get.TLoc> params=1 regs=5
+  .local r0 X
+  .local r1 Result
+  .line 36
+  0000  LoadInt      r2, 1
+  0001  HashInt      r1, r2
+  0002  FieldGet     r4, r0, 0
+  0003  HashInt      r3, r4
+  0004  HashMix      r1, r1, r3
+  0005  Ret          r1
+.func 7 DumpGenericLocalTypes.Find<T>.TLoc.Size params=1 regs=3
+; shared by DumpGenericLocalTypes.Find<Integer>.TLoc, DumpGenericLocalTypes.Find<Double>.TLoc
+  .local r0 Self
+  .local r1 Result
+  .line 22
+  0000  RefFieldGet  r1, r0, 1
+  0001  AddIntI      r1, r1, 1
+  0002  NarrowOvf    r1, r1, 4
+  .line 23
+  0003  Ret          r1

@@ -24,19 +24,11 @@ bb0:
   .reg v0 Self: TPoint var self
   .reg v1 AX: Integer param
   .reg v2 AY: Integer param
-  .reg t0: TPoint temp
-  .reg t1: TPoint temp
 bb0:
   .line 19
-  LoadRef      t0, v0
-  Unique       t0, DumpRecordMethods.TPoint
-  StoreRef     v0, t0
-  FieldSet     t0, 0, v1
+  RefFieldSet  v0, 0, v1, DumpRecordMethods.TPoint
   .line 20
-  LoadRef      t1, v0
-  Unique       t1, DumpRecordMethods.TPoint
-  StoreRef     v0, t1
-  FieldSet     t1, 1, v2
+  RefFieldSet  v0, 1, v2, DumpRecordMethods.TPoint
   .line 21
   RetVoid
 .finally
@@ -44,34 +36,24 @@ bb0:
   .reg v0 Self: TPoint var self
   .reg v1 DX: Integer param
   .reg t0: Integer temp
-  .reg t1: TPoint temp
-  .reg t2: TPoint temp
 bb0:
   .line 25
-  LoadRef      t1, v0
-  FieldGet     t0, t1, 0
+  RefFieldGet  t0, v0, 0
   AddInt       t0, t0, v1
   NarrowOvf    t0, t0, 4
-  LoadRef      t2, v0
-  Unique       t2, DumpRecordMethods.TPoint
-  StoreRef     v0, t2
-  FieldSet     t2, 0, t0
+  RefFieldSet  v0, 0, t0, DumpRecordMethods.TPoint
   .line 26
   RetVoid
 .finally
 .func f3 DumpRecordMethods.TPoint.Sum params=1
   .reg v0 Self: TPoint var self
   .reg v1 Result: Integer result
-  .reg t0: TPoint temp
-  .reg t1: Integer temp
-  .reg t2: TPoint temp
+  .reg t0: Integer temp
 bb0:
   .line 30
-  LoadRef      t0, v0
-  FieldGet     v1, t0, 0
-  LoadRef      t2, v0
-  FieldGet     t1, t2, 1
-  AddInt       v1, v1, t1
+  RefFieldGet  v1, v0, 0
+  RefFieldGet  t0, v0, 1
+  AddInt       v1, v1, t0
   NarrowOvf    v1, v1, 4
   .line 31
   Ret          v1
@@ -102,7 +84,7 @@ bb0:
   .reg t2: Int64 temp
   .reg t3: - ref
   .reg t4: Integer temp
-  .reg t5: TPoint lent
+  .reg t5: - lent
   .reg t6: Int64 temp
   .reg t7: - ref
   .reg t8: - ref
@@ -122,8 +104,9 @@ bb0:
   .reg t22: string temp
   .reg t23: Integer temp
   .reg t24: Int64 temp
-  .reg t25: TPoint temp
-  .reg t26: string temp
+  .reg t25: Int64 temp
+  .reg t26: array of TPoint temp
+  .reg t27: string temp
 bb0:
   .line 43
   AssignRef    v1, v0
@@ -142,8 +125,8 @@ bb0:
   Move         t6, t10
   MakeRef      t7, v2
   LoadInt      t9, 2
-  Lend         t5, t7, 1, t6
-  MakeRef      t8, t5
+  LendPlace    t5, t7, 1, t6, DumpRecordMethods.TPoint
+  Move         t8, t5
   Call         -, f2(t8, t9)
   Unlend
   .line 47
@@ -164,13 +147,13 @@ bb0:
   LoadConst    t21, " "
   ConcatStr    t18, t18, t21
   LoadZero     t24
-  DynGet       t25, v2, t24
-  FieldGet     t23, t25, 0
+  ElemAt       t25, t26, v2, t24
+  SlotGet      t23, t25, t26, 0
   IntToStr     t22, t23
   ConcatStr    t18, t18, t22
-  LoadConst    t26, "\n"
-  ConcatStr    t18, t18, t26
+  LoadConst    t27, "\n"
+  ConcatStr    t18, t18, t27
   CallHost     -, h0(t18)
   .line 50
   RetVoid
-.finally v1, v2, t11, t14, t18, t21, t22, t26
+.finally v1, v2, t11, t14, t18, t21, t22, t27

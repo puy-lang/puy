@@ -13,9 +13,11 @@ type
 
 procedure Read;
 var
-  [weak] V: TNode = nil;
-  K: TNodeClass = nil;
+  [weak] V: TNode;
+  K: TNodeClass;
 begin
+  V := nil;
+  K := nil;
   WriteLn(V = nil, K = nil);
 end;
 

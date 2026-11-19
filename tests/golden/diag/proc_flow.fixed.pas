@@ -10,9 +10,11 @@ type
 
 procedure Run;
 var
-  F: TFn = nil;
-  E: TEvent = nil;
+  F: TFn;
+  E: TEvent;
 begin
+  F := nil;
+  E := nil;
   WriteLn(F(1));
   E;
 end;

@@ -1,0 +1,16 @@
+stack
+  stack adding 1
+  stack adding 2
+  pop 2, count 1
+  stack removed 1
+queue
+  queue adding 1
+  queue adding 2
+  dequeue 1, count 1
+  queue removed 2
+dictionary
+  EAccessViolation: access to a nil reference
+  EAccessViolation: access to a nil reference
+set
+  EAccessViolation: access to a nil reference
+  EAccessViolation: access to a nil reference

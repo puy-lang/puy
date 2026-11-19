@@ -22,6 +22,7 @@ bb0:
   LoadConst    t4, "\n"
   ConcatStr    t2, t2, t4
   CallHost     -, h0(t2)
+  Release      t2
   .line 68
   Call         -, f2()
   .line 69
@@ -205,6 +206,7 @@ bb9:
   LoadConst    t10, "\n"
   ConcatStr    t9, t9, t10
   CallHost     -, h0(t9)
+  Release      t9
   .line 37
   Release      t0
   Jmp          bb11
@@ -263,6 +265,7 @@ bb7:
   LoadConst    t7, "\n"
   ConcatStr    t6, t6, t7
   CallHost     -, h0(t6)
+  Release      t6
   .line 52
   Release      t0
   Jmp          bb9

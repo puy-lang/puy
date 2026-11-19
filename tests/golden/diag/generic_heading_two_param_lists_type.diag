@@ -1,0 +1,29 @@
+error[E0723]: method `TA<T>.M` has no body
+  --> generic_heading_two_param_lists_type.pas:8:15
+   |
+ 8 |     procedure M;
+   |               ^
+
+error[E0411]: routine `TA` has no body
+   --> generic_heading_two_param_lists_type.pas:11:11
+    |
+ 11 | procedure TA<T><U>.M;
+    |           ^^
+    |
+    = note: write the body, or add `forward;` if the body comes later
+
+error[E0400]: expected `;`, found `<`
+   --> generic_heading_two_param_lists_type.pas:11:16
+    |
+ 11 | procedure TA<T><U>.M;
+    |                ^
+
+error[E0407]: unexpected content after the end of the program
+   --> generic_heading_two_param_lists_type.pas:11:20
+    |
+ 11 | procedure TA<T><U>.M;
+    |                    ^
+    |
+    = note: a program ends at the first `end.`; routines and blocks end with `end;`
+
+error: aborting due to 4 errors

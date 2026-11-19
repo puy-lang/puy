@@ -1,0 +1,115 @@
+error[E0700]: `TAction` has no member `Foo`
+   --> proc_result_member.pas:58:14
+    |
+ 58 |   MakeAction.Foo;
+    |              ^^^
+
+error[E0700]: `TAction` has no member `Foo`
+   --> proc_result_member.pas:59:5
+    |
+ 59 |   A.Foo;
+    |     ^^^
+
+error[E0700]: `TAction` has no member `Invoke`
+   --> proc_result_member.pas:60:14
+    |
+ 60 |   MakeAction.Invoke;
+    |              ^^^^^^
+    |
+    = note: call the value as `MakeAction()()`
+
+error[E0700]: `TAction` has no member `Invoke`
+   --> proc_result_member.pas:61:16
+    |
+ 61 |   MakeAction().Invoke;
+    |                ^^^^^^
+    |
+    = note: call the value as `MakeAction()()`
+
+error[E0700]: `TEvent` has no member `Invoke`
+   --> proc_result_member.pas:62:13
+    |
+ 62 |   MakeEvent.Invoke;
+    |             ^^^^^^
+    |
+    = note: call the value as `MakeEvent()()`
+
+error[E0700]: `TRun` has no member `Invoke`
+   --> proc_result_member.pas:63:14
+    |
+ 63 |   MakeRun(1).Invoke;
+    |              ^^^^^^
+    |
+    = note: call the value as `MakeRun(1)()`
+
+error[E0700]: `TRun` has no member `Invoke`
+   --> proc_result_member.pas:64:11
+    |
+ 64 |   Runs[0].Invoke;
+    |           ^^^^^^
+    |
+    = note: call the value as `Runs[0]()`
+
+error[E0700]: `TRun` has no member `Invoke`
+   --> proc_result_member.pas:65:9
+    |
+ 65 |   H.Run.Invoke;
+    |         ^^^^^^
+    |
+    = note: call the value as `H.Run()`
+
+error[E0700]: `TRun` has no member `Invoke`
+   --> proc_result_member.pas:66:13
+    |
+ 66 |   H.MakeRun.Invoke;
+    |             ^^^^^^
+    |
+    = note: call the value as `H.MakeRun()()`
+
+error[E0700]: `TRun` has no member `Invoke`
+   --> proc_result_member.pas:67:14
+    |
+ 67 |   H.Items[0].Invoke;
+    |              ^^^^^^
+    |
+    = note: call the value as `H.Items[0]()`
+
+error[E0700]: `TRun` has no member `Invoke`
+   --> proc_result_member.pas:68:8
+    |
+ 68 |   H[0].Invoke;
+    |        ^^^^^^
+    |
+    = note: call the value as `H[0]()`
+
+error[E0700]: `TRun` has no member `Foo`
+   --> proc_result_member.pas:69:11
+    |
+ 69 |   Runs[0].Foo;
+    |           ^^^
+
+error[E0700]: `TRun` has no member `Foo`
+   --> proc_result_member.pas:70:9
+    |
+ 70 |   H.Run.Foo;
+    |         ^^^
+
+error[E0700]: `TAction` has no member `Invoke`
+   --> proc_result_member.pas:71:16
+    |
+ 71 |   (MakeAction).Invoke;
+    |                ^^^^^^
+
+error[E0700]: `TAction` has no member `Invoke`
+   --> proc_result_member.pas:72:25
+    |
+ 72 |   TAction(MakeAction()).Invoke;
+    |                         ^^^^^^
+
+error[E0700]: `TRun` has no member `Invoke`
+   --> proc_result_member.pas:73:20
+    |
+ 73 |   TRun(MakeRun(1)).Invoke;
+    |                    ^^^^^^
+
+error: aborting due to 16 errors

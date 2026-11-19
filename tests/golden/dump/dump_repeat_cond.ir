@@ -1,0 +1,191 @@
+; puy ir 1
+.global
+  g0 G: string
+  g1 I: Integer
+.func f0 DumpRepeatCond.<main> params=0
+  .reg t0: string temp
+  .reg t1: string temp
+  .reg t2: string temp
+  .reg t3: string temp
+  .reg t4: string temp
+  .reg t5: string temp
+  .reg t6: string temp
+  .reg t7: string temp
+  .reg t8: string temp
+  .reg t9: string temp
+  .reg t10: string temp
+  .reg t11: Integer temp
+  .reg t12: string temp
+  .reg t13: Integer temp
+  .reg t14: Integer temp
+  .reg t15: Integer temp
+  .reg t16: Integer temp
+  .reg t17: Integer temp
+  .reg t18: TInts temp
+  .reg t19: Integer temp
+  .reg t20: Int64 temp
+  .reg t21: Integer temp
+  .reg t22: Integer temp
+  .reg t23: Integer temp
+  .reg t24: Integer temp
+  .reg t25: Integer temp
+  .reg t26: string temp
+  .reg t27: string temp
+  .reg t28: string temp
+  .reg t29: Integer temp
+  .reg t30: string temp
+bb0:
+  .line 21
+  LoadConst    t0, "a"
+  StoreGlobalRef t0, g0
+  .line 22
+  Jmp          bb1
+bb1:
+  .line 23
+  LoadGlobalRef t1, g0
+  LoadConst    t2, "x"
+  LoadGlobal   t3, g0
+  AppendStr    t3, t1, t2
+  StoreGlobal  t3, g0
+  Release      t1
+  .line 22
+  Jmp          bb2
+bb2:
+  .line 24
+  LoadGlobalRef t4, g0
+  LoadConst    t5, "axxx"
+  JmpIfNeStr   t4, t5, bb4, bb3
+bb3:
+  .line 24
+  Release      t4
+  Jmp          bb5
+bb4:
+  .line 24
+  Release      t4
+  Jmp          bb1
+bb5:
+  .line 25
+  Jmp          bb6
+bb6:
+  .line 26
+  LoadGlobalRef t6, g0
+  LoadConst    t7, "x"
+  LoadGlobal   t8, g0
+  AppendStr    t8, t6, t7
+  StoreGlobal  t8, g0
+  Release      t6
+  .line 27
+  LoadGlobalRef t9, g0
+  LoadConst    t10, "axxxxx"
+  JmpIfNeStr   t9, t10, bb9, bb7
+bb7:
+  .line 27
+  Release      t9
+  .line 28
+  Jmp          bb11
+bb8:
+  .line 27
+  Jmp          bb10
+bb9:
+  .line 27
+  Release      t9
+  Jmp          bb10
+bb10:
+  .line 25
+  Jmp          bb11
+bb11:
+  .line 29
+  LoadGlobal   t12, g0
+  StrLen       t11, t12
+  LoadInt      t13, 6
+  JmpIfLeInt   t11, t13, bb6, bb12
+bb12:
+  .line 25
+  Jmp          bb13
+bb13:
+  .line 30
+  LoadZero     t14
+  StoreGlobal  t14, g1
+  .line 31
+  Jmp          bb14
+bb14:
+  .line 32
+  LoadGlobal   t15, g1
+  LoadInt      t16, 1
+  AddInt       t15, t15, t16
+  NarrowOvf    t15, t15, 4
+  StoreGlobal  t15, g1
+  .line 31
+  Jmp          bb15
+bb15:
+  .line 33
+  LoadGlobal   t19, g1
+  Call         t19, f1(t19)
+  MoveRef      t18, t19
+  LoadZero     t20
+  DynGet       t17, t18, t20
+  LoadInt      t21, 3
+  JmpIfNeInt   t17, t21, bb17, bb16
+bb16:
+  .line 33
+  Release      t18
+  Jmp          bb18
+bb17:
+  .line 33
+  Release      t18
+  Jmp          bb14
+bb18:
+  .line 34
+  Jmp          bb19
+bb19:
+  .line 35
+  LoadGlobal   t22, g1
+  LoadInt      t23, 1
+  AddInt       t22, t22, t23
+  NarrowOvf    t22, t22, 4
+  StoreGlobal  t22, g1
+  .line 34
+  Jmp          bb20
+bb20:
+  .line 36
+  LoadGlobal   t24, g1
+  LoadInt      t25, 5
+  JmpIfLeInt   t24, t25, bb19, bb21
+bb21:
+  .line 34
+  Jmp          bb22
+bb22:
+  .line 37
+  LoadGlobalRef t26, g0
+  LoadConst    t27, " "
+  ConcatStr    t26, t26, t27
+  LoadGlobal   t29, g1
+  IntToStr     t28, t29
+  ConcatStr    t26, t26, t28
+  LoadConst    t30, "\n"
+  ConcatStr    t26, t26, t30
+  CallHost     -, h0(t26)
+  Release      t26
+  .line 38
+  RetVoid
+.finally t0, t1, t2, t4, t5, t6, t7, t9, t10, t18, t26, t27, t28, t30
+.func f1 DumpRepeatCond.Make params=1
+  .reg v0 N: Integer param
+  .reg v1 Result: TInts result
+  .reg t0: Int64 temp
+  .reg t1: TInts temp
+  .reg t2: Int64 temp
+  .reg t3: Int64 temp
+bb0:
+  .line 13
+  LoadInt      t0, 1
+  Move         t1, v1
+  Move         t2, t0
+  SetLen       t1, DumpRepeatCond.TInts, t2
+  Move         v1, t1
+  .line 14
+  LoadZero     t3
+  DynSet       v1, t3, v0
+  .line 15
+  Ret          v1
+.finally v1

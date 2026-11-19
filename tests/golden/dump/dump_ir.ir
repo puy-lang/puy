@@ -204,6 +204,7 @@ bb25:
   LoadConst    t40, "\n"
   ConcatStr    t33, t33, t40
   CallHost     -, h0(t33)
+  Release      t33
   .line 48
   RetVoid
 .finally t0, t9, t14, t15, t17, t18, t30, t32, t33, t34, t35, t37, t38, t40

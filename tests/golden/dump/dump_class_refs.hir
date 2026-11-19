@@ -3,8 +3,8 @@ program DumpClassRefs
   .classvar g0 Count: Integer
   .method f0 Create constructor virtual 6
   .method - Area virtual 7
-  .method f2 Name class virtual 8
-  .method f3 Twice static
+  .method f1 Name class virtual 8
+  .method f2 Twice static
 .type TShapeClass = class of TShape
 .global g0 TShape.Count: Integer
 .global g1 C: TShapeClass
@@ -13,14 +13,14 @@ program DumpClassRefs
   .var v0 Self: TShape self
   inc @20 calc=Integer Q+R+
     global g0 TShape.Count
-.routine f2 TShape.Name(): string
+.routine f1 TShape.Name(): string
   .var v0 Self: TShapeClass self
   .var v1 Result: string result
   assign @25 R+
     var v1 Result
     builtin ClassName string
       self TShapeClass
-.routine f3 TShape.Twice(N: Integer): Integer
+.routine f2 TShape.Twice(N: Integer): Integer
   .var v0 N: Integer param
   .var v1 Result: Integer result
   assign @30 R+
@@ -46,7 +46,7 @@ program DumpClassRefs
         builtin ClassType TClass
           global g2 S: TShape
     arg
-      call f3 TShape.Twice: Integer
+      call f2 TShape.Twice: Integer
         global g0 TShape.Count: Integer
   free @40
     global g2 S: TShape

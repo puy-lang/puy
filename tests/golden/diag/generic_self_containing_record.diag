@@ -1,0 +1,73 @@
+error[E0727]: type `TBar` contains itself
+   --> generic_self_containing_record.pas:21:3
+    |
+ 13 |     V: T;
+    |     - part of the cycle
+...
+ 21 |   TBar = record
+    |   ^^^^
+ 22 |     A: TFoo<TBar>;
+    |     - part of the cycle
+
+error[E0727]: type `TR` contains itself
+   --> generic_self_containing_record.pas:25:3
+    |
+ 15 |   TBox<T> = array[0..3] of T;
+    |   ---- part of the cycle
+...
+ 25 |   TR = record
+    |   ^^
+ 26 |     A: TBox<TR>;
+    |     - part of the cycle
+
+error[E0727]: type `TQ` contains itself
+   --> generic_self_containing_record.pas:28:3
+    |
+ 18 |     Value: V;
+    |     ----- part of the cycle
+...
+ 28 |   TQ = record
+    |   ^^
+ 29 |     P: TPair<Integer, TQ>;
+    |     - part of the cycle
+
+error[E0727]: type `TSelf<T>` contains itself
+   --> generic_self_containing_record.pas:31:3
+    |
+ 15 |   TBox<T> = array[0..3] of T;
+    |   ---- part of the cycle
+...
+ 31 |   TSelf<T> = record
+    |   ^^^^^
+ 32 |     B: TBox<TSelf<T>>;
+    |     - part of the cycle
+
+error[E0727]: type `TA` contains itself
+   --> generic_self_containing_record.pas:37:3
+    |
+ 37 |   TA = record
+    |   ^^
+ 38 |     X: TA;
+    |     - part of the cycle
+
+error[E0727]: type `TB` contains itself
+   --> generic_self_containing_record.pas:41:3
+    |
+ 39 |     Y: TB;
+    |     - part of the cycle
+ 40 |   end;
+ 41 |   TB = record
+    |   ^^
+ 42 |     Z: TA;
+    |     - part of the cycle
+
+warning[W0001]: unused variable `u` (unused-variable)
+   --> generic_self_containing_record.pas:48:3
+    |
+ 48 |   u: TUse;
+    |   ^ declared here
+    |
+    = note: remove `u` and its assignments if the value is not needed
+    = note: disable with `{$WARN unused-variable OFF}`
+
+error: aborting due to 6 errors; 1 warning emitted

@@ -10,7 +10,7 @@
 .host
   0: Console.Write params=1 ret=0
 .unit DumpDynArray file="dump_dynarray.pas" init=- fini=- entry=0
-.func 0 DumpDynArray.<main> params=0 regs=20
+.func 0 DumpDynArray.<main> params=0 regs=21
   .line 24
   0000  LoadInt      r11, 1
   0001  LoadInt      r12, 2
@@ -47,57 +47,93 @@
   001e  LoadInt      r12, 2
   001f  LoadGlobalRef r1, g0
   0020  Move         r14, r1
-  0021  Call         r14, f1
-  0022  Move         r13, r14
-  0023  LoadGlobal   r14, g1
-  0024  DynGet       r15, r14, r11
-  0025  DynSet       r15, r12, r13
-  0026  Release      r1
+  .inline f1 DumpDynArray.Total line=26
+  .line 15
+  0021  LoadZero     r15
+  .line 16
+  0022  LoadZero     r16
+  0023  ArrLen       r17, r14
+  0024  AddIntI      r17, r17, -1
+  0025  JmpIfLtInt   r17, r16, -> 002c
+  .line 17
+  0026  Move         r20, r16
+  0027  DynGet       r19, r14, r20
+  0028  AddInt       r18, r15, r19
+  0029  NarrowOvf    r18, r18, 4
+  002a  Move         r15, r18
+  .line 16
+  002b  ForLoopUp    r16, r17, -> 0026
+  .line 18
+  002c  Move         r13, r15
+  .endinline
+  .line 26
+  002d  LoadGlobal   r14, g1
+  002e  DynGet       r15, r14, r11
+  002f  DynSet       r15, r12, r13
+  0030  Release      r1
   .line 27
-  0027  LoadGlobal   r14, g1
-  0028  LoadInt      r15, 1
-  0029  DynGetRef    r3, r14, r15
-  002a  Move         r11, r3
-  002b  LoadZero     r12
-  002c  ArrLen       r13, r11
-  002d  ArrCopy      r11, ty64
-  002e  MoveRef      r2, r11
-  002f  StoreGlobalRef r2, g0
-  0030  Release      r3
-  0031  Release      r2
+  0031  LoadGlobal   r14, g1
+  0032  LoadInt      r15, 1
+  0033  DynGetRef    r3, r14, r15
+  0034  Move         r11, r3
+  0035  LoadZero     r12
+  0036  ArrLen       r13, r11
+  0037  ArrCopy      r11, ty64
+  0038  MoveRef      r2, r11
+  0039  Release      r3
+  003a  StoreGlobalRef r2, g0
+  003b  Release      r2
   .line 28
-  0032  LoadGlobalRef r4, g0
-  0033  LoadZero     r12
-  0034  EqInt        r11, r4, r12
-  0035  NotBool      r11, r11
-  0036  JmpIfFalse   r11, -> 0047
-  0037  LoadGlobalRef r5, g0
-  0038  Release      r6
-  0039  JmpIfEqInt   r5, r6, -> 0047
-  003a  Release      r6
-  003b  Release      r5
-  003c  Release      r4
+  003c  LoadGlobalRef r4, g0
+  003d  LoadZero     r12
+  003e  EqInt        r11, r4, r12
+  003f  NotBool      r11, r11
+  0040  JmpIfFalse   r11, -> 005b
+  0041  LoadGlobalRef r5, g0
+  0042  Release      r6
+  0043  JmpIfEqInt   r5, r6, -> 005b
+  0044  Release      r6
+  0045  Release      r5
+  0046  Release      r4
   .line 29
-  003d  LoadGlobalRef r8, g0
-  003e  Move         r12, r8
-  003f  Call         r12, f1
-  0040  Move         r11, r12
-  0041  IntToStr     r7, r11
-  0042  LoadConst    r9, k0
-  0043  ConcatStr    r7, r7, r9
-  0044  CallHost     r7, h0
-  0045  Release      r8
+  0047  LoadGlobalRef r8, g0
+  0048  Move         r12, r8
+  .inline f1 DumpDynArray.Total line=29
+  .line 15
+  0049  LoadZero     r13
+  .line 16
+  004a  LoadZero     r14
+  004b  ArrLen       r15, r12
+  004c  AddIntI      r15, r15, -1
+  004d  JmpIfLtInt   r15, r14, -> 0054
+  .line 17
+  004e  Move         r16, r13
+  004f  DynGet       r17, r12, r14
+  0050  AddInt       r16, r16, r17
+  0051  NarrowOvf    r16, r16, 4
+  0052  Move         r13, r16
+  .line 16
+  0053  ForLoopUp    r14, r15, -> 004e
+  .line 18
+  0054  Move         r11, r13
+  .endinline
+  .line 29
+  0055  IntToStr     r7, r11
+  0056  LoadConst    r9, k0
+  0057  ConcatStr    r7, r7, r9
+  0058  CallHost     r7, h0
+  0059  Release      r8
   .line 28
-  0046  Jmp          -> 004a
-  0047  Release      r6
-  0048  Release      r5
-  0049  Release      r4
+  005a  Jmp          -> 005e
+  005b  Release      r6
+  005c  Release      r5
+  005d  Release      r4
   .line 30
-  004a  Release      r10
-  004b  StoreGlobalRef r10, g0
-  004c  Release      r10
+  005e  Release      r10
+  005f  StoreGlobalRef r10, g0
+  0060  Release      r10
   .line 31
-  004d  RetVoid
+  0061  RetVoid
 .finally r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10
 .func 1 DumpDynArray.Total params=1 regs=7
   .local r0 A

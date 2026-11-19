@@ -1,0 +1,49 @@
+error[E0757]: a helper cannot be declared inside a generic type
+   --> generic_nested_helper_errors.pas:13:11
+    |
+ 13 |     TCH = class helper for TBase
+    |           ^^^^^^^^^^^^
+    |
+    = note: a helper is not copied for each instantiation; declare it outside the generic type
+
+error[E0757]: a helper cannot be declared inside a generic type
+   --> generic_nested_helper_errors.pas:18:15
+    |
+ 18 |       TDeep = class helper for TBase
+    |               ^^^^^^^^^^^^
+    |
+    = note: a helper is not copied for each instantiation; declare it outside the generic type
+
+error[E0757]: a helper cannot be declared inside a generic type
+   --> generic_nested_helper_errors.pas:24:13
+    |
+ 24 |       TGH = record helper for Integer
+    |             ^^^^^^^^^^^^^
+    |
+    = note: a helper is not copied for each instantiation; declare it outside the generic type
+
+error[E0757]: a helper cannot be declared inside a generic type
+   --> generic_nested_helper_errors.pas:31:11
+    |
+ 31 |     TRH = record helper for Integer
+    |           ^^^^^^^^^^^^^
+    |
+    = note: a helper is not copied for each instantiation; declare it outside the generic type
+
+error[E0757]: a helper cannot be declared inside a generic type
+   --> generic_nested_helper_errors.pas:36:16
+    |
+ 36 |       TCellH = record helper for string
+    |                ^^^^^^^^^^^^^
+    |
+    = note: a helper is not copied for each instantiation; declare it outside the generic type
+
+error[E0757]: a helper cannot be declared inside a generic type
+   --> generic_nested_helper_errors.pas:45:13
+    |
+ 45 |       TBH = class helper for TBase
+    |             ^^^^^^^^^^^^
+    |
+    = note: a helper is not copied for each instantiation; declare it outside the generic type
+
+error: aborting due to 6 errors

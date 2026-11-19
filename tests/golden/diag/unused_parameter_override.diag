@@ -1,0 +1,58 @@
+warning[W0017]: unused parameter `Sender` (unused-parameter)
+   --> unused_parameter_override.pas:30:24
+    |
+ 30 | procedure TBase.Handle(Sender: TObject; Code: Integer);
+    |                        ^^^^^^ declared here
+    |
+    = note: disable with `{$WARN unused-parameter OFF}`
+
+warning[W0017]: unused parameter `Code` (unused-parameter)
+   --> unused_parameter_override.pas:30:41
+    |
+ 30 | procedure TBase.Handle(Sender: TObject; Code: Integer);
+    |                                         ^^^^ declared here
+    |
+    = note: disable with `{$WARN unused-parameter OFF}`
+
+warning[W0017]: unused parameter `N` (unused-parameter)
+   --> unused_parameter_override.pas:34:27
+    |
+ 34 | class function TBase.Make(N: Integer): Integer;
+    |                           ^ declared here
+    |
+    = note: disable with `{$WARN unused-parameter OFF}`
+
+warning[W0017]: unused parameter `X` (unused-parameter)
+   --> unused_parameter_override.pas:39:23
+    |
+ 39 | procedure TBase.Plain(X: Integer);
+    |                       ^ declared here
+    |
+    = note: disable with `{$WARN unused-parameter OFF}`
+
+warning[W0017]: unused parameter `Unused` (unused-parameter)
+   --> unused_parameter_override.pas:45:19
+    |
+ 45 |   procedure Inner(Unused: Integer);
+    |                   ^^^^^^ declared here
+    |
+    = note: disable with `{$WARN unused-parameter OFF}`
+
+warning[W0017]: unused parameter `X` (unused-parameter)
+   --> unused_parameter_override.pas:58:26
+    |
+ 58 | procedure TDerived.Plain(X: Integer);
+    |                          ^ declared here
+    |
+    = note: disable with `{$WARN unused-parameter OFF}`
+
+warning[W0002]: value assigned to `Code` is never read (unused-value)
+   --> unused_parameter_override.pas:69:3
+    |
+ 69 |   Code := 5;
+    |   ^^^^
+    |
+    = note: remove the assignment if the value is not needed
+    = note: disable with `{$WARN unused-value OFF}`
+
+warning: 7 warnings emitted

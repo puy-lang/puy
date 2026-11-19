@@ -1,7 +1,7 @@
 //! Peephole rules on a function's IR before codegen (M3-58, M4-55; `docs/design/vm.md` 3.15).
 //!
 //! Codegen runs [`optimize`] on a copy of each function, so the `ir` dump still shows what `lower`
-//! made. Every rule but the last works inside one block, mostly on "pure" instructions (those
+//! made. Rules 1 to 9 work inside one block, mostly on "pure" instructions (those
 //! that read and write nothing but their register operands; [`pure`]); a few look past calls and
 //! the instructions whose register operands are known ([`operand_use`]) when a variable only the
 //! instructions naming it write is involved ([`Ctx::stable`]). The rules keep what a program can
@@ -29,6 +29,20 @@
 //!    register of its frame (no `Move` after the call).
 //! 9. [`returns`]: `Move v, x` / `Ret v` becomes `Ret x`.
 //! 10. [`hoist`]: a constant loaded in a loop is loaded once before it, into a register of its own.
+//! 11. [`checks`]: a check of `Self` before an inlined method goes where the same variable is
+//!     already checked on every path to it, and nothing since may have destroyed an instance.
+//! 12. [`checks`]: the check in the first block of a loop where nothing may destroy an instance
+//!     goes before the loop.
+//! 13. [`flow`]: `Move t, x` across blocks (an inlined routine's argument or result): the readers
+//!     of `t` that see the move's value with `x`'s register holding it on every path read `x`.
+//! 14. [`flow`]: a jump or a test going to a test of a `Boolean` whose value is known there goes
+//!     where that test leads; a compare whose result only the test after it reads becomes a
+//!     compare-and-branch.
+//! 15. [`flow`]: `Move t, x` into an operand that must be in its place (`HashLookupInt`'s row of
+//!     registers, a call's argument): `x` is computed in `t`'s register.
+
+mod checks;
+mod flow;
 
 use crate::bytecode::op;
 use crate::ir::{BlockId, Function, Global, Inst, InstKind, Operand, Reg, TempKind, Term};
@@ -128,6 +142,11 @@ pub fn optimize(
         returns(&ctx, &mut b.insts, &mut b.term);
     }
     for_loops(&mut f);
+    flow::copies_and_branches(&mut f, &ctx);
+    drop_unread_constants(&mut f, &mut ctx);
+    // `ctx.outside_try` is per block: rule 14 may have taken blocks out, and rules 11 and 12 do
+    // not look at it
+    checks::self_checks(&mut f, &ctx);
     f
 }
 
@@ -253,6 +272,8 @@ fn operand_use(inst: &Inst) -> Option<Use> {
         | op::VAL_GET_REF
         | op::FIELD_GET
         | op::FIELD_GET_REF
+        | op::REF_FIELD_GET
+        | op::REF_FIELD_GET_REF
         | op::OBJ_GET
         | op::OBJ_GET_REF
         | op::STR_LEN
@@ -278,6 +299,8 @@ fn operand_use(inst: &Inst) -> Option<Use> {
         | op::VAL_SET_REF
         | op::FIELD_SET
         | op::FIELD_SET_REF
+        | op::REF_FIELD_SET
+        | op::REF_FIELD_SET_REF
         | op::OBJ_SET
         | op::OBJ_SET_REF
         | op::STORE_GLOBAL
@@ -285,8 +308,35 @@ fn operand_use(inst: &Inst) -> Option<Use> {
         | op::ADD_REF_OBJ
         | op::AS_CLASS
         | op::STORE_REF => Some(Use::Reads),
+        // `ClassType a, b` (the check of `Self` before an inlined method; `super::inline`)
+        op::INTRINSIC if first_reg && is_class_type(ops) => Some(Use::WritesFirst),
         _ => None,
     }
+}
+
+/// [`only_reads`], for the inlining (`super::inline`).
+pub(crate) fn names_only_to_read(inst: &Inst, r: Reg) -> Option<bool> {
+    only_reads(inst, r)
+}
+
+/// The register an instruction writes whenever it completes: the first operand of a pure
+/// instruction or of one of [`operand_use`] that writes it, or the destination of a call. `None`
+/// if it writes none, or if that is not known.
+pub(crate) fn written(inst: &Inst) -> Option<Reg> {
+    match (&inst.kind, operand_use(inst)) {
+        (InstKind::Call { dst, .. }, _) => *dst,
+        (InstKind::Plain(ops), Some(Use::WritesFirst)) => match ops[0] {
+            Operand::Reg(r) => Some(r),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Whether the operands of an `Intrinsic` are those of `ClassType a, b`.
+fn is_class_type(ops: &[Operand]) -> bool {
+    let class_type = i64::from(op::intr::CLASS_TYPE);
+    matches!(ops, [_, Operand::Reg(_), Operand::Imm(id)] if *id == class_type)
 }
 
 /// Whether the instruction names `r` (some register operand is `r`) only where it reads it: not
@@ -350,7 +400,6 @@ fn pure(inst: &Inst) -> Option<Pure> {
         | op::AND_INT_I..=op::SHR_INT32_I
         | op::ADD_INT32..=op::MUL_INT32_I
         | op::ADD_F64..=op::SQRT_F64
-        | op::CURR_TO_F64..=op::ROUND_CURR
         | op::HASH_INT
         | op::HASH_F64
         | op::HASH_MIX
@@ -375,7 +424,27 @@ fn pure(inst: &Inst) -> Option<Pure> {
         | op::ADD_INT_CHK..=op::MUL_UINT_CHK
         | op::NARROW_OVF
         | op::NARROW_RNG
-        | op::ADD_CURR..=op::F64_TO_CURR => Raises,
+        | op::ADD_CURR..=op::DIV_CURR => Raises,
+        // The `Currency` conversions moved to the intrinsics (`docs/spec/bytecode.md` 2.19; M4-109)
+        // keep their classes: the number is the last operand
+        op::INTRINSIC => match ops.last() {
+            Some(&Operand::Imm(id)) => match u8::try_from(id) {
+                Ok(
+                    op::intr::CURR_TO_F64
+                    | op::intr::CURR_TO_F32
+                    | op::intr::TRUNC_CURR
+                    | op::intr::ROUND_CURR,
+                ) => Safe,
+                Ok(
+                    op::intr::NEG_CURR
+                    | op::intr::INT_TO_CURR
+                    | op::intr::UINT_TO_CURR
+                    | op::intr::F64_TO_CURR,
+                ) => Raises,
+                _ => return None,
+            },
+            _ => return None,
+        },
         _ => return None,
     })
 }
@@ -463,29 +532,7 @@ fn temp_counts(f: &Function) -> Vec<u32> {
 fn for_loops(f: &mut Function) {
     let mut refs = vec![0u32; f.blocks.len() + 1];
     for b in &f.blocks {
-        let mut each = |t: crate::ir::BlockId| refs[t as usize] += 1;
-        match &b.term {
-            Term::Jmp(t) => each(*t),
-            Term::Branch { then, other, .. } | Term::BranchImm { then, other, .. } => {
-                each(*then);
-                each(*other);
-            }
-            Term::ForLoop { top, exit, .. } => {
-                each(*top);
-                each(*exit);
-            }
-            Term::EndFinally { next, targets, .. } => {
-                each(*next);
-                for t in targets {
-                    each(*t);
-                }
-            }
-            Term::Ret(_)
-            | Term::RetVoid
-            | Term::Halt(_)
-            | Term::Raise(_)
-            | Term::RaiseOuter(..) => {}
-        }
+        b.term.each_target(|t| refs[t as usize] += 1);
     }
     for x in 0..f.blocks.len().saturating_sub(1) {
         let y = x + 1;
@@ -562,7 +609,7 @@ fn fits(v: i64) -> bool {
 
 /// The integer operation with the immediate `v` in place of its register `C` (`None` if there is
 /// none or `v` does not fit). `swapped`: the constant is `B` (the operation must be commutative).
-fn with_immediate(opc: u8, v: i64, swapped: bool) -> Option<(u8, i64)> {
+fn with_immediate(opc: u16, v: i64, swapped: bool) -> Option<(u16, i64)> {
     let commutative = matches!(
         opc,
         op::ADD_INT
@@ -1024,19 +1071,9 @@ fn destinations(ctx: &Ctx, outside_try: bool, counts: &[u32], insts: &mut Vec<In
 
 /// The blocks the terminator may go to.
 fn successors(term: &Term) -> Vec<BlockId> {
-    match term {
-        Term::Jmp(t) => vec![*t],
-        Term::Branch { then, other, .. } | Term::BranchImm { then, other, .. } => {
-            vec![*then, *other]
-        }
-        Term::ForLoop { top, exit, .. } => vec![*top, *exit],
-        Term::EndFinally { next, targets, .. } => std::iter::once(*next)
-            .chain(targets.iter().copied())
-            .collect(),
-        Term::Ret(_) | Term::RetVoid | Term::Halt(_) | Term::Raise(_) | Term::RaiseOuter(..) => {
-            Vec::new()
-        }
-    }
+    let mut out = Vec::new();
+    term.each_target(|t| out.push(t));
+    out
 }
 
 /// The loops of a function whose constants [`hoist`] may load before them, as the inclusive range
@@ -1206,8 +1243,19 @@ fn hoist(f: &mut Function, ctx: &mut Ctx) {
             }
         }
     }
-    // The registers no instruction reads any more go, with their loads
-    let mut read = vec![false; hoisted.len()];
+    drop_unread_constants(f, ctx);
+}
+
+/// The registers of constants loaded before a loop ([`hoist`]) that no instruction reads any more
+/// go, with their loads (after [`hoist`] and after rule 14, which may put a constant in a
+/// compare-and-branch).
+fn drop_unread_constants(f: &mut Function, ctx: &mut Ctx) {
+    let first = ctx.first_hoisted;
+    let count = ctx.hoisted.len();
+    if count == 0 {
+        return;
+    }
+    let mut read = vec![false; count];
     for b in &f.blocks {
         for i in &b.insts {
             let def = hoistable(i).map(|(r, _)| r);
@@ -1228,7 +1276,7 @@ fn hoist(f: &mut Function, ctx: &mut Ctx) {
             }
         });
     }
-    let mut renumber = vec![None; hoisted.len()];
+    let mut renumber = vec![None; count];
     let mut next = first;
     for (k, &r) in read.iter().enumerate() {
         if r {

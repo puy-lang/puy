@@ -1,0 +1,160 @@
+; puyc format 0
+.const
+  0: str "`array[0..2] of Integer` (0..2)"
+  1: str " "
+  2: str "\n"
+.type
+  64: dynarray array of DumpFlatPlaces.TPoint slots=0 width=2 elem=val,val
+  65: record DumpFlatPlaces.TPoint slots=2
+  66: record DumpFlatPlaces.TLine slots=7
+  67: class DumpFlatPlaces.THolder slots=7 parent=ty19 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+  68: array array[0..2] of Integer slots=3 elem=val
+.global
+  0: ref Pts
+  1: ref L
+  2: int H
+  3: int I
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpFlatPlaces file="dump_flat_places.pas" init=- fini=- entry=0
+.func 0 DumpFlatPlaces.<main> params=0 regs=15
+  .line 40
+  0000  LoadInt      r7, 2
+  0001  LoadGlobal   r8, g0
+  0002  Move         r9, r8
+  0003  Move         r10, r7
+  0004  SetLen       r9, ty64
+  0005  Move         r8, r9
+  0006  StoreGlobal  r8, g0
+  .line 41
+  0007  LoadInt      r7, 1
+  0008  StoreGlobal  r7, g3
+  .line 42
+  0009  LoadInt      r8, 2
+  000a  LoadGlobal   r9, g0
+  000b  ElemAt       r10, r9, r7
+  000c  SlotSet      r10, 1, r8
+  .line 43
+  000d  LoadZero     r7
+  000e  LoadGlobal   r8, g0
+  000f  LoadGlobal   r9, g3
+  0010  ElemAt       r10, r8, r9
+  0011  AggLoad      r0, r10, ty65
+  0013  LoadGlobal   r8, g0
+  0014  ElemAt       r9, r8, r7
+  0015  AggStore     r9, r0, ty65
+  0017  Release      r0
+  .line 44
+  0018  LoadGlobal   r8, g0
+  0019  LoadZero     r9
+  001a  ElemAt       r10, r8, r9
+  001b  SlotGet      r7, r10, 1
+  001c  LoadGlobal   r8, g1
+  001d  Unique       r8, ty66
+  001e  StoreGlobal  r8, g1
+  001f  FieldSet     r8, 2, r7
+  .line 45
+  0020  LoadGlobal   r7, g3
+  0021  LoadGlobal   r9, g1
+  0022  FieldGet     r8, r9, 2
+  0023  LoadInt      r9, 3
+  0024  ChkIndex     r7, r9, k0
+  0025  LoadGlobal   r10, g1
+  0026  Unique       r10, ty66
+  0027  StoreGlobal  r10, g1
+  0028  AddIntI      r11, r7, 4
+  0029  ValSet       r10, r11, r8
+  .line 46
+  002a  LoadZero     r7
+  002b  New          r7, ty67
+  002c  StoreGlobal  r7, g2
+  .line 47
+  002d  LoadGlobal   r9, g1
+  002e  LoadGlobal   r10, g3
+  002f  LoadInt      r11, 3
+  0030  ChkIndex     r10, r11, k0
+  0031  AddIntI      r12, r10, 4
+  0032  ValGet       r8, r9, r12
+  0033  ObjSet       r7, 3, r8
+  .line 48
+  0034  LoadGlobal   r11, g3
+  0035  Move         r8, r11
+  0036  MakeGlobalRef r9, g0
+  0037  LendPlace    r7, r9, 1, ty65
+  0039  Move         r10, r7
+  .inline f1 DumpFlatPlaces.Bump line=48
+  .line 31
+  003a  RefFieldGet  r11, r10, 0
+  003b  AddIntI      r11, r11, 1
+  003c  NarrowOvf    r11, r11, 4
+  003d  RefFieldSet  r10, 0, r11, ty65
+  .endinline
+  .line 48
+  003f  Unlend
+  .line 49
+  0040  LoadInt      r8, 4
+  0041  MakeGlobalRef r9, g1
+  0042  LoadGlobal   r12, g1
+  0043  Unique       r12, ty66
+  0044  StoreGlobal  r12, g1
+  0045  LendPlace    r7, r9, 1, ty68
+  0047  PlaceBox     r10, r7
+  0048  MakeRef      r11, r10
+  .inline f2 DumpFlatPlaces.Fill line=49
+  .line 36
+  0049  LoadZero     r12
+  004a  LoadInt      r13, 1
+  004b  LoadRef      r14, r11
+  004c  UniqueVal    r14
+  004d  StoreRef     r11, r14
+  004e  DynSet       r14, r12, r13
+  .endinline
+  .line 49
+  004f  Unlend
+  .line 50
+  0050  LoadGlobal   r8, g0
+  0051  LoadInt      r9, 1
+  0052  ElemAt       r10, r8, r9
+  0053  SlotGet      r7, r10, 0
+  0054  IntToStr     r1, r7
+  0055  LoadConst    r2, k1
+  0056  ConcatStr    r1, r1, r2
+  0057  LoadGlobal   r9, g2
+  0058  ObjGet       r8, r9, 3
+  0059  IntToStr     r3, r8
+  005a  ConcatStr    r1, r1, r3
+  005b  LoadConst    r4, k1
+  005c  ConcatStr    r1, r1, r4
+  005d  LoadGlobal   r10, g1
+  005e  FieldGet     r9, r10, 4
+  005f  IntToStr     r5, r9
+  0060  ConcatStr    r1, r1, r5
+  0061  LoadConst    r6, k2
+  0062  ConcatStr    r1, r1, r6
+  0063  CallHost     r1, h0
+  .line 51
+  0064  LoadGlobal   r7, g2
+  0065  Free         r7
+  .line 52
+  0066  RetVoid
+.finally r0, r1, r2, r3, r4, r5, r6
+.func 1 DumpFlatPlaces.Bump params=1 regs=3
+  .local r0 P
+  .line 31
+  0000  RefFieldGet  r1, r0, 0
+  0001  AddIntI      r1, r1, 1
+  0002  NarrowOvf    r1, r1, 4
+  0003  RefFieldSet  r0, 0, r1, ty65
+  .line 32
+  0005  RetVoid
+.func 2 DumpFlatPlaces.Fill params=1 regs=4
+  .local r0 V
+  .line 36
+  0000  LoadZero     r1
+  0001  LoadInt      r2, 1
+  0002  LoadRef      r3, r0
+  0003  UniqueVal    r3
+  0004  StoreRef     r0, r3
+  0005  DynSet       r3, r1, r2
+  .line 37
+  0006  RetVoid

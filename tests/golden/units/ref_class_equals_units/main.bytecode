@@ -143,7 +143,7 @@
   0000  ObjGet       r1, r0, 0
   .line 29
   0001  Ret          r1
-.func 6 Keys.TKey.Equals params=2 regs=6
+.func 6 Keys.TKey.Equals params=2 regs=8
   .local r0 Self
   .local r1 Obj
   .local r2 Result
@@ -151,20 +151,26 @@
   0000  Move         r4, r1
   0001  IsClass      r4, ty64
   0002  Move         r2, r4
-  0003  JmpIfFalse   r2, -> 0007
+  0003  JmpIfFalse   r2, -> 000f
   0004  Move         r4, r1
   0005  IsClass      r4, ty65
   0006  NotBool      r2, r4
-  0007  JmpIfFalse   r2, -> 000e
-  0008  Move         r4, r0
-  0009  AssignObj    r3, r1
-  000a  AsClass      r3, ty64
-  000b  Move         r5, r3
-  000c  Call         r4, f1
-  000d  Move         r2, r4
-  000e  Ret          r2
+  0007  JmpIfFalse   r2, -> 000f
+  0008  AssignObj    r3, r1
+  0009  AsClass      r3, ty64
+  000a  Move         r5, r3
+  .inline f1 Keys.TKey.Equal line=12
+  .line 25
+  000b  ObjGet       r6, r0, 0
+  000c  ObjGet       r7, r5, 0
+  000d  EqInt        r6, r6, r7
+  .line 26
+  000e  Move         r2, r6
+  .endinline
+  .line 12
+  000f  Ret          r2
 .finally r3
-.func 7 Main.TSubKey.Equals params=2 regs=6
+.func 7 Main.TSubKey.Equals params=2 regs=8
   .local r0 Self
   .local r1 Obj
   .local r2 Result
@@ -172,16 +178,22 @@
   0000  Move         r4, r1
   0001  IsClass      r4, ty65
   0002  Move         r2, r4
-  0003  JmpIfFalse   r2, -> 000a
-  0004  Move         r4, r0
-  0005  AssignObj    r3, r1
-  0006  AsClass      r3, ty65
-  0007  Move         r5, r3
-  0008  Call         r4, f4
-  0009  Move         r2, r4
-  000a  Ret          r2
+  0003  JmpIfFalse   r2, -> 000b
+  0004  AssignObj    r3, r1
+  0005  AsClass      r3, ty65
+  0006  Move         r5, r3
+  .inline f4 Main.TSubKey.Equal line=12
+  .line 23
+  0007  ObjGet       r6, r0, 0
+  0008  ObjGet       r7, r5, 0
+  0009  EqInt        r6, r6, r7
+  .line 24
+  000a  Move         r2, r6
+  .endinline
+  .line 12
+  000b  Ret          r2
 .finally r3
-.func 8 Main.TBox<Integer>.Equals params=2 regs=6
+.func 8 Main.TBox<Integer>.Equals params=2 regs=7
   .local r0 Self
   .local r1 Obj
   .local r2 Result
@@ -189,14 +201,16 @@
   0000  Move         r4, r1
   0001  IsClass      r4, ty66
   0002  Move         r2, r4
-  0003  JmpIfFalse   r2, -> 000a
-  0004  Move         r4, r0
-  0005  AssignObj    r3, r1
-  0006  AsClass      r3, ty66
-  0007  Move         r5, r3
-  0008  Call         r4, f10
-  0009  Move         r2, r4
-  000a  Ret          r2
+  0003  JmpIfFalse   r2, -> 0008
+  0004  AssignObj    r3, r1
+  0005  AsClass      r3, ty66
+  0006  Move         r5, r3
+  .inline f10 Main.TBox<Integer>.Equal line=17
+  .line 33
+  0007  LoadInt      r2, 1
+  .endinline
+  .line 17
+  0008  Ret          r2
 .finally r3
 .func 9 Main.TBox<Integer>.GetHashCode params=1 regs=2
   .local r0 Self

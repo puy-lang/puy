@@ -1,0 +1,13 @@
+error[E0723]: method `TPair<A, B, C>.Both` has no body
+   --> generic_heading_missing_params_ambiguous.pas:16:15
+    |
+ 16 |     procedure Both;
+    |               ^^^^
+
+error[E0757]: type parameters of `TPair` must be written as in its declaration: `<K, V>`
+   --> generic_heading_missing_params_ambiguous.pas:23:11
+    |
+ 23 | procedure TPair.Both;
+    |           ^^^^^
+
+error: aborting due to 2 errors

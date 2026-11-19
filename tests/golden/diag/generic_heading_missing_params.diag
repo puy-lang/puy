@@ -1,0 +1,81 @@
+error[E0757]: type parameters of `TG` must be written as in its declaration: `<T>`
+   --> generic_heading_missing_params.pas:57:11
+    |
+ 57 | procedure TG.Reset;
+    |           ^^
+    |
+    = fix: write `<T>`
+
+error[E0757]: type parameters of `TG` must be written as in its declaration: `<T>`
+   --> generic_heading_missing_params.pas:61:11
+    |
+ 61 | procedure TG.TCell.Reset;
+    |           ^^
+    |
+    = fix: write `<T>`
+
+error[E0757]: type parameters of `TG` must be written as in its declaration: `<T>`
+   --> generic_heading_missing_params.pas:66:10
+    |
+ 66 | function TG.Map<U>(const A: U): U;
+    |          ^^
+    |
+    = fix: write `<T>`
+
+error[E0757]: type parameters of `TInner` must be written as in its declaration: `<U>`
+   --> generic_heading_missing_params.pas:71:17
+    |
+ 71 | procedure TG<T>.TInner.Run;
+    |                 ^^^^^^
+    |
+    = fix: write `<U>`
+
+error[E0757]: type parameters of `TG` must be written as in its declaration: `<T>`
+   --> generic_heading_missing_params.pas:75:11
+    |
+ 75 | procedure TG.TInner.Stop;
+    |           ^^
+    |
+    = fix: write `<T>`
+
+error[E0757]: type parameters of `TG` must be written as in its declaration: `<T>`
+   --> generic_heading_missing_params.pas:79:13
+    |
+ 79 | procedure TG<X>.TInner.Wait;
+    |             ^^^
+    |
+    = fix: write `<T>`
+
+error[E0757]: type parameters of `TPair` must be written as in its declaration: `<K>`
+   --> generic_heading_missing_params.pas:83:11
+    |
+ 83 | procedure TPair.One;
+    |           ^^^^^
+    |
+    = fix: write `<K>`
+
+error[E0757]: type parameters of `TPair` must be written as in its declaration: `<K, V>`
+   --> generic_heading_missing_params.pas:87:11
+    |
+ 87 | procedure TPair.Two;
+    |           ^^^^^
+    |
+    = fix: write `<K, V>`
+
+error[E0757]: type parameters of `TNum` must be written as in its declaration: `<T>`
+   --> generic_heading_missing_params.pas:99:11
+    |
+ 99 | procedure TNum.Run;
+    |           ^^^^
+    |
+    = fix: write `<T>`
+
+error[E0757]: type parameters of `TInner.Map` must be written as in its declaration: `<U>`
+    --> generic_heading_missing_params.pas:103:24
+     |
+ 103 | function TOuter.TInner.Map(const A: U): U;
+     |                        ^^^
+     |
+     = fix: write `<U>`
+
+error: aborting due to 10 errors

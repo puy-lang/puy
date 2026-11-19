@@ -1,0 +1,166 @@
+; puyc format 0
+.const
+  0: str "\n"
+  1: str "has\n"
+.type
+  64: class DumpInlineCopies.TRange slots=2 parent=ty19 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+.global
+  0: int R
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpInlineCopies file="dump_inline_copies.pas" init=- fini=- entry=0
+.func 0 DumpInlineCopies.<main> params=0 regs=3
+  .line 63
+  0000  LoadZero     r0
+  0001  New          r0, ty64
+  0002  StoreGlobal  r0, g0
+  .line 64
+  0003  LoadInt      r1, 1
+  0004  ObjSet       r0, 0, r1
+  .line 65
+  0005  LoadGlobal   r0, g0
+  0006  LoadInt      r1, 5
+  0007  ObjSet       r0, 1, r1
+  .line 66
+  0008  LoadGlobal   r0, g0
+  0009  LoadInt      r1, 3
+  000a  LoadInt      r2, 2
+  000b  Call         r0, f5
+  .line 67
+  000c  LoadGlobal   r0, g0
+  000d  LoadInt      r1, 7
+  000e  LoadInt      r2, 9
+  000f  Call         r0, f5
+  .line 68
+  0010  LoadGlobal   r0, g0
+  0011  Free         r0
+  .line 69
+  0012  RetVoid
+.func 1 DumpInlineCopies.TRange.Find params=3 regs=6
+  .local r0 Self
+  .local r1 K
+  .local r2 V
+  .local r3 Result
+  .line 20
+  0000  ObjGet       r4, r0, 0
+  0001  LeInt        r3, r4, r1
+  0002  JmpIfFalse   r3, -> 000a
+  0003  ObjGet       r4, r0, 1
+  0004  LeInt        r3, r1, r4
+  0005  JmpIfFalse   r3, -> 000a
+  .line 22
+  0006  ObjGet       r5, r0, 0
+  0007  SubInt32     r4, r1, r5
+  0008  StoreRef     r2, r4
+  .line 21
+  0009  Jmp          -> 000c
+  .line 24
+  000a  LoadInt      r4, -1
+  000b  StoreRef     r2, r4
+  .line 25
+  000c  Ret          r3
+.func 2 DumpInlineCopies.TRange.Has params=2 regs=5
+  .local r0 Self
+  .local r1 K
+  .local r2 Result
+  .line 29
+  0000  ObjGet       r3, r0, 0
+  0001  SubInt32     r2, r1, r3
+  0002  LoadZero     r4
+  0003  LeInt        r2, r4, r2
+  .line 30
+  0004  Ret          r2
+.func 3 DumpInlineCopies.Clamp params=1 regs=3
+  .local r0 X
+  .local r1 Result
+  .line 34
+  0000  JmpIfGeIntI  r0, 0, -> 0003
+  .line 35
+  0001  LoadZero     r1
+  .line 34
+  0002  Jmp          -> 0004
+  .line 37
+  0003  Move         r1, r0
+  .line 38
+  0004  Ret          r1
+.func 4 DumpInlineCopies.Count params=1 regs=5
+  .local r0 N
+  .local r1 Result
+  .line 42
+  0000  JmpIfGtIntI  r0, 0, -> 0003
+  .line 43
+  0001  LoadZero     r1
+  .line 42
+  0002  Jmp          -> 0007
+  .line 45
+  0003  LoadInt      r1, 1
+  0004  AddInt32I    r3, r0, -1
+  0005  Call         r3, f4
+  0006  AddInt32     r1, r1, r3
+  .line 46
+  0007  Ret          r1
+.func 5 DumpInlineCopies.Run params=3 regs=17
+  .local r0 R
+  .local r1 A
+  .local r2 B
+  .local r3 V
+  .line 52
+  0000  MakeRef      r12, r3
+  0001  ClassType    r16, r0
+  .inline f1 DumpInlineCopies.TRange.Find line=52
+  .line 20
+  0002  ObjGet       r14, r0, 0
+  0003  JmpIfLtInt   r1, r14, -> 000a
+  0004  ObjGet       r14, r0, 1
+  0005  JmpIfLtInt   r14, r1, -> 000a
+  .line 22
+  0006  ObjGet       r15, r0, 0
+  0007  SubInt32     r14, r1, r15
+  0008  StoreRef     r12, r14
+  .line 21
+  0009  Jmp          -> 000d
+  .line 24
+  000a  LoadInt      r14, -1
+  000b  StoreRef     r12, r14
+  .line 21
+  000c  Jmp          -> 0011
+  .endinline
+  .line 53
+  000d  IntToStr     r4, r3
+  000e  LoadConst    r5, k0
+  000f  ConcatStr    r4, r4, r5
+  0010  CallHost     r4, h0
+  .line 54
+  0011  ClassType    r15, r0
+  .inline f2 DumpInlineCopies.TRange.Has line=54
+  .line 29
+  0012  ObjGet       r13, r0, 0
+  0013  SubInt32     r12, r2, r13
+  .line 30
+  0014  JmpIfLtIntI  r12, 0, -> 0017
+  .endinline
+  .line 55
+  0015  LoadConst    r6, k1
+  0016  CallHost     r6, h0
+  .line 56
+  0017  SubInt32     r11, r1, r2
+  .inline f3 DumpInlineCopies.Clamp line=56
+  .line 34
+  0018  JmpIfGeIntI  r11, 0, -> 001b
+  .line 35
+  0019  LoadZero     r10
+  .line 34
+  001a  Jmp          -> 001c
+  .line 37
+  001b  Move         r10, r11
+  .endinline
+  .line 56
+  001c  Call         r10, f4
+  001d  Move         r9, r10
+  001e  IntToStr     r7, r9
+  001f  LoadConst    r8, k0
+  0020  ConcatStr    r7, r7, r8
+  0021  CallHost     r7, h0
+  .line 57
+  0022  RetVoid
+.finally r4, r5, r6, r7, r8

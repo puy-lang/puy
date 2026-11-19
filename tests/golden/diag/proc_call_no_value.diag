@@ -1,0 +1,79 @@
+error[E0725]: procedure `O.H` has no value
+   --> proc_call_no_value.pas:47:3
+    |
+ 47 |   O.H()();          // E0725: `O.H()` calls the value of `H`
+    |   ^^^^^
+
+error[E0725]: procedure `F()` has no value
+   --> proc_call_no_value.pas:48:3
+    |
+ 48 |   F()()();          // E0725: `F()()` calls the result of `F`
+    |   ^^^^^
+
+error[E0725]: procedure `R` has no value
+   --> proc_call_no_value.pas:49:3
+    |
+ 49 |   R()();            // E0725
+    |   ^^^
+
+error[E0725]: procedure `O.H` has no value
+   --> proc_call_no_value.pas:50:8
+    |
+ 50 |   X := O.H()();     // E0725
+    |        ^^^^^
+
+error[E0725]: procedure `R` has no value
+   --> proc_call_no_value.pas:51:8
+    |
+ 51 |   X := R();         // E0725
+    |        ^^^
+
+error[E0725]: procedure `Hello` has no value
+   --> proc_call_no_value.pas:52:8
+    |
+ 17 | procedure Hello;
+    |           ----- declared here
+...
+ 52 |   X := Hello();     // E0725
+    |        ^^^^^
+
+error[E0725]: procedure `R` has no value
+   --> proc_call_no_value.pas:53:11
+    |
+ 53 |   WriteLn(R());     // E0725
+    |           ^^^
+
+error[E0725]: procedure `O.H` has no value
+   --> proc_call_no_value.pas:54:7
+    |
+ 54 |   Run(O.H());       // E0725: `O.H` passes the value
+    |       ^^^^^
+
+error[E0725]: procedure `F()` has no value
+   --> proc_call_no_value.pas:55:8
+    |
+ 55 |   R := F()();       // E0725
+    |        ^^^^^
+
+error[E0725]: procedure `TObj.P` has no value
+   --> proc_call_no_value.pas:56:10
+    |
+ 13 |     procedure P;
+    |               - declared here
+...
+ 56 |   X := O.P();       // E0725
+    |          ^
+
+error[E0402]: expected a statement
+   --> proc_call_no_value.pas:57:3
+    |
+ 57 |   (Hello());        // E0402 only: not a statement, and the call is not used as a value
+    |   ^^^^^^^^^
+
+error[E0402]: expected a statement
+   --> proc_call_no_value.pas:58:3
+    |
+ 58 |   (R());            // E0402 only
+    |   ^^^^^
+
+error: aborting due to 12 errors

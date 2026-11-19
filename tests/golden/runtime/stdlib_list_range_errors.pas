@@ -1,8 +1,9 @@
 program StdlibListRangeErrors;
 
 // The out-of-range errors of TList<T> (collections.md 3.2): ERangeError with the index and the
-// valid range, `0..Count` for Insert, the whole range for DeleteRange, no index for First / Last
-// of an empty list. A member that raises leaves the list as it was.
+// valid range, `0..Count` for Insert and InsertRange (also of no items), the whole range for
+// DeleteRange (none for no items), no index for First / Last of an empty list. A member that
+// raises leaves the list as it was.
 
 uses System.SysUtils, System.Generics.Collections;
 
@@ -43,6 +44,9 @@ begin
   try L.Insert(4, 9); except on E: Exception do Report(E); end;
   try L.Insert(-1, 9); except on E: Exception do Report(E); end;
   try L.InsertRange(5, [1, 2]); except on E: Exception do Report(E); end;
+  // Inserting no items still checks the index, unlike DeleteRange of no items below.
+  try L.InsertRange(9, []); except on E: Exception do Report(E); end;
+  L.InsertRange(3, []);
   try L.Delete(3); except on E: Exception do Report(E); end;
   try L.ExtractAt(7); except on E: Exception do Report(E); end;
   try L.Exchange(0, 3); except on E: Exception do Report(E); end;

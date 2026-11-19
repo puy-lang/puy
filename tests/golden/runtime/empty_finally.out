@@ -1,0 +1,6 @@
+2
+caught: through an empty finally
+5 -1
+1 3 
+3
+caught: through a finally calling an empty routine

@@ -29,25 +29,29 @@
   000d  LoadConst    r5, k1
   000e  ConcatStr    r1, r1, r5
   000f  CallHost     r1, h0
+  0010  Release      r4
+  0011  Release      r2
   .line 14
-  0010  LoadGlobalRef r7, g0
-  0011  Move         r14, r7
-  0012  LoadConst    r8, k2
-  0013  Move         r15, r8
-  0014  LoadZero     r16
-  0015  AnsiSameText r13, r14
-  0016  BoolToStr    r6, r13
-  0017  LoadGlobalRef r10, g0
-  0018  Move         r15, r10
-  0019  LoadConst    r11, k3
-  001a  Move         r16, r11
-  001b  LoadInt      r17, 1
-  001c  AnsiCompareText r14, r15
-  001d  IntToStr     r9, r14
-  001e  ConcatStr    r6, r6, r9
-  001f  LoadConst    r12, k1
-  0020  ConcatStr    r6, r6, r12
-  0021  CallHost     r6, h0
+  0012  LoadGlobalRef r7, g0
+  0013  Move         r14, r7
+  0014  LoadConst    r8, k2
+  0015  Move         r15, r8
+  0016  LoadZero     r16
+  0017  AnsiSameText r13, r14
+  0018  Release      r7
+  0019  BoolToStr    r6, r13
+  001a  LoadGlobalRef r10, g0
+  001b  Move         r15, r10
+  001c  LoadConst    r11, k3
+  001d  Move         r16, r11
+  001e  LoadInt      r17, 1
+  001f  AnsiCompareText r14, r15
+  0020  Release      r10
+  0021  IntToStr     r9, r14
+  0022  ConcatStr    r6, r6, r9
+  0023  LoadConst    r12, k1
+  0024  ConcatStr    r6, r6, r12
+  0025  CallHost     r6, h0
   .line 15
-  0022  RetVoid
+  0026  RetVoid
 .finally r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12

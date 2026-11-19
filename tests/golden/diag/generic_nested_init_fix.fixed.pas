@@ -35,8 +35,9 @@ end;
 
 procedure Run;
 var
-  B: THolder.TBox<Integer> = Default(THolder.TBox<Integer>);
+  B: THolder.TBox<Integer>;
 begin
+  B := Default(THolder.TBox<Integer>);
   B.V := B.V + 1;
   WriteLn(B.V);
 end;

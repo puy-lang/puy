@@ -1,0 +1,248 @@
+; puy ir 1
+.global
+  g0 G: string
+  g1 H: string
+  g2 R: TRec
+  g3 A: array of Integer
+  g4 B: array of TObject
+  g5 SA: array of string
+  g6 O: TBox
+  g7 N: Integer
+  g8 I: Integer
+.func f0 DumpBuiltinArgCopy.<main> params=0
+  .reg v0 -: Int64 hidden
+  .reg t0: Integer temp
+  .reg t1: Integer temp
+  .reg t2: string temp
+  .reg t3: string temp
+  .reg t4: string temp
+  .reg t5: string temp
+  .reg t6: string temp
+  .reg t7: string temp
+  .reg t8: string temp
+  .reg t9: Integer temp
+  .reg t10: Integer temp
+  .reg t11: string temp
+  .reg t12: string temp
+  .reg t13: string temp
+  .reg t14: string temp
+  .reg t15: TRec temp
+  .reg t16: Int64 temp
+  .reg t17: array of string temp
+  .reg t18: array of string temp
+  .reg t19: Int64 temp
+  .reg t20: Integer temp
+  .reg t21: Integer temp
+  .reg t22: string temp
+  .reg t23: string temp
+  .reg t24: string temp
+  .reg t25: string temp
+  .reg t26: array of string temp
+  .reg t27: Int64 temp
+  .reg t28: TBox temp
+  .reg t29: Integer temp
+  .reg t30: Integer temp
+  .reg t31: string temp
+  .reg t32: string temp
+  .reg t33: string temp
+  .reg t34: string temp
+  .reg t35: TBox temp
+  .reg t36: TBox temp
+  .reg t37: string temp
+  .reg t38: string temp
+  .reg t39: string temp
+  .reg t40: string temp
+  .reg t41: string temp
+  .reg t42: string temp
+  .reg t43: string temp
+  .reg t44: string temp
+  .reg t45: string temp
+  .reg t46: Int64 temp
+  .reg t47: string temp
+  .reg t48: string temp
+  .reg t49: string temp
+  .reg t50: array of Integer temp
+  .reg t51: array of Integer temp
+  .reg t52: Int64 temp
+  .reg t53: Int64 temp
+  .reg t54: array of Integer temp
+  .reg t55: array of TObject temp
+  .reg t56: array of TObject temp
+  .reg t57: Int64 temp
+  .reg t58: Int64 temp
+  .reg t59: array of TObject temp
+  .reg t60: string temp
+  .reg t61: Integer temp
+  .reg t62: string temp
+  .reg t63: string temp
+  .reg t64: string temp
+  .reg t65: string temp
+  .reg t66: string temp
+  .reg t67: string temp
+  .reg t68: Integer temp
+  .reg t69: array of Integer temp
+  .reg t70: string temp
+  .reg t71: string temp
+  .reg t72: Integer temp
+  .reg t73: array of TObject temp
+  .reg t74: string temp
+bb0:
+  .line 31
+  LoadInt      v0, 1
+  LoadInt      t0, 3
+  JmpIfLtInt   t0, v0, bb6, bb1
+bb1:
+  .line 31
+  Jmp          bb2
+bb2:
+  .line 31
+  StoreGlobal  v0, g8
+  .line 33
+  LoadConst    t4, "x"
+  Move         t2, t4
+  LoadGlobalRef t5, g0
+  Move         t3, t5
+  StrPos       t1, t2, t3
+  Release      t5
+  StoreGlobal  t1, g7
+  .line 34
+  LoadGlobalRef t6, g0
+  LoadConst    t7, "x"
+  LoadGlobal   t8, g0
+  AppendStr    t8, t6, t7
+  StoreGlobal  t8, g0
+  Release      t6
+  .line 31
+  Jmp          bb3
+bb3:
+  .line 31
+  JmpIfEqInt   v0, t0, bb5, bb4
+bb4:
+  .line 31
+  AddIntI      v0, v0, 1
+  Jmp          bb2
+bb5:
+  .line 31
+  StoreGlobal  v0, g8
+  Jmp          bb6
+bb6:
+  .line 36
+  LoadGlobal   t9, g7
+  LoadConst    t13, "x"
+  Move         t11, t13
+  LoadGlobal   t15, g2
+  FieldGetRef  t14, t15, 0
+  Move         t12, t14
+  StrPos       t10, t11, t12
+  Release      t14
+  AddInt       t9, t9, t10
+  NarrowOvf    t9, t9, 4
+  StoreGlobal  t9, g7
+  .line 37
+  LoadInt      t16, 1
+  LoadGlobal   t17, g5
+  Move         t18, t17
+  Move         t19, t16
+  SetLen       t18, array of string, t19
+  Move         t17, t18
+  StoreGlobal  t17, g5
+  .line 38
+  LoadGlobal   t20, g7
+  LoadConst    t24, "x"
+  Move         t22, t24
+  LoadGlobal   t26, g5
+  LoadZero     t27
+  DynGetRef    t25, t26, t27
+  Move         t23, t25
+  StrPos       t21, t22, t23
+  Release      t25
+  AddInt       t20, t20, t21
+  NarrowOvf    t20, t20, 4
+  StoreGlobal  t20, g7
+  .line 39
+  LoadZero     t28
+  New          t28, DumpBuiltinArgCopy.TBox
+  StoreGlobal  t28, g6
+  .line 40
+  LoadGlobal   t29, g7
+  LoadConst    t33, "x"
+  Move         t31, t33
+  LoadGlobal   t35, g6
+  ObjGetRef    t34, t35, 0
+  Move         t32, t34
+  StrPos       t30, t31, t32
+  Release      t34
+  AddInt       t29, t29, t30
+  NarrowOvf    t29, t29, 4
+  StoreGlobal  t29, g7
+  .line 41
+  LoadGlobal   t36, g6
+  Free         t36
+  .line 42
+  LoadConst    t41, "["
+  Move         t38, t41
+  LoadGlobalRef t42, g0
+  Move         t39, t42
+  LoadConst    t43, "]"
+  Move         t40, t43
+  ConcatStrN   t37, t38, 3, t38, t39, t40
+  Release      t42
+  StoreGlobalRef t37, g1
+  .line 43
+  LoadConst    t48, "%s"
+  Move         t45, t48
+  LoadInt      t46, 10
+  LoadGlobalRef t49, g0
+  Move         t47, t49
+  Format       t44, t45, 1, t46, t47
+  Release      t49
+  StoreGlobalRef t44, g1
+  .line 44
+  LoadGlobalRef t54, g3
+  Move         t51, t54
+  LoadZero     t52
+  LoadInt      t53, 1
+  ArrCopy      t51, array of Integer, t52, t53
+  MoveRef      t50, t51
+  Release      t54
+  StoreGlobalRef t50, g3
+  Release      t50
+  .line 45
+  LoadGlobalRef t59, g4
+  Move         t56, t59
+  LoadZero     t57
+  LoadInt      t58, 1
+  ArrCopy      t56, array of TObject, t57, t58
+  MoveRef      t55, t56
+  StoreGlobalRef t55, g4
+  .line 46
+  LoadGlobal   t61, g7
+  IntToStr     t60, t61
+  LoadConst    t62, " "
+  ConcatStr    t60, t60, t62
+  LoadGlobalRef t63, g0
+  ConcatStr    t60, t60, t63
+  LoadConst    t64, " "
+  ConcatStr    t60, t60, t64
+  LoadGlobalRef t65, g1
+  ConcatStr    t60, t60, t65
+  LoadConst    t66, " "
+  ConcatStr    t60, t60, t66
+  LoadGlobal   t69, g3
+  ArrLen       t68, t69
+  IntToStr     t67, t68
+  ConcatStr    t60, t60, t67
+  LoadConst    t70, " "
+  ConcatStr    t60, t60, t70
+  LoadGlobal   t73, g4
+  ArrLen       t72, t73
+  IntToStr     t71, t72
+  ConcatStr    t60, t60, t71
+  LoadConst    t74, "\n"
+  ConcatStr    t60, t60, t74
+  CallHost     -, h0(t60)
+  Release      t65
+  Release      t63
+  .line 47
+  RetVoid
+.finally t4, t5, t6, t7, t13, t14, t24, t25, t33, t34, t37, t41, t42, t43, t44, t48, t49, t50, t54, t55, t59, t60, t62, t63, t64, t65, t66, t67, t70, t71, t74

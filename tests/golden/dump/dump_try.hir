@@ -29,7 +29,7 @@ program DumpTry
       writeln @22
         arg
           const string "other"
-.routine f2 Count(N: Integer): Integer
+.routine f1 Count(N: Integer): Integer
   .var v0 N: Integer param
   .var v1 Result: Integer result
   .var v2 I: Integer local
@@ -79,5 +79,5 @@ program DumpTry
           const string "caught"
   writeln @49
     arg
-      call f2 Count: Integer
+      call f1 Count: Integer
         const Integer 4

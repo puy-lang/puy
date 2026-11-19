@@ -1,0 +1,34 @@
+error[E0723]: forward declaration of class `TPair` has no body
+   --> generic_forward_arity.pas:13:3
+    |
+ 13 |   TPair<T> = class;
+    |   ^^^^^
+
+error[E0723]: forward declaration of interface `IShape` has no body
+   --> generic_forward_arity.pas:17:3
+    |
+ 17 |   IShape<T> = interface;
+    |   ^^^^^^
+
+error[E3401]: attributes must be written on the full declaration of `TTagged`
+   --> generic_forward_arity.pas:29:3
+    |
+ 29 |   [TAttr]
+    |   ^^^^^^^
+
+error[E0723]: forward declaration of class `TTagged` has no body
+   --> generic_forward_arity.pas:30:3
+    |
+ 30 |   TTagged<T> = class;
+    |   ^^^^^^^
+
+error[E3401]: attributes must be written on the full declaration of `TMarked`
+   --> generic_forward_arity.pas:34:3
+    |
+ 34 |   [TAttr]
+    |   ^^^^^^^
+ 35 |   TMarked<T> = class;
+ 36 |   TMarked<T> = class
+    |   ------- declared here
+
+error: aborting due to 5 errors

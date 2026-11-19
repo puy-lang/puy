@@ -36,7 +36,7 @@ warning[W0004]: directive `{$TEXTBLOCK CRLF}` is ignored (ignored-directive)
    |
    = note: multi-line strings in Puy always use LF; write `#13#10` explicitly for CR LF
    = note: disable with `{$WARN ignored-directive OFF}`
-   = fix: remove `{$TEXTBLOCK CRLF}`
+   = suggestion: remove `{$TEXTBLOCK CRLF}`
 
 warning[W0004]: directive `{$B+}` is ignored (ignored-directive)
   --> dir_ignored.pas:6:1
@@ -46,7 +46,7 @@ warning[W0004]: directive `{$B+}` is ignored (ignored-directive)
    |
    = note: boolean operators in Puy always short-circuit
    = note: disable with `{$WARN ignored-directive OFF}`
-   = fix: remove `{$B+}`
+   = suggestion: remove `{$B+}`
 
 warning[W0004]: directive `{$J-}` is ignored (ignored-directive)
   --> dir_ignored.pas:7:1
@@ -56,7 +56,7 @@ warning[W0004]: directive `{$J-}` is ignored (ignored-directive)
    |
    = note: typed constants in Puy are always read-only
    = note: disable with `{$WARN ignored-directive OFF}`
-   = fix: remove `{$J-}`
+   = suggestion: remove `{$J-}`
 
 warning[W0004]: directive `{$RTTI EXPLICIT}` is ignored (ignored-directive)
   --> dir_ignored.pas:8:1
@@ -66,7 +66,7 @@ warning[W0004]: directive `{$RTTI EXPLICIT}` is ignored (ignored-directive)
    |
    = note: Puy keeps run-time type information for every type
    = note: disable with `{$WARN ignored-directive OFF}`
-   = fix: remove `{$RTTI EXPLICIT}`
+   = suggestion: remove `{$RTTI EXPLICIT}`
 
 warning[W0004]: directive `{$M+}` is ignored (ignored-directive)
   --> dir_ignored.pas:9:1
@@ -76,12 +76,22 @@ warning[W0004]: directive `{$M+}` is ignored (ignored-directive)
    |
    = note: Puy keeps run-time type information for every type
    = note: disable with `{$WARN ignored-directive OFF}`
-   = fix: remove `{$M+}`
+   = suggestion: remove `{$M+}`
 
-warning[W0004]: directive `{$M 16384,1048576}` is ignored (ignored-directive)
+warning[W0004]: directive `{$TYPEINFO ON}` is ignored (ignored-directive)
    --> dir_ignored.pas:10:1
     |
- 10 | {$M 16384,1048576}
+ 10 | {$TYPEINFO ON}
+    | ^^^^^^^^^^^^^^
+    |
+    = note: Puy keeps run-time type information for every type
+    = note: disable with `{$WARN ignored-directive OFF}`
+    = suggestion: remove `{$TYPEINFO ON}`
+
+warning[W0004]: directive `{$M 16384,1048576}` is ignored (ignored-directive)
+   --> dir_ignored.pas:11:1
+    |
+ 11 | {$M 16384,1048576}
     | ^^^^^^^^^^^^^^^^^^
     |
     = note: Puy compiles to bytecode for a VM, where this directive has no meaning
@@ -89,39 +99,39 @@ warning[W0004]: directive `{$M 16384,1048576}` is ignored (ignored-directive)
     = fix: remove `{$M 16384,1048576}`
 
 warning[W0004]: directive `{$SCOPEDENUMS ON}` is ignored (ignored-directive)
-   --> dir_ignored.pas:11:1
+   --> dir_ignored.pas:12:1
     |
- 11 | {$SCOPEDENUMS ON}
+ 12 | {$SCOPEDENUMS ON}
     | ^^^^^^^^^^^^^^^^^
     |
     = note: enumeration values in Puy are always qualified with the type name
     = note: disable with `{$WARN ignored-directive OFF}`
-    = fix: remove `{$SCOPEDENUMS ON}`
+    = suggestion: remove `{$SCOPEDENUMS ON}`
 
 warning[W0004]: directive `{$HINTS OFF}` is ignored (ignored-directive)
-   --> dir_ignored.pas:12:1
+   --> dir_ignored.pas:13:1
     |
- 12 | {$HINTS OFF}
+ 13 | {$HINTS OFF}
     | ^^^^^^^^^^^^
     |
     = note: disable individual warnings with `{$WARN <name> OFF}`
     = note: disable with `{$WARN ignored-directive OFF}`
-    = fix: remove `{$HINTS OFF}`
+    = suggestion: remove `{$HINTS OFF}`
 
 warning[W0004]: directive `{$WARNINGS OFF}` is ignored (ignored-directive)
-   --> dir_ignored.pas:13:1
+   --> dir_ignored.pas:14:1
     |
- 13 | {$WARNINGS OFF}
+ 14 | {$WARNINGS OFF}
     | ^^^^^^^^^^^^^^^
     |
     = note: disable individual warnings with `{$WARN <name> OFF}`
     = note: disable with `{$WARN ignored-directive OFF}`
-    = fix: remove `{$WARNINGS OFF}`
+    = suggestion: remove `{$WARNINGS OFF}`
 
 warning[W0004]: directive `{$O+}` is ignored (ignored-directive)
-   --> dir_ignored.pas:14:1
+   --> dir_ignored.pas:15:1
     |
- 14 | {$O+}
+ 15 | {$O+}
     | ^^^^^
     |
     = note: Puy compiles to bytecode for a VM, where this directive has no meaning
@@ -129,9 +139,9 @@ warning[W0004]: directive `{$O+}` is ignored (ignored-directive)
     = fix: remove `{$O+}`
 
 warning[W0004]: directive `{$HPPEMIT 'x'}` is ignored (ignored-directive)
-   --> dir_ignored.pas:15:1
+   --> dir_ignored.pas:16:1
     |
- 15 | {$HPPEMIT 'x'}
+ 16 | {$HPPEMIT 'x'}
     | ^^^^^^^^^^^^^^
     |
     = note: Puy does not generate C++ headers
@@ -139,9 +149,9 @@ warning[W0004]: directive `{$HPPEMIT 'x'}` is ignored (ignored-directive)
     = fix: remove `{$HPPEMIT 'x'}`
 
 warning[W0004]: FPC-only directive `{$PUSH}` is ignored (ignored-directive)
-   --> dir_ignored.pas:16:1
+   --> dir_ignored.pas:17:1
     |
- 16 | {$PUSH}
+ 17 | {$PUSH}
     | ^^^^^^^
     |
     = note: Puy always uses the Delphi dialect
@@ -150,9 +160,9 @@ warning[W0004]: FPC-only directive `{$PUSH}` is ignored (ignored-directive)
     = fix: remove `{$PUSH}`
 
 warning[W0004]: FPC-only directive `{$POP}` is ignored (ignored-directive)
-   --> dir_ignored.pas:18:1
+   --> dir_ignored.pas:19:1
     |
- 18 | {$POP}
+ 19 | {$POP}
     | ^^^^^^
     |
     = note: Puy always uses the Delphi dialect
@@ -161,9 +171,9 @@ warning[W0004]: FPC-only directive `{$POP}` is ignored (ignored-directive)
     = fix: remove `{$POP}`
 
 warning[W0004]: FPC-only directive `{$MODESWITCH ADVANCEDRECORDS}` is ignored (ignored-directive)
-   --> dir_ignored.pas:19:1
+   --> dir_ignored.pas:20:1
     |
- 19 | {$MODESWITCH ADVANCEDRECORDS}
+ 20 | {$MODESWITCH ADVANCEDRECORDS}
     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     |
     = note: Puy always uses the Delphi dialect
@@ -171,13 +181,13 @@ warning[W0004]: FPC-only directive `{$MODESWITCH ADVANCEDRECORDS}` is ignored (i
     = fix: remove `{$MODESWITCH ADVANCEDRECORDS}`
 
 warning[W0004]: directive `{$D+}` is ignored (ignored-directive)
-   --> dir_ignored.pas:23:1
+   --> dir_ignored.pas:24:1
     |
- 23 | {$D+}
+ 24 | {$D+}
     | ^^^^^
     |
     = note: Puy compiles to bytecode for a VM, where this directive has no meaning
     = note: disable with `{$WARN ignored-directive OFF}`
     = fix: remove `{$D+}`
 
-warning: 18 warnings emitted
+warning: 19 warnings emitted

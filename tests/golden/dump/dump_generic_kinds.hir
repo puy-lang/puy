@@ -31,7 +31,7 @@ program DumpGenericKinds
 .instance TMap<Integer, string>
 .instance TFour<Byte>
 .instance TStore<string>
-.routine f4 TStore<string>.Get(): string
+.routine f0 TStore<string>.Get(): string
   .var v0 Self: TStore<string> self
   .var v1 Result: string result
   inc @35 calc=Integer Q+R+

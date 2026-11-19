@@ -682,9 +682,7 @@ impl<'a, 's> Sema<'a, 's> {
     /// Types the arguments of a call that does not resolve, for their own diagnostics.
     fn lower_args_quietly(&mut self, args: &[ast::Arg]) {
         for a in args {
-            if let Some(v) = a.value()
-                && !matches!(strip_parens(&v), ast::Expr::Nil(_))
-            {
+            if let Some(v) = a.value() {
                 self.lower_expr_unchecked_ctor(&v);
             }
         }

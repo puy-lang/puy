@@ -64,7 +64,8 @@
   0004  LoadConst    r4, k2
   0005  ConcatStr    r3, r3, r4
   0006  CallHost     r3, h0
-  0007  RetVoid
+  0007  Release      r3
+  0008  RetVoid
 .finally r3, r4
 .func 3 DumpAnonCaptureMore.Make params=1 regs=14
   .local r0 S
@@ -160,5 +161,6 @@
   0011  LoadConst    r12, k2
   0012  ConcatStr    r7, r7, r12
   0013  CallHost     r7, h0
-  0014  RetVoid
+  0014  Release      r7
+  0015  RetVoid
 .finally r7, r8, r9, r10, r11, r12

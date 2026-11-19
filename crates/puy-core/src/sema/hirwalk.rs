@@ -27,6 +27,10 @@ pub(crate) trait HirVisit {
     }
     /// An expression, before its parts are walked.
     fn expr(&mut self, _e: &mut Expr) {}
+    /// A statement, before its parts are walked.
+    fn stmt(&mut self, _s: &mut Stmt) {}
+    /// A place (an assignment target, a `var` argument, …), before its parts are walked.
+    fn place(&mut self, _p: &mut Place) {}
 }
 
 /// Every type and id of a routine: its variables, result type and body (not `parent`).
@@ -74,6 +78,7 @@ fn walk_conversion(c: &mut Conversion, v: &mut impl HirVisit) {
 }
 
 fn walk_stmt(s: &mut Stmt, v: &mut impl HirVisit) {
+    v.stmt(s);
     match &mut s.kind {
         StmtKind::Assign { target, value, .. } => {
             walk_place(target, v);
@@ -275,6 +280,26 @@ fn walk_stmt(s: &mut Stmt, v: &mut impl HirVisit) {
             walk_expr(to, v);
             walk_expr(count, v);
         }
+        StmtKind::ArraySortRange {
+            target,
+            index,
+            count,
+        } => {
+            walk_place(target, v);
+            walk_expr(index, v);
+            walk_expr(count, v);
+        }
+        StmtKind::HashRelink {
+            buckets,
+            hashes,
+            next,
+            count,
+        } => {
+            walk_place(buckets, v);
+            walk_expr(hashes, v);
+            walk_place(next, v);
+            walk_expr(count, v);
+        }
         StmtKind::Free { target, .. }
         | StmtKind::FreeIfClass { value: target }
         | StmtKind::CheckDefaultOrder { value: target } => walk_expr(target, v),
@@ -287,6 +312,7 @@ fn walk_stmt(s: &mut Stmt, v: &mut impl HirVisit) {
 }
 
 fn walk_place(p: &mut Place, v: &mut impl HirVisit) {
+    v.place(p);
     match p {
         Place::Var(..) => {}
         Place::Global(g) => v.global(g),
@@ -332,7 +358,7 @@ pub(crate) fn walk_expr(e: &mut Expr, v: &mut impl HirVisit) {
     v.expr(e);
     v.ty(&mut e.ty);
     match &mut e.kind {
-        ExprKind::Const | ExprKind::Var(_) | ExprKind::Error => {}
+        ExprKind::Const { .. } | ExprKind::Var(_) | ExprKind::Error => {}
         ExprKind::Global(g) => v.global(g),
         ExprKind::Binary { first, steps } => {
             walk_expr(first, v);

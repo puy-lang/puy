@@ -16,10 +16,13 @@ end;
 
 procedure Show;
 var
-  A: TColors = [];
-  B: set of Byte = [];
-  C: set of Char = [];
+  A: TColors;
+  B: set of Byte;
+  C: set of Char;
 begin
+  A := [];
+  B := [];
+  C := [];
   var D: set of Word := [];
   WriteLn(TColor.Red in A, 1 in B, 'a' in C, 2 in D, TColor.Green in Pick);
 end;

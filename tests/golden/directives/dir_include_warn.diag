@@ -6,7 +6,7 @@ warning[W0004]: directive `{$B+}` is ignored (ignored-directive)
    |
    = note: boolean operators in Puy always short-circuit
    = note: disable with `{$WARN ignored-directive OFF}`
-   = fix: remove `{$B+}`
+   = suggestion: remove `{$B+}`
 
 warning[W0007]: conditional symbol `WIN32` is never defined in Puy (platform-symbol)
   --> dir_include_warn.inc:2:9

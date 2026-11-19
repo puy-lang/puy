@@ -662,3 +662,102 @@ fn expr_type_args_not_read_over_lex_error() {
     assert_eq!(p.root.text().to_string(), src);
     assert!(!p.cst.contains("TYPE_ARGS@"), "{}", p.cst);
 }
+
+#[test]
+fn trimmed_range_skips_leading_trivia_of_the_node() {
+    // A node whose first tokens are trivia (the root, where a leading comment is attached)
+    // starts at its first non-trivia token
+    let p = assert_clean("// head\nX := 1;\n");
+    assert_eq!(
+        crate::syntax::ast::trimmed_range(&p.root).start(),
+        TextSize::from(8),
+        "{}",
+        p.cst
+    );
+}
+
+#[test]
+fn trimmed_range_skips_trailing_trivia_inside_nested_nodes() {
+    // An anonymous method cut off before its body ends with a space and an empty
+    // ROUTINE_BODY, so the trimmed range steps back over both to `)`, also for the statement
+    // that holds it
+    let p = parse_src(b"R := procedure(X: Integer) inline;\n");
+    let anon = p
+        .root
+        .descendants()
+        .find(|n| n.kind() == SyntaxKind::ANON_ROUTINE)
+        .expect("an anonymous method");
+    assert_eq!(
+        anon.text_range(),
+        TextRange::new(5.into(), 27.into()),
+        "{}",
+        p.cst
+    );
+    assert_eq!(
+        crate::syntax::ast::trimmed_range(&anon),
+        TextRange::new(5.into(), 26.into())
+    );
+    let assign = anon.parent().expect("the assignment");
+    assert_eq!(
+        crate::syntax::ast::trimmed_range(&assign),
+        TextRange::new(0.into(), 26.into())
+    );
+}
+
+#[test]
+fn trimmed_range_of_a_node_without_trivia_at_the_ends_is_its_range() {
+    // Trivia between the tokens (a comment inside parentheses) does not narrow the range
+    let p = assert_clean("X := ( { a } 1 + 2 // c\n);\n");
+    let paren = p
+        .root
+        .descendants()
+        .find(|n| n.kind() == SyntaxKind::PAREN_EXPR)
+        .expect("a parenthesized expression");
+    assert_eq!(
+        crate::syntax::ast::trimmed_range(&paren),
+        TextRange::new(5.into(), 25.into())
+    );
+}
+
+#[test]
+fn nodes_of_kind_returns_nodes_in_preorder() {
+    // The nodes come outer before inner and in file order, as a cursor walk returns them
+    let p = assert_clean("program P;\nbegin\n  X := (1 + (2 * 3));\n  Y := (4);\nend.\n");
+    let found: Vec<TextRange> = crate::syntax::nodes_of_kind(&p.root, SyntaxKind::PAREN_EXPR)
+        .iter()
+        .map(|n| n.text_range())
+        .collect();
+    assert_eq!(
+        found,
+        [
+            TextRange::new(24.into(), 37.into()),
+            TextRange::new(29.into(), 36.into()),
+            TextRange::new(46.into(), 49.into()),
+        ],
+        "{}",
+        p.cst
+    );
+}
+
+#[test]
+fn has_node_of_kind_sees_the_node_and_its_descendants() {
+    // The node itself counts, a nested node counts, and a kind outside the subtree does not
+    let p = assert_clean("program P;\nbegin\n  X := (1 + 2);\n  Y := (4);\nend.\n");
+    let parens = crate::syntax::nodes_of_kind(&p.root, SyntaxKind::PAREN_EXPR);
+    assert!(crate::syntax::has_node_of_kind(
+        &p.root,
+        SyntaxKind::BINARY_EXPR
+    ));
+    assert!(!crate::syntax::has_node_of_kind(
+        &p.root,
+        SyntaxKind::ERROR_NODE
+    ));
+    assert!(crate::syntax::has_node_of_kind(
+        &parens[1],
+        SyntaxKind::PAREN_EXPR
+    ));
+    assert!(!crate::syntax::has_node_of_kind(
+        &parens[1],
+        SyntaxKind::BINARY_EXPR
+    ));
+}

@@ -25,7 +25,7 @@ program DumpKeyCompare
       var v0 A: T
       var v1 B: T
 .instance Order<Integer>
-.routine f2 Order<Integer>(const A: Integer; const B: Integer): Integer
+.routine f1 Order<Integer>(const A: Integer; const B: Integer): Integer
   .var v0 A: Integer const param
   .var v1 B: Integer const param
   .var v2 Result: Integer result
@@ -35,7 +35,7 @@ program DumpKeyCompare
       var v0 A: Integer
       var v1 B: Integer
 .generated <cmp:DumpKeyCompare.TVersion>
-.routine f3 <cmp:DumpKeyCompare.TVersion>(const A: TVersion; const B: TVersion): Integer
+.routine f2 <cmp:DumpKeyCompare.TVersion>(const A: TVersion; const B: TVersion): Integer
   .var v0 A: TVersion const param
   .var v1 B: TVersion const param
   .var v2 Result: Integer result
@@ -67,7 +67,7 @@ program DumpKeyCompare
     const Integer 1
   writeln @28
     arg
-      call KeyCompare<TVersion> via f3: Integer
+      call KeyCompare<TVersion> via f2: Integer
         global g0 V: TVersion
         global g0 V: TVersion
   writeln @29
@@ -77,6 +77,6 @@ program DumpKeyCompare
         const Double 2.5
   writeln @30
     arg
-      call f2 Order<Integer>: Integer
+      call f1 Order<Integer>: Integer
         const Integer 1
         const Integer 2

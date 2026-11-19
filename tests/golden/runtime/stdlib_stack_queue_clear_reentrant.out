@@ -1,0 +1,51 @@
+stack of capacity 4
+  destroying 1: stack count 0
+  destroying 2: stack count 2
+  destroying 3: stack count 4
+stack of capacity 4: count 6, capacity 8, items 101 102 103 104 105 106, popped 106 105 104 103 102 101
+stack of capacity 16
+  destroying 1: stack count 0
+  destroying 2: stack count 2
+stack of capacity 16: count 4, capacity 16, items 201 202 203 204, popped 204 203 202 201
+stack with Notify
+  removed 1: stack count 0
+  removed 2: stack count 0
+  destroying 1: stack count 0
+  destroying 2: stack count 2
+stack with Notify: count 4, capacity 4, items 301 302 303 304, popped 304 303 302 301
+stack freed
+  destroying 1: stack count 0
+  destroying 2: stack count 2
+  destroying 3: stack count 4
+queue that wraps round
+  destroying 1: queue count 0
+  destroying 2: queue count 2
+  destroying 3: queue count 4
+  destroying 4: queue count 6
+queue that wraps round: count 8, capacity 8, items 401 402 403 404 405 406 407 408, dequeued 401 402 403 404 405 406 407 408
+queue that has moved on
+  destroying 1: queue count 0
+  destroying 2: queue count 2
+  destroying 3: queue count 4
+queue that has moved on: count 6, capacity 8, items 451 452 453 454 455 456, dequeued 451 452 453 454 455 456
+queue of capacity 16
+  destroying 1: queue count 0
+  destroying 2: queue count 2
+queue of capacity 16: count 4, capacity 16, items 501 502 503 504, dequeued 501 502 503 504
+queue of capacity 16 that wraps round
+  destroying 1: queue count 0
+  destroying 2: queue count 2
+  destroying 3: queue count 4
+queue of capacity 16 that wraps round: count 6, capacity 16, items 551 552 553 554 555 556, dequeued 551 552 553 554 555 556
+queue with Notify
+  removed 1: queue count 0
+  removed 2: queue count 0
+  removed 3: queue count 0
+  destroying 1: queue count 0
+  destroying 2: queue count 2
+  destroying 3: queue count 4
+queue with Notify: count 6, capacity 8, items 601 602 603 604 605 606, dequeued 601 602 603 604 605 606
+queue freed
+  destroying 1: queue count 0
+  destroying 2: queue count 2
+  destroying 3: queue count 4

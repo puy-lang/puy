@@ -85,6 +85,67 @@ pub(super) fn is_class_builtin(name: &str) -> bool {
     ClassBuiltin::from_name(name).is_some()
 }
 
+/// The methods named `name` that a class has, nearest declaration first: those of the class,
+/// then those of its ancestors that are not overridden by a nearer one.
+pub(super) fn methods_named(
+    types: &super::types::TypeTable,
+    class: TypeId,
+    name: &str,
+) -> Vec<(TypeId, ClassMethod)> {
+    let mut out: Vec<(TypeId, ClassMethod)> = Vec::new();
+    for c in types.class_chain(class) {
+        for m in types.class_methods(c) {
+            // An operator is not reached by its name (`docs/spec/objects.md` 11.1)
+            if !m.name.eq_ignore_ascii_case(name) || m.kind == MethodKind::Operator {
+                continue;
+            }
+            // An overridden method is reached through its override
+            if m.vmt.is_some() && out.iter().any(|(_, n)| n.vmt == m.vmt && n.is_override) {
+                continue;
+            }
+            out.push((c, m.clone()));
+        }
+    }
+    out
+}
+
+/// The methods named `name` of a class that `visible` lets the code see (by the visibility and
+/// the class declaring the method), for choosing among overloads: the routine of each, nearest
+/// first. Built-in methods (`ToString` of `TObject`) have no routine and are left out.
+///
+/// A class's methods hide those of its ancestors with the same name unless they are all
+/// `overload`, and a method hides an ancestor's with the same parameters (as Delphi does).
+pub(super) fn method_set(
+    types: &super::types::TypeTable,
+    routines: &[RoutineInfo],
+    class: TypeId,
+    name: &str,
+    visible: impl Fn(Visibility, TypeId) -> bool,
+) -> Vec<RoutineId> {
+    let mut out: Vec<(TypeId, ClassMethod)> = Vec::new();
+    for (c, m) in methods_named(types, class, name) {
+        if !visible(m.vis, c) {
+            continue;
+        }
+        if let Some((last, _)) = out.last()
+            && *last != c
+            && !out
+                .iter()
+                .all(|(_, n)| n.routine.is_some_and(|r| routines[r.0 as usize].overload))
+        {
+            break;
+        }
+        if out
+            .iter()
+            .any(|(_, n)| same_signature(&n.params, &m.params))
+        {
+            continue;
+        }
+        out.push((c, m));
+    }
+    out.into_iter().filter_map(|(_, m)| m.routine).collect()
+}
+
 /// Whether two parameter lists are the same for overriding and for an implementation heading:
 /// the count, the types and the modes.
 fn same_signature(a: &[(Ty, ParamMode)], b: &[(Ty, ParamMode)]) -> bool {
@@ -367,10 +428,12 @@ impl<'a, 's> Sema<'a, 's> {
                                 .map(|f| f.span)
                         })
                         .or_else(|| {
-                            // A type parameter (`docs/spec/generics.md` 2.2)
+                            // A type parameter (`docs/spec/generics.md` 2.2), the innermost
+                            // one of the name (a nested type's own follow the outer type's)
                             self.types
                                 .type_params(id)
                                 .iter()
+                                .rev()
                                 .map(|p| self.types.get(*p))
                                 .find(|p| {
                                     p.name
@@ -501,6 +564,7 @@ impl<'a, 's> Sema<'a, 's> {
                 file: self.input.file,
                 interface: self.in_interface_part,
                 parent: None,
+                scope: self.cur.as_ref().and_then(|c| c.routine),
                 calls: Vec::new(),
                 method_of: Some(id),
                 self_kind,
@@ -983,21 +1047,7 @@ impl<'a, 's> Sema<'a, 's> {
     /// The methods named `name` that a class has, nearest declaration first: those of the
     /// class, then those of its ancestors that are not overridden by a nearer one.
     pub(super) fn methods_named(&self, class: TypeId, name: &str) -> Vec<(TypeId, ClassMethod)> {
-        let mut out: Vec<(TypeId, ClassMethod)> = Vec::new();
-        for c in self.types.class_chain(class) {
-            for m in self.types.class_methods(c) {
-                // An operator is not reached by its name (`docs/spec/objects.md` 11.1)
-                if !m.name.eq_ignore_ascii_case(name) || m.kind == MethodKind::Operator {
-                    continue;
-                }
-                // An overridden method is reached through its override
-                if m.vmt.is_some() && out.iter().any(|(_, n)| n.vmt == m.vmt && n.is_override) {
-                    continue;
-                }
-                out.push((c, m.clone()));
-            }
-        }
-        out
+        methods_named(&self.types, class, name)
     }
 
     /// Whether the code being analyzed can see a member of `owner` with visibility `vis`
@@ -1272,35 +1322,11 @@ impl<'a, 's> Sema<'a, 's> {
     }
 
     /// The visible methods named `name` of a class, for choosing among overloads: the routine of
-    /// each, nearest first. Built-in methods (`ToString` of `TObject`) have no routine and are
-    /// left out.
-    ///
-    /// A class's methods hide those of its ancestors with the same name unless they are all
-    /// `overload`, and a method hides an ancestor's with the same parameters (as Delphi does).
+    /// each, nearest first ([`method_set`]).
     pub(super) fn method_set(&self, class: TypeId, name: &str) -> Vec<RoutineId> {
-        let mut out: Vec<(TypeId, ClassMethod)> = Vec::new();
-        for (c, m) in self.methods_named(class, name) {
-            if !self.can_see(m.vis, c) {
-                continue;
-            }
-            if let Some((last, _)) = out.last()
-                && *last != c
-                && !out.iter().all(|(_, n)| {
-                    n.routine
-                        .is_some_and(|r| self.routines[r.0 as usize].overload)
-                })
-            {
-                break;
-            }
-            if out
-                .iter()
-                .any(|(_, n)| same_signature(&n.params, &m.params))
-            {
-                continue;
-            }
-            out.push((c, m));
-        }
-        out.into_iter().filter_map(|(_, m)| m.routine).collect()
+        method_set(&self.types, &self.routines, class, name, |vis, owner| {
+            self.can_see(vis, owner)
+        })
     }
 
     /// The method of a class a routine is: (the class declaring it, the method).
@@ -1374,7 +1400,7 @@ impl<'a, 's> Sema<'a, 's> {
             name_range.start(),
             name_range.start() + crate::source::TextSize::from(class_text.len() as u32),
         );
-        // A nested class (`procedure TOuter.TInner.Run;`; `docs/spec/objects.md` 2.2)
+        // A nested class or record (`procedure TOuter.TInner.Run;`; `docs/spec/objects.md` 2.2)
         let looked_up = match class_text.split_once('.') {
             // A generic type (`docs/spec/generics.md` 1.2), found by its type parameters
             _ if generic.is_some() => generic.map(|c| {
@@ -1400,7 +1426,7 @@ impl<'a, 's> Sema<'a, 's> {
                         .collect()
                 };
                 match self.lookup_type_symbol(&outer.to_ascii_lowercase()) {
-                    Some(Some(t @ Ty::Class(_))) => {
+                    Some(Some(t @ (Ty::Class(_) | Ty::Record(_)))) => {
                         Some(Some(self.nested_type(t, &parts[1..], class_range)))
                     }
                     other => other,
@@ -1569,7 +1595,8 @@ impl<'a, 's> Sema<'a, 's> {
             .iter()
             .filter(|r| {
                 r.unit == unit
-                    && r.method_of.is_some()
+                    // A helper in a generic type is reported with E0757 alone
+                    && r.method_of.is_some_and(|c| !self.generic_helpers.contains(&c))
                     && !r.is_abstract
                     && !r.has_body
                     && !r.implicit_forward
@@ -1720,6 +1747,7 @@ impl<'a, 's> Sema<'a, 's> {
             file: self.input.file,
             interface: false,
             parent: None,
+            scope: None,
             calls: Vec::new(),
             method_of: Some(object),
             self_kind: SelfKind::Instance,
@@ -1769,6 +1797,7 @@ impl<'a, 's> Sema<'a, 's> {
             file: self.input.file,
             interface: false,
             parent: None,
+            scope: None,
             calls: Vec::new(),
             method_of: Some(exception),
             self_kind: SelfKind::Instance,
@@ -2398,18 +2427,7 @@ impl<'a, 's> Sema<'a, 's> {
                     && self.routines[routine.0 as usize].ret.is_none()
                 {
                     let r = *routine;
-                    let pname = self.routines[r.0 as usize].name.clone();
-                    let mut d = Diagnostic::error(
-                        Code::E(725),
-                        format!("procedure `{pname}` has no value"),
-                        Stage::Sema,
-                    )
-                    .with_primary(self.span(range), "")
-                    .with_secondary(self.routine_decl_span(r), "declared here");
-                    if let Some(note) = self.procedure_value_note(r) {
-                        d = d.with_note(note);
-                    }
-                    self.push(d);
+                    self.routine_no_value(r, range);
                     return err_expr(span);
                 }
                 call
@@ -2751,7 +2769,7 @@ impl<'a, 's> Sema<'a, 's> {
                     self.lower_expr(&v);
                 }
             }
-            let t = self.types.name(Ty::Record(record));
+            let t = self.tn(Ty::Record(record));
             self.type_member_missing(&t, name, range);
             return err_expr(span);
         }

@@ -8,7 +8,7 @@ error[E2000]: variable `V` may be read before it is assigned
     |           ^ read here
     |
     = note: Puy requires every local variable to be assigned before it is read
-    = fix: add an initial value: `var V: TNode = nil;`
+    = fix: add `V := nil; K := nil;` at the start of the body
 
 error[E2000]: variable `K` may be read before it is assigned
    --> weak_flow.pas:19:20
@@ -20,7 +20,7 @@ error[E2000]: variable `K` may be read before it is assigned
     |                    ^ read here
     |
     = note: Puy requires every local variable to be assigned before it is read
-    = fix: add an initial value: `var K: TNodeClass = nil;`
+    = fix: add `V := nil; K := nil;` at the start of the body
 
 warning[W0001]: unused variable `W` (unused-variable)
    --> weak_flow.pas:24:10

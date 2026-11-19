@@ -1,0 +1,7 @@
+dictionary of capacity 4: count 12, capacity 16, keys 101 102 103 104 105 106 107 108 109 110 111 112
+has 104: TRUE, has 1: FALSE
+after Add and Remove: count 12, capacity 16, keys 102 103 104 105 106 107 108 109 110 111 112 1
+dictionary of capacity 16: count 6, capacity 16, keys 201 202 203 204 205 206
+set: count 12, capacity 16, items 301 302 303 304 305 306 307 308 309 310 311 312
+list of capacity 4: count 12, capacity 16, items 401 402 403 404 405 406 407 408 409 410 411 412
+list of capacity 16: count 9, capacity 16, items 501 502 503 504 505 506 507 508 509

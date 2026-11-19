@@ -66,7 +66,7 @@ error[E0702]: type mismatch: expected `Integer`, found `Byte` (argument 2, param
  40 |   WriteLn(TryStrToInt('1', B));
     |                            ^
     |
-    = note: a `out` parameter needs a variable of exactly the same type
+    = note: an `out` parameter needs a variable of exactly the same type
 
 error[E0705]: wrong number of arguments: expected 2, found 1
    --> sysutils_diag.pas:41:11

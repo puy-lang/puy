@@ -81,6 +81,8 @@ fn keeps_instance(types: &TypeTable, ty: Ty) -> bool {
 
 struct Flow<'a> {
     r: &'a Routine,
+    /// The routine's name in diagnostics (`TVec<T>.Make`; `docs/spec/generics.md` 8).
+    name: &'a str,
     effects: &'a Effects,
     summary: Option<Summary>,
     types: &'a TypeTable,
@@ -105,12 +107,20 @@ struct Flow<'a> {
     finallies: Vec<FinallyCtx>,
     result_return_reported: bool,
     out_return_reported: Vec<bool>,
+    /// The diagnostics whose `safe` fix assigns a zero at the start of the body, with the variable
+    /// they report (E2000 for a local variable of a routine or `Result`, E2002 read before
+    /// assigned). Their fixes are made at the end so that each assigns all of them
+    /// (`docs/spec/semantics.md` 4.4).
+    inits: Vec<(usize, usize)>,
 }
 
-/// `unused_param_on` marks the parameters where W0017 is enabled. `sema_reads` are the variable reads recorded by semantic analysis (with positions). Reads inside expressions that did not
+/// `unused_param_on` marks the parameters W0017 checks (where it is enabled, except those of an
+/// `override` method). `sema_reads` are the variable reads recorded by semantic analysis (with positions). Reads inside expressions that did not
 /// make it into the tree (error-typed expressions, discarded statements) also count as reads if they are in reachable code (4.6).
+#[allow(clippy::too_many_arguments)]
 pub fn analyze(
     r: &Routine,
+    name: &str,
     types: &TypeTable,
     file: FileId,
     bytes: &[u8],
@@ -121,6 +131,7 @@ pub fn analyze(
     let n = r.vars.len();
     let mut f = Flow {
         r,
+        name,
         effects,
         summary: None,
         types,
@@ -138,6 +149,7 @@ pub fn analyze(
         finallies: Vec::new(),
         result_return_reported: false,
         out_return_reported: vec![false; n],
+        inits: Vec::new(),
     };
     let mut cur = Cursor {
         state: initial_state(r),
@@ -147,9 +159,10 @@ pub fn analyze(
     if cur.reachable {
         f.check_return(&cur.state, r.end_span);
     }
+    f.attach_inits();
     f.count_unseen_reads();
     f.unused_variables();
-    f.unused_parameters();
+    f.unused_parameters(unused_param_on);
     // W0001 alone for a variable whose value is never read, and W0017 alone for such a
     // parameter where W0017 is enabled; no W0002 for a variable read where the tree does not show
     // it (the reads cannot be placed on a path)
@@ -251,6 +264,7 @@ fn summarize(
         .collect();
     let mut f = Flow {
         r,
+        name: &r.name,
         effects,
         summary: Some(Summary {
             own: n,
@@ -273,6 +287,7 @@ fn summarize(
         finallies: Vec::new(),
         result_return_reported: false,
         out_return_reported: vec![false; n],
+        inits: Vec::new(),
     };
     let mut state = initial_state(r);
     state.extend(std::iter::repeat_n(false, target_vars));
@@ -679,6 +694,26 @@ impl<'a> Flow<'a> {
                 self.expr(to, cur);
                 self.expr(count, cur);
             }
+            StmtKind::ArraySortRange {
+                target,
+                index,
+                count,
+            } => {
+                self.place_read(target, cur);
+                self.expr(index, cur);
+                self.expr(count, cur);
+            }
+            StmtKind::HashRelink {
+                buckets,
+                hashes,
+                next,
+                count,
+            } => {
+                self.place_read(buckets, cur);
+                self.expr(hashes, cur);
+                self.place_read(next, cur);
+                self.expr(count, cur);
+            }
             StmtKind::FreeAndNil { target } => {
                 self.place_read(target, cur);
                 if let Place::Var(id, _) = target {
@@ -828,7 +863,7 @@ impl<'a> Flow<'a> {
 
     fn expr(&mut self, e: &Expr, cur: &mut Cursor) {
         match &e.kind {
-            ExprKind::Const | ExprKind::Global(_) => {}
+            ExprKind::Const { .. } | ExprKind::Global(_) => {}
             // An error-typed expression has no children, so the reads recorded by semantic analysis within its range
             // are treated as read here (4.6; also reports E2000 / E2004)
             ExprKind::Error => self.reads_within(e.span, cur),
@@ -1050,11 +1085,7 @@ impl<'a> Flow<'a> {
                 .with_primary(span(self.file, at), label)
                 .with_secondary(span(self.file, v.span), "declared here")
                 .with_note("Puy requires an `out` parameter to be assigned before it is read");
-                let d = match self.begin_insert(&name, v.ty) {
-                    Some(f) => d.with_fix(f),
-                    None => d,
-                };
-                self.diags.push(d);
+                self.push_with_init(d, i);
             }
             VarKind::Result => {
                 let d = Diagnostic::error(
@@ -1064,11 +1095,7 @@ impl<'a> Flow<'a> {
                 )
                 .with_primary(span(self.file, at), label)
                 .with_note("Puy requires `Result` to be assigned before it is read");
-                let d = match self.begin_insert("Result", v.ty) {
-                    Some(f) => d.with_fix(f),
-                    None => d,
-                };
-                self.diags.push(d);
+                self.push_with_init(d, i);
             }
             _ => {
                 let mut d = Diagnostic::error(
@@ -1080,7 +1107,11 @@ impl<'a> Flow<'a> {
                 .with_secondary(span(self.file, v.span), "declared here")
                 .with_note("Puy requires every local variable to be assigned before it is read");
                 match self.initial_value_fix(v) {
-                    Ok(f) => d = d.with_fix(f),
+                    Ok(InitFix::Decl(f)) => d = d.with_fix(f),
+                    Ok(InitFix::Begin) => {
+                        self.push_with_init(d, i);
+                        return;
+                    }
                     Err(NoFix::SeveralNames) => {
                         d = d.with_note(format!(
                             "declare `{name}` on its own to give it an initial value"
@@ -1102,13 +1133,49 @@ impl<'a> Flow<'a> {
         }
     }
 
-    /// An edit inserting `name := zero;` right after the body's `begin`. If a newline follows `begin`,
-    /// adds a line with the same indentation as the next line (continuing on the `begin` line reads poorly).
-    fn begin_insert(&self, name: &str, ty: Ty) -> Option<Fix> {
+    /// Pushes a diagnostic whose fix assigns a zero to the variable `var` at the start of the body
+    /// (made by `attach_inits`), or without a fix if there is no zero or no body to write it in.
+    fn push_with_init(&mut self, d: Diagnostic, var: usize) {
+        if self.r.body_begin.is_some() && zero_text(self.r.vars[var].ty, self.types).is_some() {
+            self.inits.push((self.diags.len(), var));
+        }
+        self.diags.push(d);
+    }
+
+    /// Gives each diagnostic of `inits` a `safe` fix assigning zeros at the start of the body to
+    /// all the variables of `inits`, in the order of declaration: their edits are then the same,
+    /// so `puy fix` applies them in one round instead of putting each later one above the
+    /// earlier ones (`docs/spec/semantics.md` 4.4).
+    fn attach_inits(&mut self) {
+        let mut vars: Vec<usize> = self.inits.iter().map(|&(_, v)| v).collect();
+        vars.sort_unstable();
+        vars.dedup();
+        let assigns: Vec<(&str, Ty)> = vars
+            .iter()
+            .map(|&v| (self.r.vars[v].name.as_str(), self.r.vars[v].ty))
+            .collect();
+        let Some(fix) = self.begin_insert(&assigns) else {
+            return;
+        };
+        for &(d, _) in &self.inits {
+            self.diags[d].fixes.push(fix.clone());
+        }
+    }
+
+    /// An edit inserting `name := zero;` for each of `assigns` right after the body's `begin`. If a
+    /// newline follows `begin`, adds a line for each with the same indentation as the next line
+    /// (continuing on the `begin` line reads poorly).
+    fn begin_insert(&self, assigns: &[(&str, Ty)]) -> Option<Fix> {
         let at = self.r.body_begin?;
-        let zero = zero_text(ty, self.types)?;
+        let lines = assigns
+            .iter()
+            .map(|&(name, ty)| Some(format!("{name} := {};", zero_text(ty, self.types)?)))
+            .collect::<Option<Vec<String>>>()?;
+        if lines.is_empty() {
+            return None;
+        }
         let rest = &self.bytes[u32::from(at) as usize..];
-        let text = match rest.first() {
+        let text: String = match rest.first() {
             Some(b'\r' | b'\n') => {
                 // Newlines included in edits are always `LF` (`diagnostics.md` 2.1)
                 let newline = "\n";
@@ -1122,23 +1189,39 @@ impl<'a> Flow<'a> {
                     .take_while(|b| matches!(b, b' ' | b'\t'))
                     .map(|&b| b as char)
                     .collect();
-                format!("{newline}{indent}{name} := {zero};")
+                lines
+                    .iter()
+                    .map(|l| format!("{newline}{indent}{l}"))
+                    .collect()
             }
-            _ => format!(" {name} := {zero};"),
+            _ => lines.iter().map(|l| format!(" {l}")).collect(),
         };
         Some(Fix::safe(
-            format!("add `{name} := {zero};` at the start of the body"),
+            format!("add `{}` at the start of the body", lines.join(" ")),
             vec![TextEdit::insert(self.file, at, text)],
         ))
     }
 
-    /// An edit adding an initial value to a declaration (E2000).
-    fn initial_value_fix(&self, v: &Var) -> Result<Fix, NoFix> {
+    /// The fix of E2000 for a local variable: an assignment at the start of the body for one
+    /// declared in the `var` section of a routine (an initial value there is a Puy extension that
+    /// Delphi does not accept; `docs/spec/semantics.md` 4.1), an initial value in the declaration
+    /// for an inline variable and a variable of a script's top level.
+    fn initial_value_fix(&self, v: &Var) -> Result<InitFix, NoFix> {
         let decl = v.decl.as_ref().ok_or(NoFix::Other)?;
         let zero = zero_text(v.ty, self.types).ok_or(NoFix::Anonymous)?;
         match decl.kind() {
             SyntaxKind::VAR_DECL => {
                 let d = ast::VarDecl::cast(decl.clone()).ok_or(NoFix::Other)?;
+                let top_level = decl
+                    .parent()
+                    .and_then(|section| section.parent())
+                    .is_some_and(|p| p.kind() == SyntaxKind::SCRIPT);
+                if !top_level {
+                    return match self.r.body_begin {
+                        Some(_) => Ok(InitFix::Begin),
+                        None => Err(NoFix::Other),
+                    };
+                }
                 if d.names().len() != 1 {
                     return Err(NoFix::SeveralNames);
                 }
@@ -1146,10 +1229,10 @@ impl<'a> Flow<'a> {
                 let at = t.syntax().text_range().end();
                 let text = format!(" = {zero}");
                 let shown = format!("var {}: {} = {zero};", v.name, t.text());
-                Ok(Fix::safe(
+                Ok(InitFix::Decl(Fix::safe(
                     format!("add an initial value: `{shown}`"),
                     vec![TextEdit::insert(self.file, at, text)],
-                ))
+                )))
             }
             SyntaxKind::INLINE_VAR_DECL => {
                 let d = ast::InlineVarDecl::cast(decl.clone()).ok_or(NoFix::Other)?;
@@ -1157,10 +1240,10 @@ impl<'a> Flow<'a> {
                 let at = t.syntax().text_range().end();
                 let text = format!(" := {zero}");
                 let shown = format!("var {}: {} := {zero};", v.name, t.text());
-                Ok(Fix::safe(
+                Ok(InitFix::Decl(Fix::safe(
                     format!("add an initial value: `{shown}`"),
                     vec![TextEdit::insert(self.file, at, text)],
-                ))
+                )))
             }
             _ => Err(NoFix::Other),
         }
@@ -1181,7 +1264,7 @@ impl<'a> Flow<'a> {
             && !self.result_return_reported
         {
             self.result_return_reported = true;
-            let name = self.r.name.clone();
+            let name = self.name;
             let ty = self.r.vars[rid.0 as usize].ty;
             let mut d = Diagnostic::error(
                 Code::E(2001),
@@ -1191,7 +1274,7 @@ impl<'a> Flow<'a> {
             .with_primary(span(self.file, self.r.name_span), "")
             .with_secondary(span(self.file, at), "returns here")
             .with_note("Puy requires `Result` to be assigned on every path that returns");
-            if let Some(mut f) = self.begin_insert("Result", ty) {
+            if let Some(mut f) = self.begin_insert(&[("Result", ty)]) {
                 f.applicability = crate::diagnostics::Applicability::Suggestion;
                 d = d.with_fix(f);
             }
@@ -1217,7 +1300,7 @@ impl<'a> Flow<'a> {
                 .with_note(
                     "Puy requires an `out` parameter to be assigned on every path that returns",
                 );
-                if let Some(mut f) = self.begin_insert(&name, v.ty) {
+                if let Some(mut f) = self.begin_insert(&[(name.as_str(), v.ty)]) {
                     f.applicability = crate::diagnostics::Applicability::Suggestion;
                     d = d.with_fix(f);
                 }
@@ -1257,9 +1340,13 @@ impl<'a> Flow<'a> {
     }
 
     /// W0017 (disabled by default): a value or `const` parameter that is never read, or a `var`
-    /// parameter that is neither read nor written.
-    fn unused_parameters(&mut self) {
+    /// parameter that is neither read nor written. Only the parameters marked in `on` (W0017
+    /// enabled, and not a parameter of an `override` method) are checked.
+    fn unused_parameters(&mut self, on: &[bool]) {
         for (i, v) in self.r.vars.iter().enumerate() {
+            if !on[i] {
+                continue;
+            }
             let unused = match v.kind {
                 VarKind::Param(ast::ParamMode::Value | ast::ParamMode::Const) => {
                     !self.reads[i] && !v.read_by_nested
@@ -1338,7 +1425,15 @@ impl<'a> Flow<'a> {
     }
 }
 
-/// Why E2000 has no fix that adds an initial value.
+/// The fix of E2000 for a local variable.
+enum InitFix {
+    /// An initial value in the declaration.
+    Decl(Fix),
+    /// An assignment at the start of the body (made by `Flow::attach_inits`).
+    Begin,
+}
+
+/// Why E2000 has no fix that gives a local variable a value.
 enum NoFix {
     /// A declaration of two or more identifiers.
     SeveralNames,

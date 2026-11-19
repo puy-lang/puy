@@ -19,6 +19,11 @@ pub enum Shape {
     ABRange3,
     /// `A B` (`B` to `B+3`; `StrReplace`)
     ABRange4,
+    /// `A B` (`B` to `B+4`; `HashFind`)
+    ABRange5,
+    /// `A B C` (`B`, `B+1` are consecutive registers, `C` an immediate: a slot number;
+    /// `HashLookupInt`, `HashLookupStr`)
+    ABRange2Slot,
     /// `A B C` (`B` is the format, `B+1 ..= B+2C` the `C` pairs of kind and value; `Format`)
     ABPairs,
     /// `A B C` (`C` is the number of registers `B ..= B+C-1`, at least 2; `ConcatStrN`)
@@ -42,12 +47,30 @@ pub enum Shape {
     ABSlot,
     /// `A B C` (`B` is an immediate: a field number; `FieldSet`, `ExcSet`, `ObjSet`)
     ASlotC,
+    /// `A B C` as [`Shape::ASlotC`], followed by a type word holding a type index
+    /// (`RefFieldSet`; `docs/spec/bytecode.md` 1.2)
+    ASlotCType,
     /// `A B C` (`C` is a constant pool index; `ChkIndex`, `ChkRange`)
     ABk,
     /// `A B C` (`C` is a type index; `EnumToStr`)
     ABType,
     /// `A B C` (`C` is the length of the path in `A+1 ..= A+C`; `Lend`)
     ABPath,
+    /// `A B C` as [`Shape::ABPath`], followed by a type word holding the type of the flat place
+    /// (`LendPlace`; `docs/spec/bytecode.md` 1.2, 2.8)
+    ABPathType,
+    /// `A B C` (`A`, `A+1` are the cursor written, `B` and `C` registers; `ElemAt`)
+    ACursorBC,
+    /// `A B C` (`A` is a register, `B`, `B+1` the cursor, `C` an immediate: a slot number in the
+    /// flat place; `SlotGet`)
+    ABCursorSlot,
+    /// `A B C` (`A`, `A+1` are the cursor, `B` an immediate: a slot number in the flat place, `C`
+    /// a register; `SlotSet`)
+    ACursorSlotC,
+    /// `A B` (`A` is a register, `B`, `B+1` the cursor), followed by a type word (`AggLoad`)
+    ABCursorType,
+    /// `A B` (`A`, `A+1` are the cursor, `B` a register), followed by a type word (`AggStore`)
+    ACursorBType,
     /// `A B` (`A`, `A+1` are registers; `B` is the number of `Jmp`s that follow; `EndFinally`)
     AJumps,
     /// `A B C` (`B` is a register of the frame `C` levels out, `C` an immediate; `OuterRef`)
@@ -56,21 +79,57 @@ pub enum Shape {
     Intrinsic,
 }
 
+impl Shape {
+    /// The second register of the cursor (`docs/spec/bytecode.md` 2.8) among the operands `a` and
+    /// `b` of an instruction of this shape, or `None` for a shape without a cursor. The short form
+    /// holds a cursor only when this register fits in 8 bits (1.2): the fast path of the VM reads
+    /// it in the window of 256 registers.
+    pub fn cursor_end(self, a: u32, b: u32) -> Option<u32> {
+        match self {
+            Shape::ACursorBC | Shape::ACursorSlotC | Shape::ACursorBType => Some(a + 1),
+            Shape::ABCursorSlot | Shape::ABCursorType => Some(b + 1),
+            _ => Option::None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct OpInfo {
-    pub code: u8,
+    /// The instruction's number: 0 to 255 in the `op` of its word, 256 to 511 after `Ext`
+    /// (`docs/spec/bytecode.md` 1.2), or the number of an intrinsic (`C` of `Intrinsic`; 2.19)
+    pub code: u16,
     pub name: &'static str,
     pub shape: Shape,
 }
 
 macro_rules! ops {
-    ($($konst:ident = $code:expr, $name:literal, $shape:ident;)*) => {
-        $(pub const $konst: u8 = $code;)*
+    ($t:ty; $($konst:ident = $code:expr, $name:literal, $shape:ident;)*) => {
+        $(pub const $konst: $t = $code;)*
         pub const TABLE: &[OpInfo] = &[$(OpInfo { code: $code, name: $name, shape: Shape::$shape }),*];
+    };
+    // The instructions 0 to 255 also as the `op` of their word (`word`)
+    ($t:ty, word; $($konst:ident = $code:expr, $name:literal, $shape:ident;)*) => {
+        ops!($t; $($konst = $code, $name, $shape;)*);
+
+        /// The instructions numbered 0 to 255 as the 8-bit `op` of their word
+        /// (`bytecode::word_op`). The VM dispatches on these: with the `u16` numbers, the
+        /// execution loop held the number in a machine register of its own and its code moved,
+        /// which slowed it down by about 10% (M4-109; `docs/notes/benchmark-m4c.md`).
+        pub mod word {
+            $(pub const $konst: u8 = $code;)*
+        }
     };
 }
 
+/// The number an instruction after the prefix `Ext` starts from (`docs/spec/bytecode.md` 1.2): the
+/// `op` of its word plus this.
+pub const EXT_BASE: u16 = 256;
+
+/// One past the largest instruction number (`Ext` with `op` 255).
+pub const LIMIT: u16 = 512;
+
 ops! {
+    u16, word;
     NOP = 0, "Nop", None;
     WIDE = 1, "Wide", None;
     MOVE = 2, "Move", AB;
@@ -161,15 +220,16 @@ ops! {
     INT_TO_STR = 87, "IntToStr", AB;
     UINT_TO_STR = 88, "UIntToStr", AB;
     BOOL_TO_STR = 89, "BoolToStr", AB;
-    STR_TO_INT = 90, "StrToInt", AB;
-    STR_TO_INT64 = 91, "StrToInt64", AB;
+    // `docs/spec/bytecode.md` 2.23 (the units of the standard library only)
+    HASH_FIND = 90, "HashFind", ABRange5;
     STR_COPY = 92, "StrCopy", ABRange3;
     STR_POS = 93, "StrPos", ABRange2;
     STR_UPPER_ASCII = 94, "StrUpperAscii", AB;
     STR_LOWER_ASCII = 95, "StrLowerAscii", AB;
-    STR_TRIM = 96, "StrTrim", AB;
+    // `docs/spec/bytecode.md` 2.23 (the units of the standard library only)
+    HASH_LOOKUP_INT = 96, "HashLookupInt", ABRange2Slot;
     STR_PAD_LEFT = 97, "StrPadLeft", ABC;
-    STR_TO_INT_DEF = 98, "StrToIntDef", ABRange2;
+    HASH_LOOKUP_STR = 98, "HashLookupStr", ABRange2Slot;
     STR_TO_INT_IO = 99, "StrToIntIO", ABCImm;
     UP_CASE_CHAR = 100, "UpCaseChar", AB;
     CAP_GET = 101, "CapGet", ABSlot;
@@ -198,6 +258,8 @@ ops! {
     FOR_LOOP_UP = 124, "ForLoopUp", ABsC;
     FOR_LOOP_DOWN = 125, "ForLoopDown", ABsC;
     CONCAT_STR_N = 126, "ConcatStrN", ABList;
+    // `docs/spec/bytecode.md` 2.8 (flat places)
+    ELEM_AT = 127, "ElemAt", ACursorBC;
     ASSIGN_REF = 128, "AssignRef", AB;
     MOVE_REF = 129, "MoveRef", AB;
     ADD_REF = 130, "AddRef", A;
@@ -227,13 +289,17 @@ ops! {
     LEND = 154, "Lend", ABPath;
     LOAD_GLOBAL_REF = 155, "LoadGlobalRef", ABx;
     LOAD_REF_REF = 156, "LoadRefRef", AB;
-    STR_SET_LEN = 157, "StrSetLen", AB;
     UNIQUE_VAL = 158, "UniqueVal", A;
     MATERIALIZE = 159, "Materialize", ABx;
+    REF_FIELD_GET = 160, "RefFieldGet", ABSlot;
     RAISE = 161, "Raise", A;
     RAISE_OUTER = 162, "RaiseOuter", AB;
     END_FINALLY = 163, "EndFinally", AJumps;
+    REF_FIELD_GET_REF = 164, "RefFieldGetRef", ABSlot;
+    REF_FIELD_SET = 165, "RefFieldSet", ASlotCType;
     EXC_INFO = 166, "ExcInfo", ABSlot;
+    REF_FIELD_SET_REF = 167, "RefFieldSetRef", ASlotCType;
+    LEND_PLACE = 168, "LendPlace", ABPathType;
     CHK_RANGE = 169, "ChkRange", ABk;
     ENUM_TO_STR = 170, "EnumToStr", ABType;
     SET_IN = 171, "SetIn", ABC;
@@ -281,29 +347,18 @@ ops! {
     SUB_CURR = 213, "SubCurr", ABC;
     MUL_CURR = 214, "MulCurr", ABC;
     DIV_CURR = 215, "DivCurr", ABC;
-    NEG_CURR = 216, "NegCurr", AB;
-    INT_TO_CURR = 217, "IntToCurr", AB;
-    UINT_TO_CURR = 218, "UIntToCurr", AB;
-    F64_TO_CURR = 219, "F64ToCurr", AB;
-    CURR_TO_F64 = 220, "CurrToF64", AB;
-    CURR_TO_F32 = 221, "CurrToF32", AB;
-    TRUNC_CURR = 222, "TruncCurr", AB;
-    ROUND_CURR = 223, "RoundCurr", AB;
     // `docs/spec/equality.md` 8.1
     HASH_INT = 224, "HashInt", AB;
     HASH_F64 = 225, "HashF64", AB;
     HASH_STR = 226, "HashStr", AB;
     HASH_MIX = 227, "HashMix", ABC;
     KEY_EQ_F64 = 228, "KeyEqF64", ABC;
-    STR_TO_U8 = 230, "StrToU8", AB;
-    U8_TO_STR = 231, "U8ToStr", AB;
+    AGG_LOAD = 229, "AggLoad", ABCursorType;
     U8_LEN = 232, "U8Len", AB;
     U8_INDEX = 233, "U8Index", ABC;
     CONCAT_U8 = 234, "ConcatU8", ABC;
     CMP_U8 = 235, "CmpU8", ABC;
     EQ_U8 = 236, "EqU8", ABC;
-    U8_COPY = 237, "U8Copy", ABRange3;
-    U8_POS = 238, "U8Pos", ABRange2;
     ADD_INT32 = 239, "AddInt32", ABC;
     SUB_INT32 = 240, "SubInt32", ABC;
     MUL_INT32 = 241, "MulInt32", ABC;
@@ -314,7 +369,13 @@ ops! {
     ARR_INSERT_ARR = 246, "ArrInsertArr", ABx;
     ARR_DELETE = 247, "ArrDelete", ABx;
     FORMAT = 248, "Format", ABPairs;
-    SLICE_RANGE = 254, "SliceRange", ABRange3;
+    SLOT_GET = 249, "SlotGet", ABCursorSlot;
+    SLOT_GET_REF = 250, "SlotGetRef", ABCursorSlot;
+    SLOT_SET = 251, "SlotSet", ACursorSlotC;
+    SLOT_SET_REF = 252, "SlotSetRef", ACursorSlotC;
+    AGG_STORE = 253, "AggStore", ACursorBType;
+    // The prefix of the instructions numbered 256 to 511 (`docs/spec/bytecode.md` 1.2)
+    EXT = 254, "Ext", None;
     INTRINSIC = 255, "Intrinsic", Intrinsic;
 }
 
@@ -325,6 +386,7 @@ pub mod intr {
     use super::{OpInfo, Shape};
 
     ops! {
+        u8;
         INT_TO_HEX = 0, "IntToHex", ABRange2;
         STR_TO_BOOL = 1, "StrToBool", AB;
         BOOL_STR = 2, "BoolStr", ABRange2;
@@ -406,6 +468,31 @@ pub mod intr {
         ARRAY_MOVE_RANGE = 73, "ArrayMoveRange", ABRange3;
         IS_REF_OBJ = 74, "IsRefObj", AB;
         IS_OVERRIDDEN = 75, "IsOverridden", ABRange3;
+        // `docs/spec/bytecode.md` 2.8: a lent flat place taken out into a block
+        PLACE_BOX = 76, "PlaceBox", AB;
+        // Instructions moved here to free their numbers (M4-109; `docs/spec/bytecode.md` 2.19)
+        STR_TO_INT = 77, "StrToInt", AB;
+        STR_TO_INT64 = 78, "StrToInt64", AB;
+        STR_TRIM = 79, "StrTrim", AB;
+        STR_TO_INT_DEF = 80, "StrToIntDef", ABRange2;
+        STR_SET_LEN = 81, "StrSetLen", AB;
+        NEG_CURR = 82, "NegCurr", AB;
+        INT_TO_CURR = 83, "IntToCurr", AB;
+        UINT_TO_CURR = 84, "UIntToCurr", AB;
+        F64_TO_CURR = 85, "F64ToCurr", AB;
+        CURR_TO_F64 = 86, "CurrToF64", AB;
+        CURR_TO_F32 = 87, "CurrToF32", AB;
+        TRUNC_CURR = 88, "TruncCurr", AB;
+        ROUND_CURR = 89, "RoundCurr", AB;
+        STR_TO_U8 = 90, "StrToU8", AB;
+        U8_TO_STR = 91, "U8ToStr", AB;
+        U8_COPY = 92, "U8Copy", ABRange3;
+        U8_POS = 93, "U8Pos", ABRange2;
+        SLICE_RANGE = 94, "SliceRange", ABRange3;
+        // `docs/spec/bytecode.md` 2.23 (the units of the standard library only)
+        HASH_RELINK = 95, "HashRelink", ABRange3;
+        // `docs/spec/bytecode.md` 2.22 (the units of the standard library only)
+        ARRAY_SORT_RANGE = 96, "ArraySortRange", ABRange3;
     }
 
     /// Looks up the information of an intrinsic.
@@ -416,7 +503,7 @@ pub mod intr {
 
 /// The name and shape of the instruction `opc` with the third operand `c`: an intrinsic's own for
 /// `Intrinsic` (`docs/spec/bytecode.md` 2.19), the opcode's otherwise.
-pub fn resolve(opc: u8, c: u32) -> Option<&'static OpInfo> {
+pub fn resolve(opc: u16, c: u32) -> Option<&'static OpInfo> {
     if opc == INTRINSIC {
         intr::info(c)
     } else {
@@ -424,19 +511,41 @@ pub fn resolve(opc: u8, c: u32) -> Option<&'static OpInfo> {
     }
 }
 
-/// Looks up the information of an opcode.
-pub fn info(code: u8) -> Option<&'static OpInfo> {
-    LOOKUP[code as usize].map(|i| &TABLE[i])
+/// Looks up the information of an instruction number (0 to 511; 1.2).
+pub fn info(code: u16) -> Option<&'static OpInfo> {
+    #[cfg(test)]
+    if code == TEST_EXT {
+        return Some(&TEST_EXT_INFO);
+    }
+    LOOKUP
+        .get(usize::from(code))
+        .copied()
+        .flatten()
+        .map(|i| &TABLE[i])
 }
 
-static LOOKUP: [Option<usize>; 256] = {
-    let mut t = [None; 256];
+static LOOKUP: [Option<usize>; LIMIT as usize] = {
+    let mut t = [None; LIMIT as usize];
     let mut i = 0;
     while i < TABLE.len() {
         t[TABLE[i].code as usize] = Some(i);
         i += 1;
     }
     t
+};
+
+/// An instruction past 255 for the unit tests of the `Ext` path (`docs/spec/bytecode.md` 1.2;
+/// no instruction uses `Ext` yet): `TestExt A B C` is `rA := rB - rC` (wrapping), so that each of
+/// its three registers shows in the result. Its word holds the `op` of `AddInt`, so that a decoder
+/// that drops `Ext` runs another instruction.
+#[cfg(test)]
+pub const TEST_EXT: u16 = EXT_BASE + ADD_INT;
+
+#[cfg(test)]
+static TEST_EXT_INFO: OpInfo = OpInfo {
+    code: TEST_EXT,
+    name: "TestExt",
+    shape: Shape::ABC,
 };
 
 #[cfg(test)]
@@ -448,15 +557,55 @@ mod tests {
         assert_eq!(info(CALL).unwrap().name, "Call");
         assert_eq!(info(CELL_SET_REF).unwrap().name, "CellSetRef");
         assert_eq!(info(CAP_GET).unwrap().name, "CapGet");
-        // The exception instructions replaced by the class ones (`docs/spec/objects.md` 14.8)
-        for code in [160, 164, 165, 167, 168] {
-            assert!(info(code).is_none(), "{code}");
+        // The numbers of the exception instructions replaced by the class ones
+        // (`docs/spec/objects.md` 14.8) went to the fields read through a reference slot
+        // (`docs/spec/bytecode.md` 2.8), except 168
+        for (code, name) in [
+            (160, "RefFieldGet"),
+            (164, "RefFieldGetRef"),
+            (165, "RefFieldSet"),
+            (167, "RefFieldSetRef"),
+        ] {
+            assert_eq!(info(code).map(|i| i.name), Some(name), "{code}");
+        }
+        // The rest of the numbers left (M4-63)
+        for (code, name) in [
+            (127, "ElemAt"),
+            (168, "LendPlace"),
+            (229, "AggLoad"),
+            (249, "SlotGet"),
+            (253, "AggStore"),
+        ] {
+            assert_eq!(info(code).map(|i| i.name), Some(name), "{code}");
         }
         for (i, a) in TABLE.iter().enumerate() {
             for b in &TABLE[i + 1..] {
                 assert_ne!(a.code, b.code);
             }
         }
+    }
+
+    // The numbers freed by moving rare instructions to `Intrinsic` (M4-109;
+    // `docs/spec/bytecode.md` 2.19) stay free but 90, 96 and 98 (the hash table lookups; 2.23;
+    // 91 was `HashFindKey` until M4-132), `Ext` took one of them, and no instruction is numbered
+    // past 255 yet besides the one of the unit tests.
+    #[test]
+    fn freed_numbers_and_ext() {
+        for code in [
+            91, 157, 216, 217, 218, 219, 220, 221, 222, 223, 230, 231, 237, 238,
+        ] {
+            assert!(info(code).is_none(), "{code}");
+        }
+        assert_eq!(info(90).map(|i| i.name), Some("HashFind"));
+        assert_eq!(info(96).map(|i| i.name), Some("HashLookupInt"));
+        assert_eq!(info(98).map(|i| i.name), Some("HashLookupStr"));
+        assert_eq!(info(254).map(|i| i.name), Some("Ext"));
+        assert_eq!(info(TEST_EXT).map(|i| i.name), Some("TestExt"));
+        for code in EXT_BASE..LIMIT {
+            assert!(code == TEST_EXT || info(code).is_none(), "{code}");
+        }
+        assert!(info(LIMIT).is_none());
+        assert!(TABLE.iter().all(|i| i.code < EXT_BASE));
     }
 
     // Each intrinsic's number is unique and increasing, so `resolve` finds it by `C`, and an
@@ -488,7 +637,12 @@ mod tests {
         assert_eq!(resolve(INTRINSIC, 72).unwrap().name, "CallableHash");
         assert_eq!(resolve(INTRINSIC, 74).unwrap().name, "IsRefObj");
         assert_eq!(resolve(INTRINSIC, 75).unwrap().name, "IsOverridden");
-        assert!(resolve(INTRINSIC, 76).is_none());
+        assert_eq!(resolve(INTRINSIC, 76).unwrap().name, "PlaceBox");
+        assert_eq!(resolve(INTRINSIC, 77).unwrap().name, "StrToInt");
+        assert_eq!(resolve(INTRINSIC, 94).unwrap().name, "SliceRange");
+        assert_eq!(resolve(INTRINSIC, 95).unwrap().name, "HashRelink");
+        assert_eq!(resolve(INTRINSIC, 96).unwrap().name, "ArraySortRange");
+        assert!(resolve(INTRINSIC, 97).is_none());
         assert_eq!(resolve(INTRINSIC, 53).unwrap().name, "ExceptObject");
         assert_eq!(resolve(INTRINSIC, 46).unwrap().name, "Free");
         assert_eq!(resolve(CALL, 0).unwrap().name, "Call");

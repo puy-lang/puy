@@ -52,8 +52,9 @@
   0005  LoadConst    r3, k2
   0006  ConcatStr    r1, r1, r3
   0007  CallHost     r1, h0
+  0008  Release      r2
   .line 28
-  0008  RetVoid
+  0009  RetVoid
 .finally r1, r2, r3
 .func 3 DumpCtorDtor.TNamed.AfterConstruction params=1 regs=4
   .local r0 Self
@@ -64,6 +65,7 @@
   0003  LoadConst    r3, k2
   0004  ConcatStr    r1, r1, r3
   0005  CallHost     r1, h0
+  0006  Release      r2
   .line 33
-  0006  RetVoid
+  0007  RetVoid
 .finally r1, r2, r3

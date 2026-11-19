@@ -34,10 +34,14 @@
   .line 23
   0001  AddInt32I    r2, r0, 1
   .line 25
-  0002  Move         r11, r0
-  0003  AddInt32I    r12, r1, 1
-  0004  Call         r11, f1
-  0005  Move         r2, r11
+  0002  AddInt32I    r12, r1, 1
+  .inline f1 DumpAssignTry.F line=25
+  .line 11
+  0003  SubInt       r13, r0, r12
+  0004  NarrowOvf    r13, r13, 4
+  .line 12
+  0005  Move         r2, r13
+  .endinline
   .line 28
   0006  AddIntI      r11, r0, 1
   0007  NarrowOvf    r11, r11, 4

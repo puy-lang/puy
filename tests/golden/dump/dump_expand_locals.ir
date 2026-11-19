@@ -1,0 +1,408 @@
+; puy ir 1
+.global
+  g0 A: array of TPoint
+  g1 H: THolder
+.func f0 DumpExpandLocals.<main> params=0
+  .reg t0: Int64 temp
+  .reg t1: array of TPoint temp
+  .reg t2: array of TPoint temp
+  .reg t3: Int64 temp
+  .reg t4: Int64 temp
+  .reg t5: Integer temp
+  .reg t6: array of TPoint temp
+  .reg t7: Int64 temp
+  .reg t8: array of TPoint temp
+  .reg t9: Int64 temp
+  .reg t10: Integer temp
+  .reg t11: array of TPoint temp
+  .reg t12: Int64 temp
+  .reg t13: array of TPoint temp
+  .reg t14: THolder temp
+  .reg t15: array of TPoint temp
+  .reg t16: THolder temp
+  .reg t17: array of TPoint temp
+  .reg t18: array of TPoint temp
+  .reg t19: array of TPoint temp
+  .reg t20: - temp
+  .reg t21: THolder temp
+bb0:
+  .line 122
+  LoadInt      t0, 2
+  LoadGlobal   t1, g0
+  Move         t2, t1
+  Move         t3, t0
+  SetLen       t2, array of DumpExpandLocals.TPoint, t3
+  Move         t1, t2
+  StoreGlobal  t1, g0
+  .line 123
+  LoadInt      t4, 1
+  LoadInt      t5, 1
+  LoadGlobal   t6, g0
+  ElemAt       t7, t8, t6, t4
+  SlotSet      t7, t8, 0, t5
+  .line 124
+  LoadInt      t9, 1
+  LoadInt      t10, 2
+  LoadGlobal   t11, g0
+  ElemAt       t12, t13, t11, t9
+  SlotSet      t12, t13, 1, t10
+  .line 125
+  LoadZero     t14
+  New          t14, DumpExpandLocals.THolder
+  StoreGlobal  t14, g1
+  .line 126
+  LoadGlobalRef t17, g0
+  Move         t15, t17
+  LoadGlobal   t16, g1
+  Call         -, f3(t15, t16)
+  Release      t17
+  .line 127
+  LoadGlobalRef t19, g0
+  Move         t18, t19
+  Call         -, f4(t18)
+  Release      t19
+  .line 128
+  Call         -, f6()
+  .line 129
+  LoadGlobal   t21, g1
+  Free         t21
+  .line 130
+  RetVoid
+.finally t17, t19
+.func f1 DumpExpandLocals.Twice params=1
+  .reg v0 N: Integer var param
+  .reg t0: Integer temp
+  .reg t1: Integer temp
+bb0:
+  .line 42
+  LoadRef      t0, v0
+  LoadInt      t1, 2
+  MulInt       t0, t0, t1
+  NarrowOvf    t0, t0, 4
+  StoreRef     v0, t0
+  .line 43
+  RetVoid
+.finally
+.func f2 DumpExpandLocals.Show params=1
+  .reg v0 P: TPoint const param
+  .reg t0: string temp
+  .reg t1: Integer temp
+  .reg t2: string temp
+  .reg t3: string temp
+  .reg t4: Integer temp
+  .reg t5: string temp
+bb0:
+  .line 47
+  FieldGet     t1, v0, 0
+  IntToStr     t0, t1
+  LoadConst    t2, " "
+  ConcatStr    t0, t0, t2
+  FieldGet     t4, v0, 1
+  IntToStr     t3, t4
+  ConcatStr    t0, t0, t3
+  LoadConst    t5, "\n"
+  ConcatStr    t0, t0, t5
+  CallHost     -, h0(t0)
+  .line 48
+  RetVoid
+.finally t0, t2, t3, t5
+.func f3 DumpExpandLocals.Run params=2
+  .reg v0 A: array of TPoint const param
+  .reg v1 H: THolder param
+  .reg v2 P: TPoint local expanded v5..v6
+  .reg v3 L: TLine local expanded v7..v11
+  .reg v4 W: TPoint local
+  .reg v5 P.X: Integer local field v2
+  .reg v6 P.Y: Integer local field v2
+  .reg v7 L.A.X: Integer local field v3
+  .reg v8 L.A.Y: Integer local field v3
+  .reg v9 L.B.X: Integer local field v3
+  .reg v10 L.B.Y: Integer local field v3
+  .reg v11 L.Tag: string local field v3
+  .reg t0: Int64 temp
+  .reg t1: Int64 temp
+  .reg t2: array of TPoint temp
+  .reg t3: Integer temp
+  .reg t4: Integer temp
+  .reg t5: - ref
+  .reg t6: Int64 temp
+  .reg t7: THolder temp
+  .reg t8: Int64 temp
+  .reg t9: THolder temp
+  .reg t10: TPoint temp
+  .reg t11: string temp
+  .reg t12: string temp
+  .reg t13: string temp
+  .reg t14: string temp
+  .reg t15: string temp
+  .reg t16: string temp
+bb0:
+  .line 56
+  LoadInt      t0, 1
+  ElemAt       t1, t2, v0, t0
+  SlotGet      v5, t1, t2, 0
+  SlotGet      v6, t1, t2, 1
+  .line 57
+  Move         t3, v5
+  LoadInt      t4, 1
+  AddInt       t3, t3, t4
+  NarrowOvf    t3, t3, 4
+  Move         v5, t3
+  .line 58
+  MakeRef      t5, v6
+  Call         -, f1(t5)
+  .line 59
+  LoadZero     v7
+  LoadZero     v8
+  LoadZero     v9
+  LoadZero     v10
+  Release      v11
+  .line 60
+  Move         v7, v5
+  Move         v8, v6
+  .line 61
+  LoadConst    v11, "a"
+  .line 62
+  Move         v9, v7
+  Move         v10, v8
+  .line 63
+  LoadZero     t6
+  Move         t7, v1
+  SlotSet      t6, t7, 0, v9
+  SlotSet      t6, t7, 1, v10
+  .line 64
+  LoadZero     t8
+  Move         t9, v1
+  SlotGet      v5, t8, t9, 0
+  SlotGet      v6, t8, t9, 1
+  .line 65
+  Release      v4
+  .line 66
+  Unique       v4, DumpExpandLocals.TPoint
+  FieldSet     v4, 0, v5
+  .line 67
+  Move         t10, v4
+  Call         -, f2(t10)
+  .line 68
+  IntToStr     t11, v7
+  LoadConst    t12, " "
+  ConcatStr    t11, t11, t12
+  IntToStr     t13, v10
+  ConcatStr    t11, t11, t13
+  LoadConst    t14, " "
+  ConcatStr    t11, t11, t14
+  AssignRef    t15, v11
+  ConcatStr    t11, t11, t15
+  LoadConst    t16, "\n"
+  ConcatStr    t11, t11, t16
+  CallHost     -, h0(t11)
+  Release      t15
+  .line 69
+  RetVoid
+.finally v11, v4, t11, t12, t13, t14, t15, t16
+.func f4 DumpExpandLocals.Kept params=1
+  .reg v0 A: array of TPoint const param
+  .reg v1 P: TPoint local
+  .reg v2 Q: TPoint local
+  .reg v3 E: TPoint local
+  .reg v4 N: TPoint local
+  .reg v5 O: TOwned local
+  .reg v6 B: TBack local
+  .reg v7 S: TNums local
+  .reg v8 -: array of TPoint hidden
+  .reg v9 -: Integer hidden
+  .reg t0: Int64 temp
+  .reg t1: Int64 temp
+  .reg t2: array of TPoint temp
+  .reg t3: TPoint temp
+  .reg t4: string temp
+  .reg t5: Integer temp
+  .reg t6: string temp
+  .reg t7: Int64 temp
+  .reg t8: Int64 temp
+  .reg t9: array of TPoint temp
+  .reg t10: string temp
+  .reg t11: Integer temp
+  .reg t12: string temp
+  .reg t13: - ref
+  .reg t14: string temp
+  .reg t15: Integer temp
+  .reg t16: string temp
+  .reg t17: Integer temp
+  .reg t18: Integer temp
+  .reg t19: Integer temp
+  .reg t20: string temp
+  .reg t21: Integer temp
+  .reg t22: string temp
+  .reg t23: string temp
+  .reg t24: Integer temp
+  .reg t25: string temp
+  .reg t26: string temp
+  .reg t27: Integer temp
+  .reg t28: string temp
+bb0:
+  .line 86
+  LoadZero     t0
+  ElemAt       t1, t2, v0, t0
+  AggLoad      v2, t1, t2, DumpExpandLocals.TPoint
+  .line 87
+  Move         t3, v2
+  Call         -, f2(t3)
+  .line 88
+  AssignRef    v1, v2
+  .line 89
+  FieldGet     t5, v1, 0
+  IntToStr     t4, t5
+  LoadConst    t6, "\n"
+  ConcatStr    t4, t4, t6
+  CallHost     -, h0(t4)
+  .line 90
+  AssignRef    v8, v0
+  ArrLen       t7, v8
+  LoadZero     v9
+  Jmp          bb1
+bb1:
+  .line 90
+  JmpIfLeInt   t7, v9, bb4, bb2
+bb2:
+  .line 90
+  ElemAt       t8, t9, v8, v9
+  AggLoad      v3, t8, t9, DumpExpandLocals.TPoint
+  .line 91
+  FieldGet     t11, v3, 0
+  IntToStr     t10, t11
+  LoadConst    t12, "\n"
+  ConcatStr    t10, t10, t12
+  CallHost     -, h0(t10)
+  .line 90
+  Jmp          bb3
+bb3:
+  .line 90
+  AddIntI      v9, v9, 1
+  Jmp          bb1
+bb4:
+  .line 92
+  Release      v4
+  .line 93
+  OuterRef     t13, 0, 0
+  Call         -, f5(t13)
+  .line 94
+  FieldGet     t15, v4, 0
+  IntToStr     t14, t15
+  LoadConst    t16, "\n"
+  ConcatStr    t14, t14, t16
+  CallHost     -, h0(t14)
+  .line 95
+  Release      v5
+  .line 96
+  LoadInt      t17, 1
+  Unique       v5, DumpExpandLocals.TOwned
+  FieldSet     v5, 1, t17
+  .line 97
+  Release      v6
+  .line 98
+  LoadInt      t18, 2
+  Unique       v6, DumpExpandLocals.TBack
+  FieldSet     v6, 1, t18
+  .line 99
+  Release      v7
+  .line 100
+  LoadInt      t19, 3
+  Unique       v7, DumpExpandLocals.TNums
+  FieldSet     v7, 1, t19
+  .line 101
+  FieldGet     t21, v5, 1
+  IntToStr     t20, t21
+  LoadConst    t22, " "
+  ConcatStr    t20, t20, t22
+  FieldGet     t24, v6, 1
+  IntToStr     t23, t24
+  ConcatStr    t20, t20, t23
+  LoadConst    t25, " "
+  ConcatStr    t20, t20, t25
+  FieldGet     t27, v7, 1
+  IntToStr     t26, t27
+  ConcatStr    t20, t20, t26
+  LoadConst    t28, "\n"
+  ConcatStr    t20, t20, t28
+  CallHost     -, h0(t20)
+  .line 102
+  RetVoid
+.finally v1, v2, v3, v4, v5, v6, v7, v8, t4, t6, t10, t12, t14, t16, t20, t22, t23, t25, t26, t28
+.func f5 DumpExpandLocals.Kept.Bump params=1 outer=f4
+  .reg link
+  .reg v0 N: TPoint outer v4 up=1
+  .reg t0: Integer temp
+  .reg t1: Integer temp
+bb0:
+  .line 80
+  OuterRef     v0, 4, 1
+  .line 82
+  RefFieldGet  t0, v0, 0
+  LoadInt      t1, 1
+  AddInt       t0, t0, t1
+  NarrowOvf    t0, t0, 4
+  RefFieldSet  v0, 0, t0, DumpExpandLocals.TPoint
+  .line 83
+  RetVoid
+.finally
+.func f6 DumpExpandLocals.Captured params=0
+  .reg v0 K: Integer local
+  .reg v1 P: TPoint local
+  .reg v2 F: TProc local
+  .reg v3 K: Integer cell v0
+  .reg t0: Integer temp
+  .reg t1: Int64 temp
+  .reg t2: Int64 temp
+  .reg t3: - temp
+  .reg t4: - ref
+  .reg t5: Integer temp
+  .reg t6: string temp
+  .reg t7: Integer temp
+  .reg t8: string temp
+bb0:
+  .line 104
+  NewCell      v3
+  CellRef      v0, v3
+  .line 110
+  LoadZero     t0
+  StoreRef     v0, t0
+  .line 111
+  LoadInt      t1, 7
+  LoadInt      t2, 1
+  Move         t3, v3
+  MakeClosure  v2, t1, t2, t3
+  .line 112
+  CallClosure  -, v2()
+  .line 113
+  Release      v1
+  .line 114
+  LoadRef      t5, v0
+  Unique       v1, DumpExpandLocals.TPoint
+  FieldSet     v1, 0, t5
+  .line 115
+  FieldGet     t7, v1, 0
+  IntToStr     t6, t7
+  LoadConst    t8, "\n"
+  ConcatStr    t6, t6, t8
+  CallHost     -, h0(t6)
+  .line 116
+  RetVoid
+.finally v1, v2, v3, t6, t8
+.func f7 DumpExpandLocals.Captured.<anon1> params=1
+  .reg link
+  .reg v0 K: Integer outer v0 up=1
+  .reg v1 K: Integer capture v0
+  .reg t0: Integer temp
+  .reg t1: Integer temp
+bb0:
+  .line 111
+  CapGet       v1, link, 0
+  CellRef      v0, v1
+  LoadRef      t0, v0
+  LoadInt      t1, 1
+  AddInt       t0, t0, t1
+  NarrowOvf    t0, t0, 4
+  StoreRef     v0, t0
+  RetVoid
+.finally

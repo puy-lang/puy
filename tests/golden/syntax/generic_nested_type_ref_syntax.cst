@@ -1,0 +1,224 @@
+SOURCE_FILE@0..804
+  PROGRAM@0..804
+    PROGRAM_HEADER@0..35
+      PROGRAM_KW@0..7 "program"
+      WHITESPACE@7..8 " "
+      IDENT@8..34 "GenericNestedTypeRefSyntax"
+      SEMICOLON@34..35 ";"
+    NEWLINE@35..36 "\n"
+    NEWLINE@36..37 "\n"
+    LINE_COMMENT@37..121 "// After the type arguments in a type position, `.` and names continue the type as a"
+    NEWLINE@121..122 "\n"
+    LINE_COMMENT@122..215 "// NESTED_TYPE_REF whose first child is the instantiation (grammar.md 1.3): the last name may"
+    NEWLINE@215..216 "\n"
+    LINE_COMMENT@216..312 "// have type arguments of its own, and the form repeats (`A<X>.B<Y>.C`). In an expression's type"
+    NEWLINE@312..313 "\n"
+    LINE_COMMENT@313..408 "// arguments the same nodes are read. Recovery: no name after `.` is E0405, a missing `>` after"
+    NEWLINE@408..409 "\n"
+    LINE_COMMENT@409..493 "// the last name is E0400. The names are not declared, so the analysis reports them."
+    NEWLINE@493..494 "\n"
+    NEWLINE@494..495 "\n"
+    VAR_SECTION@495..733
+      VAR_KW@495..498 "var"
+      NEWLINE@498..499 "\n"
+      WHITESPACE@499..501 "  "
+      VAR_DECL@501..531
+        IDENT_LIST@501..502
+          IDENT@501..502 "A"
+        COLON@502..503 ":"
+        WHITESPACE@503..504 " "
+        NESTED_TYPE_REF@504..530
+          GENERIC_TYPE_REF@504..518
+            QUALIFIED_NAME@504..509
+              IDENT@504..509 "TList"
+            LT@509..510 "<"
+            TYPE_REF@510..517
+              QUALIFIED_NAME@510..517
+                IDENT@510..517 "Integer"
+            GT@517..518 ">"
+          DOT@518..519 "."
+          QUALIFIED_NAME@519..530
+            IDENT@519..530 "TEnumerator"
+        SEMICOLON@530..531 ";"
+      NEWLINE@531..532 "\n"
+      WHITESPACE@532..534 "  "
+      VAR_DECL@534..574
+        IDENT_LIST@534..535
+          IDENT@534..535 "B"
+        COLON@535..536 ":"
+        WHITESPACE@536..537 " "
+        NESTED_TYPE_REF@537..573
+          NESTED_TYPE_REF@537..567
+            GENERIC_TYPE_REF@537..552
+              QUALIFIED_NAME@537..543
+                IDENT@537..543 "TOuter"
+              LT@543..544 "<"
+              TYPE_REF@544..551
+                QUALIFIED_NAME@544..551
+                  IDENT@544..551 "Integer"
+              GT@551..552 ">"
+            DOT@552..553 "."
+            QUALIFIED_NAME@553..559
+              IDENT@553..559 "TInner"
+            LT@559..560 "<"
+            TYPE_REF@560..566
+              STRING_KW@560..566 "string"
+            GT@566..567 ">"
+          DOT@567..568 "."
+          QUALIFIED_NAME@568..573
+            IDENT@568..573 "TPair"
+        SEMICOLON@573..574 ";"
+      NEWLINE@574..575 "\n"
+      WHITESPACE@575..577 "  "
+      VAR_DECL@577..621
+        IDENT_LIST@577..578
+          IDENT@577..578 "C"
+        COLON@578..579 ":"
+        WHITESPACE@579..580 " "
+        GENERIC_TYPE_REF@580..620
+          QUALIFIED_NAME@580..584
+            IDENT@580..584 "TMap"
+          LT@584..585 "<"
+          TYPE_REF@585..591
+            STRING_KW@585..591 "string"
+          COMMA@591..592 ","
+          WHITESPACE@592..593 " "
+          NESTED_TYPE_REF@593..619
+            GENERIC_TYPE_REF@593..607
+              QUALIFIED_NAME@593..598
+                IDENT@593..598 "TList"
+              LT@598..599 "<"
+              TYPE_REF@599..606
+                QUALIFIED_NAME@599..606
+                  IDENT@599..606 "Integer"
+              GT@606..607 ">"
+            DOT@607..608 "."
+            QUALIFIED_NAME@608..619
+              IDENT@608..619 "TEnumerator"
+          GT@619..620 ">"
+        SEMICOLON@620..621 ";"
+      NEWLINE@621..622 "\n"
+      WHITESPACE@622..624 "  "
+      VAR_DECL@624..662
+        IDENT_LIST@624..625
+          IDENT@624..625 "D"
+        COLON@625..626 ":"
+        WHITESPACE@626..627 " "
+        NESTED_TYPE_REF@627..661
+          GENERIC_TYPE_REF@627..642
+            QUALIFIED_NAME@627..633
+              IDENT@627..633 "TOuter"
+            LT@633..634 "<"
+            TYPE_REF@634..641
+              QUALIFIED_NAME@634..641
+                IDENT@634..641 "Integer"
+            GT@641..642 ">"
+          DOT@642..643 "."
+          QUALIFIED_NAME@643..655
+            IDENT@643..649 "TInner"
+            DOT@649..650 "."
+            IDENT@650..655 "TDeep"
+          LT@655..656 "<"
+          TYPE_REF@656..660
+            QUALIFIED_NAME@656..660
+              IDENT@656..660 "Byte"
+          GT@660..661 ">"
+        SEMICOLON@661..662 ";"
+      NEWLINE@662..663 "\n"
+      WHITESPACE@663..665 "  "
+      VAR_DECL@665..676
+        IDENT_LIST@665..666
+          IDENT@665..666 "P"
+        COLON@666..667 ":"
+        WHITESPACE@667..668 " "
+        TYPE_REF@668..675
+          QUALIFIED_NAME@668..675
+            IDENT@668..675 "TObject"
+        SEMICOLON@675..676 ";"
+      NEWLINE@676..677 "\n"
+      WHITESPACE@677..679 "  "
+      VAR_DECL@679..699
+        IDENT_LIST@679..680
+          IDENT@679..680 "E"
+        COLON@680..681 ":"
+        WHITESPACE@681..682 " "
+        NESTED_TYPE_REF@682..698
+          GENERIC_TYPE_REF@682..697
+            QUALIFIED_NAME@682..688
+              IDENT@682..688 "TOuter"
+            LT@688..689 "<"
+            TYPE_REF@689..696
+              QUALIFIED_NAME@689..696
+                IDENT@689..696 "Integer"
+            GT@696..697 ">"
+          DOT@697..698 "."
+        SEMICOLON@698..699 ";"
+      NEWLINE@699..700 "\n"
+      WHITESPACE@700..702 "  "
+      VAR_DECL@702..733
+        IDENT_LIST@702..703
+          IDENT@702..703 "F"
+        COLON@703..704 ":"
+        WHITESPACE@704..705 " "
+        NESTED_TYPE_REF@705..732
+          GENERIC_TYPE_REF@705..720
+            QUALIFIED_NAME@705..711
+              IDENT@705..711 "TOuter"
+            LT@711..712 "<"
+            TYPE_REF@712..719
+              QUALIFIED_NAME@712..719
+                IDENT@712..719 "Integer"
+            GT@719..720 ">"
+          DOT@720..721 "."
+          QUALIFIED_NAME@721..727
+            IDENT@721..727 "TInner"
+          LT@727..728 "<"
+          TYPE_REF@728..732
+            QUALIFIED_NAME@728..732
+              IDENT@728..732 "Byte"
+        SEMICOLON@732..733 ";"
+    NEWLINE@733..734 "\n"
+    COMPOUND_STMT@734..802
+      BEGIN_KW@734..739 "begin"
+      NEWLINE@739..740 "\n"
+      WHITESPACE@740..742 "  "
+      ASSIGN_STMT@742..797
+        NAME_REF@742..743
+          IDENT@742..743 "P"
+        WHITESPACE@743..744 " "
+        ASSIGN@744..746 ":="
+        WHITESPACE@746..747 " "
+        FIELD_EXPR@747..797
+          NAME_REF@747..790
+            IDENT@747..752 "TList"
+            TYPE_ARGS@752..790
+              LT@752..753 "<"
+              NESTED_TYPE_REF@753..789
+                NESTED_TYPE_REF@753..783
+                  GENERIC_TYPE_REF@753..768
+                    QUALIFIED_NAME@753..759
+                      IDENT@753..759 "TOuter"
+                    LT@759..760 "<"
+                    TYPE_REF@760..767
+                      QUALIFIED_NAME@760..767
+                        IDENT@760..767 "Integer"
+                    GT@767..768 ">"
+                  DOT@768..769 "."
+                  QUALIFIED_NAME@769..775
+                    IDENT@769..775 "TInner"
+                  LT@775..776 "<"
+                  TYPE_REF@776..782
+                    STRING_KW@776..782 "string"
+                  GT@782..783 ">"
+                DOT@783..784 "."
+                QUALIFIED_NAME@784..789
+                  IDENT@784..789 "TPair"
+              GT@789..790 ">"
+          DOT@790..791 "."
+          IDENT@791..797 "Create"
+      SEMICOLON@797..798 ";"
+      NEWLINE@798..799 "\n"
+      END_KW@799..802 "end"
+    DOT@802..803 "."
+    NEWLINE@803..804 "\n"
+    EOF@804..804 ""

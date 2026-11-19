@@ -1,0 +1,23 @@
+TList
+  same capacity: 3 visits
+  TrimExcess: EInvalidOperation: `TList<Integer>` was modified during enumeration
+  capacity 3
+  TrimExcess at the count: 3 visits
+  Capacity: EInvalidOperation: `TList<Integer>` was modified during enumeration
+TStack
+  unchanged: 3 visits
+  Capacity: EInvalidOperation: `TStack<Integer>` was modified during enumeration
+  TrimExcess: EInvalidOperation: `TStack<Integer>` was modified during enumeration
+TQueue
+  unchanged: 3 visits
+  Capacity: EInvalidOperation: `TQueue<Integer>` was modified during enumeration
+  TrimExcess: EInvalidOperation: `TQueue<Integer>` was modified during enumeration
+TDictionary
+  unchanged: 3 visits
+  Capacity: EInvalidOperation: `TDictionary<Integer,Integer>` was modified during enumeration
+  TrimExcess: EInvalidOperation: `TDictionary<Integer,Integer>` was modified during enumeration
+THashSet
+  capacity 4
+  unchanged: 3 visits
+  Capacity: EInvalidOperation: `THashSet<Integer>` was modified during enumeration
+  TrimExcess: EInvalidOperation: `THashSet<Integer>` was modified during enumeration

@@ -28,12 +28,32 @@ warning[W0004]: directive `{$X-,Y+}` is ignored (ignored-directive)
    = note: disable with `{$WARN ignored-directive OFF}`
    = fix: remove `{$X-,Y+}`
 
-note[W0008]: user hint: R on (user-message)
-  --> dir_comma_partial.pas:8:12
+warning[W0004]: `J-` in directive `{$R+,J-}` is ignored (ignored-directive)
+  --> dir_comma_partial.pas:9:1
    |
- 8 | {$IFOPT R+}{$MESSAGE HINT 'R on'}{$ENDIF}
-   |            ^^^^^^^^^^^^^^^^^^^^^^
+ 9 | {$R+,J-}
+   | ^^^^^^^^
    |
-   = note: disable with `{$WARN user-message OFF}`
+   = note: typed constants in Puy are always read-only
+   = note: disable with `{$WARN ignored-directive OFF}`
+   = suggestion: replace with `{$R+}`
 
-warning: 3 warnings emitted
+warning[W0004]: directive `{$X-,B-}` is ignored (ignored-directive)
+   --> dir_comma_partial.pas:10:1
+    |
+ 10 | {$X-,B-}
+    | ^^^^^^^^
+    |
+    = note: boolean operators in Puy always short-circuit
+    = note: disable with `{$WARN ignored-directive OFF}`
+    = suggestion: remove `{$X-,B-}`
+
+note[W0008]: user hint: R on (user-message)
+   --> dir_comma_partial.pas:11:12
+    |
+ 11 | {$IFOPT R+}{$MESSAGE HINT 'R on'}{$ENDIF}
+    |            ^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: disable with `{$WARN user-message OFF}`
+
+warning: 5 warnings emitted

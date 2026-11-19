@@ -8,7 +8,7 @@
 .host
   0: Console.Write params=1 ret=0
 .unit DumpDefaultProperties file="dump_default_properties.pas" init=- fini=- entry=0
-.func 0 DumpDefaultProperties.<main> params=0 regs=16
+.func 0 DumpDefaultProperties.<main> params=0 regs=17
   .line 38
   0000  New          r0, ty64
   0001  StoreGlobalRef r0, g0
@@ -19,9 +19,13 @@
   0005  LoadGlobalRef r2, g0
   0006  Move         r13, r2
   0007  LoadInt      r14, 2
-  0008  CallMethod   r13, f1
-  0009  Move         r12, r13
-  000a  CallMethod   r10, f2
+  0008  ClassType    r16, r13
+  .inline f1 DumpDefaultProperties.TSeq.Get line=39
+  .line 21
+  0009  Move         r12, r14
+  .endinline
+  .line 39
+  000a  ClassType    r13, r10
   .line 40
   000b  LoadGlobalRef r4, g0
   000c  Move         r11, r4

@@ -6,7 +6,7 @@
 use super::Sema;
 use super::types::{Constraint, Ty, TypeDef, TypeId, TypeKind, Visibility};
 use crate::diagnostics::{Code, Diagnostic, Fix, Stage, TextEdit};
-use crate::source::{Span, TextRange};
+use crate::source::{Span, TextRange, TextSize};
 use crate::syntax::SyntaxKind;
 use crate::syntax::ast::{self, AstNode};
 
@@ -20,6 +20,10 @@ pub(super) struct GenericTypeName {
     pub span: TextRange,
     /// Declared in the `interface` section of a unit (seen by the files using it).
     pub interface: bool,
+    /// For a generic type nested in a class or record, the class (or instantiation) it was
+    /// found through: the type named before it or one of its ancestors, or a class whose method
+    /// is being analyzed (2.5). Its type arguments are the outer ones of the nested type.
+    pub through: Option<TypeId>,
 }
 
 /// A generic type of the `type` section being declared whose type parameters are not entered
@@ -104,6 +108,42 @@ fn param_names(tp: &ast::TypeParams) -> Vec<(String, TextRange)> {
         .collect()
 }
 
+/// The number of type parameters of a type declaration; `None` for one without them. Two
+/// declarations of a name with different numbers declare different types
+/// (`docs/spec/generics.md` 2.3).
+fn decl_arity(d: &ast::TypeDecl) -> Option<usize> {
+    d.type_params().map(|tp| param_names(&tp).len())
+}
+
+/// Whether a type declaration declares a class (`Some(true)`) or an interface (`Some(false)`),
+/// with whether it is a forward declaration.
+fn class_or_interface(d: &ast::TypeDecl) -> Option<(bool, bool)> {
+    match d.type_spec()? {
+        ast::TypeSpec::Class(c) => Some((true, c.is_forward())),
+        ast::TypeSpec::Interface(i) => Some((false, i.is_forward())),
+        _ => None,
+    }
+}
+
+/// The full declaration of `section` that completes the forward declaration `forward` of a
+/// class or an interface: the same name, kind and number of type parameters, after it
+/// (`docs/spec/objects.md` 2.3, `docs/spec/generics.md` 2.1, 2.3).
+pub(super) fn completing_decl(
+    section: &ast::TypeSection,
+    forward: &ast::TypeDecl,
+) -> Option<ast::TypeDecl> {
+    let name = forward.name()?;
+    let (class, _) = class_or_interface(forward)?;
+    let arity = decl_arity(forward);
+    section.decls().find(|d| {
+        d.name().is_some_and(|n| {
+            n.text().eq_ignore_ascii_case(name.text())
+                && n.text_range().start() > name.text_range().start()
+        }) && class_or_interface(d) == Some((class, false))
+            && decl_arity(d) == arity
+    })
+}
+
 /// The constraints of each type parameter as written (lowercase, without spaces), to compare a
 /// declaration with its forward declaration (`docs/spec/generics.md` 2.1).
 fn written_constraints(tp: &ast::TypeParams) -> Vec<Vec<String>> {
@@ -129,8 +169,8 @@ fn written_constraints(tp: &ast::TypeParams) -> Vec<Vec<String>> {
 
 impl<'a, 's> Sema<'a, 's> {
     /// A generic type of a `type` section (`docs/spec/generics.md` 1.1, 2.1): a class or a record
-    /// is declared (its type parameters are entered with its members), any other kind is E0757
-    /// (or E3200 for the kinds M4-16 implements). Returns the type to define.
+    /// is declared (its type parameters are entered with its members), and so are an interface,
+    /// a procedural type and an array type; any other kind is E0757. Returns the type to define.
     pub(super) fn declare_generic_type(
         &mut self,
         decl: &ast::TypeDecl,
@@ -155,11 +195,11 @@ impl<'a, 's> Sema<'a, 's> {
         // The form of the definition (2.1); its id is made below
         let form: fn(TypeId) -> Ty = match &spec {
             ast::TypeSpec::Class(c) if c.is_forward() => {
-                self.generic_forward(section, name, range, true);
+                self.generic_forward(decl, section, name, range, true);
                 return None;
             }
             ast::TypeSpec::Interface(i) if i.is_forward() => {
-                self.generic_forward(section, name, range, false);
+                self.generic_forward(decl, section, name, range, false);
                 return None;
             }
             ast::TypeSpec::Class(_) => Ty::Class,
@@ -184,10 +224,29 @@ impl<'a, 's> Sema<'a, 's> {
                 return None;
             }
         };
+        // The type parameters of the outer generic types (2.2, 2.5): the same name in the nested
+        // type is reported, and still declared (it hides the outer one in the nested type), so
+        // the number of type parameters stays as written
+        let outer_params: Vec<(String, TextRange)> = outer
+            .map(|o| {
+                self.types
+                    .type_params(o)
+                    .iter()
+                    .map(|p| {
+                        let d = self.types.get(*p);
+                        (d.name.clone().unwrap_or_default(), d.span)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
         // `<T, T>` (2.2)
         let mut params: Vec<(String, TextRange)> = Vec::new();
         for (n, r) in param_names(tp) {
-            if let Some((_, prev)) = params.iter().find(|(p, _)| p.eq_ignore_ascii_case(&n)) {
+            let twice = params.iter().find(|(p, _)| p.eq_ignore_ascii_case(&n));
+            let of_outer = outer_params
+                .iter()
+                .find(|(p, _)| p.eq_ignore_ascii_case(&n));
+            if let Some((_, prev)) = twice.or(of_outer) {
                 let d = Diagnostic::error(
                     Code::E(701),
                     format!("`{n}` is already declared"),
@@ -196,7 +255,9 @@ impl<'a, 's> Sema<'a, 's> {
                 .with_primary(self.span(r), "declared again here")
                 .with_secondary(self.span(*prev), "declared here");
                 self.push(d);
-                continue;
+                if twice.is_some() {
+                    continue;
+                }
             }
             params.push((n, r));
         }
@@ -227,26 +288,23 @@ impl<'a, 's> Sema<'a, 's> {
             self.push(d);
             return None;
         }
-        // The forward declaration (2.1): the same type parameters
+        // The forward declaration (2.1): the same type parameters. One with another number of
+        // them declares another type (2.3)
         let forward = section.decls().find_map(|d| {
             let n = d.name()?;
-            let fp = d.type_params()?;
             (n.text().eq_ignore_ascii_case(name)
                 && n.text_range().start() < range.start()
-                && match d.type_spec() {
-                    Some(ast::TypeSpec::Class(c)) => c.is_forward(),
-                    Some(ast::TypeSpec::Interface(i)) => i.is_forward(),
-                    _ => false,
-                })
-            .then_some(fp)
+                && decl_arity(&d) == Some(arity)
+                && class_or_interface(&d).is_some_and(|(_, fwd)| fwd))
+            .then(|| d.type_params())
+            .flatten()
         });
         if let Some(fp) = &forward {
             let declared = param_names(fp);
-            let same = declared.len() == arity
-                && declared
-                    .iter()
-                    .zip(param_names(tp))
-                    .all(|((a, _), (b, _))| a.eq_ignore_ascii_case(&b));
+            let same = declared
+                .iter()
+                .zip(param_names(tp))
+                .all(|((a, _), (b, _))| a.eq_ignore_ascii_case(&b));
             if !same {
                 let list: Vec<&str> = declared.iter().map(|(n, _)| n.as_str()).collect();
                 self.error(
@@ -306,6 +364,7 @@ impl<'a, 's> Sema<'a, 's> {
                 id,
                 span: range,
                 interface: self.in_interface_part,
+                through: None,
             }),
         }
         self.generic_params.push(PendingParams {
@@ -320,23 +379,13 @@ impl<'a, 's> Sema<'a, 's> {
     /// full declaration comes later in the section (E0723 otherwise).
     fn generic_forward(
         &mut self,
+        decl: &ast::TypeDecl,
         section: &ast::TypeSection,
         name: &str,
         range: TextRange,
         class: bool,
     ) {
-        let later = section.decls().any(|d| {
-            d.type_params().is_some()
-                && d.name().is_some_and(|n| {
-                    n.text().eq_ignore_ascii_case(name) && n.text_range().start() > range.start()
-                })
-                && match d.type_spec() {
-                    Some(ast::TypeSpec::Class(c)) => class && !c.is_forward(),
-                    Some(ast::TypeSpec::Interface(i)) => !class && !i.is_forward(),
-                    _ => false,
-                }
-        });
-        if !later {
+        if completing_decl(section, decl).is_none() {
             let what = if class { "class" } else { "interface" };
             self.error(
                 Code::E(723),
@@ -474,6 +523,52 @@ impl<'a, 's> Sema<'a, 's> {
         }
     }
 
+    /// E0757 for a helper declared in a generic type or a type nested in one
+    /// (`docs/spec/generics.md` 2.1, 2.5), or in the body of a generic routine or of a method of
+    /// a generic type (2.6): a helper is not copied for each instantiation, so its target would
+    /// stay the open type. The bodies of its methods are not checked (`nested_heading`,
+    /// `routine_heading_params`).
+    pub(super) fn helper_in_generic(&mut self, id: TypeId, h: &ast::HelperType) {
+        // The types nested in a generic type are generic themselves (`nest_in_generic`)
+        // A type declared in a generic body (2.6), or nested in one, is reported as the body
+        let local = |s: &Self, mut c: TypeId| loop {
+            if let Some(l) = s.types.generic_local.get(&c) {
+                return Some(l.class.is_some());
+            }
+            c = *s.types.generic_outer.get(&c)?;
+        };
+        let in_method = match self.class_scope().filter(|o| self.types.is_generic(*o)) {
+            Some(o) => local(self, o),
+            None => match self.generic_body() {
+                Some(b) => Some(b.class.is_some()),
+                None => return,
+            },
+        };
+        let (place, outside) = match in_method {
+            None => ("a generic type", "the generic type"),
+            Some(true) => ("a method of a generic type", "the method"),
+            Some(false) => ("a generic routine", "the routine"),
+        };
+        let start = h
+            .kind_token()
+            .map(|t| t.text_range().start())
+            .unwrap_or(h.syntax().text_range().start());
+        let range = h
+            .helper_token()
+            .map(|t| TextRange::new(start, t.text_range().end()))
+            .unwrap_or_else(|| ast::trimmed_range(h.syntax()));
+        self.error(
+            Code::E(757),
+            format!("a helper cannot be declared inside {place}"),
+            range,
+        )
+        .notes
+        .push(format!(
+            "a helper is not copied for each instantiation; declare it outside {outside}"
+        ));
+        self.generic_helpers.insert(id);
+    }
+
     /// A type declared in the body of a generic type (`docs/spec/generics.md` 2.5): a generic
     /// definition with the outer type's type parameters, so that each instantiation of the outer
     /// type has its own. Enumerations, subranges, sets and dynamic arrays (which have no members
@@ -498,6 +593,114 @@ impl<'a, 's> Sema<'a, 's> {
         self.types.generics.push((id, params));
         self.types.generic_tys.insert(id, ty);
         self.types.generic_outer.insert(id, outer);
+    }
+
+    /// The generic body being analyzed (`docs/spec/generics.md` 2.6): the body of a generic
+    /// routine or of a method of a generic type, or of a routine nested in one (an anonymous
+    /// method too). `None` outside one, and in a type's body.
+    fn generic_body(&self) -> Option<GenericBody> {
+        if self.class_scope().is_some() {
+            return None;
+        }
+        let cur = self.cur.as_ref().filter(|c| !c.is_main)?;
+        // The routines being analyzed, outermost first
+        let ctxs: Vec<&super::RoutineCtx> = self.outer.iter().chain(std::iter::once(cur)).collect();
+        // The method of a generic type the body belongs to (a nested routine's or an anonymous
+        // method's `Self` is the method's), or else the outermost routine: a nested routine
+        // cannot be generic (2.1)
+        let class = ctxs
+            .iter()
+            .rev()
+            .find_map(|c| c.self_class)
+            .filter(|c| self.types.is_generic(*c));
+        let root = match class {
+            Some(c) => ctxs.iter().find(|x| x.self_class == Some(c))?,
+            None => ctxs.first()?,
+        };
+        let own: Vec<TypeId> = root
+            .routine
+            .map(|r| self.routines[r.0 as usize].type_params.clone())
+            .unwrap_or_default();
+        let mut params: Vec<TypeId> = class
+            .map(|c| self.types.type_params(c).to_vec())
+            .unwrap_or_default();
+        let own: Vec<TypeId> = own.into_iter().filter(|p| !params.contains(p)).collect();
+        let own_count = own.len();
+        params.extend(own);
+        if params.is_empty() {
+            return None;
+        }
+        let head = match class {
+            Some(_) => root
+                .qual_name
+                .rsplit_once('.')
+                .map_or(root.qual_name.as_str(), |(_, m)| m)
+                .to_string(),
+            None => root.qual_name.clone(),
+        };
+        let rest = cur
+            .qual_name
+            .strip_prefix(root.qual_name.as_str())
+            .unwrap_or("")
+            .to_string();
+        Some(GenericBody {
+            class,
+            params,
+            own: own_count,
+            head,
+            rest,
+        })
+    }
+
+    /// A type declared in a generic body (`docs/spec/generics.md` 2.6): a generic definition
+    /// with the type parameters of the body (the generic type's, then the routine's own), so
+    /// that each instantiation of the routine has its own, as for a type nested in a generic
+    /// type (2.5). Enumerations, subranges, sets and dynamic arrays stay one type.
+    pub(super) fn local_in_generic(&mut self, ty: Ty, name: &str) {
+        let (Ty::Class(id)
+        | Ty::Record(id)
+        | Ty::Intf(id)
+        | Ty::Proc(id)
+        | Ty::Callable(id)
+        | Ty::Array(id)) = ty
+        else {
+            return;
+        };
+        if self.types.is_generic(id) {
+            return;
+        }
+        let Some(body) = self.generic_body() else {
+            return;
+        };
+        let local = super::types::LocalGeneric {
+            class: body.class,
+            head: body.head,
+            unit: self.program_name.clone(),
+            own: body.own,
+            tail: format!("{}.{name}", body.rest),
+        };
+        // The definition's full name is the generic form (`Hello.Find<T>.TLoc`), which the
+        // shared functions of its methods are named after (7)
+        let params = body.params;
+        let own_names: Vec<String> = params[params.len() - body.own..]
+            .iter()
+            .map(|p| self.types.get(*p).name.clone().unwrap_or_default())
+            .collect();
+        let own_text = if own_names.is_empty() {
+            String::new()
+        } else {
+            format!("<{}>", own_names.join(","))
+        };
+        let prefix = match body.class {
+            // A generic type's full name has its type parameters (`Hello.TBox<T>`)
+            Some(c) => format!("{}.", self.types.full_name(Ty::Class(c))),
+            None => format!("{}.", local.unit),
+        };
+        self.types.get_mut(id).full_name =
+            Some(format!("{prefix}{}{own_text}{}", local.head, local.tail));
+        self.types.generics.push((id, params));
+        self.types.generic_tys.insert(id, ty);
+        self.types.generic_local.insert(id, local);
     }
 
     /// Runs `f` with the type parameters of the generic definition `id` in scope (an interface,
@@ -528,7 +731,9 @@ impl<'a, 's> Sema<'a, 's> {
 
     /// The type parameter `lower` of the definitions in `param_scopes`, innermost first, then of
     /// the generic types whose body is being declared or whose method is being analyzed (a type
-    /// nested in a generic type sees the outer type's; 2.5).
+    /// nested in a generic type sees the outer type's; 2.5). A definition's own type parameters
+    /// follow its outer type's, so they are searched from the last: a nested type's own type
+    /// parameter hides an outer one of the same name (reported E0701; 2.2).
     pub(super) fn scoped_param(&self, lower: &str) -> Option<Ty> {
         let starts = self
             .param_scopes
@@ -538,7 +743,7 @@ impl<'a, 's> Sema<'a, 's> {
             .chain(self.method_class())
             .chain(self.class_scopes.iter().rev().map(|c| c.class));
         starts.into_iter().find_map(|d| {
-            self.types.type_params(d).iter().find_map(|p| {
+            self.types.type_params(d).iter().rev().find_map(|p| {
                 self.types
                     .get(*p)
                     .name
@@ -588,9 +793,10 @@ impl<'a, 's> Sema<'a, 's> {
                     } else {
                         Some(self.resolve_type_ref(&r))
                     }
-                } else if let Some(gr) = c.generic_ref() {
-                    // A type with type arguments (`IComparable<T>`; 1.1)
-                    Some(self.resolve_type(Some(ast::TypeSpec::Generic(gr))))
+                } else if let Some(spec) = c.type_spec() {
+                    // A type with type arguments (`IComparable<T>`; 1.1), or one nested in an
+                    // instantiation (`TOuter<Integer>.IFoo`; 2.5)
+                    Some(self.resolve_type(Some(spec)))
                 } else {
                     continue;
                 };
@@ -730,8 +936,8 @@ impl<'a, 's> Sema<'a, 's> {
     /// a generic routine (`function Max<T>`), the body of a generic type's method
     /// (`procedure TStack<T>.Push`), the body of a generic method (`function TUtil.Max<T>`,
     /// `function TList<T>.Map<U>`). E0757 when they are not written as in the declaration or
-    /// have constraints, or for a nested routine; E3200 for the forms M4-16 implements (a nested
-    /// type).
+    /// have constraints, or for a nested routine. A name of three or more parts is a method of a
+    /// nested type (2.5).
     pub(super) fn routine_heading_params(&mut self, header: &ast::RoutineHeader) -> HeadingParams {
         let Some(qname) = header.name() else {
             return HeadingParams::None;
@@ -753,7 +959,7 @@ impl<'a, 's> Sema<'a, 's> {
         match (idents.len(), tps.as_slice()) {
             (1, []) => HeadingParams::None,
             (1, [(1, tp)]) => self.generic_routine_heading(header, tp, idents[0].text()),
-            (2, _) if tps.iter().all(|(k, _)| *k == 1 || *k == 2) => {
+            (2, _) => {
                 let class_tp = tps.iter().find(|(k, _)| *k == 1).map(|(_, tp)| tp);
                 let method_tp = tps.iter().find(|(k, _)| *k == 2).map(|(_, tp)| tp);
                 let class = match class_tp {
@@ -771,9 +977,27 @@ impl<'a, 's> Sema<'a, 's> {
                     }
                 });
                 let Some(owner) = owner else {
-                    // Not a class: reported by the heading's own checks
-                    return HeadingParams::None;
+                    let lower = idents[0].text().to_ascii_lowercase();
+                    let candidates = self.heading_generic_types(None, &lower);
+                    if candidates.is_empty() {
+                        // Not a class: reported by the heading's own checks
+                        return HeadingParams::None;
+                    }
+                    // A generic type without its type parameters (E0757): the body is not
+                    // checked; its declaration counts as having one (no E0723)
+                    if let Some(class) =
+                        self.missing_type_params(&idents[0], &candidates, idents[1].text())
+                    {
+                        self.mark_has_body(class, idents[1].text());
+                    }
+                    return HeadingParams::Failed;
                 };
+                if self.generic_helpers.contains(&owner) {
+                    // A helper in a generic body (E0757): the body is not checked; its
+                    // declaration counts as having one (no E0723)
+                    self.mark_has_body(owner, idents[1].text());
+                    return HeadingParams::Failed;
+                }
                 let own = match self.generic_method_heading(header, owner, &idents, method_tp) {
                     Some(own) => own,
                     None => return HeadingParams::Failed,
@@ -787,12 +1011,13 @@ impl<'a, 's> Sema<'a, 's> {
                     fresh: false,
                 }
             }
-            (_, []) => HeadingParams::None,
             (n, _) if n >= 3 => self.nested_heading(header, &idents, &tps),
-            (_, [(_, tp), ..]) => {
-                self.generics_not_supported(tp.syntax().text_range());
-                HeadingParams::Failed
-            }
+            (_, []) => HeadingParams::None,
+            // `F<T><U>`, `TA<T><U>.M`, `TA.M<T><U>`: E0400 in the parser
+            _ => unreachable!(
+                "a heading's name starts with an identifier and has at most one type parameter \
+                 list after each identifier (`GenericName`, `docs/spec/grammar.md` 1.3)"
+            ),
         }
     }
 
@@ -823,21 +1048,7 @@ impl<'a, 's> Sema<'a, 's> {
             let next = match after(k) {
                 Some(tp) => {
                     let written = param_names(&tp).len();
-                    let candidates: Vec<TypeId> = match class {
-                        None => self
-                            .generic_types
-                            .iter()
-                            .filter(|g| g.lower == lower)
-                            .map(|g| g.id)
-                            .collect(),
-                        Some(c) => self
-                            .types
-                            .nested_generics
-                            .iter()
-                            .filter(|g| g.owner == c && g.lower == lower)
-                            .map(|g| g.id)
-                            .collect(),
-                    };
+                    let candidates = self.heading_generic_types(class, &lower);
                     let Some(&found) = candidates
                         .iter()
                         .find(|c| self.types.own_type_params(**c).len() == written)
@@ -869,14 +1080,33 @@ impl<'a, 's> Sema<'a, 's> {
                             _ => None,
                         },
                     };
-                    let Some(found) = found else {
-                        return if failed {
-                            HeadingParams::Failed
-                        } else {
-                            HeadingParams::None
-                        };
-                    };
-                    found
+                    match found {
+                        Some(found) => found,
+                        None => {
+                            // A generic type without its type parameters (E0757)
+                            let candidates = self.heading_generic_types(class, &lower);
+                            if candidates.is_empty() {
+                                return if failed {
+                                    HeadingParams::Failed
+                                } else {
+                                    HeadingParams::None
+                                };
+                            }
+                            let member = idents[k + 1].text();
+                            let picked = if failed {
+                                // Only the first part is reported; the rest is still found
+                                self.pick_by_member(&candidates, member)
+                            } else {
+                                failed = true;
+                                self.missing_type_params(ident, &candidates, member)
+                            };
+                            // Not one type: the declaration the heading meant is not known
+                            let Some(picked) = picked else {
+                                return HeadingParams::Failed;
+                            };
+                            picked
+                        }
+                    }
                 }
             };
             class = Some(next);
@@ -884,7 +1114,7 @@ impl<'a, 's> Sema<'a, 's> {
         let Some(owner) = class else {
             return HeadingParams::None;
         };
-        if failed {
+        if failed || self.generic_helpers.contains(&owner) {
             // The body is not checked; its declaration counts as having one (no E0723)
             self.mark_has_body(owner, idents[n - 1].text());
             return HeadingParams::Failed;
@@ -1061,6 +1291,107 @@ impl<'a, 's> Sema<'a, 's> {
             .collect();
         if let [r] = routines[..] {
             self.routines[r.0 as usize].has_body = true;
+        }
+    }
+
+    /// A generic type written without its type parameters in a body's heading
+    /// (`procedure TG.Reset;` for `TG<T>`; `docs/spec/generics.md` 1.2): E0757 on the name, with
+    /// the declared list inserted after it. `candidates`: the generic types of the name; `member`:
+    /// the name after it in the heading, which picks among types of different numbers of type
+    /// parameters (no fix when it does not pick one; the list shown is then that of the first
+    /// one declaring the name). Returns the type the heading names, when it picks one.
+    fn missing_type_params(
+        &mut self,
+        ident: &crate::syntax::SyntaxToken,
+        candidates: &[TypeId],
+        member: &str,
+    ) -> Option<TypeId> {
+        let unique = self.pick_by_member(candidates, member);
+        let shown = unique
+            .or_else(|| {
+                candidates
+                    .iter()
+                    .copied()
+                    .find(|c| self.declares_member(*c, member))
+            })
+            .unwrap_or(candidates[0]);
+        let names: Vec<String> = self
+            .types
+            .own_type_params(shown)
+            .iter()
+            .map(|p| self.types.get(*p).name.clone().unwrap_or_default())
+            .collect();
+        let list = format!("<{}>", names.join(", "));
+        let name = ident.text();
+        let at = ident.text_range();
+        let mut d = Diagnostic::error(
+            Code::E(757),
+            format!("type parameters of `{name}` must be written as in its declaration: `{list}`"),
+            Stage::Sema,
+        )
+        .with_primary(self.span(at), "");
+        if unique.is_some() {
+            d = d.with_fix(Fix::safe(
+                format!("write `{list}`"),
+                vec![TextEdit::insert(self.input.file, at.end(), list.clone())],
+            ));
+        }
+        self.push(d);
+        unique
+    }
+
+    /// The one of the generic types `candidates` (of a name) that a heading means when it leaves
+    /// out the type parameters: the only one, or the only one declaring `member`.
+    fn pick_by_member(&self, candidates: &[TypeId], member: &str) -> Option<TypeId> {
+        if let [one] = candidates {
+            return Some(*one);
+        }
+        let mut having = candidates
+            .iter()
+            .copied()
+            .filter(|c| self.declares_member(*c, member));
+        match (having.next(), having.next()) {
+            (Some(one), None) => Some(one),
+            _ => None,
+        }
+    }
+
+    /// Whether `owner` itself declares a method, a static member or a nested type named `name`.
+    fn declares_member(&self, owner: TypeId, name: &str) -> bool {
+        let lower = name.to_ascii_lowercase();
+        self.types
+            .class_methods(owner)
+            .iter()
+            .any(|m| m.name.eq_ignore_ascii_case(name))
+            || self
+                .types
+                .class_statics(owner)
+                .iter()
+                .any(|s| s.name.eq_ignore_ascii_case(name))
+            || self
+                .types
+                .nested_generics
+                .iter()
+                .any(|g| g.owner == owner && g.lower == lower)
+    }
+
+    /// The generic types named `lower` that a heading's part can name: the top-level ones, or
+    /// the ones nested in `outer`.
+    fn heading_generic_types(&self, outer: Option<TypeId>, lower: &str) -> Vec<TypeId> {
+        match outer {
+            None => self
+                .generic_types
+                .iter()
+                .filter(|g| g.lower == lower)
+                .map(|g| g.id)
+                .collect(),
+            Some(c) => self
+                .types
+                .nested_generics
+                .iter()
+                .filter(|g| g.owner == c && g.lower == lower)
+                .map(|g| g.id)
+                .collect(),
         }
     }
 
@@ -1487,6 +1818,7 @@ impl<'a, 's> Sema<'a, 's> {
                 diags: &mut diags,
                 unit: self.unit_index,
                 cur_origin: None,
+                cur_from: None,
             };
             f(&mut i)
         };
@@ -1494,6 +1826,45 @@ impl<'a, 's> Sema<'a, 's> {
             self.push(d);
         }
         r
+    }
+
+    /// The classes and records whose nested generic types a name looked up in `scope` reaches,
+    /// nearest first (`docs/spec/generics.md` 2.5): for a type named before the name
+    /// (`THolder.TBox<…>`), that type and its ancestors; for a name written alone, the classes
+    /// being declared or whose method is being analyzed, each with its ancestors, and the
+    /// classes they are nested in. Empty for a unit.
+    fn nested_lookup_classes(&self, scope: &GenericScope) -> Vec<TypeId> {
+        let starts: Vec<TypeId> = match scope {
+            GenericScope::Type(c) => return self.types.class_chain(*c),
+            GenericScope::Unit(_) => return Vec::new(),
+            GenericScope::Visible => self
+                .method_class()
+                .into_iter()
+                .chain(self.class_scopes.iter().rev().map(|c| c.class))
+                .collect(),
+        };
+        let mut classes: Vec<TypeId> = Vec::new();
+        let mut walked: Vec<TypeId> = Vec::new();
+        for c in starts {
+            let mut cur = Some(c);
+            while let Some(k) = cur {
+                if walked.contains(&k) {
+                    break;
+                }
+                walked.push(k);
+                for a in self.types.class_chain(k) {
+                    if !classes.contains(&a) {
+                        classes.push(a);
+                    }
+                }
+                cur = self
+                    .lexical_outer
+                    .get(&k)
+                    .copied()
+                    .or_else(|| self.types.generic_outer.get(&k).copied());
+            }
+        }
+        classes
     }
 
     /// The generic types of a name (lowercase; `docs/spec/generics.md` 2.3), each with the unit
@@ -1521,10 +1892,11 @@ impl<'a, 's> Sema<'a, 's> {
                 .collect::<Vec<_>>()
         };
         let nested_in = |s: &Self, c: TypeId| {
+            let owner = s.types.instance_of(c).map_or(c, |i| i.def);
             s.types
                 .nested_generics
                 .iter()
-                .filter(|g| g.owner == c && g.lower == lower)
+                .filter(|g| g.owner == owner && g.lower == lower)
                 .map(|g| {
                     (
                         GenericTypeName {
@@ -1533,6 +1905,7 @@ impl<'a, 's> Sema<'a, 's> {
                             id: g.id,
                             span: g.span,
                             interface: true,
+                            through: Some(c),
                         },
                         None,
                     )
@@ -1540,7 +1913,20 @@ impl<'a, 's> Sema<'a, 's> {
                 .collect::<Vec<_>>()
         };
         match scope {
-            GenericScope::Type(c) => nested_in(self, *c),
+            // Through an instantiation, the generic types its definition declares
+            // (`TOuter<Integer>.TInner<string>`; 2.5)
+            // and those its ancestors declare (`TD.TBox<…>` for `TD = class(THolder)`)
+            GenericScope::Type(_) => {
+                let mut found: Vec<(GenericTypeName, Option<usize>)> = Vec::new();
+                for c in self.nested_lookup_classes(scope) {
+                    for f in nested_in(self, c) {
+                        if !found.iter().any(|(g, _)| g.arity == f.0.arity) {
+                            found.push(f);
+                        }
+                    }
+                }
+                found
+            }
             GenericScope::Unit(super::UnitRef::Own) => own,
             GenericScope::Unit(super::UnitRef::Package(k)) => self.used_units[*k]
                 .iface
@@ -1558,6 +1944,7 @@ impl<'a, 's> Sema<'a, 's> {
                             id,
                             span: TextRange::default(),
                             interface: true,
+                            through: None,
                         },
                         None,
                     )
@@ -1568,30 +1955,8 @@ impl<'a, 's> Sema<'a, 's> {
                 .and_then(|k| self.used_units[k].iface.map(|i| of_unit(self, i, k)))
                 .unwrap_or_default(),
             GenericScope::Visible => {
-                // The generic types nested in the classes being declared or whose method is
-                // being analyzed, and in the classes they are nested in (2.5)
-                let mut classes: Vec<TypeId> = Vec::new();
-                let starts: Vec<TypeId> = self
-                    .method_class()
-                    .into_iter()
-                    .chain(self.class_scopes.iter().rev().map(|c| c.class))
-                    .collect();
-                for c in starts {
-                    let mut cur = Some(c);
-                    while let Some(k) = cur {
-                        if classes.contains(&k) {
-                            break;
-                        }
-                        classes.push(k);
-                        cur = self
-                            .lexical_outer
-                            .get(&k)
-                            .copied()
-                            .or_else(|| self.types.generic_outer.get(&k).copied());
-                    }
-                }
                 let mut found: Vec<(GenericTypeName, Option<usize>)> = Vec::new();
-                for c in classes {
+                for c in self.nested_lookup_classes(scope) {
                     for f in nested_in(self, c) {
                         if !found.iter().any(|(g, _)| g.arity == f.0.arity) {
                             found.push(f);
@@ -1709,12 +2074,23 @@ impl<'a, 's> Sema<'a, 's> {
             }
         }
         let origin = Some(self.span(args_range));
-        // A type nested in a generic type takes the outer type's type parameters first (2.5)
+        // A type nested in a generic type takes the outer type's type parameters first (2.5):
+        // the type arguments of the instantiation it is named through
+        // (`TOuter<Integer>.TInner<string>`), or else the outer type's own (open) ones
         let all = self.types.type_params(def).len();
-        let mut args: Vec<Ty> = self.types.type_params(def)[..all - own.len()]
-            .iter()
-            .map(|p| Ty::Param(*p))
-            .collect();
+        let outer = all - own.len();
+        // (`generic_types_named` looks in the definition of the class or instantiation it is found
+        // through, whose type parameters are the outer ones of `def`)
+        let through = g.through.and_then(|k| self.types.instance_of(k)).map(|i| {
+            debug_assert_eq!(i.args.len(), outer);
+            i.args.clone()
+        });
+        let mut args: Vec<Ty> = through.unwrap_or_else(|| {
+            self.types.type_params(def)[..outer]
+                .iter()
+                .map(|p| Ty::Param(*p))
+                .collect()
+        });
         args.extend(tys.into_iter().map(|(t, _)| t));
         Some(self.with_inst(|i| i.instantiate(def, args, origin, None)))
     }
@@ -2172,6 +2548,20 @@ impl<'a, 's> Sema<'a, 's> {
     }
 }
 
+/// A generic body being analyzed (`docs/spec/generics.md` 2.6).
+struct GenericBody {
+    /// The generic type of the method the body belongs to.
+    class: Option<TypeId>,
+    /// The type parameters seen in the body: the generic type's, then the routine's own.
+    params: Vec<TypeId>,
+    /// The number of the routine's own type parameters.
+    own: usize,
+    /// The generic routine's name (only the method's for a method of `class`).
+    head: String,
+    /// The routines nested in it down to the one being analyzed (`.Inner`).
+    rest: String,
+}
+
 /// The type parameters a routine heading writes (`docs/spec/generics.md` 1.2).
 pub(super) enum HeadingParams {
     /// None (and none are missing).
@@ -2253,8 +2643,11 @@ impl<'a, 's> Sema<'a, 's> {
                     .map(|(_, r)| Span::new(self.input.file, *r));
                 // The name of a type parameter of the class: reported, and still declared (it
                 // hides the class's in the method), so the method's body finds it
+                // The innermost one of the name: a nested type's own type parameter follows (and
+                // hides) the outer type's (2.2)
                 let of_class = class_params
                     .iter()
+                    .rev()
                     .find(|(p, _, _)| p.eq_ignore_ascii_case(&n))
                     .map(|(_, r, u)| Span::new(self.unit_file(*u), *r));
                 if let Some(prev) = twice.or(of_class) {
@@ -2405,10 +2798,22 @@ impl<'a, 's> Sema<'a, 's> {
         args: &ast::TypeArgs,
     ) -> super::Resolved {
         use super::Resolved;
+        // `F(A < B, C > (D))` is read as `F(A<B, C>(D))`: the comma belongs to the call, so the
+        // note puts the first comparison in parentheses, and the call's number of arguments is
+        // not checked (`docs/spec/generics.md` 1.4)
+        let comma = args.args().count() > 1;
         let not_generic = |s: &mut Self| {
+            let note = if comma {
+                "to compare, write `(A < B), C > (D)`"
+            } else {
+                "to compare, write `(A < B) > (C)`"
+            };
             s.error(Code::E(761), format!("`{name}` is not generic"), range)
                 .notes
-                .push("to compare, write `(A < B) > (C)`".into());
+                .push(note.into());
+            if comma {
+                s.comma_comparisons.push(range);
+            }
             Resolved::Error
         };
         if let Resolved::Key(op, None) = r {
@@ -2562,14 +2967,19 @@ impl<'a, 's> Sema<'a, 's> {
         super::Resolved::Key(op, Some(t))
     }
 
-    /// E0761 for `Zero<Integer> + 1`, read as the comparisons `(Zero < Integer) > (+1)`
-    /// (`docs/spec/generics.md` 1.4): `A` names a generic routine and `B` a type, so the
+    /// E0761 for `Zero<Integer> + 1`, read as the comparisons `(Zero < Integer) > (+1)`, and for
+    /// `Cnt<Byte>=2`, read as `(Cnt < Byte) >= 2` (`>=` is one token;
+    /// `docs/spec/generics.md` 1.4): `A` names a generic routine and `B` a type, so the
     /// parentheses of the call were meant. The fix writes them after `>`. Returns whether it was
     /// reported.
     pub(super) fn generic_call_needs_parens(&mut self, b: &ast::BinaryExpr) -> bool {
-        let Some(gt) = b.op().filter(|t| t.kind() == SyntaxKind::GT) else {
+        let Some(op) = b
+            .op()
+            .filter(|t| matches!(t.kind(), SyntaxKind::GT | SyntaxKind::GE))
+        else {
             return false;
         };
+        let joined_eq = op.kind() == SyntaxKind::GE;
         let Some(ast::Expr::Binary(inner)) = b.lhs() else {
             return false;
         };
@@ -2608,9 +3018,11 @@ impl<'a, 's> Sema<'a, 's> {
         if !is_type {
             return false;
         }
-        let range = TextRange::new(a_tok.text_range().start(), gt.text_range().end());
+        // The `>` of `>=` is its first character
+        let gt_end = op.text_range().start() + TextSize::of('>');
+        let range = TextRange::new(a_tok.text_range().start(), gt_end);
         let text = self.src(range);
-        let d = Diagnostic::error(
+        let mut d = Diagnostic::error(
             Code::E(761),
             format!("`{text}` needs parentheses here"),
             Stage::Sema,
@@ -2620,6 +3032,11 @@ impl<'a, 's> Sema<'a, 's> {
             "add `()`",
             vec![TextEdit::insert(self.input.file, range.end(), "()")],
         ));
+        if joined_eq {
+            d.notes.push(
+                "`>=` is read as one operator; to compare with `=`, write a space after `>`".into(),
+            );
+        }
         self.push(d);
         true
     }
@@ -2641,44 +3058,52 @@ impl<'a, 's> Sema<'a, 's> {
 }
 
 /// The constructor `T.Create` calls for the class `class` (`docs/spec/generics.md` 3.1, 4.3): the
-/// public `Create` found as the name is found (the nearest class declaring a method `Create`),
-/// callable without arguments, with the default values of its parameters (the routine is `None`
-/// for the built-in `TObject.Create`). `None` when the class has no such constructor (the
-/// `constructor` constraint is not satisfied).
+/// one `class.Create` without arguments calls, chosen among the public overloads found as the
+/// name is found (including those inherited from ancestors), with the default values of its
+/// parameters (the routine is `None` for the built-in `TObject.Create`). `None` when the class
+/// has no such constructor, or more than one of them can be called without arguments (the call
+/// would be ambiguous; the `constructor` constraint is not satisfied).
 pub(super) fn default_ctor(
     types: &super::types::TypeTable,
     routines: &[super::RoutineInfo],
     class: TypeId,
 ) -> Option<(Option<super::hir::RoutineId>, Vec<super::hir::Expr>)> {
-    let mut at = Some(class);
-    while let Some(c) = at {
-        let mut found = types
+    let set = super::methods::method_set(types, routines, class, "Create", |vis, _| {
+        vis == Visibility::Public
+    });
+    if set.is_empty() {
+        // Without a public `Create` of a routine, the built-in `TObject.Create`, unless a
+        // `Create` the code cannot call hides it
+        let nearest = super::methods::methods_named(types, class, "Create")
+            .into_iter()
+            .next()?
+            .1;
+        let builtin = nearest.routine.is_none()
+            && nearest.kind == super::types::MethodKind::Constructor
+            && nearest.params.is_empty();
+        return builtin.then(|| (None, Vec::new()));
+    }
+    let mut callable = set
+        .into_iter()
+        .filter(|r| routines[r.0 as usize].min_args() == 0);
+    let r = callable.next()?;
+    if callable.next().is_some() {
+        return None;
+    }
+    let info = &routines[r.0 as usize];
+    let is_ctor = info.method_of.is_some_and(|c| {
+        types
             .class_methods(c)
             .iter()
-            .filter(|m| m.name.eq_ignore_ascii_case("create"))
-            .peekable();
-        if found.peek().is_some() {
-            return found.find_map(|m| {
-                if m.kind != super::types::MethodKind::Constructor || m.vis != Visibility::Public {
-                    return None;
-                }
-                match m.routine {
-                    Some(r) => {
-                        let info = &routines[r.0 as usize];
-                        (info.min_args() == 0).then(|| {
-                            let defaults = info
-                                .params
-                                .iter()
-                                .map(|p| p.default.clone().expect("every parameter has a default"))
-                                .collect();
-                            (Some(r), defaults)
-                        })
-                    }
-                    None => m.params.is_empty().then(|| (None, Vec::new())),
-                }
-            });
-        }
-        at = types.parent(c);
+            .any(|m| m.routine == Some(r) && m.kind == super::types::MethodKind::Constructor)
+    });
+    if !is_ctor {
+        return None;
     }
-    None
+    let defaults = info
+        .params
+        .iter()
+        .map(|p| p.default.clone().expect("every parameter has a default"))
+        .collect();
+    Some((Some(r), defaults))
 }

@@ -1,0 +1,17 @@
+program Main uses=Marks
+.type TFoo = class(TBase)
+  .field 0 FX: Integer
+    .attr Marks.MarkAttribute f0
+      const Integer 1
+  .property N: Integer read=f1 write=-
+.global g0 F: TFoo
+.routine <main>
+  assign @20 R+
+    global g0 F
+    create TFoo builtin
+  writeln @21
+    arg
+      method f1 TBase.GetN: Integer
+        global g0 F: TFoo
+  free @22
+    global g0 F: TFoo

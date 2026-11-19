@@ -1,0 +1,51 @@
+error[E0700]: `TBase` has no method or property `FValue`
+   --> inherited_property_errors.pas:40:21
+    |
+ 40 |   WriteLn(inherited FValue);
+    |                     ^^^^^^
+
+error[E0700]: `TBase` has no method or property `Missing`
+   --> inherited_property_errors.pas:41:21
+    |
+ 41 |   WriteLn(inherited Missing);
+    |                     ^^^^^^^
+
+error[E0704]: `inherited` without a method name is only allowed as a statement
+   --> inherited_property_errors.pas:42:11
+    |
+ 42 |   WriteLn(inherited [1]);
+    |           ^^^^^^^^^
+    |
+    = note: write the name of the parent's default array property: `inherited Items[…]`
+
+error[E0704]: `Value` is not a procedure or function
+   --> inherited_property_errors.pas:43:21
+    |
+ 43 |   WriteLn(inherited Value(1));
+    |                     ^^^^^
+
+error[E0707]: cannot assign to `inherited Value`
+   --> inherited_property_errors.pas:44:3
+    |
+ 16 |     property Value: Integer read FValue;
+    |              ----- declared here
+...
+ 44 |   inherited Value := 1;
+    |   ^^^^^^^^^^^^^^^ a read-only property
+
+error[E0707]: cannot read `inherited Only`
+   --> inherited_property_errors.pas:45:11
+    |
+ 15 |     property Only: Integer write SetOnly;
+    |              ---- declared here
+...
+ 45 |   WriteLn(inherited Only);
+    |           ^^^^^^^^^^^^^^ a write-only property
+
+error[E0706]: a property cannot be passed to a `var` parameter
+   --> inherited_property_errors.pas:46:8
+    |
+ 46 |   Bump(inherited Value);
+    |        ^^^^^^^^^^^^^^^
+
+error: aborting due to 7 errors

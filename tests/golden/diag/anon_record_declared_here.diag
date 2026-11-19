@@ -1,0 +1,49 @@
+error[E0702]: type mismatch: expected `Integer`, found `record`
+   --> anon_record_declared_here.pas:19:8
+    |
+  8 |   A: record
+    |      ------ record type declared here
+...
+ 19 |   N := A;
+    |        ^
+
+error[E0702]: type mismatch: expected `record`, found `record`
+   --> anon_record_declared_here.pas:20:8
+    |
+  8 |   A: record
+    |      ------ record type declared here
+...
+ 11 |   B: record
+    |      ------ record type declared here
+...
+ 20 |   A := B;
+    |        ^
+
+error[E0703]: operator `+` cannot be applied to `Integer` and `record`
+   --> anon_record_declared_here.pas:21:10
+    |
+  8 |   A: record
+    |      ------ record type declared here
+...
+ 21 |   N := N + A;
+    |          ^
+
+error[E0700]: `record` has no field `Y`
+   --> anon_record_declared_here.pas:22:5
+    |
+  8 |   A: record
+    |      ------ record type declared here
+...
+ 22 |   A.Y := 1;
+    |     ^
+
+error[E0702]: type mismatch: expected `Integer`, found `array[0..1] of record`
+   --> anon_record_declared_here.pas:23:8
+    |
+ 14 |   C: array[0..1] of record
+    |                     ------ record type declared here
+...
+ 23 |   N := C;
+    |        ^
+
+error: aborting due to 5 errors

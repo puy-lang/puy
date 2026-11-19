@@ -1,0 +1,211 @@
+; puy ir 1
+.global
+  g0 Pts: array of TPoint
+  g1 L: TLine
+  g2 H: THolder
+  g3 I: Integer
+.func f0 DumpFlatPlaces.<main> params=0
+  .reg t0: Int64 temp
+  .reg t1: array of TPoint temp
+  .reg t2: array of TPoint temp
+  .reg t3: Int64 temp
+  .reg t4: Integer temp
+  .reg t5: Int64 temp
+  .reg t6: Integer temp
+  .reg t7: array of TPoint temp
+  .reg t8: Int64 temp
+  .reg t9: array of TPoint temp
+  .reg t10: Int64 temp
+  .reg t11: TPoint temp
+  .reg t12: array of TPoint temp
+  .reg t13: Int64 temp
+  .reg t14: Int64 temp
+  .reg t15: array of TPoint temp
+  .reg t16: array of TPoint temp
+  .reg t17: Int64 temp
+  .reg t18: array of TPoint temp
+  .reg t19: Integer temp
+  .reg t20: array of TPoint temp
+  .reg t21: Int64 temp
+  .reg t22: Int64 temp
+  .reg t23: array of TPoint temp
+  .reg t24: TLine temp
+  .reg t25: Int64 temp
+  .reg t26: Integer temp
+  .reg t27: TLine temp
+  .reg t28: Int64 temp
+  .reg t29: TLine temp
+  .reg t30: Int64 temp
+  .reg t31: THolder temp
+  .reg t32: THolder temp
+  .reg t33: Integer temp
+  .reg t34: TLine temp
+  .reg t35: Int64 temp
+  .reg t36: Int64 temp
+  .reg t37: Int64 temp
+  .reg t38: - lent
+  .reg t39: Int64 temp
+  .reg t40: - ref
+  .reg t41: - ref
+  .reg t42: Int64 temp
+  .reg t43: - lent
+  .reg t44: Int64 temp
+  .reg t45: - ref
+  .reg t46: array[0..2] of Integer lent
+  .reg t47: - ref
+  .reg t48: TLine temp
+  .reg t49: string temp
+  .reg t50: Integer temp
+  .reg t51: array of TPoint temp
+  .reg t52: Int64 temp
+  .reg t53: Int64 temp
+  .reg t54: array of TPoint temp
+  .reg t55: string temp
+  .reg t56: string temp
+  .reg t57: Integer temp
+  .reg t58: THolder temp
+  .reg t59: string temp
+  .reg t60: string temp
+  .reg t61: Integer temp
+  .reg t62: TLine temp
+  .reg t63: string temp
+  .reg t64: THolder temp
+bb0:
+  .line 40
+  LoadInt      t0, 2
+  LoadGlobal   t1, g0
+  Move         t2, t1
+  Move         t3, t0
+  SetLen       t2, array of DumpFlatPlaces.TPoint, t3
+  Move         t1, t2
+  StoreGlobal  t1, g0
+  .line 41
+  LoadInt      t4, 1
+  StoreGlobal  t4, g3
+  .line 42
+  LoadGlobal   t5, g3
+  LoadInt      t6, 2
+  LoadGlobal   t7, g0
+  ElemAt       t8, t9, t7, t5
+  SlotSet      t8, t9, 1, t6
+  .line 43
+  LoadZero     t10
+  LoadGlobal   t12, g0
+  LoadGlobal   t13, g3
+  ElemAt       t14, t15, t12, t13
+  AggLoad      t11, t14, t15, DumpFlatPlaces.TPoint
+  LoadGlobal   t16, g0
+  ElemAt       t17, t18, t16, t10
+  AggStore     t17, t18, t11, DumpFlatPlaces.TPoint
+  Release      t11
+  .line 44
+  LoadGlobal   t20, g0
+  LoadZero     t21
+  ElemAt       t22, t23, t20, t21
+  SlotGet      t19, t22, t23, 1
+  LoadGlobal   t24, g1
+  Unique       t24, DumpFlatPlaces.TLine
+  StoreGlobal  t24, g1
+  FieldSet     t24, 2, t19
+  .line 45
+  LoadGlobal   t25, g3
+  LoadGlobal   t27, g1
+  FieldGet     t26, t27, 2
+  LoadInt      t28, 3
+  ChkIndex     t25, t28, "`array[0..2] of Integer` (0..2)"
+  LoadGlobal   t29, g1
+  Unique       t29, DumpFlatPlaces.TLine
+  StoreGlobal  t29, g1
+  Move         t30, t25
+  AddIntI      t30, t30, 4
+  ValSet       t29, t30, t26
+  .line 46
+  LoadZero     t31
+  New          t31, DumpFlatPlaces.THolder
+  StoreGlobal  t31, g2
+  .line 47
+  LoadGlobal   t32, g2
+  LoadGlobal   t34, g1
+  LoadGlobal   t35, g3
+  LoadInt      t36, 3
+  ChkIndex     t35, t36, "`array[0..2] of Integer` (0..2)"
+  Move         t37, t35
+  AddIntI      t37, t37, 4
+  ValGet       t33, t34, t37
+  ObjSet       t32, 3, t33
+  .line 48
+  LoadGlobal   t42, g3
+  Move         t39, t42
+  MakeGlobalRef t40, g0
+  LendPlace    t38, t40, 1, t39, DumpFlatPlaces.TPoint
+  Move         t41, t38
+  Call         -, f1(t41)
+  Unlend
+  .line 49
+  LoadInt      t44, 4
+  MakeGlobalRef t45, g1
+  LoadGlobal   t48, g1
+  Unique       t48, DumpFlatPlaces.TLine
+  StoreGlobal  t48, g1
+  LendPlace    t43, t45, 1, t44, array[0..2] of Integer
+  PlaceBox     t46, t43
+  MakeRef      t47, t46
+  Call         -, f2(t47)
+  Unlend
+  .line 50
+  LoadGlobal   t51, g0
+  LoadInt      t52, 1
+  ElemAt       t53, t54, t51, t52
+  SlotGet      t50, t53, t54, 0
+  IntToStr     t49, t50
+  LoadConst    t55, " "
+  ConcatStr    t49, t49, t55
+  LoadGlobal   t58, g2
+  ObjGet       t57, t58, 3
+  IntToStr     t56, t57
+  ConcatStr    t49, t49, t56
+  LoadConst    t59, " "
+  ConcatStr    t49, t49, t59
+  LoadGlobal   t62, g1
+  FieldGet     t61, t62, 4
+  IntToStr     t60, t61
+  ConcatStr    t49, t49, t60
+  LoadConst    t63, "\n"
+  ConcatStr    t49, t49, t63
+  CallHost     -, h0(t49)
+  .line 51
+  LoadGlobal   t64, g2
+  Free         t64
+  .line 52
+  RetVoid
+.finally t11, t49, t55, t56, t59, t60, t63
+.func f1 DumpFlatPlaces.Bump params=1
+  .reg v0 P: TPoint var param
+  .reg t0: Integer temp
+  .reg t1: Integer temp
+bb0:
+  .line 31
+  RefFieldGet  t0, v0, 0
+  LoadInt      t1, 1
+  AddInt       t0, t0, t1
+  NarrowOvf    t0, t0, 4
+  RefFieldSet  v0, 0, t0, DumpFlatPlaces.TPoint
+  .line 32
+  RetVoid
+.finally
+.func f2 DumpFlatPlaces.Fill params=1
+  .reg v0 V: array of Integer var param
+  .reg t0: Int64 temp
+  .reg t1: Integer temp
+  .reg t2: array of Integer temp
+bb0:
+  .line 36
+  LoadZero     t0
+  LoadInt      t1, 1
+  LoadRef      t2, v0
+  UniqueVal    t2
+  StoreRef     v0, t2
+  DynSet       t2, t0, t1
+  .line 37
+  RetVoid
+.finally

@@ -582,11 +582,28 @@
           }
         ],
         "notes": [
-          "Puy requires every local variable to be assigned before it is read",
-          "declare `J` on its own to give it an initial value"
+          "Puy requires every local variable to be assigned before it is read"
         ],
-        "fixes": [],
-        "rendered": "error[E2000]: variable `J` may be read before it is assigned\n   --> sema_flow.pas:64:14\n    |\n 60 | var I, J: Integer;\n    |        - declared here\n...\n 64 |   WriteLn(I, J);\n    |              ^ read here\n    |\n    = note: Puy requires every local variable to be assigned before it is read\n    = note: declare `J` on its own to give it an initial value"
+        "fixes": [
+          {
+            "title": "add `J := 0;` at the start of the body",
+            "applicability": "safe",
+            "edits": [
+              {
+                "file": "sema_flow.pas",
+                "start": 857,
+                "end": 857,
+                "line": 61,
+                "column": 6,
+                "end_line": 61,
+                "end_column": 6,
+                "original": "",
+                "replacement": "\n  J := 0;"
+              }
+            ]
+          }
+        ],
+        "rendered": "error[E2000]: variable `J` may be read before it is assigned\n   --> sema_flow.pas:64:14\n    |\n 60 | var I, J: Integer;\n    |        - declared here\n...\n 64 |   WriteLn(I, J);\n    |              ^ read here\n    |\n    = note: Puy requires every local variable to be assigned before it is read\n    = fix: add `J := 0;` at the start of the body"
       },
       {
         "code": "E0700",

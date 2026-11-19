@@ -8,9 +8,15 @@ use std::fmt;
 /// toolchain are rejected by the exact toolchain version match instead.
 pub const FORMAT_VERSION: u32 = 0;
 
-/// Builds an instruction word.
-pub fn encode(op: u8, a: u32, b: u32, c: u32) -> u32 {
-    op as u32 | ((a & 0xFF) << 8) | ((b & 0xFF) << 16) | ((c & 0xFF) << 24)
+/// Builds the word of the instruction `op`. An instruction numbered past 255 keeps its number less
+/// 256 in `op` and goes after the prefix `Ext` (1.2; [`needs_ext`]).
+pub fn encode(op: impl Into<u16>, a: u32, b: u32, c: u32) -> u32 {
+    u32::from(op.into() & 0xFF) | ((a & 0xFF) << 8) | ((b & 0xFF) << 16) | ((c & 0xFF) << 24)
+}
+
+/// Whether the instruction `op` is written after the prefix `Ext` (its number is 256 to 511; 1.2).
+pub fn needs_ext(op: u16) -> bool {
+    op >= op::EXT_BASE
 }
 
 /// Extension word (upper 8 bits of `A` / `B` / `C`).
@@ -18,13 +24,16 @@ pub fn encode_ext(a: u32, b: u32, c: u32) -> u32 {
     (((a >> 8) & 0xFF) << 8) | (((b >> 8) & 0xFF) << 16) | (((c >> 8) & 0xFF) << 24)
 }
 
-/// Splits a word: `(op, A, B, C)` (8 bits each).
+/// Splits a word: `(op, A, B, C)` (8 bits each). `op` is the field of the word, not the
+/// instruction's number (which [`decode_at`] gives, adding 256 after `Ext`; 1.2): compare it with
+/// [`op::word`].
 pub fn decode(word: u32) -> (u8, u32, u32, u32) {
     (word_op(word), word_a(word), word_b(word), word_c(word))
 }
 
-/// The opcode of a word (one field of [`decode`]; the fast path of the execution loop reads each
-/// field only where an instruction uses it).
+/// The `op` of a word (one field of [`decode`]; the fast path of the execution loop reads each
+/// field only where an instruction uses it). After `Ext` it is the instruction's number less 256;
+/// compare it with [`op::word`].
 #[inline(always)]
 pub fn word_op(word: u32) -> u8 {
     (word & 0xFF) as u8
@@ -54,38 +63,102 @@ pub(crate) fn decode_bx(word: u32, extension: Option<u32>) -> u32 {
     (word >> 16) | extension.map_or(0, |ext| ext & 0xFFFF_0000)
 }
 
-/// The instruction at the boundary `pos`: its opcode, its `A`, `B`, `C` (widened by the extension
-/// word after a `Wide`; 1.2) and its length in words (1, or 3 with `Wide`). A `Wide` at `pos` must
-/// be followed by two words.
-pub(crate) fn decode_at(code: &[u32], pos: usize) -> (u8, u32, u32, u32, usize) {
-    let (op0, a0, b0, c0) = decode(code[pos]);
-    if op0 != op::WIDE {
-        return (op0, a0, b0, c0, 1);
+/// The prefixes of the instruction at the boundary `pos` (1.2): whether it has `Wide`, and the
+/// position of its main word (the word holding `op`, after `Wide` and `Ext`). The prefixes must be
+/// followed by a word (the verifier keeps them so).
+fn prefixes_at(code: &[u32], pos: usize) -> (bool, bool, usize) {
+    let wide = word_op(code[pos]) == op::word::WIDE;
+    let at = pos + usize::from(wide);
+    let ext = word_op(code[at]) == op::word::EXT;
+    (wide, ext, at + usize::from(ext))
+}
+
+/// What is wrong with the prefixes of the instruction at the boundary `pos` (1.2; checked before
+/// [`decode_at`] reads it), if anything: they come in the order `Wide`, `Ext`, each at most once,
+/// and are followed by the instruction's word and, after `Wide`, the extension word.
+fn prefix_error(code: &[u32], pos: usize) -> Option<&'static str> {
+    let mut at = pos;
+    let wide = word_op(code[at]) == op::word::WIDE;
+    if wide {
+        at += 1;
+        match code.get(at).map(|&w| word_op(w)) {
+            Option::None => return Some("`Wide` without a following instruction"),
+            Some(op::word::WIDE) => return Some("`Wide` after `Wide`"),
+            Some(_) => {}
+        }
     }
-    let (opc, a8, b8, c8) = decode(code[pos + 1]);
-    let (_, ea, eb, ec) = decode(code[pos + 2]);
-    (opc, a8 | (ea << 8), b8 | (eb << 8), c8 | (ec << 8), 3)
+    if word_op(code[at]) == op::word::EXT {
+        at += 1;
+        match code.get(at).map(|&w| word_op(w)) {
+            Option::None => return Some("`Ext` without a following instruction"),
+            Some(op::word::WIDE) => return Some("`Wide` after `Ext`"),
+            Some(op::word::EXT) => return Some("`Ext` after `Ext`"),
+            Some(_) => {}
+        }
+    }
+    if wide && at + 1 >= code.len() {
+        return Some("`Wide` without a following instruction");
+    }
+    None
+}
+
+/// The instruction at the boundary `pos`: its number (`op`, plus 256 after `Ext`), its `A`, `B`,
+/// `C` (widened by the extension word after a `Wide`; 1.2) and its length in words (1, 1 more for
+/// `Ext`, 2 more for `Wide` and its extension word, and 1 more for the type word of an instruction
+/// that has one: [`has_type_word`]). A `Wide` at `pos` must be followed by its instruction and the
+/// extension word, an `Ext` by its instruction; the type word is not read.
+pub(crate) fn decode_at(code: &[u32], pos: usize) -> (u16, u32, u32, u32, usize) {
+    let (wide, ext, at) = prefixes_at(code, pos);
+    let (op8, a8, b8, c8) = decode(code[at]);
+    let opc = u16::from(op8) + if ext { op::EXT_BASE } else { 0 };
+    let tail = usize::from(has_type_word(opc));
+    if !wide {
+        return (opc, a8, b8, c8, at - pos + 1 + tail);
+    }
+    let (_, ea, eb, ec) = decode(code[at + 1]);
+    let len = at - pos + 2 + tail;
+    (opc, a8 | (ea << 8), b8 | (eb << 8), c8 | (ec << 8), len)
+}
+
+/// Whether the instruction at the boundary `pos` has the `Wide` prefix (1.2).
+pub(crate) fn is_wide_at(code: &[u32], pos: usize) -> bool {
+    word_op(code[pos]) == op::word::WIDE
+}
+
+/// Whether the instruction `opc` is followed by a type word (1.2): the last word of the
+/// instruction, after the extension word of a `Wide`, holding a type index (`RefFieldSet`,
+/// `RefFieldSetRef`, `AggLoad`, `AggStore`, `LendPlace`).
+#[inline(always)]
+pub(crate) fn has_type_word(opc: u16) -> bool {
+    matches!(
+        opc,
+        op::REF_FIELD_SET | op::REF_FIELD_SET_REF | op::AGG_LOAD | op::AGG_STORE | op::LEND_PLACE
+    )
+}
+
+/// The type index in the type word of the instruction at the boundary `pos` whose length is `len`
+/// (as [`decode_at`] gives it; the instruction has a type word).
+pub(crate) fn type_word_at(code: &[u32], pos: usize, len: usize) -> u32 {
+    code[pos + len - 1]
 }
 
 /// `Bx` of the instruction at the boundary `pos` (16 bits, or 32 bits after a `Wide`; see
-/// `decode_bx`). A `Wide` at `pos` must be followed by two words.
+/// `decode_bx`). The prefixes at `pos` must be followed by their words ([`decode_at`]).
 pub(crate) fn bx_at(code: &[u32], pos: usize) -> u32 {
-    if decode(code[pos]).0 == op::WIDE {
-        decode_bx(code[pos + 1], Some(code[pos + 2]))
-    } else {
-        decode_bx(code[pos], None)
-    }
+    let (wide, _, at) = prefixes_at(code, pos);
+    decode_bx(code[at], wide.then(|| code[at + 1]))
 }
 
 /// Writes `Bx` of the instruction at the boundary `pos`, keeping its width (the inverse of
 /// [`bx_at`] and `decode_bx`): without `Wide`, `bx` must fit in 16 bits.
 pub(crate) fn set_bx_at(code: &mut [u32], pos: usize, bx: u32) {
-    if decode(code[pos]).0 == op::WIDE {
-        code[pos + 1] = (code[pos + 1] & 0xFFFF) | (bx << 16);
-        code[pos + 2] = (code[pos + 2] & 0xFFFF) | (bx & 0xFFFF_0000);
+    let (wide, _, at) = prefixes_at(code, pos);
+    if wide {
+        code[at] = (code[at] & 0xFFFF) | (bx << 16);
+        code[at + 1] = (code[at + 1] & 0xFFFF) | (bx & 0xFFFF_0000);
     } else {
         assert!(bx <= 0xFFFF, "a narrow `Bx` holds 16 bits");
-        code[pos] = (code[pos] & 0xFFFF) | (bx << 16);
+        code[at] = (code[at] & 0xFFFF) | (bx << 16);
     }
 }
 
@@ -138,6 +211,10 @@ pub enum ConstEntry {
         words: Vec<u64>,
     },
 }
+
+/// The largest width of a flat record or static array (an array's element width, the type of
+/// `AggLoad`, `AggStore` and `LendPlace`; `docs/design/records.md` 3.2 B).
+pub const MAX_FLAT_WIDTH: u32 = 16;
 
 /// The first type index of the type section; 0–63 are the VM's built-in types (3.2).
 pub const FIRST_TYPE_INDEX: u32 = 64;
@@ -220,9 +297,14 @@ pub struct TypeEntry {
     /// Fields of a record, elements of a static array (0 for a dynamic array), slots of a class's
     /// instances.
     pub slots: u32,
-    /// The kind of each slot ([`SLOT_PLAIN`], [`SLOT_REF`], [`SLOT_OBJ`]): one per field for a
-    /// record or a class, one for all the elements of an array.
+    /// The kind of each slot ([`SLOT_PLAIN`], [`SLOT_REF`], [`SLOT_OBJ`]): one per slot for a
+    /// record or a class (flat fields included), one per slot of an element for an array (`width`
+    /// of them).
     pub refs: Vec<u8>,
+    /// The width of an element of an array: the number of slots it takes, 1 to [`MAX_FLAT_WIDTH`]
+    /// (more than 1 only for an element that is a flat record or static array; 3.2). 0 for the
+    /// other kinds.
+    pub width: u32,
     /// The fully qualified name (`Hello.TPoint`), or the written form of an anonymous type.
     pub name: String,
     /// The parent's type index of a class (`None` for the root `TObject` and for the other
@@ -277,11 +359,35 @@ impl TypeEntry {
             .map_or_else(|| ord.to_string(), |(_, n)| n.clone())
     }
 
-    /// The kind of slot `i` ([`SLOT_PLAIN`], [`SLOT_REF`] or [`SLOT_OBJ`]).
+    /// The kind of slot `i` ([`SLOT_PLAIN`], [`SLOT_REF`] or [`SLOT_OBJ`]): of an array, that of
+    /// the same place in its element (`i` modulo the width).
     pub fn slot_kind(&self, i: usize) -> u8 {
         match self.kind {
             TYPE_RECORD | TYPE_CLASS => self.refs.get(i).copied().unwrap_or(0),
+            TYPE_ARRAY | TYPE_DYNARRAY if self.width > 1 => {
+                self.refs.get(i % self.width as usize).copied().unwrap_or(0)
+            }
             _ => self.refs.first().copied().unwrap_or(0),
+        }
+    }
+
+    /// The number of slots of an element of an array (its width; 1 for the other kinds, whose
+    /// slots are the elements themselves).
+    pub fn elem_width(&self) -> usize {
+        match self.kind {
+            TYPE_ARRAY | TYPE_DYNARRAY => self.width.max(1) as usize,
+            _ => 1,
+        }
+    }
+
+    /// The number of slots a value of this record or static array type takes when it is laid out
+    /// flat (3.2): the fields of a record, the elements times their width of a static array.
+    /// `None` for the other kinds.
+    pub fn flat_width(&self) -> Option<u64> {
+        match self.kind {
+            TYPE_RECORD => Some(u64::from(self.slots)),
+            TYPE_ARRAY => Some(u64::from(self.slots) * self.elem_width() as u64),
+            _ => None,
         }
     }
 }
@@ -371,6 +477,17 @@ pub const EXC_SLOT_EXTRA: u32 = 2;
 pub const EXC_INFO_STACK_TRACE: u32 = 0;
 pub const EXC_INFO_SUPPRESSED: u32 = 1;
 
+/// How `ArraySortRange` (`I96`) compares the elements (its `r(B+2)`; `docs/spec/bytecode.md`
+/// 2.22): the slots as signed or unsigned 64-bit integers, as `Single` (the low 32 bits) or
+/// `Double` in the total preorder of `KeyCompare`, as strings (`CmpStr`) or as `UTF8String`s
+/// (`CmpU8`).
+pub const SORT_INT: i64 = 0;
+pub const SORT_UINT: i64 = 1;
+pub const SORT_SINGLE: i64 = 2;
+pub const SORT_DOUBLE: i64 = 3;
+pub const SORT_STR: i64 = 4;
+pub const SORT_UTF8: i64 = 5;
+
 /// The kinds of the elements of `Format`'s `array of const` (`docs/spec/bytecode.md` 2.16).
 /// Integers are `0..=7`, their width code of the `Narrow` family (2.2).
 pub const FORMAT_KIND_INT_LAST: i64 = 7;
@@ -406,6 +523,7 @@ pub fn builtin_types() -> &'static [TypeEntry] {
             kind: 0,
             slots: 0,
             refs: Vec::new(),
+            width: 0,
             name: String::new(),
             parent: None,
             values: Vec::new(),
@@ -422,6 +540,7 @@ pub fn builtin_types() -> &'static [TypeEntry] {
                 kind: TYPE_CLASS,
                 slots: refs.len() as u32,
                 refs,
+                width: 0,
                 name: name.to_string(),
                 parent: *parent,
                 values: Vec::new(),
@@ -437,6 +556,7 @@ pub fn builtin_types() -> &'static [TypeEntry] {
             kind: TYPE_DYNARRAY,
             slots: 0,
             refs: vec![SLOT_REF],
+            width: 1,
             name: "TArray<Exception>".into(),
             parent: None,
             values: Vec::new(),
@@ -487,6 +607,7 @@ pub fn builtin_types() -> &'static [TypeEntry] {
                 kind: 0,
                 slots: 0,
                 refs: Vec::new(),
+                width: 0,
                 name: String::new(),
                 parent: None,
                 values: Vec::new(),
@@ -526,7 +647,27 @@ pub struct Function {
     /// For a function shared by several instantiations, their full names
     /// (`docs/spec/generics.md` 7, 8): shown by the disassembly only, not written in the file.
     pub shared_by: Vec<String>,
+    /// The inline table (3.2): the calls inlined into the function, ordered by start, an entry
+    /// before the entries inside it.
+    pub inlines: Vec<InlineEntry>,
 }
+
+/// An entry of a function's inline table (3.2, `docs/design/inlining.md` 3.6): the code that
+/// stands for the body of the function `func`, called at `line`. Positions are word positions;
+/// the range does not include its end.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct InlineEntry {
+    pub start: u32,
+    pub end: u32,
+    pub func: u32,
+    /// The line of the call (in the function holding the entry, or in the function of `outer`).
+    pub line: u32,
+    /// The entry whose code the call is in (an earlier entry of the table).
+    pub outer: Option<u32>,
+}
+
+/// `InlineEntry::outer` of an entry not inside another (in the module file).
+const NO_OUTER_INLINE: u32 = u32::MAX;
 
 /// `outer` of a function that is not nested (in the module file).
 const NO_OUTER: u32 = u32::MAX;
@@ -565,6 +706,16 @@ impl HandlerEntry {
 }
 
 impl Function {
+    /// The entries of the inline table whose range holds the word position `pos`, innermost
+    /// first.
+    pub fn inline_chain(&self, pos: u32) -> Vec<usize> {
+        let after = self.inlines.partition_point(|e| e.start <= pos);
+        let Some(inner) = (0..after).rev().find(|&k| pos < self.inlines[k].end) else {
+            return Vec::new();
+        };
+        std::iter::successors(Some(inner), |&k| self.inlines[k].outer.map(|o| o as usize)).collect()
+    }
+
     /// The line of a word position.
     pub fn line_at(&self, pos: u32) -> u32 {
         let mut line = self.lines.first().map(|l| l.1).unwrap_or(1);
@@ -841,6 +992,9 @@ impl Module {
             w.u8(0);
             w.u8(0);
             w.u32(t.slots);
+            if matches!(t.kind, TYPE_ARRAY | TYPE_DYNARRAY) {
+                w.u32(t.width);
+            }
             for r in &t.refs {
                 w.u8(*r);
             }
@@ -924,6 +1078,14 @@ impl Module {
             }
             w.u32(f.file);
             w.u32(f.outer.unwrap_or(NO_OUTER));
+            w.u32(f.inlines.len() as u32);
+            for e in &f.inlines {
+                w.u32(e.start);
+                w.u32(e.end);
+                w.u32(e.func);
+                w.u32(e.line);
+                w.u32(e.outer.unwrap_or(NO_OUTER_INLINE));
+            }
         }
         w.buf
     }
@@ -1204,9 +1366,20 @@ impl Module {
             r.u8()?;
             r.u8()?;
             let slots = r.u32()?;
+            let width = if matches!(kind, TYPE_ARRAY | TYPE_DYNARRAY) {
+                let w = r.u32()?;
+                if !(1..=MAX_FLAT_WIDTH).contains(&w) {
+                    return Err(LoadError::Invalid(format!(
+                        "array element width {w} out of range"
+                    )));
+                }
+                w
+            } else {
+                0
+            };
             let nrefs = match kind {
                 TYPE_RECORD | TYPE_CLASS => slots as usize,
-                TYPE_ARRAY | TYPE_DYNARRAY => 1,
+                TYPE_ARRAY | TYPE_DYNARRAY => width as usize,
                 TYPE_ENUM | TYPE_SET | TYPE_INTERFACE => 0,
                 k => return Err(LoadError::Invalid(format!("unknown type kind {k}"))),
             };
@@ -1272,7 +1445,7 @@ impl Module {
                     values.push((ord, name));
                 }
             }
-            if kind == TYPE_ARRAY && slots > i32::MAX as u32 {
+            if kind == TYPE_ARRAY && u64::from(slots) * u64::from(width) > i32::MAX as u64 {
                 return Err(LoadError::Invalid("static array is too large".into()));
             }
             if kind == TYPE_SET && !(1..=65536).contains(&slots) {
@@ -1287,6 +1460,7 @@ impl Module {
                 kind,
                 slots,
                 refs,
+                width,
                 name,
                 parent,
                 values,
@@ -1350,6 +1524,17 @@ impl Module {
             }
             let file = r.u32()?;
             let outer = Some(r.u32()?).filter(|&o| o != NO_OUTER);
+            let ninlines = r.count("inline")?;
+            let mut inlines = Vec::with_capacity(ninlines);
+            for _ in 0..ninlines {
+                inlines.push(InlineEntry {
+                    start: r.u32()?,
+                    end: r.u32()?,
+                    func: r.u32()?,
+                    line: r.u32()?,
+                    outer: Some(r.u32()?).filter(|&o| o != NO_OUTER_INLINE),
+                });
+            }
             out.push(Function {
                 outer,
                 name,
@@ -1362,6 +1547,7 @@ impl Module {
                 file,
                 handlers,
                 shared_by: Vec::new(),
+                inlines,
             });
         }
         Ok(out)
@@ -1501,11 +1687,13 @@ impl Module {
                             "constant {k}: type {ty} is not a record or static array"
                         ))
                     })?;
-                if items.len() != t.slots as usize {
+                // One item per slot: a static array whose elements are flat records has their
+                // slots (3.2)
+                let n = t.flat_width().unwrap_or(0);
+                if items.len() as u64 != n {
                     return Err(LoadError::Invalid(format!(
-                        "constant {k}: {} elements for a type of {} slots",
+                        "constant {k}: {} elements for a type of {n} slots",
                         items.len(),
-                        t.slots
                     )));
                 }
                 // Elements come first, so nested constants cannot form a cycle
@@ -1707,10 +1895,13 @@ impl Module {
             {
                 return Err(format!("{what} has a position off an instruction boundary"));
             }
-            if !(h.body_start < h.body_end
-                && h.body_end <= h.handler_start
-                && h.handler_start < h.handler_end)
-            {
+            // A `finally` block may be empty (`try … finally end`): it is just its `EndFinally`
+            let handler_ordered = if h.kind == HANDLER_FINALLY {
+                h.handler_start <= h.handler_end
+            } else {
+                h.handler_start < h.handler_end
+            };
+            if !(h.body_start < h.body_end && h.body_end <= h.handler_start && handler_ordered) {
                 return Err(format!("{what} has its ranges out of order"));
             }
             let regs = f.regs as u32;
@@ -1744,6 +1935,55 @@ impl Module {
         Ok(())
     }
 
+    /// The inline table (3.3): each range is a non-empty run of whole instructions, inside the
+    /// range of its outer entry (an earlier one), and the entries are ordered by start, each
+    /// nested in or apart from the entries before it.
+    fn verify_inlines(&self, f: &Function, boundaries: &[u32]) -> Result<(), String> {
+        let len = f.code.len() as u32;
+        let at_boundary = |p: u32| p == len || boundaries.binary_search(&p).is_ok();
+        for (i, e) in f.inlines.iter().enumerate() {
+            let what = format!("inline entry {i}");
+            if !(e.start < e.end && e.end <= len && at_boundary(e.start) && at_boundary(e.end)) {
+                return Err(format!("{what} has a range off the instructions"));
+            }
+            if e.func as usize >= self.funcs.len() {
+                return Err(format!("{what} names function {} out of range", e.func));
+            }
+            if let Some(o) = e.outer {
+                let Some(outer) = f.inlines[..i].get(o as usize) else {
+                    return Err(format!(
+                        "{what} has an outer entry that does not come before it"
+                    ));
+                };
+                if !(outer.start <= e.start && e.end <= outer.end) {
+                    return Err(format!("{what} is not inside its outer entry"));
+                }
+            }
+            if let Some(prev) = i.checked_sub(1).map(|p| f.inlines[p])
+                && prev.start > e.start
+            {
+                return Err(format!("{what} starts before the entry before it"));
+            }
+            // An earlier entry overlapping this one holds it: it is its outer entry or one
+            // around that
+            for (j, g) in f.inlines[..i].iter().enumerate() {
+                if g.end <= e.start || e.end <= g.start {
+                    continue;
+                }
+                let mut k = e.outer;
+                while let Some(o) = k.filter(|&o| o as usize != j) {
+                    k = f.inlines[o as usize].outer;
+                }
+                if k.is_none() {
+                    return Err(format!(
+                        "{what} overlaps inline entry {j} without being inside it"
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
+
     fn verify_function(&self, fi: usize, f: &Function) -> Result<(), LoadError> {
         let err = |m: String| LoadError::Invalid(format!("function {fi} ({}): {m}", f.name));
         if (f.params as usize) > f.regs as usize && !(f.params == 0 && f.regs == 0) {
@@ -1762,18 +2002,18 @@ impl Module {
         let mut boundaries: Vec<u32> = Vec::new();
         let mut pc = 0usize;
         let code = &f.code;
-        let mut last: Option<u8> = None;
+        let mut last: Option<u16> = None;
         // `EndFinally`: (index into `boundaries`, `A`, number of `Jmp`s)
         let mut end_finally: Vec<(usize, u32, u32)> = Vec::new();
         while pc < code.len() {
             boundaries.push(pc as u32);
-            if decode(code[pc]).0 == op::WIDE && pc + 2 >= code.len() {
-                return Err(err("`Wide` without a following instruction".into()));
+            if let Some(m) = prefix_error(code, pc) {
+                return Err(err(m.into()));
             }
             let (opc, a, b, c, len) = decode_at(code, pc);
-            let wide = len == 3;
-            if opc == op::WIDE && wide {
-                return Err(err("`Wide` after `Wide`".into()));
+            let wide = is_wide_at(code, pc);
+            if pc + len > code.len() {
+                return Err(err(format!("missing type word at {pc:04x}")));
             }
             // An intrinsic is checked by its own shape (2.19)
             let info = op::resolve(opc, c).ok_or_else(|| {
@@ -1792,6 +2032,29 @@ impl Module {
                     Ok(())
                 }
             };
+            // The type word of `AggLoad`, `AggStore` and `LendPlace` (2.8): a record or static
+            // array that fits a flat place
+            let flat_type = |t: u32| -> Result<(), LoadError> {
+                match self.type_entry(t) {
+                    Some(e) => match e.flat_width() {
+                        Some(w) if (1..=u64::from(MAX_FLAT_WIDTH)).contains(&w) => Ok(()),
+                        Some(_) => Err(err(format!("type {t} is too wide at {pc:04x}"))),
+                        Option::None => {
+                            Err(err(format!("type {t} has the wrong kind at {pc:04x}")))
+                        }
+                    },
+                    Option::None => Err(err(format!("type {t} out of range at {pc:04x}"))),
+                }
+            };
+            // A cursor in the short form has both registers in 8 bits (1.2)
+            if !wide
+                && let Some(r) = info.shape.cursor_end(a, b)
+                && r > 255
+            {
+                return Err(err(format!(
+                    "cursor ending at r{r} without `Wide` at {pc:04x}"
+                )));
+            }
             use op::Shape::*;
             match info.shape {
                 Intrinsic => unreachable!("`resolve` gives an intrinsic's own shape"),
@@ -1849,6 +2112,22 @@ impl Module {
                     reg(a, "A")?;
                     reg(b, "B")?;
                     reg(b + 3, "B+3")?;
+                }
+                // `docs/spec/bytecode.md` 2.23: the kinds, lengths and indices of the arrays are
+                // checked when it runs
+                ABRange5 => {
+                    reg(a, "A")?;
+                    reg(b, "B")?;
+                    reg(b + 4, "B+4")?;
+                    if c != 0 {
+                        return Err(err(format!("C={c} is not 0 at {pc:04x}")));
+                    }
+                }
+                // `C` is a slot of the instance `rB`, checked when it runs as `ObjGet`'s
+                ABRange2Slot => {
+                    reg(a, "A")?;
+                    reg(b, "B")?;
+                    reg(b + 1, "B+1")?;
                 }
                 ABPairs => {
                     reg(a, "A")?;
@@ -1926,6 +2205,22 @@ impl Module {
                     reg(a, "A")?;
                     reg(c, "C")?;
                 }
+                ASlotCType => {
+                    reg(a, "A")?;
+                    reg(c, "C")?;
+                    // The type word (1.2): the record or static array a reference slot points
+                    // to (2.8)
+                    let t = type_word_at(code, pc, len);
+                    match self.type_entry(t) {
+                        Some(e) if matches!(e.kind, TYPE_RECORD | TYPE_ARRAY) => {}
+                        Some(_) => {
+                            return Err(err(format!("type {t} has the wrong kind at {pc:04x}")));
+                        }
+                        Option::None => {
+                            return Err(err(format!("type {t} out of range at {pc:04x}")));
+                        }
+                    }
+                }
                 ABk => {
                     reg(a, "A")?;
                     reg(b, "B")?;
@@ -1947,13 +2242,40 @@ impl Module {
                         }
                     }
                 }
-                ABPath => {
+                ABPath | ABPathType => {
                     reg(a, "A")?;
                     reg(b, "B")?;
                     if c == 0 {
                         return Err(err(format!("empty lending path at {pc:04x}")));
                     }
                     reg(a + c, "A+C")?;
+                    if info.shape == ABPathType {
+                        flat_type(type_word_at(code, pc, len))?;
+                    }
+                }
+                // A cursor is two registers (2.8)
+                ACursorBC => {
+                    reg(a + 1, "A+1")?;
+                    reg(b, "B")?;
+                    reg(c, "C")?;
+                }
+                ABCursorSlot => {
+                    reg(a, "A")?;
+                    reg(b + 1, "B+1")?;
+                }
+                ACursorSlotC => {
+                    reg(a + 1, "A+1")?;
+                    reg(c, "C")?;
+                }
+                ABCursorType => {
+                    reg(a, "A")?;
+                    reg(b + 1, "B+1")?;
+                    flat_type(type_word_at(code, pc, len))?;
+                }
+                ACursorBType => {
+                    reg(a + 1, "A+1")?;
+                    reg(b, "B")?;
+                    flat_type(type_word_at(code, pc, len))?;
                 }
                 AJumps => {
                     reg(a, "A")?;
@@ -2018,7 +2340,7 @@ impl Module {
         // `EndFinally` is followed by exactly `B` `Jmp`s and then another instruction (state 0 goes on
         // after the `Jmp`s)
         let opcode_at =
-            |i: usize| -> Option<u8> { Some(decode_at(code, *boundaries.get(i)? as usize).0) };
+            |i: usize| -> Option<u16> { Some(decode_at(code, *boundaries.get(i)? as usize).0) };
         for &(i, _, n) in &end_finally {
             for k in 1..=n as usize {
                 if opcode_at(i + k) != Some(op::JMP) {
@@ -2040,7 +2362,7 @@ impl Module {
         // Jump targets
         for &start in &boundaries {
             let (opc, _, _, c, len) = decode_at(code, start as usize);
-            let wide = len == 3;
+            let wide = is_wide_at(code, start as usize);
             let Some(info) = op::info(opc) else { continue };
             let next = start as usize + len;
             let offset: i64 = match info.shape {
@@ -2058,6 +2380,7 @@ impl Module {
                 )));
             }
         }
+        self.verify_inlines(f, &boundaries).map_err(err)?;
         // Line table
         if f.lines.is_empty() || f.lines[0].0 != 0 {
             return Err(err("line table must start at 0".into()));
@@ -2233,11 +2556,21 @@ pub fn disassemble(m: &Module) -> String {
                     line.push_str(&format!(" values={}", values.join(",")));
                 }
                 TYPE_SET => {}
-                _ => line.push_str(match t.slot_kind(0) {
-                    SLOT_REF => " elem=ref",
-                    SLOT_OBJ => " elem=obj",
-                    _ => " elem=val",
-                }),
+                _ => {
+                    // The kind of each slot of an element; its width only when an element takes
+                    // more than one slot (a flat record or static array; 3.2)
+                    let kinds: Vec<&str> = (0..t.elem_width())
+                        .map(|i| match t.slot_kind(i) {
+                            SLOT_REF => "ref",
+                            SLOT_OBJ => "obj",
+                            _ => "val",
+                        })
+                        .collect();
+                    if t.elem_width() > 1 {
+                        line.push_str(&format!(" width={}", t.elem_width()));
+                    }
+                    line.push_str(&format!(" elem={}", kinds.join(",")));
+                }
             }
             out.push_str(&line);
             out.push('\n');
@@ -2314,7 +2647,11 @@ pub fn disassemble(m: &Module) -> String {
         }
         let mut li = 0usize;
         let mut pc = 0usize;
+        // The entries of the inline table entered and not left yet, innermost last
+        let mut open: Vec<usize> = Vec::new();
+        let mut next_inline = 0usize;
         while pc < f.code.len() {
+            inline_marks(m, f, pc, &mut open, &mut next_inline, &mut out);
             while li < f.lines.len() && f.lines[li].0 as usize <= pc {
                 out.push_str(&format!("  .line {}\n", f.lines[li].1));
                 li += 1;
@@ -2323,11 +2660,40 @@ pub fn disassemble(m: &Module) -> String {
             out.push_str(&format!("  {pc:04x}  {text}\n"));
             pc += len;
         }
+        inline_marks(m, f, pc, &mut open, &mut next_inline, &mut out);
         if !f.managed.is_empty() {
             out.push_str(&format!(".finally {}\n", managed_text(&f.managed)));
         }
     }
     out
+}
+
+/// The lines of the inline table (5) at `pc`: `.endinline` for the entries ending there
+/// (innermost first), then `.inline` for those starting there (outermost first).
+fn inline_marks(
+    m: &Module,
+    f: &Function,
+    pc: usize,
+    open: &mut Vec<usize>,
+    next: &mut usize,
+    out: &mut String,
+) {
+    while let Some(&k) = open.last() {
+        if f.inlines[k].end as usize > pc {
+            break;
+        }
+        open.pop();
+        out.push_str("  .endinline\n");
+    }
+    while let Some(e) = f.inlines.get(*next).filter(|e| e.start as usize == pc) {
+        let name = m
+            .funcs
+            .get(e.func as usize)
+            .map_or("?", |g| g.name.as_str());
+        out.push_str(&format!("  .inline f{} {name} line={}\n", e.func, e.line));
+        open.push(*next);
+        *next += 1;
+    }
 }
 
 /// Managed registers as the disassembly shows them (`.finally`; 5): `r3, r4:obj`.
@@ -2382,7 +2748,7 @@ fn fmt_target(t: i64) -> String {
 /// Disassembles one instruction: (text, number of words).
 pub fn disassemble_one(code: &[u32], pc: usize) -> (String, usize) {
     let (opc, a, b, c, len) = decode_at(code, pc);
-    let wide = len == 3;
+    let wide = is_wide_at(code, pc);
     let next = pc + len;
     // An intrinsic is shown by its own name and shape (2.19)
     let Some(info) = op::resolve(opc, c) else {
@@ -2401,7 +2767,8 @@ pub fn disassemble_one(code: &[u32], pc: usize) -> (String, usize) {
         Intrinsic => unreachable!("`resolve` gives an intrinsic's own shape"),
         None => String::new(),
         A => format!("r{a}"),
-        AB | ABRange2 | ABRange3 | ABRange4 => format!("r{a}, r{b}"),
+        AB | ABRange2 | ABRange3 | ABRange4 | ABRange5 => format!("r{a}, r{b}"),
+        ABRange2Slot => format!("r{a}, r{b}, {c}"),
         ABPairs | ABList => format!("r{a}, r{b}, {c}"),
         ABC => format!("r{a}, r{b}, r{c}"),
         ABCImm => format!("r{a}, r{b}, {c}"),
@@ -2435,6 +2802,14 @@ pub fn disassemble_one(code: &[u32], pc: usize) -> (String, usize) {
         }
         ABSlot | ABPath => format!("r{a}, r{b}, {c}"),
         ASlotC => format!("r{a}, {b}, r{c}"),
+        ASlotCType => format!("r{a}, {b}, r{c}, ty{}", type_word_at(code, pc, len)),
+        ABPathType => format!("r{a}, r{b}, {c}, ty{}", type_word_at(code, pc, len)),
+        ACursorBC => format!("r{a}, r{b}, r{c}"),
+        ABCursorSlot => format!("r{a}, r{b}, {c}"),
+        ACursorSlotC => format!("r{a}, {b}, r{c}"),
+        ABCursorType | ACursorBType => {
+            format!("r{a}, r{b}, ty{}", type_word_at(code, pc, len))
+        }
         ABk => format!("r{a}, r{b}, k{c}"),
         ABType => format!("r{a}, r{b}, ty{c}"),
         ASBx => format!("r{a}, -> {}", fmt_target(next as i64 + sbx)),
@@ -2512,6 +2887,7 @@ mod tests {
                 file: 0,
                 handlers: Vec::new(),
                 shared_by: Vec::new(),
+                inlines: Vec::new(),
                 outer: None,
             }],
             globals: vec![GlobalEntry {
@@ -2625,6 +3001,7 @@ mod tests {
             kind: TYPE_RECORD,
             slots: 2,
             refs: vec![SLOT_PLAIN, SLOT_REF],
+            width: 0,
             name: "Hello.TPoint".into(),
             parent: None,
             values: Vec::new(),
@@ -2878,6 +3255,269 @@ mod tests {
         assert!(m.verify().is_ok());
     }
 
+    /// A module whose `<main>` has `regs` registers and the code `code`, with a record type (64).
+    fn with_type_and_code(regs: u16, code: Vec<u32>) -> Module {
+        let mut m = sample_with_type();
+        m.funcs[0].regs = regs;
+        m.funcs[0].code = code;
+        m.funcs[0].lines = vec![(0, 5)];
+        m
+    }
+
+    #[test]
+    // A type word is shown as the last operand `tyN` on the line of its instruction, which is 2
+    // words long, or 4 with `Wide` (1.2, 5).
+    fn ref_field_writes_disassemble_with_the_type_word() {
+        let ret = encode(op::RET_VOID, 0, 0, 0);
+        let short = with_type_and_code(3, vec![encode(op::REF_FIELD_SET, 0, 1, 2), 64, ret]);
+        assert_eq!(short.verify(), Ok(()));
+        assert_eq!(
+            disassemble_one(&short.funcs[0].code, 0),
+            ("RefFieldSet  r0, 1, r2, ty64".to_string(), 2)
+        );
+        let wide = with_type_and_code(
+            300,
+            vec![
+                encode(op::WIDE, 0, 0, 0),
+                encode(op::REF_FIELD_SET_REF, 0, 1, 299 & 0xFF),
+                encode_ext(0, 1, 299),
+                64,
+                ret,
+            ],
+        );
+        assert_eq!(wide.verify(), Ok(()));
+        assert_eq!(
+            disassemble_one(&wide.funcs[0].code, 0),
+            ("w.RefFieldSetRef r0, 1, r299, ty64".to_string(), 4)
+        );
+    }
+
+    #[test]
+    // The verifier refuses a `RefFieldSet` / `RefFieldSetRef` without its type word, with a type
+    // word that does not name a record of the type section, and a jump to the type word, which
+    // belongs to the instruction (1.2, 3.3).
+    fn verify_checks_the_type_word() {
+        let ret = encode(op::RET_VOID, 0, 0, 0);
+        let bad = [
+            (
+                "no type word",
+                vec![ret, encode(op::REF_FIELD_SET, 0, 1, 2)],
+                "missing type word at 0001",
+            ),
+            (
+                "a type that is not a record",
+                vec![encode(op::REF_FIELD_SET, 0, 1, 2), 0, ret],
+                "type 0 has the wrong kind at 0000",
+            ),
+            (
+                "a type outside the section",
+                vec![encode(op::REF_FIELD_SET_REF, 0, 1, 2), 65, ret],
+                "type 65 out of range at 0000",
+            ),
+            (
+                "a jump to the type word",
+                vec![
+                    encode(op::JMP, 0, 1, 0),
+                    encode(op::REF_FIELD_SET, 0, 1, 2),
+                    64,
+                    ret,
+                ],
+                "jump target 2 is not an instruction boundary at 0000",
+            ),
+        ];
+        for (what, code, message) in bad {
+            assert_eq!(
+                with_type_and_code(3, code).verify(),
+                Err(LoadError::Invalid(format!(
+                    "function 0 (Hello.<main>): {message}"
+                ))),
+                "{what}"
+            );
+        }
+    }
+
+    /// [`with_type_and_code`] with two more types: 65 a dynamic array of `Hello.TPoint` laid out
+    /// flat (width 2) and 66 a record of 17 slots, wider than a flat place.
+    fn with_flat_types(regs: u16, code: Vec<u32>) -> Module {
+        let mut m = with_type_and_code(regs, code);
+        m.types.push(TypeEntry {
+            kind: TYPE_DYNARRAY,
+            refs: vec![SLOT_PLAIN, SLOT_REF],
+            width: 2,
+            name: "array of Hello.TPoint".into(),
+            ..TypeEntry::default()
+        });
+        m.types.push(TypeEntry {
+            kind: TYPE_RECORD,
+            slots: 17,
+            refs: vec![SLOT_PLAIN; 17],
+            name: "Hello.TWide".into(),
+            ..TypeEntry::default()
+        });
+        m
+    }
+
+    #[test]
+    // An array entry of the type section has the width of its elements, 1 to 16, and that many
+    // slot kinds: the module reads back the same, the dump shows a width above 1, and a width
+    // out of the range is refused when the module is read (3.2, 5.2).
+    fn array_types_carry_their_element_width() {
+        let ret = encode(op::RET_VOID, 0, 0, 0);
+        let m = with_flat_types(4, vec![ret]);
+        let bytes = m.encode("0.0.0");
+        assert_eq!(Module::decode(&bytes, "0.0.0").as_ref(), Ok(&m));
+        let d = disassemble(&m);
+        assert!(
+            d.contains("  65: dynarray array of Hello.TPoint slots=0 width=2 elem=val,ref\n"),
+            "{d}"
+        );
+        for w in [0, 17] {
+            let mut bad = m.clone();
+            bad.types[1].width = w;
+            bad.types[1].refs = vec![SLOT_PLAIN; w as usize];
+            assert_eq!(
+                Module::decode(&bad.encode("0.0.0"), "0.0.0"),
+                Err(LoadError::Invalid(format!(
+                    "array element width {w} out of range"
+                ))),
+                "{w}"
+            );
+        }
+    }
+
+    #[test]
+    // The instructions of flat places disassemble with their cursors as the first register and
+    // their type words as `tyN` (2.8, 5.2).
+    fn flat_place_instructions_disassemble() {
+        let ret = encode(op::RET_VOID, 0, 0, 0);
+        let code = vec![
+            encode(op::ELEM_AT, 2, 0, 1),
+            encode(op::SLOT_GET, 1, 2, 0),
+            encode(op::SLOT_SET_REF, 2, 1, 1),
+            encode(op::AGG_LOAD, 0, 2, 0),
+            64,
+            encode(op::AGG_STORE, 2, 0, 0),
+            64,
+            encode(op::LEND_PLACE, 0, 3, 1),
+            64,
+            ret,
+        ];
+        let m = with_flat_types(5, code);
+        assert_eq!(m.verify(), Ok(()));
+        let mut lines = Vec::new();
+        let mut pc = 0;
+        while pc < m.funcs[0].code.len() {
+            let (text, len) = disassemble_one(&m.funcs[0].code, pc);
+            lines.push(text);
+            pc += len;
+        }
+        assert_eq!(
+            lines,
+            [
+                "ElemAt       r2, r0, r1",
+                "SlotGet      r1, r2, 0",
+                "SlotSetRef   r2, 1, r1",
+                "AggLoad      r0, r2, ty64",
+                "AggStore     r2, r0, ty64",
+                "LendPlace    r0, r3, 1, ty64",
+                "RetVoid",
+            ]
+        );
+    }
+
+    #[test]
+    // The verifier checks both registers of a cursor, and that the type word of `AggLoad`,
+    // `AggStore` and `LendPlace` names a record or static array of 16 slots at most (2.8, 3.3).
+    fn verify_checks_flat_place_instructions() {
+        let ret = encode(op::RET_VOID, 0, 0, 0);
+        let bad = [
+            (
+                "ElemAt writing past the registers",
+                vec![encode(op::ELEM_AT, 3, 0, 1), ret],
+                "register A+1=4 out of range at 0000",
+            ),
+            (
+                "SlotGet reading past the registers",
+                vec![encode(op::SLOT_GET, 0, 3, 0), ret],
+                "register B+1=4 out of range at 0000",
+            ),
+            (
+                "SlotSet writing past the registers",
+                vec![encode(op::SLOT_SET, 3, 0, 1), ret],
+                "register A+1=4 out of range at 0000",
+            ),
+            (
+                "AggLoad of a dynamic array",
+                vec![encode(op::AGG_LOAD, 0, 1, 0), 65, ret],
+                "type 65 has the wrong kind at 0000",
+            ),
+            (
+                "AggStore of a record of 17 slots",
+                vec![encode(op::AGG_STORE, 2, 0, 0), 66, ret],
+                "type 66 is too wide at 0000",
+            ),
+            (
+                "LendPlace without a path",
+                vec![encode(op::LEND_PLACE, 0, 1, 0), 64, ret],
+                "empty lending path at 0000",
+            ),
+            (
+                "LendPlace without its type word",
+                vec![encode(op::LEND_PLACE, 0, 1, 1)],
+                "missing type word at 0000",
+            ),
+        ];
+        for (what, code, message) in bad {
+            assert_eq!(
+                with_flat_types(4, code).verify(),
+                Err(LoadError::Invalid(format!(
+                    "function 0 (Hello.<main>): {message}"
+                ))),
+                "{what}"
+            );
+        }
+    }
+
+    #[test]
+    // A cursor whose second register is past r255 takes `Wide` even when its first one is r255
+    // (1.2): the verifier refuses the short form, which the fast path would read out of its window
+    // of 256 registers, and takes the wide form of the same instruction.
+    fn verify_wants_wide_for_cursor_ending_past_r255() {
+        let ret = encode(op::RET_VOID, 0, 0, 0);
+        // (instruction, A, B, C, whether a type word follows)
+        let cases = [
+            (op::ELEM_AT, 255, 0, 1, false),
+            (op::SLOT_GET, 0, 255, 0, false),
+            (op::SLOT_SET, 255, 0, 1, false),
+            (op::AGG_LOAD, 0, 255, 0, true),
+            (op::AGG_STORE, 255, 0, 0, true),
+        ];
+        for (opc, a, b, c, typed) in cases {
+            let name = op::info(opc).unwrap().name;
+            let mut short = vec![encode(opc, a, b, c)];
+            let mut wide = vec![
+                encode(op::WIDE, 0, 0, 0),
+                encode(opc, a, b, c),
+                encode_ext(a, b, c),
+            ];
+            if typed {
+                short.push(64);
+                wide.push(64);
+            }
+            short.push(ret);
+            wide.push(ret);
+            assert_eq!(
+                with_flat_types(257, short).verify(),
+                Err(LoadError::Invalid(
+                    "function 0 (Hello.<main>): cursor ending at r256 without `Wide` at 0000"
+                        .into()
+                )),
+                "{name}"
+            );
+            assert_eq!(with_flat_types(257, wide).verify(), Ok(()), "{name}");
+        }
+    }
+
     #[test]
     // The array instructions take a type of the right kind (a dynamic array for `SetLen`,
     // `NewArr`, `ArrCopy`; a record or static array for `Materialize`), and `SetLen` / `ArrCopy`
@@ -2889,6 +3529,7 @@ mod tests {
                 kind: TYPE_DYNARRAY,
                 slots: 0,
                 refs: vec![SLOT_REF],
+                width: 1,
                 name: "array of string".into(),
                 parent: None,
                 values: Vec::new(),
@@ -2963,6 +3604,7 @@ mod tests {
             kind: TYPE_CLASS,
             slots: 2,
             refs: vec![SLOT_REF, SLOT_REF],
+            width: 0,
             name: "Hello.EParseError".into(),
             parent: Some(parent),
             values: Vec::new(),
@@ -3014,6 +3656,7 @@ mod tests {
             kind: TYPE_ENUM,
             slots: 0,
             refs: Vec::new(),
+            width: 0,
             name: "Hello.TCode".into(),
             parent: None,
             values: vec![(0, "Zero".into()), (5, "Five".into()), (5, "Again".into())],
@@ -3083,6 +3726,7 @@ mod tests {
             kind: TYPE_SET,
             slots: 100,
             refs: Vec::new(),
+            width: 0,
             name: "Hello.TSmallChars".into(),
             parent: None,
             values: Vec::new(),
@@ -3271,8 +3915,27 @@ mod tests {
     // The verifier's rules for the handler table and `EndFinally` (`docs/spec/exceptions.md` 6.3).
     fn verify_checks_handler_table() {
         type Change = fn(&mut Module);
-        let cases: [(&str, Change, bool); 9] = [
+        let cases: [(&str, Change, bool); 11] = [
             ("valid", |_| {}, true),
+            (
+                "an empty finally block (its handler range ends where it starts)",
+                |m| {
+                    let h = &mut m.funcs[0].handlers[0];
+                    h.body_end = 2;
+                    h.handler_start = 2;
+                },
+                true,
+            ),
+            (
+                "an empty except block",
+                |m| {
+                    let h = &mut m.funcs[0].handlers[0];
+                    h.kind = HANDLER_EXCEPT;
+                    h.handler_start = 2;
+                    h.body_end = 2;
+                },
+                false,
+            ),
             ("unknown kind", |m| m.funcs[0].handlers[0].kind = 3, false),
             (
                 "an except block may end at the end of the code",
@@ -3330,6 +3993,104 @@ mod tests {
             change(&mut m);
             assert_eq!(m.verify().is_ok(), ok, "{what}");
         }
+    }
+
+    /// `sample` with an inline table: words 1..3 stand for function 0's body called at line 5,
+    /// and word 2 for a call inlined into it at line 9.
+    fn with_inlines() -> Module {
+        let mut m = sample();
+        m.funcs[0].inlines = vec![
+            InlineEntry {
+                start: 1,
+                end: 3,
+                func: 0,
+                line: 5,
+                outer: None,
+            },
+            InlineEntry {
+                start: 2,
+                end: 3,
+                func: 0,
+                line: 9,
+                outer: Some(0),
+            },
+        ];
+        m
+    }
+
+    #[test]
+    // The inline table (3.3): ranges of whole instructions inside the code, each inside its outer
+    // entry, in order of start, nested or apart, naming functions of the table.
+    fn verify_checks_inline_table() {
+        type Change = fn(&mut Module);
+        let cases: [(&str, Change, bool); 9] = [
+            ("valid", |_| {}, true),
+            ("empty range", |m| m.funcs[0].inlines[1].end = 2, false),
+            ("past the code", |m| m.funcs[0].inlines[0].end = 5, false),
+            (
+                "may end at the end of the code",
+                |m| m.funcs[0].inlines[0].end = 4,
+                true,
+            ),
+            (
+                "unknown function",
+                |m| m.funcs[0].inlines[1].func = 1,
+                false,
+            ),
+            (
+                "outer after it",
+                |m| m.funcs[0].inlines[0].outer = Some(1),
+                false,
+            ),
+            (
+                "outside its outer entry",
+                |m| m.funcs[0].inlines[1].end = 4,
+                false,
+            ),
+            (
+                "overlapping without an outer entry",
+                |m| m.funcs[0].inlines[1].outer = None,
+                false,
+            ),
+            (
+                "out of order",
+                |m| {
+                    let e = &mut m.funcs[0].inlines;
+                    e[1].outer = None;
+                    e[1].start = 0;
+                    e[1].end = 1;
+                },
+                false,
+            ),
+        ];
+        for (what, change, ok) in cases {
+            let mut m = with_inlines();
+            change(&mut m);
+            assert_eq!(m.verify().is_ok(), ok, "{what}");
+        }
+    }
+
+    #[test]
+    // The inline table goes through the module file as it is (3.2).
+    fn inline_table_round_trips() {
+        let m = with_inlines();
+        assert_eq!(Module::decode(&m.encode("test"), "test").unwrap(), m);
+    }
+
+    #[test]
+    // The disassembly marks an inlined range with `.inline` before its first instruction and
+    // `.endinline` after its last, innermost last in and first out (5).
+    fn disassembly_marks_inlined_ranges() {
+        let d = disassemble(&with_inlines());
+        let code = &d[d.find(".func 0").expect("the function")..];
+        assert_eq!(
+            code,
+            ".func 0 Hello.<main> params=0 regs=3\n  .local r1 I\n  .line 5\n  \
+             0000  LoadInt      r1, 0\n  .inline f0 Hello.<main> line=5\n  \
+             0001  LoadConst    r0, k0\n  .inline f0 Hello.<main> line=9\n  .line 6\n  \
+             0002  CallHost     r0, h0\n  .endinline\n  .endinline\n  0003  RetVoid\n\
+             .finally r0\n"
+        );
     }
 
     #[test]
@@ -3524,14 +4285,14 @@ mod tests {
         // `StrInsert` reads `B` and `B+1`; with B = 2, B+1 is past the 3 registers
         m.funcs[0].code[0] = encode(op::INTRINSIC, 0, 2, u32::from(op::intr::STR_INSERT));
         assert!(m.verify().is_err());
-        // 76 is not given to an intrinsic yet (`docs/spec/bytecode.md` 2.19)
-        m.funcs[0].code[0] = encode(op::INTRINSIC, 0, 0, 76);
+        // 97 is not given to an intrinsic yet (`docs/spec/bytecode.md` 2.19)
+        m.funcs[0].code[0] = encode(op::INTRINSIC, 0, 0, 97);
         assert!(m.verify().is_err());
     }
 
-    // The intrinsics only the standard library uses (`I73`-`I75`; 2.22) take registers of the
-    // function, `ArrayMoveRange` and `IsOverridden` also `B+1` and `B+2`, and show by their names
-    // (3.3, 5).
+    // The intrinsics only the standard library uses (`I73`-`I75`, `I96`; 2.22) take registers of
+    // the function, `ArrayMoveRange`, `IsOverridden` and `ArraySortRange` also `B+1` and `B+2`,
+    // and show by their names (3.3, 5).
     #[test]
     fn stdlib_intrinsics_check_their_registers() {
         let mut m = sample();
@@ -3543,6 +4304,10 @@ mod tests {
             ),
             (word(0, 2, op::intr::IS_REF_OBJ), "IsRefObj     r0, r2"),
             (word(1, 0, op::intr::IS_OVERRIDDEN), "IsOverridden r1, r0"),
+            (
+                word(2, 0, op::intr::ARRAY_SORT_RANGE),
+                "ArraySortRange r2, r0",
+            ),
         ];
         for (w, text) in ok {
             m.funcs[0].code[0] = w;
@@ -3557,6 +4322,54 @@ mod tests {
             word(0, 3, op::intr::IS_REF_OBJ),
             word(0, 1, op::intr::IS_OVERRIDDEN),
             word(3, 0, op::intr::IS_OVERRIDDEN),
+            word(0, 1, op::intr::ARRAY_SORT_RANGE),
+            word(3, 0, op::intr::ARRAY_SORT_RANGE),
+        ];
+        for (i, w) in bad.into_iter().enumerate() {
+            m.funcs[0].code[0] = w;
+            assert!(m.verify().is_err(), "{i}");
+        }
+    }
+
+    // The hash table lookups (90, 96, 98, `I95`; 2.23) take the registers of their ranges,
+    // `HashFind` a `C` of 0, `HashLookupInt` / `HashLookupStr` any slot number in `C` (checked
+    // when they run, as `ObjGet`'s), and show by their names (3.3, 5).
+    #[test]
+    fn hash_table_instructions_check_their_operands() {
+        let mut m = sample();
+        m.funcs[0].regs = 7;
+        let relink = |a, b| encode(op::INTRINSIC, a, b, u32::from(op::intr::HASH_RELINK));
+        let ok = [
+            (encode(op::HASH_FIND, 6, 2, 0), "HashFind     r6, r2"),
+            (
+                encode(op::HASH_LOOKUP_INT, 3, 0, 2),
+                "HashLookupInt r3, r0, 2",
+            ),
+            (
+                encode(op::HASH_LOOKUP_STR, 6, 5, 255),
+                "HashLookupStr r6, r5, 255",
+            ),
+            (relink(6, 4), "HashRelink   r6, r4"),
+        ];
+        for (w, text) in ok {
+            m.funcs[0].code[0] = w;
+            assert!(m.verify().is_ok(), "{text}: {:?}", m.verify());
+            assert_eq!(disassemble_one(&m.funcs[0].code, 0).0, text);
+        }
+        let bad = [
+            // `B+4`, `B+1`, `B+2` past the 7 registers
+            encode(op::HASH_FIND, 0, 3, 0),
+            encode(op::HASH_LOOKUP_INT, 0, 6, 0),
+            encode(op::HASH_LOOKUP_STR, 0, 6, 0),
+            relink(0, 5),
+            encode(op::HASH_FIND, 7, 0, 0),
+            encode(op::HASH_LOOKUP_INT, 7, 0, 0),
+            encode(op::HASH_LOOKUP_STR, 7, 0, 0),
+            relink(7, 0),
+            // `C`
+            encode(op::HASH_FIND, 0, 0, 1),
+            // 91 is free again (`HashFindKey` until M4-132)
+            encode(91u8, 0, 0, 0),
         ];
         for (i, w) in bad.into_iter().enumerate() {
             m.funcs[0].code[0] = w;
@@ -3687,6 +4500,85 @@ mod tests {
             m.funcs[0].code = code;
             m.funcs[0].lines = vec![(0, 1)];
             assert_eq!(m.verify(), Err(LoadError::Invalid(message.into())), "{idx}");
+        }
+    }
+
+    // An instruction numbered past 255 is its `op` after the prefix `Ext` (1.2): `Ext` adds a
+    // word, comes after `Wide`, and the instruction verifies and shows by its own number and name.
+    #[test]
+    fn ext_instruction_decodes_verifies_and_disassembles() {
+        let ext = 0x0000_00FE;
+        let ret_void = 0x0000_0073;
+        let mut m = sample();
+        // `Ext`, then `TestExt r0, r1, r2` (its word holds the `op` of `AddInt`, 16)
+        m.funcs[0].code = vec![ext, 0x0201_0010, ret_void];
+        m.funcs[0].lines = vec![(0, 1)];
+        assert_eq!(decode_at(&m.funcs[0].code, 0), (op::TEST_EXT, 0, 1, 2, 2));
+        assert_eq!(m.verify(), Ok(()));
+        assert_eq!(
+            disassemble_one(&m.funcs[0].code, 0),
+            ("TestExt      r0, r1, r2".to_string(), 2)
+        );
+        // `Wide`, `Ext`, then `TestExt r300, r1, r2` and the extension word
+        m.funcs[0].code = vec![0x0000_0001, ext, 0x0201_2C10, 0x0000_0100, ret_void];
+        m.funcs[0].regs = 301;
+        assert_eq!(decode_at(&m.funcs[0].code, 0), (op::TEST_EXT, 300, 1, 2, 4));
+        assert_eq!(m.verify(), Ok(()));
+        assert_eq!(
+            disassemble_one(&m.funcs[0].code, 0),
+            ("w.TestExt    r300, r1, r2".to_string(), 4)
+        );
+        // The words after the prefixes are not instruction boundaries: `Jmp +1` lands on the word
+        // of `TestExt`
+        m.funcs[0].code = vec![encode(op::JMP, 0, 1, 0), ext, 0x0201_0010, ret_void];
+        m.funcs[0].regs = 3;
+        assert_eq!(
+            m.verify(),
+            Err(LoadError::Invalid(
+                "function 0 (Hello.<main>): jump target 2 is not an instruction boundary at 0000"
+                    .into()
+            ))
+        );
+    }
+
+    // The prefixes come in the order `Wide`, `Ext`, each once, and are followed by their words;
+    // `Ext` before a number no instruction has is an unknown opcode (1.2, 3.3).
+    #[test]
+    fn ext_prefix_errors() {
+        let (ext, wide, ret_void) = (0x0000_00FE, 0x0000_0001, 0x0000_0073);
+        let cases = [
+            (vec![ext], "`Ext` without a following instruction"),
+            (vec![ext, ext, ret_void], "`Ext` after `Ext`"),
+            (
+                vec![ext, wide, 0x0201_0010, 0, ret_void],
+                "`Wide` after `Ext`",
+            ),
+            (vec![wide, ext], "`Ext` without a following instruction"),
+            (
+                vec![wide, ext, 0x0201_0010],
+                "`Wide` without a following instruction",
+            ),
+            // `Ext` with the `op` of `Nop` is 256, and with that of `Intrinsic` 511
+            (
+                vec![ext, 0x0000_0000, ret_void],
+                "unknown opcode 256 at 0000",
+            ),
+            (
+                vec![ext, 0x0000_00FF, ret_void],
+                "unknown opcode 511 at 0000",
+            ),
+        ];
+        for (idx, (code, message)) in cases.into_iter().enumerate() {
+            let mut m = sample();
+            m.funcs[0].code = code;
+            m.funcs[0].lines = vec![(0, 1)];
+            assert_eq!(
+                m.verify(),
+                Err(LoadError::Invalid(format!(
+                    "function 0 (Hello.<main>): {message}"
+                ))),
+                "{idx}"
+            );
         }
     }
 

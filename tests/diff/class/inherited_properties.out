@@ -1,0 +1,12 @@
+16
+child(base:k)
+TBase.SetValue x=y!
+base:k
+TBase.SetName 0 zero
+zero <zero>
+6 16 22
+100 101
+base kind / child kind
+TBase.SetName 2 nested
+nested <nested>
+base kind / child kind

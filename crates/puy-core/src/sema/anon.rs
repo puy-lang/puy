@@ -121,6 +121,7 @@ impl<'a, 's> Sema<'a, 's> {
             file: self.input.file,
             interface: false,
             parent,
+            scope: None,
             calls: Vec::new(),
             method_of: None,
             self_kind: types::SelfKind::Instance,
@@ -193,7 +194,7 @@ impl<'a, 's> Sema<'a, 's> {
             self.cur_mut().has_errors = true;
         }
         let info = &mut self.routines[id.0 as usize];
-        info.hir = Some(routine);
+        info.hir = Some(Box::new(routine));
         info.calls = calls;
         if let Some(s) = self_at {
             self.anon_self.insert(id, s);

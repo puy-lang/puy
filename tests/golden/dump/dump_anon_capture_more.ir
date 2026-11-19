@@ -75,6 +75,7 @@ bb0:
   LoadConst    t2, "\n"
   ConcatStr    t0, t0, t2
   CallHost     -, h0(t0)
+  Release      t0
   RetVoid
 .finally t0, t2
 .func f3 DumpAnonCaptureMore.Make params=1
@@ -213,5 +214,6 @@ bb0:
   LoadConst    t7, "\n"
   ConcatStr    t0, t0, t7
   CallHost     -, h0(t0)
+  Release      t0
   RetVoid
 .finally t0, t1, t2, t4, t5, t7

@@ -1,0 +1,24 @@
+-- O.H()
+GetH
+hello
+-- O.H
+GetH
+hello
+-- Run(O.H)
+GetH
+Run
+hello
+-- R := O.H
+GetH
+hello
+-- F()()
+F
+hello
+-- Run(F())
+F
+Run
+hello
+-- G()()()
+G
+F
+hello

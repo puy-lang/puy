@@ -150,6 +150,7 @@ bb0:
   LoadConst    t37, "\n"
   ConcatStr    t30, t30, t37
   CallHost     -, h0(t30)
+  Release      t36
   Release      t33
   .line 99
   LoadGlobalRef t40, g0
@@ -163,6 +164,7 @@ bb0:
   LoadConst    t43, "\n"
   ConcatStr    t38, t38, t43
   CallHost     -, h0(t38)
+  Release      t42
   Release      t40
   .line 100
   LoadGlobalRef t46, g1
@@ -177,6 +179,7 @@ bb0:
   LoadConst    t50, "\n"
   ConcatStr    t44, t44, t50
   CallHost     -, h0(t44)
+  Release      t48
   Release      t46
   .line 101
   LoadGlobalRef t54, g0
@@ -200,6 +203,7 @@ bb0:
   LoadConst    t62, "\n"
   ConcatStr    t51, t51, t62
   CallHost     -, h0(t51)
+  Release      t61
   Release      t55
   Release      t54
   .line 102
@@ -214,6 +218,7 @@ bb0:
   LoadConst    t68, "\n"
   ConcatStr    t63, t63, t68
   CallHost     -, h0(t63)
+  Release      t67
   Release      t65
   .line 103
   LoadGlobalRef t71, g0
@@ -442,6 +447,7 @@ bb0:
   LoadConst    t1, "\n"
   ConcatStr    t0, t0, t1
   CallHost     -, h0(t0)
+  Release      t0
   .line 84
   RetVoid
 .finally t0, t1

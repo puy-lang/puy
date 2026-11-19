@@ -25,3 +25,108 @@ pub type SyntaxNode = rowan::SyntaxNode<PuyLanguage>;
 pub type SyntaxToken = rowan::SyntaxToken<PuyLanguage>;
 pub type SyntaxElement = rowan::SyntaxElement<PuyLanguage>;
 pub type SyntaxNodeChildren = rowan::SyntaxNodeChildren<PuyLanguage>;
+
+// ---- Searches over the green tree ----
+//
+// Walking a subtree with the cursor API (`descendants`, `descendants_with_tokens`) allocates a
+// cursor for every node and token it passes. These searches walk the green tree instead, and
+// make cursors only for what they return.
+
+fn green_kind(raw: rowan::SyntaxKind) -> SyntaxKind {
+    SyntaxKind::from_raw(raw.0)
+}
+
+/// Whether the node or one of its descendants is a node of `kind` (as
+/// `node.descendants().any(|n| n.kind() == kind)`).
+pub fn has_node_of_kind(node: &SyntaxNode, kind: SyntaxKind) -> bool {
+    fn walk(green: &rowan::GreenNodeData, kind: SyntaxKind) -> bool {
+        green.children().any(|c| match c {
+            rowan::NodeOrToken::Node(n) => green_kind(n.kind()) == kind || walk(n, kind),
+            rowan::NodeOrToken::Token(_) => false,
+        })
+    }
+    node.kind() == kind || walk(&node.green(), kind)
+}
+
+/// The node and its descendants that are nodes of `kind`, in preorder (as
+/// `node.descendants().filter(|n| n.kind() == kind)`).
+pub fn nodes_of_kind(node: &SyntaxNode, kind: SyntaxKind) -> Vec<SyntaxNode> {
+    /// `path` holds the indexes among the child nodes from `root` to `green`.
+    fn walk(
+        root: &SyntaxNode,
+        green: &rowan::GreenNodeData,
+        path: &mut Vec<usize>,
+        kind: SyntaxKind,
+        out: &mut Vec<SyntaxNode>,
+    ) {
+        let child_nodes = green.children().filter_map(|c| c.into_node());
+        for (i, n) in child_nodes.enumerate() {
+            path.push(i);
+            if green_kind(n.kind()) == kind {
+                let mut cur = root.clone();
+                for &j in path.iter() {
+                    cur = cur
+                        .children()
+                        .nth(j)
+                        .expect("the path follows the green tree of the same node");
+                }
+                out.push(cur);
+            }
+            walk(root, n, path, kind, out);
+            path.pop();
+        }
+    }
+    let mut out = Vec::new();
+    if node.kind() == kind {
+        out.push(node.clone());
+    }
+    walk(node, &node.green(), &mut Vec::new(), kind, &mut out);
+    out
+}
+
+/// The range from the start of the node's first non-trivia token to the end of its last, or
+/// `None` when it has only trivia (or no tokens).
+pub(crate) fn non_trivia_range(node: &SyntaxNode) -> Option<rowan::TextRange> {
+    fn first_start(
+        green: &rowan::GreenNodeData,
+        mut at: rowan::TextSize,
+    ) -> Option<rowan::TextSize> {
+        for c in green.children() {
+            match c {
+                rowan::NodeOrToken::Token(t) if !green_kind(t.kind()).is_trivia() => {
+                    return Some(at);
+                }
+                rowan::NodeOrToken::Token(_) => {}
+                rowan::NodeOrToken::Node(n) => {
+                    if let Some(s) = first_start(n, at) {
+                        return Some(s);
+                    }
+                }
+            }
+            at += c.text_len();
+        }
+        None
+    }
+    fn last_end(green: &rowan::GreenNodeData, mut end: rowan::TextSize) -> Option<rowan::TextSize> {
+        for c in green.children().rev() {
+            match c {
+                rowan::NodeOrToken::Token(t) if !green_kind(t.kind()).is_trivia() => {
+                    return Some(end);
+                }
+                rowan::NodeOrToken::Token(_) => {}
+                rowan::NodeOrToken::Node(n) => {
+                    if let Some(e) = last_end(n, end) {
+                        return Some(e);
+                    }
+                }
+            }
+            end -= c.text_len();
+        }
+        None
+    }
+    let range = node.text_range();
+    let green = node.green();
+    let start = first_start(&green, range.start())?;
+    let end = last_end(&green, range.end()).expect("a node with a non-trivia token has a last one");
+    Some(rowan::TextRange::new(start, end))
+}

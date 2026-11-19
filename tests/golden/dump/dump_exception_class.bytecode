@@ -11,7 +11,7 @@
 .func 0 DumpExceptionClass.<main> params=0 regs=15
   .local r0 E
   .try 0005..0008 finally 0008..000a r4
-  .try 0000..000e except 000e..001d r1
+  .try 0000..000e except 000e..001e r1
   .line 23
   0000  LoadConst    r3, k0
   0001  Move         r12, r3
@@ -27,11 +27,11 @@
   000b  MoveRef      r2, r10
   000c  Raise        r2
   .line 22
-  000d  Jmp          -> 001d
+  000d  Jmp          -> 001e
   .line 25
   000e  Move         r10, r1
   000f  IsClass      r10, ty64
-  0010  JmpIfFalse   r10, -> 001c
+  0010  JmpIfFalse   r10, -> 001d
   0011  Move         r0, r1
   .line 26
   0012  ExceptObject r7
@@ -42,12 +42,13 @@
   0017  LoadConst    r9, k1
   0018  ConcatStr    r6, r6, r9
   0019  CallHost     r6, h0
+  001a  Release      r6
   .line 22
-  001a  Release      r1
-  001b  Jmp          -> 001d
-  001c  Raise        r1
+  001b  Release      r1
+  001c  Jmp          -> 001e
+  001d  Raise        r1
   .line 28
-  001d  RetVoid
+  001e  RetVoid
 .finally r1, r2, r3, r5, r6, r7, r8, r9
 .func 1 DumpExceptionClass.ECoded.Create params=3 regs=4
   .local r0 Self

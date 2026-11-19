@@ -1,0 +1,41 @@
+error[E0735]: no overload of `TF.Create` matches these arguments
+   --> member_of_unresolved_call.pas:40:3
+    |
+ 10 |     constructor Create(A: Integer); overload;
+    |                 ------ candidate
+ 11 |     constructor Create(const S: string); overload;
+    |                 ------ candidate
+...
+ 40 |   TF.Create.Free;
+    |   ^^^^^^^^^
+    |
+    = note: the call has no arguments
+
+error[E0705]: wrong number of arguments: expected 1, found 0
+   --> member_of_unresolved_call.pas:41:3
+    |
+ 15 |     constructor Create(A: Integer);
+    |                 ------ declared here
+...
+ 41 |   TG.Create.Free;
+    |   ^^^^^^^^^
+
+error[E0704]: function `Make` requires arguments
+   --> member_of_unresolved_call.pas:42:3
+    |
+ 30 | function Make(A: Integer): TG;
+    |          ---- declared here
+...
+ 42 |   Make.Free;
+    |   ^^^^
+
+error[E0725]: procedure `Nothing` has no value
+   --> member_of_unresolved_call.pas:43:3
+    |
+ 35 | procedure Nothing;
+    |           ------- declared here
+...
+ 43 |   Nothing.Free;
+    |   ^^^^^^^
+
+error: aborting due to 4 errors

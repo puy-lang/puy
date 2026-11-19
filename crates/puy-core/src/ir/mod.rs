@@ -7,6 +7,8 @@
 //! and the block terminators (whose fall-through jumps codegen drops).
 
 mod dump;
+mod expand;
+pub mod inline;
 pub mod lower;
 pub mod opt;
 
@@ -80,6 +82,26 @@ pub struct VarReg {
     /// Used by a nested routine or captured by an anonymous method: code the routine calls may
     /// read or write it (`docs/spec/semantics.md` 4.9, `docs/spec/objects.md` 9.6).
     pub shared: bool,
+    /// A local record expanded into one register per field, or one of those registers
+    /// (`docs/design/records.md` 3.9).
+    pub expand: VarExpand,
+}
+
+/// Whether a named variable takes part in the expansion of a local record
+/// (`docs/design/records.md` 3.9; the `ir` dump, `docs/spec/bytecode.md` 5.1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VarExpand {
+    No,
+    /// The record: its fields are the variables `first..first + count` (in the order of its flat
+    /// layout), and its own register is not used.
+    Whole {
+        first: u32,
+        count: u32,
+    },
+    /// The register of a field of the expanded record `of`.
+    Field {
+        of: u32,
+    },
 }
 
 /// An operand of a plain instruction.
@@ -148,7 +170,7 @@ pub enum InstKind {
 
 #[derive(Debug, Clone)]
 pub struct Inst {
-    pub op: u8,
+    pub op: u16,
     pub kind: InstKind,
     pub line: u32,
 }
@@ -214,6 +236,35 @@ macro_rules! term_regs {
     };
 }
 
+/// Calls `$each` with every block a terminator may go to (by reference, shared or mutable as
+/// `$term` is).
+macro_rules! term_targets {
+    ($term:expr, $each:expr) => {
+        match $term {
+            Term::Jmp(t) => $each(t),
+            Term::Branch { then, other, .. } | Term::BranchImm { then, other, .. } => {
+                $each(then);
+                $each(other);
+            }
+            Term::ForLoop { top, exit, .. } => {
+                $each(top);
+                $each(exit);
+            }
+            Term::EndFinally { next, targets, .. } => {
+                $each(next);
+                for t in targets {
+                    $each(t);
+                }
+            }
+            Term::Ret(_)
+            | Term::RetVoid
+            | Term::Halt(_)
+            | Term::Raise(_)
+            | Term::RaiseOuter(..) => {}
+        }
+    };
+}
+
 impl Inst {
     /// Calls `each` with every register operand.
     pub fn each_reg(&self, mut each: impl FnMut(Reg)) {
@@ -237,7 +288,7 @@ pub enum Term {
     /// `JmpIfTrue` / `JmpIfFalse` (`b` is `None`) and the compare-and-branch instructions.
     /// Goes to `then` when the condition holds and to `other` when it does not.
     Branch {
-        op: u8,
+        op: u16,
         a: Reg,
         b: Option<Reg>,
         then: BlockId,
@@ -246,7 +297,7 @@ pub enum Term {
     /// A compare-and-branch with an immediate (`JmpIfEqIntI` and the others; made by
     /// [`opt`] from a constant loaded into a temporary).
     BranchImm {
-        op: u8,
+        op: u16,
         a: Reg,
         imm: i64,
         then: BlockId,
@@ -289,6 +340,17 @@ impl Term {
     /// Calls `each` with every register the terminator reads, which it may change.
     pub fn each_reg_mut(&mut self, mut each: impl FnMut(&mut Reg)) {
         term_regs!(self, each);
+    }
+
+    /// Calls `each` with every block the terminator may go to.
+    pub fn each_target(&self, mut each: impl FnMut(BlockId)) {
+        let mut each = |t: &BlockId| each(*t);
+        term_targets!(self, each);
+    }
+
+    /// Calls `each` with every block the terminator may go to, which it may change.
+    pub fn each_target_mut(&mut self, mut each: impl FnMut(&mut BlockId)) {
+        term_targets!(self, each);
     }
 }
 
@@ -344,6 +406,26 @@ pub struct Function {
     pub finally: Vec<Reg>,
     /// The handler table, inner entries first.
     pub tries: Vec<TryEntry>,
+    /// A constructor or a destructor: never inlined (`docs/design/inlining.md` 3.3).
+    pub lifecycle: bool,
+    /// The calls inlined into the function ([`inline`]; empty in what `lower` makes), outer
+    /// entries before the entries inside them.
+    pub inlines: Vec<InlineSite>,
+}
+
+/// A call inlined into a function (`docs/design/inlining.md` 3.6): the blocks that stand for the
+/// callee's body.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InlineSite {
+    /// The first and last block of the body, in layout order.
+    pub blocks: (BlockId, BlockId),
+    /// The function inlined.
+    pub callee: u32,
+    /// The line of the call.
+    pub line: u32,
+    /// The site the call is in (an index into `Function::inlines`), if the call was inlined into
+    /// the callee of another site.
+    pub outer: Option<u32>,
 }
 
 impl Function {

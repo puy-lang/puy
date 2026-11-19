@@ -15,12 +15,12 @@
   65: class System.Generics.Defaults.TEqualityComparer<string> ref abstract slots=0 parent=ty20 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4,abstract:TEqualityComparer<string>.Equals,abstract:TEqualityComparer<string>.GetHashCode intf=ty24:;ty64:abstract,abstract
   66: class System.Generics.Defaults.TOrdinalIgnoreCaseComparer ref slots=0 parent=ty65 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4,f2,f3 intf=ty24:;ty64:f2,f3
   67: class System.Generics.Collections.TEnumerable<Integer> abstract slots=0 parent=ty19 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4,abstract:TEnumerable<Integer>.ToArray
-  68: class System.Generics.Collections.TList<Integer> slots=5 refs=0 objs=3 parent=ty67 vmt=f11,builtin0,builtin0,builtin1,builtin3,builtin4,f12,f13
+  68: class System.Generics.Collections.TList<Integer> slots=5 refs=0 objs=3 parent=ty67 vmt=f12,builtin0,builtin0,builtin1,builtin3,builtin4,f13,f14
   69: class System.Generics.Collections.TEnumerable<string> abstract slots=0 parent=ty19 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4,abstract:TEnumerable<string>.ToArray
-  70: class System.Generics.Collections.TList<string> slots=5 refs=0 objs=3 parent=ty69 vmt=f14,builtin0,builtin0,builtin1,builtin3,builtin4,f15,f13
+  70: class System.Generics.Collections.TList<string> slots=5 refs=0 objs=3 parent=ty69 vmt=f15,builtin0,builtin0,builtin1,builtin3,builtin4,f16,f14
   71: dynarray TArray<Integer> slots=0 elem=val
   72: dynarray TArray<string> slots=0 elem=ref
-  73: class System.Generics.Defaults.TDefaultEqualityComparer<string> ref slots=0 parent=ty65 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4,f24,f25 intf=ty24:;ty64:f24,f25
+  73: class System.Generics.Defaults.TDefaultEqualityComparer<string> ref slots=0 parent=ty65 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4,f25,f26 intf=ty24:;ty64:f25,f26
 .global
   0: int L
   1: int S
@@ -29,13 +29,13 @@
 .unit System.SysUtils file="<stdlib>/System.SysUtils.pas" init=- fini=- entry=-
 .unit System.Generics.Defaults file="<stdlib>/System.Generics.Defaults.pas" init=- fini=- entry=-
 .unit System.Generics.Collections file="<stdlib>/System.Generics.Collections.pas" init=- fini=- entry=-
-.unit DumpStdlibListAdd file="dump_stdlib_list_add.pas" init=- fini=- entry=10
+.unit DumpStdlibListAdd file="dump_stdlib_list_add.pas" init=- fini=- entry=11
 .func 0 System.Generics.Defaults.TStringComparer.Ordinal params=1 regs=3
   .local r0 Self
   .local r1 Result
   .line 176
   0000  LoadInt      r2, 66
-  0001  Call         r2, f16
+  0001  Call         r2, f17
   0002  AssignObj    r1, r2
   0003  ReleaseObj   r2
   .line 177
@@ -73,184 +73,297 @@
 .func 4 System.Generics.Collections.GrownCapacity params=1 regs=3
   .local r0 Current
   .local r1 Result
-  .line 656
+  .line 690
   0000  JmpIfGeIntI  r0, 2, -> 0003
-  .line 657
+  .line 691
   0001  LoadInt      r1, 4
-  .line 656
+  .line 690
   0002  Jmp          -> 0009
-  .line 658
+  .line 692
   0003  LoadConst    r2, k0
   0004  JmpIfLeInt   r0, r2, -> 0007
-  .line 659
+  .line 693
   0005  LoadConst    r1, k1
-  .line 656
+  .line 690
   0006  Jmp          -> 0009
-  .line 661
+  .line 695
   0007  MulIntI      r1, r0, 2
   0008  NarrowOvf    r1, r1, 4
-  .line 662
+  .line 696
   0009  Ret          r1
-.func 5 System.Generics.Collections.CapacityError params=3 regs=13
+.func 5 System.Generics.Collections.ReleasesWholeArray params=3 regs=6
+  .local r0 KeepCapacity
+  .local r1 Count
+  .local r2 Capacity
+  .local r3 Result
+  .line 704
+  0000  NotBool      r3, r0
+  0001  JmpIfTrue    r3, -> 0005
+  0002  DivIntI      r4, r2, 4
+  0003  NarrowOvf    r4, r4, 4
+  0004  LtInt        r3, r4, r1
+  .line 705
+  0005  Ret          r3
+.func 6 System.Generics.Collections.CapacityError params=3 regs=13
   .local r0 Kind
   .local r1 Value
   .local r2 Count
   .local r3 Result
-  .line 667
+  .line 710
   0000  LoadConst    r5, k2
   0001  Move         r6, r5
   0002  LoadInt      r7, 10
   0003  Move         r8, r0
   0004  LoadInt      r9, 4
-  .line 668
+  .line 711
   0005  Move         r10, r1
-  .line 667
+  .line 710
   0006  LoadInt      r11, 4
-  .line 668
+  .line 711
   0007  Move         r12, r2
-  .line 667
+  .line 710
   0008  Format       r4, r6, 3
   0009  New          r3, ty3
   000a  ObjSetRef    r3, 0, r4
-  .line 669
+  .line 712
   000b  Ret          r3
 .finally r3, r4, r5
-.func 6 System.Generics.Collections.ModifiedError params=1 regs=9
+.func 7 System.Generics.Collections.ModifiedError params=1 regs=9
   .local r0 Container
   .local r1 Result
-  .line 674
+  .line 717
   0000  LoadConst    r3, k3
   0001  Move         r6, r3
   0002  ClassName    r4, r0
   0003  Move         r7, r4
-  .line 675
+  .line 718
   0004  LoadConst    r5, k4
-  .line 674
+  .line 717
   0005  Move         r8, r5
   0006  ConcatStrN   r2, r6, 3
   0007  New          r1, ty23
   0008  ObjSetRef    r1, 0, r2
-  .line 676
+  .line 719
   0009  Ret          r1
 .finally r1, r2, r3, r4, r5
-.func 7 System.Generics.Collections.NextVersion params=1 regs=3
+.func 8 System.Generics.Collections.NextVersion params=1 regs=3
   .local r0 Version
   .local r1 Result
-  .line 682
+  .line 728
   0000  LoadConst    r2, k1
   0001  JmpIfNeInt   r0, r2, -> 0004
-  .line 683
+  .line 729
   0002  LoadZero     r1
-  .line 682
+  .line 728
   0003  Jmp          -> 0006
-  .line 685
+  .line 731
   0004  AddIntI      r1, r0, 1
   0005  NarrowOvf    r1, r1, 4
-  .line 686
+  .line 732
   0006  Ret          r1
-.func 8 System.Generics.Collections.NotifyState params=1 regs=2
+.func 9 System.Generics.Collections.NotifyState params=1 regs=2
   .local r0 Overridden
   .local r1 Result
-  .line 698
+  .line 744
   0000  JmpIfFalse   r0, -> 0003
-  .line 699
+  .line 745
   0001  LoadInt      r1, 1
-  .line 698
+  .line 744
   0002  Jmp          -> 0004
-  .line 701
+  .line 747
   0003  LoadInt      r1, 2
-  .line 702
+  .line 748
   0004  Ret          r1
-.func 9 System.Generics.Collections.OwnRefCountedError params=1 regs=8
+.func 10 System.Generics.Collections.OwnRefCountedError params=1 regs=8
   .local r0 ClassName
   .local r1 Result
-  .line 2436
+  .line 2753
   0000  LoadConst    r3, k5
   0001  Move         r5, r3
   0002  Move         r6, r0
-  .line 2437
+  .line 2754
   0003  LoadConst    r4, k3
   0004  Move         r7, r4
-  .line 2436
+  .line 2753
   0005  ConcatStrN   r2, r5, 3
   0006  New          r1, ty23
   0007  ObjSetRef    r1, 0, r2
-  .line 2438
+  .line 2755
   0008  Ret          r1
 .finally r1, r2, r3, r4
-.func 10 DumpStdlibListAdd.<main> params=0 regs=12
+.func 11 DumpStdlibListAdd.<main> params=0 regs=16
   .try 0002..0005 finally 0005..0007 r0
-  .try 0010..0013 finally 0013..0015 r2
+  .try 002d..0030 finally 0030..0032 r2
   .line 12
   0000  LoadZero     r9
   0001  New          r9, ty68
   0002  Move         r10, r9
-  0003  CallMethod   r10, f17
+  0003  CallMethod   r10, f18
   0004  LoadZero     r0
   0005  JmpIfNeIntI  r0, 1, -> 0007
   0006  DestroyFailed r9
   0007  EndFinally   r0, 0
-  0008  Move         r8, r9
-  0009  StoreGlobal  r8, g0
+  0008  StoreGlobal  r9, g0
   .line 13
-  000a  Move         r9, r8
-  000b  LoadInt      r10, 1
-  000c  CallMethod   r9, f18
-  000d  Move         r8, r9
+  0009  LoadInt      r10, 1
+  000a  ClassType    r15, r9
+  .inline f19 System.Generics.Collections.TList<Integer>.Add line=13
+  .line 965
+  000b  ObjGet       r12, r9, 4
+  000c  JmpIfEqIntI  r12, 2, -> 0011
+  .line 966
+  000d  Move         r12, r9
+  000e  Move         r13, r10
+  000f  LoadZero     r14
+  0010  CallMethod   r12, f27
+  .line 967
+  0011  ObjGet       r12, r9, 1
+  0012  ObjGet       r14, r9, 0
+  0013  ArrLen       r13, r14
+  0014  JmpIfNeInt   r12, r13, -> 0018
+  .line 968
+  0015  Move         r12, r9
+  0016  LoadInt      r13, 1
+  0017  CallMethod   r12, f28
+  .line 969
+  0018  ObjGet       r13, r9, 1
+  0019  ObjGet       r14, r9, 0
+  001a  DynSet       r14, r13, r10
+  .line 970
+  001b  ObjGet       r11, r9, 1
+  .line 971
+  001c  ObjGet       r12, r9, 1
+  001d  AddIntI      r12, r12, 1
+  001e  NarrowOvf    r12, r12, 4
+  001f  ObjSet       r9, 1, r12
+  .line 973
+  0020  ObjGet       r12, r9, 2
+  0021  LoadConst    r13, k1
+  0022  JmpIfNeInt   r12, r13, -> 0026
+  .line 974
+  0023  LoadZero     r12
+  0024  ObjSet       r9, 2, r12
+  .line 973
+  0025  Jmp          -> 002a
+  .line 976
+  0026  ObjGet       r12, r9, 2
+  0027  AddIntI      r12, r12, 1
+  0028  NarrowOvf    r12, r12, 4
+  0029  ObjSet       r9, 2, r12
+  .line 977
+  002a  Move         r8, r11
+  .endinline
   .line 14
-  000e  LoadZero     r9
-  000f  New          r9, ty70
-  0010  Move         r10, r9
-  0011  CallMethod   r10, f17
-  0012  LoadZero     r2
-  0013  JmpIfNeIntI  r2, 1, -> 0015
-  0014  DestroyFailed r9
-  0015  EndFinally   r2, 0
-  0016  Move         r8, r9
-  0017  StoreGlobal  r8, g1
+  002b  LoadZero     r9
+  002c  New          r9, ty70
+  002d  Move         r10, r9
+  002e  CallMethod   r10, f18
+  002f  LoadZero     r2
+  0030  JmpIfNeIntI  r2, 1, -> 0032
+  0031  DestroyFailed r9
+  0032  EndFinally   r2, 0
+  0033  StoreGlobal  r9, g1
   .line 15
-  0018  Move         r9, r8
-  0019  LoadConst    r4, k6
-  001a  Move         r10, r4
-  001b  CallMethod   r9, f19
-  001c  Move         r8, r9
+  0034  LoadConst    r4, k6
+  0035  Move         r10, r4
+  0036  ClassType    r15, r9
+  .inline f20 System.Generics.Collections.TList<string>.Add line=15
+  .line 965
+  0037  ObjGet       r12, r9, 4
+  0038  JmpIfEqIntI  r12, 2, -> 003d
+  .line 966
+  0039  Move         r12, r9
+  003a  Move         r13, r10
+  003b  LoadZero     r14
+  003c  CallMethod   r12, f27
+  .line 967
+  003d  ObjGet       r12, r9, 1
+  003e  ObjGet       r14, r9, 0
+  003f  ArrLen       r13, r14
+  0040  JmpIfNeInt   r12, r13, -> 0044
+  .line 968
+  0041  Move         r12, r9
+  0042  LoadInt      r13, 1
+  0043  CallMethod   r12, f29
+  .line 969
+  0044  ObjGet       r13, r9, 1
+  0045  ObjGet       r14, r9, 0
+  0046  DynSetRef    r14, r13, r10
+  .line 970
+  0047  ObjGet       r11, r9, 1
+  .line 971
+  0048  ObjGet       r12, r9, 1
+  0049  AddIntI      r12, r12, 1
+  004a  NarrowOvf    r12, r12, 4
+  004b  ObjSet       r9, 1, r12
+  .line 973
+  004c  ObjGet       r12, r9, 2
+  004d  LoadConst    r13, k1
+  004e  JmpIfNeInt   r12, r13, -> 0052
+  .line 974
+  004f  LoadZero     r12
+  0050  ObjSet       r9, 2, r12
+  .line 973
+  0051  Jmp          -> 0056
+  .line 976
+  0052  ObjGet       r12, r9, 2
+  0053  AddIntI      r12, r12, 1
+  0054  NarrowOvf    r12, r12, 4
+  0055  ObjSet       r9, 2, r12
+  .line 977
+  0056  Move         r8, r11
+  .endinline
   .line 16
-  001d  LoadGlobal   r9, g0
-  001e  LoadZero     r10
-  001f  CallMethod   r9, f20
-  0020  Move         r8, r9
-  0021  IntToStr     r5, r8
-  0022  LoadGlobal   r9, g1
-  0023  LoadZero     r10
-  0024  CallMethod   r9, f21
-  0025  MoveRef      r6, r9
-  0026  ConcatStr    r5, r5, r6
-  0027  LoadConst    r7, k7
-  0028  ConcatStr    r5, r5, r7
-  0029  CallHost     r5, h0
+  0057  LoadGlobal   r9, g0
+  0058  LoadZero     r10
+  0059  ClassType    r14, r9
+  .inline f21 System.Generics.Collections.TList<Integer>.GetItem line=16
+  .line 832
+  005a  JmpIfLtIntI  r10, 0, -> 005d
+  005b  ObjGet       r12, r9, 1
+  005c  JmpIfLtInt   r10, r12, -> 0060
+  .line 833
+  005d  Move         r12, r9
+  005e  Move         r13, r10
+  005f  CallMethod   r12, f30
+  .line 834
+  0060  ObjGet       r12, r9, 0
+  0061  DynGet       r8, r12, r10
+  .endinline
+  .line 16
+  0062  IntToStr     r5, r8
+  0063  LoadGlobal   r9, g1
+  0064  LoadZero     r10
+  0065  CallMethod   r9, f22
+  0066  MoveRef      r6, r9
+  0067  ConcatStr    r5, r5, r6
+  0068  LoadConst    r7, k7
+  0069  ConcatStr    r5, r5, r7
+  006a  CallHost     r5, h0
   .line 17
-  002a  LoadGlobal   r8, g1
-  002b  Free         r8
+  006b  LoadGlobal   r8, g1
+  006c  Free         r8
   .line 18
-  002c  LoadGlobal   r8, g0
-  002d  Free         r8
+  006d  LoadGlobal   r8, g0
+  006e  Free         r8
   .line 19
-  002e  RetVoid
+  006f  RetVoid
 .finally r1, r3, r4, r5, r6, r7
-.func 11 System.Generics.Collections.TList<Integer>.Destroy params=1 regs=2
+.func 12 System.Generics.Collections.TList<Integer>.Destroy params=1 regs=3
   .local r0 Self
-  .line 885
+  .line 934
   0000  LoadInt      r1, 68
   0001  DtorEnter    r0, r1
-  .line 887
+  .line 936
   0002  Move         r1, r0
-  0003  CallMethod   r1, f22
-  .line 889
-  0004  RetVoid
-.func 12 System.Generics.Collections.TList<Integer>.ToArray params=1 regs=6
+  0003  LoadZero     r2
+  0004  CallMethod   r1, f23
+  .line 938
+  0005  RetVoid
+.func 13 System.Generics.Collections.TList<Integer>.ToArray params=1 regs=6
   .local r0 Self
   .local r1 Result
-  .line 1186
+  .line 1278
   0000  ObjGetRef    r2, r0, 0
   0001  Move         r3, r2
   0002  LoadZero     r4
@@ -258,30 +371,31 @@
   0004  ArrCopy      r3, ty71
   0005  MoveRef      r1, r3
   0006  Release      r2
-  .line 1187
+  .line 1279
   0007  Ret          r1
 .finally r1, r2
-.func 13 System.Generics.Collections.TList<T>.Notify params=3 regs=3
+.func 14 System.Generics.Collections.TList<T>.Notify params=3 regs=3
 ; shared by System.Generics.Collections.TList<Integer>, System.Generics.Collections.TList<string>
   .local r0 Self
   .local r1 Item
   .local r2 Action
-  .line 893
+  .line 942
   0000  RetVoid
-.func 14 System.Generics.Collections.TList<string>.Destroy params=1 regs=2
+.func 15 System.Generics.Collections.TList<string>.Destroy params=1 regs=3
   .local r0 Self
-  .line 885
+  .line 934
   0000  LoadInt      r1, 70
   0001  DtorEnter    r0, r1
-  .line 887
+  .line 936
   0002  Move         r1, r0
-  0003  CallMethod   r1, f23
-  .line 889
-  0004  RetVoid
-.func 15 System.Generics.Collections.TList<string>.ToArray params=1 regs=6
+  0003  LoadZero     r2
+  0004  CallMethod   r1, f24
+  .line 938
+  0005  RetVoid
+.func 16 System.Generics.Collections.TList<string>.ToArray params=1 regs=6
   .local r0 Self
   .local r1 Result
-  .line 1186
+  .line 1278
   0000  ObjGetRef    r2, r0, 0
   0001  Move         r3, r2
   0002  LoadZero     r4
@@ -289,10 +403,10 @@
   0004  ArrCopy      r3, ty72
   0005  MoveRef      r1, r3
   0006  Release      r2
-  .line 1187
+  .line 1279
   0007  Ret          r1
 .finally r1, r2
-.func 16 System.Generics.Defaults.TEqualityComparer<string>.Default params=1 regs=2
+.func 17 System.Generics.Defaults.TEqualityComparer<string>.Default params=1 regs=2
   .local r0 Self
   .local r1 Result
   .line 135
@@ -300,217 +414,399 @@
   .line 136
   0001  Ret          r1
 .finally r1:obj
-.func 17 System.Generics.Collections.TList<T>.Create params=1 regs=1
+.func 18 System.Generics.Collections.TList<T>.Create params=1 regs=1
 ; shared by System.Generics.Collections.TList<Integer>, System.Generics.Collections.TList<string>
   .local r0 Self
-  .line 859
+  .line 908
   0000  RetVoid
-.func 18 System.Generics.Collections.TList<Integer>.Add params=2 regs=6
+.func 19 System.Generics.Collections.TList<Integer>.Add params=2 regs=6
   .local r0 Self
   .local r1 Value
   .local r2 Result
-  .line 916
+  .line 965
   0000  ObjGet       r3, r0, 4
   0001  JmpIfEqIntI  r3, 2, -> 0006
-  .line 917
+  .line 966
   0002  Move         r3, r0
   0003  Move         r4, r1
   0004  LoadZero     r5
-  0005  CallMethod   r3, f26
-  .line 918
+  0005  CallMethod   r3, f27
+  .line 967
   0006  ObjGet       r3, r0, 1
   0007  ObjGet       r5, r0, 0
   0008  ArrLen       r4, r5
   0009  JmpIfNeInt   r3, r4, -> 000d
-  .line 919
-  000a  Move         r3, r0
-  000b  LoadInt      r4, 1
-  000c  CallMethod   r3, f27
-  .line 920
-  000d  ObjGet       r4, r0, 1
-  000e  ObjGet       r5, r0, 0
-  000f  DynSet       r5, r4, r1
-  .line 921
-  0010  ObjGet       r2, r0, 1
-  .line 922
-  0011  ObjGet       r3, r0, 1
-  0012  AddIntI      r3, r3, 1
-  0013  NarrowOvf    r3, r3, 4
-  0014  ObjSet       r0, 1, r3
-  .line 923
-  0015  ObjGet       r4, r0, 2
-  0016  Call         r4, f7
-  0017  ObjSet       r0, 2, r4
-  .line 924
-  0018  Ret          r2
-.func 19 System.Generics.Collections.TList<string>.Add params=2 regs=6
-  .local r0 Self
-  .local r1 Value
-  .local r2 Result
-  .line 916
-  0000  ObjGet       r3, r0, 4
-  0001  JmpIfEqIntI  r3, 2, -> 0006
-  .line 917
-  0002  Move         r3, r0
-  0003  Move         r4, r1
-  0004  LoadZero     r5
-  0005  CallMethod   r3, f26
-  .line 918
-  0006  ObjGet       r3, r0, 1
-  0007  ObjGet       r5, r0, 0
-  0008  ArrLen       r4, r5
-  0009  JmpIfNeInt   r3, r4, -> 000d
-  .line 919
+  .line 968
   000a  Move         r3, r0
   000b  LoadInt      r4, 1
   000c  CallMethod   r3, f28
-  .line 920
+  .line 969
   000d  ObjGet       r4, r0, 1
   000e  ObjGet       r5, r0, 0
-  000f  DynSetRef    r5, r4, r1
-  .line 921
+  000f  DynSet       r5, r4, r1
+  .line 970
   0010  ObjGet       r2, r0, 1
-  .line 922
+  .line 971
   0011  ObjGet       r3, r0, 1
   0012  AddIntI      r3, r3, 1
   0013  NarrowOvf    r3, r3, 4
   0014  ObjSet       r0, 1, r3
-  .line 923
-  0015  ObjGet       r4, r0, 2
-  0016  Call         r4, f7
-  0017  ObjSet       r0, 2, r4
-  .line 924
-  0018  Ret          r2
-.func 20 System.Generics.Collections.TList<Integer>.GetItem params=2 regs=5
+  .line 973
+  0015  ObjGet       r3, r0, 2
+  0016  LoadConst    r4, k1
+  0017  JmpIfNeInt   r3, r4, -> 001b
+  .line 974
+  0018  LoadZero     r3
+  0019  ObjSet       r0, 2, r3
+  .line 973
+  001a  Jmp          -> 001f
+  .line 976
+  001b  ObjGet       r3, r0, 2
+  001c  AddIntI      r3, r3, 1
+  001d  NarrowOvf    r3, r3, 4
+  001e  ObjSet       r0, 2, r3
+  .line 977
+  001f  Ret          r2
+.func 20 System.Generics.Collections.TList<string>.Add params=2 regs=6
+  .local r0 Self
+  .local r1 Value
+  .local r2 Result
+  .line 965
+  0000  ObjGet       r3, r0, 4
+  0001  JmpIfEqIntI  r3, 2, -> 0006
+  .line 966
+  0002  Move         r3, r0
+  0003  Move         r4, r1
+  0004  LoadZero     r5
+  0005  CallMethod   r3, f27
+  .line 967
+  0006  ObjGet       r3, r0, 1
+  0007  ObjGet       r5, r0, 0
+  0008  ArrLen       r4, r5
+  0009  JmpIfNeInt   r3, r4, -> 000d
+  .line 968
+  000a  Move         r3, r0
+  000b  LoadInt      r4, 1
+  000c  CallMethod   r3, f29
+  .line 969
+  000d  ObjGet       r4, r0, 1
+  000e  ObjGet       r5, r0, 0
+  000f  DynSetRef    r5, r4, r1
+  .line 970
+  0010  ObjGet       r2, r0, 1
+  .line 971
+  0011  ObjGet       r3, r0, 1
+  0012  AddIntI      r3, r3, 1
+  0013  NarrowOvf    r3, r3, 4
+  0014  ObjSet       r0, 1, r3
+  .line 973
+  0015  ObjGet       r3, r0, 2
+  0016  LoadConst    r4, k1
+  0017  JmpIfNeInt   r3, r4, -> 001b
+  .line 974
+  0018  LoadZero     r3
+  0019  ObjSet       r0, 2, r3
+  .line 973
+  001a  Jmp          -> 001f
+  .line 976
+  001b  ObjGet       r3, r0, 2
+  001c  AddIntI      r3, r3, 1
+  001d  NarrowOvf    r3, r3, 4
+  001e  ObjSet       r0, 2, r3
+  .line 977
+  001f  Ret          r2
+.func 21 System.Generics.Collections.TList<Integer>.GetItem params=2 regs=5
   .local r0 Self
   .local r1 Index
   .local r2 Result
-  .line 786
+  .line 832
   0000  JmpIfLtIntI  r1, 0, -> 0003
   0001  ObjGet       r3, r0, 1
   0002  JmpIfLtInt   r1, r3, -> 0006
-  .line 787
+  .line 833
   0003  Move         r3, r0
   0004  Move         r4, r1
-  0005  CallMethod   r3, f29
-  .line 788
+  0005  CallMethod   r3, f30
+  .line 834
   0006  ObjGet       r3, r0, 0
   0007  DynGet       r2, r3, r1
-  .line 789
+  .line 835
   0008  Ret          r2
-.func 21 System.Generics.Collections.TList<string>.GetItem params=2 regs=5
+.func 22 System.Generics.Collections.TList<string>.GetItem params=2 regs=5
   .local r0 Self
   .local r1 Index
   .local r2 Result
-  .line 786
+  .line 832
   0000  JmpIfLtIntI  r1, 0, -> 0003
   0001  ObjGet       r3, r0, 1
   0002  JmpIfLtInt   r1, r3, -> 0006
-  .line 787
+  .line 833
   0003  Move         r3, r0
   0004  Move         r4, r1
-  0005  CallMethod   r3, f29
-  .line 788
+  0005  CallMethod   r3, f30
+  .line 834
   0006  ObjGet       r3, r0, 0
   0007  DynGetRef    r2, r3, r1
-  .line 789
+  .line 835
   0008  Ret          r2
 .finally r2
-.func 22 System.Generics.Collections.TList<Integer>.Clear params=1 regs=10
+.func 23 System.Generics.Collections.TList<Integer>.RemoveAll params=2 regs=19
   .local r0 Self
-  .local r1 I
-  .local r2 Removed
-  .line 1063
-  0000  Move         r6, r0
-  0001  CallMethod   r6, f30
-  0002  JmpIfFalse   r6, -> 000b
-  .line 1064
-  0003  ObjGetRef    r3, r0, 0
-  0004  Move         r5, r3
-  0005  LoadZero     r6
-  0006  ObjGet       r7, r0, 1
-  0007  ArrCopy      r5, ty71
-  0008  MoveRef      r2, r5
-  0009  Release      r3
-  .line 1063
-  000a  Jmp          -> 000c
-  .line 1066
-  000b  Release      r2
-  .line 1067
-  000c  LoadZero     r1
-  000d  ObjGet       r5, r0, 1
-  000e  AddIntI      r5, r5, -1
-  000f  NarrowOvf    r5, r5, 4
-  0010  JmpIfLtInt   r5, r1, -> 0015
-  0011  LoadZero     r4
-  .line 1068
-  0012  ObjGet       r9, r0, 0
-  0013  DynSet       r9, r1, r4
-  .line 1067
-  0014  ForLoopUp    r1, r5, -> 0012
-  .line 1069
-  0015  LoadZero     r5
-  0016  ObjSet       r0, 1, r5
-  .line 1070
-  0017  ObjGet       r6, r0, 2
-  0018  Call         r6, f7
-  0019  ObjSet       r0, 2, r6
-  .line 1071
-  001a  Move         r5, r0
-  001b  Move         r6, r2
-  001c  LoadZero     r7
-  001d  CallMethod   r5, f31
-  .line 1072
-  001e  RetVoid
-.finally r2, r3
-.func 23 System.Generics.Collections.TList<string>.Clear params=1 regs=9
+  .local r1 KeepCapacity
+  .local r2 I
+  .local r3 N
+  .local r4 Count
+  .local r5 Tell
+  .local r6 WholeArray
+  .local r7 Removed
+  .inline f31 System.Generics.Collections.TList<T>.Notifies line=1122
+  .line 768
+  0000  ObjGet       r13, r0, 4
+  0001  JmpIfTrue    r13, -> 000c
+  .line 769
+  0002  Move         r15, r0
+  0003  LoadInt      r16, 7
+  0004  LoadInt      r17, 14
+  0005  IsOverridden r14, r15
+  0006  JmpIfFalse   r14, -> 0009
+  .inline f9 System.Generics.Collections.NotifyState line=769
+  .line 745
+  0007  LoadInt      r15, 1
+  .line 744
+  0008  Jmp          -> 000a
+  .line 747
+  0009  LoadInt      r15, 2
+  .line 748
+  000a  Move         r13, r15
+  .endinline
+  .line 769
+  000b  ObjSet       r0, 4, r13
+  .line 770
+  000c  ObjGet       r12, r0, 4
+  000d  LoadInt      r13, 1
+  000e  EqInt        r12, r12, r13
+  .line 771
+  000f  Move         r5, r12
+  .endinline
+  .line 1123
+  0010  ObjGet       r4, r0, 1
+  .line 1127
+  0011  ObjGet       r11, r0, 0
+  0012  ArrLen       r3, r11
+  .inline f5 System.Generics.Collections.ReleasesWholeArray line=1128
+  .line 704
+  0013  NotBool      r14, r1
+  0014  JmpIfTrue    r14, -> 0018
+  0015  DivIntI      r15, r3, 4
+  0016  NarrowOvf    r15, r15, 4
+  0017  LtInt        r14, r15, r4
+  .line 705
+  0018  Move         r6, r14
+  0019  JmpIfTrue    r5, -> 001b
+  .endinline
+  .line 1132
+  001a  JmpIfTrue    r6, -> 0023
+  .line 1133
+  001b  ObjGetRef    r8, r0, 0
+  001c  Move         r11, r8
+  001d  LoadZero     r12
+  001e  Move         r13, r4
+  001f  ArrCopy      r11, ty71
+  0020  MoveRef      r7, r11
+  0021  Release      r8
+  .line 1132
+  0022  Jmp          -> 0024
+  .line 1135
+  0023  Release      r7
+  .line 1139
+  0024  LoadZero     r11
+  0025  ObjSet       r0, 1, r11
+  .line 1140
+  0026  ObjGet       r12, r0, 2
+  .inline f8 System.Generics.Collections.NextVersion line=1140
+  .line 728
+  0027  LoadConst    r14, k1
+  0028  JmpIfNeInt   r12, r14, -> 002b
+  .line 729
+  0029  LoadZero     r13
+  .line 728
+  002a  Jmp          -> 002d
+  .line 731
+  002b  AddIntI      r13, r12, 1
+  002c  NarrowOvf    r13, r13, 4
+  .endinline
+  .line 1140
+  002d  ObjSet       r0, 2, r13
+  .line 1141
+  002e  JmpIfFalse   r6, -> 003d
+  .line 1146
+  002f  Release      r9
+  0030  ObjSetRef    r0, 0, r9
+  0031  Release      r9
+  .line 1147
+  0032  JmpIfFalse   r1, -> 003c
+  0033  ObjGet       r12, r0, 0
+  0034  ArrLen       r11, r12
+  0035  JmpIfLeInt   r3, r11, -> 003c
+  .line 1148
+  0036  ObjGet       r12, r0, 0
+  0037  Move         r13, r12
+  0038  Move         r14, r3
+  0039  SetLen       r13, ty71
+  003a  Move         r12, r13
+  003b  ObjSet       r0, 0, r12
+  .line 1141
+  003c  Jmp          -> 0045
+  .line 1151
+  003d  LoadZero     r2
+  003e  AddIntI      r11, r4, -1
+  003f  NarrowOvf    r11, r11, 4
+  0040  JmpIfLtInt   r11, r2, -> 0045
+  0041  LoadZero     r10
+  .line 1152
+  0042  ObjGet       r15, r0, 0
+  0043  DynSet       r15, r2, r10
+  .line 1151
+  0044  ForLoopUp    r2, r11, -> 0042
+  .line 1153
+  0045  JmpIfFalse   r5, -> 004a
+  .line 1154
+  0046  Move         r11, r0
+  0047  Move         r12, r7
+  0048  LoadZero     r13
+  0049  CallMethod   r11, f32
+  .line 1155
+  004a  RetVoid
+.finally r7, r8, r9
+.func 24 System.Generics.Collections.TList<string>.RemoveAll params=2 regs=19
   .local r0 Self
-  .local r1 I
-  .local r2 Removed
-  .line 1063
-  0000  Move         r6, r0
-  0001  CallMethod   r6, f30
-  0002  JmpIfFalse   r6, -> 000b
-  .line 1064
-  0003  ObjGetRef    r3, r0, 0
-  0004  Move         r5, r3
-  0005  LoadZero     r6
-  0006  ObjGet       r7, r0, 1
-  0007  ArrCopy      r5, ty72
-  0008  MoveRef      r2, r5
-  0009  Release      r3
-  .line 1063
-  000a  Jmp          -> 000c
-  .line 1066
-  000b  Release      r2
-  .line 1067
-  000c  LoadZero     r1
-  000d  ObjGet       r5, r0, 1
-  000e  AddIntI      r5, r5, -1
-  000f  NarrowOvf    r5, r5, 4
-  0010  JmpIfLtInt   r5, r1, -> 0015
-  .line 1068
-  0011  Release      r4
-  0012  ObjGet       r8, r0, 0
-  0013  DynSetRef    r8, r1, r4
-  .line 1067
-  0014  ForLoopUp    r1, r5, -> 0011
-  .line 1069
-  0015  LoadZero     r5
-  0016  ObjSet       r0, 1, r5
-  .line 1070
-  0017  ObjGet       r6, r0, 2
-  0018  Call         r6, f7
-  0019  ObjSet       r0, 2, r6
-  .line 1071
-  001a  Move         r5, r0
-  001b  Move         r6, r2
-  001c  LoadZero     r7
-  001d  CallMethod   r5, f32
-  .line 1072
-  001e  RetVoid
-.finally r2, r3, r4
-.func 24 System.Generics.Defaults.TDefaultEqualityComparer<string>.Equals params=3 regs=4
+  .local r1 KeepCapacity
+  .local r2 I
+  .local r3 N
+  .local r4 Count
+  .local r5 Tell
+  .local r6 WholeArray
+  .local r7 Removed
+  .inline f31 System.Generics.Collections.TList<T>.Notifies line=1122
+  .line 768
+  0000  ObjGet       r13, r0, 4
+  0001  JmpIfTrue    r13, -> 000c
+  .line 769
+  0002  Move         r15, r0
+  0003  LoadInt      r16, 7
+  0004  LoadInt      r17, 14
+  0005  IsOverridden r14, r15
+  0006  JmpIfFalse   r14, -> 0009
+  .inline f9 System.Generics.Collections.NotifyState line=769
+  .line 745
+  0007  LoadInt      r15, 1
+  .line 744
+  0008  Jmp          -> 000a
+  .line 747
+  0009  LoadInt      r15, 2
+  .line 748
+  000a  Move         r13, r15
+  .endinline
+  .line 769
+  000b  ObjSet       r0, 4, r13
+  .line 770
+  000c  ObjGet       r12, r0, 4
+  000d  LoadInt      r13, 1
+  000e  EqInt        r12, r12, r13
+  .line 771
+  000f  Move         r5, r12
+  .endinline
+  .line 1123
+  0010  ObjGet       r4, r0, 1
+  .line 1127
+  0011  ObjGet       r11, r0, 0
+  0012  ArrLen       r3, r11
+  .inline f5 System.Generics.Collections.ReleasesWholeArray line=1128
+  .line 704
+  0013  NotBool      r14, r1
+  0014  JmpIfTrue    r14, -> 0018
+  0015  DivIntI      r15, r3, 4
+  0016  NarrowOvf    r15, r15, 4
+  0017  LtInt        r14, r15, r4
+  .line 705
+  0018  Move         r6, r14
+  0019  JmpIfTrue    r5, -> 001b
+  .endinline
+  .line 1132
+  001a  JmpIfTrue    r6, -> 0023
+  .line 1133
+  001b  ObjGetRef    r8, r0, 0
+  001c  Move         r11, r8
+  001d  LoadZero     r12
+  001e  Move         r13, r4
+  001f  ArrCopy      r11, ty72
+  0020  MoveRef      r7, r11
+  0021  Release      r8
+  .line 1132
+  0022  Jmp          -> 0024
+  .line 1135
+  0023  Release      r7
+  .line 1139
+  0024  LoadZero     r11
+  0025  ObjSet       r0, 1, r11
+  .line 1140
+  0026  ObjGet       r12, r0, 2
+  .inline f8 System.Generics.Collections.NextVersion line=1140
+  .line 728
+  0027  LoadConst    r14, k1
+  0028  JmpIfNeInt   r12, r14, -> 002b
+  .line 729
+  0029  LoadZero     r13
+  .line 728
+  002a  Jmp          -> 002d
+  .line 731
+  002b  AddIntI      r13, r12, 1
+  002c  NarrowOvf    r13, r13, 4
+  .endinline
+  .line 1140
+  002d  ObjSet       r0, 2, r13
+  .line 1141
+  002e  JmpIfFalse   r6, -> 003d
+  .line 1146
+  002f  Release      r9
+  0030  ObjSetRef    r0, 0, r9
+  0031  Release      r9
+  .line 1147
+  0032  JmpIfFalse   r1, -> 003c
+  0033  ObjGet       r12, r0, 0
+  0034  ArrLen       r11, r12
+  0035  JmpIfLeInt   r3, r11, -> 003c
+  .line 1148
+  0036  ObjGet       r12, r0, 0
+  0037  Move         r13, r12
+  0038  Move         r14, r3
+  0039  SetLen       r13, ty72
+  003a  Move         r12, r13
+  003b  ObjSet       r0, 0, r12
+  .line 1141
+  003c  Jmp          -> 0045
+  .line 1151
+  003d  LoadZero     r2
+  003e  AddIntI      r11, r4, -1
+  003f  NarrowOvf    r11, r11, 4
+  0040  JmpIfLtInt   r11, r2, -> 0045
+  .line 1152
+  0041  Release      r10
+  0042  ObjGet       r14, r0, 0
+  0043  DynSetRef    r14, r2, r10
+  .line 1151
+  0044  ForLoopUp    r2, r11, -> 0041
+  .line 1153
+  0045  JmpIfFalse   r5, -> 004a
+  .line 1154
+  0046  Move         r11, r0
+  0047  Move         r12, r7
+  0048  LoadZero     r13
+  0049  CallMethod   r11, f33
+  .line 1155
+  004a  RetVoid
+.finally r7, r8, r9, r10
+.func 25 System.Generics.Defaults.TDefaultEqualityComparer<string>.Equals params=3 regs=4
   .local r0 Self
   .local r1 Left
   .local r2 Right
@@ -519,7 +815,7 @@
   0000  EqStr        r3, r1, r2
   .line 147
   0001  Ret          r3
-.func 25 System.Generics.Defaults.TDefaultEqualityComparer<string>.GetHashCode params=2 regs=3
+.func 26 System.Generics.Defaults.TDefaultEqualityComparer<string>.GetHashCode params=2 regs=3
   .local r0 Self
   .local r1 Value
   .local r2 Result
@@ -527,212 +823,278 @@
   0000  HashStr      r2, r1
   .line 152
   0001  Ret          r2
-.func 26 System.Generics.Collections.TList<T>.NotifyItem params=3 regs=6
+.func 27 System.Generics.Collections.TList<T>.NotifyItem params=3 regs=12
 ; shared by System.Generics.Collections.TList<Integer>, System.Generics.Collections.TList<string>
   .local r0 Self
   .local r1 Item
   .local r2 Action
-  .line 731
-  0000  Move         r4, r0
-  0001  CallMethod   r4, f30
-  0002  JmpIfFalse   r4, -> 0007
-  .line 732
-  0003  Move         r3, r0
-  0004  Move         r4, r1
-  0005  Move         r5, r2
-  0006  CallVirtual  r3, 7
-  .line 733
-  0007  RetVoid
-.func 27 System.Generics.Collections.TList<Integer>.Grow params=2 regs=8
+  .inline f31 System.Generics.Collections.TList<T>.Notifies line=777
+  .line 768
+  0000  ObjGet       r6, r0, 4
+  0001  JmpIfTrue    r6, -> 000b
+  .line 769
+  0002  Move         r8, r0
+  0003  LoadInt      r9, 7
+  0004  LoadInt      r10, 14
+  0005  IsOverridden r7, r8
+  0006  JmpIfFalse   r7, -> 0009
+  .inline f9 System.Generics.Collections.NotifyState line=769
+  .line 745
+  0007  LoadInt      r8, 1
+  .line 744
+  0008  Jmp          -> 000a
+  .line 747
+  0009  LoadInt      r8, 2
+  .endinline
+  .line 769
+  000a  ObjSet       r0, 4, r8
+  .line 770
+  000b  ObjGet       r5, r0, 4
+  .line 771
+  000c  JmpIfNeIntI  r5, 1, -> 0011
+  .endinline
+  .line 778
+  000d  Move         r3, r0
+  000e  Move         r4, r1
+  000f  Move         r5, r2
+  0010  CallVirtual  r3, 7
+  .line 779
+  0011  RetVoid
+.func 28 System.Generics.Collections.TList<Integer>.Grow params=2 regs=8
   .local r0 Self
   .local r1 ACount
   .local r2 Needed
   .local r3 NewCapacity
-  .line 754
+  .line 800
   0000  ObjGet       r2, r0, 1
   0001  AddInt       r2, r2, r1
   0002  NarrowOvf    r2, r2, 4
-  .line 755
+  .line 801
   0003  ObjGet       r5, r0, 0
   0004  ArrLen       r4, r5
   0005  JmpIfLtInt   r4, r2, -> 0007
-  .line 756
+  .line 802
   0006  RetVoid
-  .line 757
+  .line 803
   0007  ObjGet       r5, r0, 0
   0008  ArrLen       r4, r5
-  0009  Call         r4, f4
-  000a  Move         r3, r4
-  .line 758
-  000b  JmpIfLeInt   r2, r3, -> 000d
-  .line 759
-  000c  Move         r3, r2
-  .line 760
-  000d  ObjGet       r5, r0, 0
-  000e  Move         r6, r5
-  000f  Move         r7, r3
-  0010  SetLen       r6, ty71
-  0011  Move         r5, r6
-  0012  ObjSet       r0, 0, r5
-  .line 761
-  0013  RetVoid
-.func 28 System.Generics.Collections.TList<string>.Grow params=2 regs=8
+  .inline f4 System.Generics.Collections.GrownCapacity line=803
+  .line 690
+  0009  JmpIfGeIntI  r4, 2, -> 000c
+  .line 691
+  000a  LoadInt      r5, 4
+  .line 690
+  000b  Jmp          -> 0012
+  .line 692
+  000c  LoadConst    r6, k0
+  000d  JmpIfLeInt   r4, r6, -> 0010
+  .line 693
+  000e  LoadConst    r5, k1
+  .line 690
+  000f  Jmp          -> 0012
+  .line 695
+  0010  MulIntI      r5, r4, 2
+  0011  NarrowOvf    r5, r5, 4
+  .line 696
+  0012  Move         r3, r5
+  .endinline
+  .line 804
+  0013  JmpIfLeInt   r2, r3, -> 0015
+  .line 805
+  0014  Move         r3, r2
+  .line 806
+  0015  ObjGet       r5, r0, 0
+  0016  Move         r6, r5
+  0017  Move         r7, r3
+  0018  SetLen       r6, ty71
+  0019  Move         r5, r6
+  001a  ObjSet       r0, 0, r5
+  .line 807
+  001b  RetVoid
+.func 29 System.Generics.Collections.TList<string>.Grow params=2 regs=8
   .local r0 Self
   .local r1 ACount
   .local r2 Needed
   .local r3 NewCapacity
-  .line 754
+  .line 800
   0000  ObjGet       r2, r0, 1
   0001  AddInt       r2, r2, r1
   0002  NarrowOvf    r2, r2, 4
-  .line 755
+  .line 801
   0003  ObjGet       r5, r0, 0
   0004  ArrLen       r4, r5
   0005  JmpIfLtInt   r4, r2, -> 0007
-  .line 756
+  .line 802
   0006  RetVoid
-  .line 757
+  .line 803
   0007  ObjGet       r5, r0, 0
   0008  ArrLen       r4, r5
-  0009  Call         r4, f4
-  000a  Move         r3, r4
-  .line 758
-  000b  JmpIfLeInt   r2, r3, -> 000d
-  .line 759
-  000c  Move         r3, r2
-  .line 760
-  000d  ObjGet       r5, r0, 0
-  000e  Move         r6, r5
-  000f  Move         r7, r3
-  0010  SetLen       r6, ty72
-  0011  Move         r5, r6
-  0012  ObjSet       r0, 0, r5
-  .line 761
-  0013  RetVoid
-.func 29 System.Generics.Collections.TList<T>.CheckIndex params=2 regs=14
+  .inline f4 System.Generics.Collections.GrownCapacity line=803
+  .line 690
+  0009  JmpIfGeIntI  r4, 2, -> 000c
+  .line 691
+  000a  LoadInt      r5, 4
+  .line 690
+  000b  Jmp          -> 0012
+  .line 692
+  000c  LoadConst    r6, k0
+  000d  JmpIfLeInt   r4, r6, -> 0010
+  .line 693
+  000e  LoadConst    r5, k1
+  .line 690
+  000f  Jmp          -> 0012
+  .line 695
+  0010  MulIntI      r5, r4, 2
+  0011  NarrowOvf    r5, r5, 4
+  .line 696
+  0012  Move         r3, r5
+  .endinline
+  .line 804
+  0013  JmpIfLeInt   r2, r3, -> 0015
+  .line 805
+  0014  Move         r3, r2
+  .line 806
+  0015  ObjGet       r5, r0, 0
+  0016  Move         r6, r5
+  0017  Move         r7, r3
+  0018  SetLen       r6, ty72
+  0019  Move         r5, r6
+  001a  ObjSet       r0, 0, r5
+  .line 807
+  001b  RetVoid
+.func 30 System.Generics.Collections.TList<T>.CheckIndex params=2 regs=14
 ; shared by System.Generics.Collections.TList<Integer>, System.Generics.Collections.TList<string>
   .local r0 Self
   .local r1 Index
-  .line 737
+  .line 783
   0000  JmpIfLtIntI  r1, 0, -> 0003
   0001  ObjGet       r8, r0, 1
   0002  JmpIfLtInt   r1, r8, -> 0012
-  .line 738
+  .line 784
   0003  LoadConst    r4, k8
   0004  Move         r8, r4
   0005  IntToStr     r5, r1
   0006  Move         r9, r5
   0007  LoadConst    r6, k9
   0008  Move         r10, r6
-  .line 739
+  .line 785
   0009  ObjGet       r12, r0, 1
   000a  AddIntI      r12, r12, -1
   000b  NarrowOvf    r12, r12, 4
   000c  IntToStr     r7, r12
-  .line 738
+  .line 784
   000d  Move         r11, r7
   000e  ConcatStrN   r3, r8, 4
   000f  New          r2, ty3
   0010  ObjSetRef    r2, 0, r3
   0011  Raise        r2
-  .line 740
+  .line 786
   0012  RetVoid
 .finally r2, r3, r4, r5, r6, r7
-.func 30 System.Generics.Collections.TList<T>.Notifies params=1 regs=7
+.func 31 System.Generics.Collections.TList<T>.Notifies params=1 regs=7
 ; shared by System.Generics.Collections.TList<Integer>, System.Generics.Collections.TList<string>
   .local r0 Self
   .local r1 Result
-  .line 722
+  .line 768
   0000  ObjGet       r2, r0, 4
-  0001  JmpIfTrue    r2, -> 0008
-  .line 723
+  0001  JmpIfTrue    r2, -> 000b
+  .line 769
   0002  Move         r4, r0
   0003  LoadInt      r5, 7
-  0004  LoadInt      r6, 13
+  0004  LoadInt      r6, 14
   0005  IsOverridden r3, r4
-  0006  Call         r3, f8
-  0007  ObjSet       r0, 4, r3
-  .line 724
-  0008  ObjGet       r1, r0, 4
-  0009  LoadInt      r2, 1
-  000a  EqInt        r1, r1, r2
-  .line 725
-  000b  Ret          r1
-.func 31 System.Generics.Collections.TList<Integer>.ItemsRemoved params=3 regs=12
+  0006  JmpIfFalse   r3, -> 0009
+  .inline f9 System.Generics.Collections.NotifyState line=769
+  .line 745
+  0007  LoadInt      r4, 1
+  .line 744
+  0008  Jmp          -> 000a
+  .line 747
+  0009  LoadInt      r4, 2
+  .endinline
+  .line 769
+  000a  ObjSet       r0, 4, r4
+  .line 770
+  000b  ObjGet       r1, r0, 4
+  000c  LoadInt      r2, 1
+  000d  EqInt        r1, r1, r2
+  .line 771
+  000e  Ret          r1
+.func 32 System.Generics.Collections.TList<Integer>.ItemsRemoved params=3 regs=12
   .local r0 Self
   .local r1 Items
   .local r2 From
   .local r3 I
   .local r4 Done
   .try 0005..000b finally 000b..0011 r5
-  .line 900
+  .line 949
   0000  Move         r3, r2
   0001  ArrLen       r7, r1
   0002  AddIntI      r7, r7, -1
   0003  JmpIfLtInt   r7, r3, -> 0013
-  .line 902
+  .line 951
   0004  LoadZero     r4
-  .line 904
+  .line 953
   0005  Move         r8, r0
   0006  DynGet       r9, r1, r3
   0007  LoadInt      r10, 1
   0008  CallVirtual  r8, 7
-  .line 905
+  .line 954
   0009  LoadInt      r4, 1
-  .line 903
+  .line 952
   000a  LoadZero     r5
-  .line 908
+  .line 957
   000b  JmpIfTrue    r4, -> 0011
-  .line 909
+  .line 958
   000c  Move         r8, r0
   000d  Move         r9, r1
   000e  AddIntI      r10, r3, 1
   000f  NarrowOvf    r10, r10, 4
-  0010  CallMethod   r8, f31
-  .line 903
+  0010  CallMethod   r8, f32
+  .line 952
   0011  EndFinally   r5, 0
-  .line 900
+  .line 949
   0012  ForLoopUp    r3, r7, -> 0004
-  .line 912
+  .line 961
   0013  RetVoid
 .finally r6
-.func 32 System.Generics.Collections.TList<string>.ItemsRemoved params=3 regs=13
+.func 33 System.Generics.Collections.TList<string>.ItemsRemoved params=3 regs=13
   .local r0 Self
   .local r1 Items
   .local r2 From
   .local r3 I
   .local r4 Done
   .try 0005..000d finally 000d..0013 r5
-  .line 900
+  .line 949
   0000  Move         r3, r2
   0001  ArrLen       r8, r1
   0002  AddIntI      r8, r8, -1
   0003  JmpIfLtInt   r8, r3, -> 0015
-  .line 902
+  .line 951
   0004  LoadZero     r4
-  .line 904
+  .line 953
   0005  Move         r9, r0
   0006  DynGetRef    r7, r1, r3
   0007  Move         r10, r7
   0008  LoadInt      r11, 1
   0009  CallVirtual  r9, 7
   000a  Release      r7
-  .line 905
+  .line 954
   000b  LoadInt      r4, 1
-  .line 903
+  .line 952
   000c  LoadZero     r5
-  .line 908
+  .line 957
   000d  JmpIfTrue    r4, -> 0013
-  .line 909
+  .line 958
   000e  Move         r9, r0
   000f  Move         r10, r1
   0010  AddIntI      r11, r3, 1
   0011  NarrowOvf    r11, r11, 4
-  0012  CallMethod   r9, f32
-  .line 903
+  0012  CallMethod   r9, f33
+  .line 952
   0013  EndFinally   r5, 0
-  .line 900
+  .line 949
   0014  ForLoopUp    r3, r8, -> 0004
-  .line 912
+  .line 961
   0015  RetVoid
 .finally r6, r7

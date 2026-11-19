@@ -1,0 +1,37 @@
+; puyc format 0
+.const
+  0: str "\n"
+.global
+  0: int N
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpEmptyFinally file="dump_empty_finally.pas" init=- fini=- entry=0
+.func 0 DumpEmptyFinally.<main> params=0 regs=8
+  .try 0000..0003 finally 0003..0003 r0
+  .try 0004..0009 finally 0009..0009 r2
+  .line 15
+  0000  LoadInt      r6, 2
+  0001  StoreGlobal  r6, g0
+  .line 14
+  0002  LoadZero     r0
+  0003  EndFinally   r0, 0
+  .line 19
+  0004  LoadGlobal   r6, g0
+  0005  AddIntI      r6, r6, 1
+  0006  NarrowOvf    r6, r6, 4
+  0007  StoreGlobal  r6, g0
+  .line 18
+  0008  LoadZero     r2
+  0009  EndFinally   r2, 0
+  .line 23
+  000a  LoadGlobal   r6, g0
+  000b  IntToStr     r4, r6
+  000c  LoadConst    r5, k0
+  000d  ConcatStr    r4, r4, r5
+  000e  CallHost     r4, h0
+  .line 24
+  000f  RetVoid
+.finally r1, r3, r4, r5
+.func 1 DumpEmptyFinally.Nothing params=0 regs=1
+  .line 9
+  0000  RetVoid

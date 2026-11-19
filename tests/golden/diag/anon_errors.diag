@@ -141,7 +141,7 @@ error[E0707]: cannot assign to `I`
  78 |         I := N;
     |         ^ the loop variable of the enclosing routine
     |
-    = note: an anonymous method cannot write a variable its enclosing routine uses as a `for` loop variable
+    = note: a nested routine or an anonymous method cannot write a variable its enclosing routine uses as a `for` loop variable
 
 error[E0712]: `Break` outside a loop
    --> anon_errors.pas:80:9

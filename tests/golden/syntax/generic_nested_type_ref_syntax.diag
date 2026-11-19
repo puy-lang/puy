@@ -1,0 +1,59 @@
+error[E0700]: undeclared identifier `TList`
+   --> generic_nested_type_ref_syntax.pas:10:6
+    |
+ 10 |   A: TList<Integer>.TEnumerator;
+    |      ^^^^^
+
+error[E0700]: undeclared identifier `TOuter`
+   --> generic_nested_type_ref_syntax.pas:11:6
+    |
+ 11 |   B: TOuter<Integer>.TInner<string>.TPair;
+    |      ^^^^^^
+
+error[E0700]: undeclared identifier `TMap`
+   --> generic_nested_type_ref_syntax.pas:12:6
+    |
+ 12 |   C: TMap<string, TList<Integer>.TEnumerator>;
+    |      ^^^^
+
+error[E0700]: undeclared identifier `TOuter`
+   --> generic_nested_type_ref_syntax.pas:13:6
+    |
+ 13 |   D: TOuter<Integer>.TInner.TDeep<Byte>;
+    |      ^^^^^^
+
+error[E0700]: undeclared identifier `TOuter`
+   --> generic_nested_type_ref_syntax.pas:15:6
+    |
+ 15 |   E: TOuter<Integer>.;
+    |      ^^^^^^
+
+error[E0405]: expected an identifier
+   --> generic_nested_type_ref_syntax.pas:15:22
+    |
+ 15 |   E: TOuter<Integer>.;
+    |                      ^
+    |                      - found here
+
+error[E0700]: undeclared identifier `TOuter`
+   --> generic_nested_type_ref_syntax.pas:16:6
+    |
+ 16 |   F: TOuter<Integer>.TInner<Byte;
+    |      ^^^^^^
+
+error[E0400]: expected `>`, found `;`
+   --> generic_nested_type_ref_syntax.pas:16:33
+    |
+ 16 |   F: TOuter<Integer>.TInner<Byte;
+    |                                 ^
+    |                                 - found here
+    |
+    = fix: insert `>`
+
+error[E0700]: undeclared identifier `TList`
+   --> generic_nested_type_ref_syntax.pas:18:8
+    |
+ 18 |   P := TList<TOuter<Integer>.TInner<string>.TPair>.Create;
+    |        ^^^^^
+
+error: aborting due to 9 errors

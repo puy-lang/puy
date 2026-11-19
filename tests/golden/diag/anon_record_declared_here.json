@@ -1,0 +1,177 @@
+[
+  {
+    "schema": "puy.diagnostics/1",
+    "diagnostics": [
+      {
+        "code": "E0702",
+        "severity": "error",
+        "name": null,
+        "message": "type mismatch: expected `Integer`, found `record`",
+        "primary": {
+          "file": "anon_record_declared_here.pas",
+          "start": 467,
+          "end": 468,
+          "line": 19,
+          "column": 8,
+          "end_line": 19,
+          "end_column": 9,
+          "label": ""
+        },
+        "secondary": [
+          {
+            "file": "anon_record_declared_here.pas",
+            "start": 325,
+            "end": 331,
+            "line": 8,
+            "column": 6,
+            "end_line": 8,
+            "end_column": 12,
+            "label": "record type declared here"
+          }
+        ],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0702]: type mismatch: expected `Integer`, found `record`\n   --> anon_record_declared_here.pas:19:8\n    |\n  8 |   A: record\n    |      ------ record type declared here\n...\n 19 |   N := A;\n    |        ^"
+      },
+      {
+        "code": "E0702",
+        "severity": "error",
+        "name": null,
+        "message": "type mismatch: expected `record`, found `record`",
+        "primary": {
+          "file": "anon_record_declared_here.pas",
+          "start": 477,
+          "end": 478,
+          "line": 20,
+          "column": 8,
+          "end_line": 20,
+          "end_column": 9,
+          "label": ""
+        },
+        "secondary": [
+          {
+            "file": "anon_record_declared_here.pas",
+            "start": 325,
+            "end": 331,
+            "line": 8,
+            "column": 6,
+            "end_line": 8,
+            "end_column": 12,
+            "label": "record type declared here"
+          },
+          {
+            "file": "anon_record_declared_here.pas",
+            "start": 360,
+            "end": 366,
+            "line": 11,
+            "column": 6,
+            "end_line": 11,
+            "end_column": 12,
+            "label": "record type declared here"
+          }
+        ],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0702]: type mismatch: expected `record`, found `record`\n   --> anon_record_declared_here.pas:20:8\n    |\n  8 |   A: record\n    |      ------ record type declared here\n...\n 11 |   B: record\n    |      ------ record type declared here\n...\n 20 |   A := B;\n    |        ^"
+      },
+      {
+        "code": "E0703",
+        "severity": "error",
+        "name": null,
+        "message": "operator `+` cannot be applied to `Integer` and `record`",
+        "primary": {
+          "file": "anon_record_declared_here.pas",
+          "start": 489,
+          "end": 490,
+          "line": 21,
+          "column": 10,
+          "end_line": 21,
+          "end_column": 11,
+          "label": ""
+        },
+        "secondary": [
+          {
+            "file": "anon_record_declared_here.pas",
+            "start": 325,
+            "end": 331,
+            "line": 8,
+            "column": 6,
+            "end_line": 8,
+            "end_column": 12,
+            "label": "record type declared here"
+          }
+        ],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0703]: operator `+` cannot be applied to `Integer` and `record`\n   --> anon_record_declared_here.pas:21:10\n    |\n  8 |   A: record\n    |      ------ record type declared here\n...\n 21 |   N := N + A;\n    |          ^"
+      },
+      {
+        "code": "E0700",
+        "severity": "error",
+        "name": null,
+        "message": "`record` has no field `Y`",
+        "primary": {
+          "file": "anon_record_declared_here.pas",
+          "start": 498,
+          "end": 499,
+          "line": 22,
+          "column": 5,
+          "end_line": 22,
+          "end_column": 6,
+          "label": ""
+        },
+        "secondary": [
+          {
+            "file": "anon_record_declared_here.pas",
+            "start": 325,
+            "end": 331,
+            "line": 8,
+            "column": 6,
+            "end_line": 8,
+            "end_column": 12,
+            "label": "record type declared here"
+          }
+        ],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0700]: `record` has no field `Y`\n   --> anon_record_declared_here.pas:22:5\n    |\n  8 |   A: record\n    |      ------ record type declared here\n...\n 22 |   A.Y := 1;\n    |     ^"
+      },
+      {
+        "code": "E0702",
+        "severity": "error",
+        "name": null,
+        "message": "type mismatch: expected `Integer`, found `array[0..1] of record`",
+        "primary": {
+          "file": "anon_record_declared_here.pas",
+          "start": 513,
+          "end": 514,
+          "line": 23,
+          "column": 8,
+          "end_line": 23,
+          "end_column": 9,
+          "label": ""
+        },
+        "secondary": [
+          {
+            "file": "anon_record_declared_here.pas",
+            "start": 410,
+            "end": 416,
+            "line": 14,
+            "column": 21,
+            "end_line": 14,
+            "end_column": 27,
+            "label": "record type declared here"
+          }
+        ],
+        "notes": [],
+        "fixes": [],
+        "rendered": "error[E0702]: type mismatch: expected `Integer`, found `array[0..1] of record`\n   --> anon_record_declared_here.pas:23:8\n    |\n 14 |   C: array[0..1] of record\n    |                     ------ record type declared here\n...\n 23 |   N := C;\n    |        ^"
+      }
+    ],
+    "summary": {
+      "errors": 5,
+      "warnings": 0,
+      "notes": 0
+    }
+  }
+]

@@ -16,7 +16,7 @@ program Hello
     objfield T Value #0
       self TBox<T>
 .instance TBox<TUserId>
-.routine f1 TBox<TUserId>.Get(): TUserId
+.routine f0 TBox<TUserId>.Get(): TUserId
   .var v0 Self: TBox<TUserId> self
   .var v1 Result: TUserId result
   assign @19 R+
@@ -24,7 +24,7 @@ program Hello
     objfield TUserId Value #0
       self TBox<TUserId>
 .instance TBox<Int64>
-.routine f2 TBox<Int64>.Get(): Int64
+.routine f1 TBox<Int64>.Get(): Int64
   .var v0 Self: TBox<Int64> self
   .var v1 Result: Int64 result
   assign @19 R+
@@ -46,7 +46,7 @@ program Hello
     objfield Int64 Value #0
       global g1 B: TBox<Int64>
     binary Int64
-      method f1 TBox<TUserId>.Get: TUserId
+      method f0 TBox<TUserId>.Get: TUserId
         global g0 A: TBox<TUserId>
       + Int64 int:Int64
         const Int64 1
@@ -59,12 +59,12 @@ program Hello
       global g3 N: Integer
   writeln @34
     arg
-      method f1 TBox<TUserId>.Get: TUserId
+      method f0 TBox<TUserId>.Get: TUserId
         global g0 A: TBox<TUserId>
     arg
       const Char #32
     arg
-      method f2 TBox<Int64>.Get: Int64
+      method f1 TBox<Int64>.Get: Int64
         global g1 B: TBox<Int64>
     arg
       const Char #32

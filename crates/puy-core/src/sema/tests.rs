@@ -381,12 +381,17 @@ fn definite_assignment() {
         codes("procedure P; var S: string; begin S := S + 'x'; WriteLn(S); end;"),
         ["E2000"]
     );
+    // A variable of a routine's `var` section is assigned at the start of the body, as an
+    // initial value there is a Puy extension
     let d = check("procedure P; var S: string; begin S := S + 'x'; WriteLn(S); end;");
-    assert_eq!(d[0].fixes[0].edits[0].replacement, " = ''");
+    assert_eq!(d[0].fixes[0].edits[0].replacement, " S := '';");
     assert_eq!(
         d[0].fixes[0].title,
-        "add an initial value: `var S: string = '';`"
+        "add `S := '';` at the start of the body"
     );
+    // So is one of a declaration with two or more identifiers
+    let d = check("procedure P; var A, B: Integer; begin WriteLn(B); A := 1; WriteLn(A); end;");
+    assert_eq!(d[0].fixes[0].edits[0].replacement, " B := 0;");
     assert_eq!(
         all_codes("procedure P; var A, B: Integer; begin WriteLn(A); B := 1; end;"),
         ["W0001", "E2000"]

@@ -1,0 +1,19 @@
+sum 412
+a2 2 20
+p 103 30 q 103 -1
+a0 4 102
+q 0 0
+1 2 1 20 Line!?
+7 20 1 20 Line!?m
+1 20 7
+7 global Line!?m
+0 0 []
+s 3 4 p 0 0
+s2 3 40 s1 4
+h 3 40
+p 3 40
+33 big 9
+34 big2 10
+range error
+p 5 6
+whole 1 2

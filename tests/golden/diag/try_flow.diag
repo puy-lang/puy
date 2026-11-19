@@ -8,7 +8,7 @@ error[E2000]: variable `X` may be read before it is assigned
     |             ^ read here
     |
     = note: Puy requires every local variable to be assigned before it is read
-    = fix: add an initial value: `var X: Integer = 0;`
+    = fix: add `X := 0;` at the start of the body
 
 error[E2000]: variable `X` may be read before it is assigned
    --> try_flow.pas:14:13
@@ -20,7 +20,7 @@ error[E2000]: variable `X` may be read before it is assigned
     |             ^ read here
     |
     = note: Puy requires every local variable to be assigned before it is read
-    = fix: add an initial value: `var X: Integer = 0;`
+    = fix: add `X := 0;` at the start of the body
 
 warning[W0003]: unreachable code (unreachable-code)
    --> try_flow.pas:59:3
@@ -40,6 +40,6 @@ error[E2000]: variable `X` may be read before it is assigned
     |                      ^ read here
     |
     = note: Puy requires every local variable to be assigned before it is read
-    = fix: add an initial value: `var X: Exception = nil;`
+    = fix: add `X := nil;` at the start of the body
 
 error: aborting due to 3 errors; 1 warning emitted

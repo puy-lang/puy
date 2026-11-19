@@ -31,8 +31,9 @@
   0005  LoadConst    r3, k2
   0006  ConcatStr    r1, r1, r3
   0007  CallHost     r1, h0
+  0008  Release      r2
   .line 14
-  0008  RetVoid
+  0009  RetVoid
 .finally r0, r1, r2, r3
 .func 1 Gamma.<fini> params=0 regs=3
   .line 13
@@ -42,8 +43,9 @@
   0003  LoadConst    r2, k2
   0004  ConcatStr    r0, r0, r2
   0005  CallHost     r0, h0
+  0006  Release      r1
   .line 14
-  0006  RetVoid
+  0007  RetVoid
 .finally r0, r1, r2
 .func 2 Delta.<fini> params=0 regs=1
   .line 11

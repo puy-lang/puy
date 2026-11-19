@@ -155,6 +155,7 @@ ast_node!(EnumType, ENUM_TYPE);
 ast_node!(EnumValue, ENUM_VALUE);
 ast_node!(SubrangeType, SUBRANGE_TYPE);
 ast_node!(DistinctType, DISTINCT_TYPE);
+ast_node!(NestedTypeRef, NESTED_TYPE_REF);
 ast_node!(SetType, SET_TYPE);
 ast_node!(CaseStmt, CASE_STMT);
 ast_node!(CaseArm, CASE_ARM);
@@ -462,6 +463,9 @@ pub enum TypeSpec {
     Helper(HelperType),
     /// `type T`: a distinct type (`docs/spec/types.md` 1.3). Only a type declaration has it.
     Distinct(DistinctType),
+    /// `TList<Integer>.TEnumerator`: a type nested in an instantiation (`docs/spec/grammar.md`
+    /// 1.3).
+    Nested(NestedTypeRef),
 }
 
 impl TypeSpec {
@@ -481,6 +485,7 @@ impl TypeSpec {
             REF_TYPE => TypeSpec::Reference(RefType(node)),
             HELPER_TYPE => TypeSpec::Helper(HelperType(node)),
             DISTINCT_TYPE => TypeSpec::Distinct(DistinctType(node)),
+            NESTED_TYPE_REF => TypeSpec::Nested(NestedTypeRef(node)),
             _ => return None,
         })
     }
@@ -500,6 +505,7 @@ impl TypeSpec {
             TypeSpec::Reference(n) => &n.0,
             TypeSpec::Helper(n) => &n.0,
             TypeSpec::Distinct(n) => &n.0,
+            TypeSpec::Nested(n) => &n.0,
         }
     }
     /// The type name, if the type is written as a name.
@@ -628,9 +634,9 @@ impl Constraint {
     pub fn type_ref(&self) -> Option<TypeRef> {
         child(&self.0)
     }
-    /// A type name with type arguments (`IComparable<T>`).
-    pub fn generic_ref(&self) -> Option<GenericTypeRef> {
-        child(&self.0)
+    /// The type written, a name or not (`IComparable<T>`, `TOuter<Integer>.IFoo`).
+    pub fn type_spec(&self) -> Option<TypeSpec> {
+        self.0.children().find_map(TypeSpec::cast)
     }
 }
 
@@ -778,6 +784,10 @@ impl HelperType {
     /// The `class` / `record` keyword.
     pub fn kind_token(&self) -> Option<SyntaxToken> {
         token(&self.0, CLASS_KW).or_else(|| token(&self.0, RECORD_KW))
+    }
+    /// The `helper` keyword.
+    pub fn helper_token(&self) -> Option<SyntaxToken> {
+        token(&self.0, HELPER_KW)
     }
     /// The parentheses after `helper` (`CLASS_PARENTS`).
     pub fn parent_list(&self) -> Option<SyntaxNode> {
@@ -1147,6 +1157,31 @@ impl GenericTypeRef {
         self.0.children().filter_map(TypeSpec::cast)
     }
     /// From `<` to `>` (the type arguments as written).
+    pub fn args_range(&self) -> Option<rowan::TextRange> {
+        let lt = self.lt_token()?;
+        let end = self.0.text_range().end();
+        Some(rowan::TextRange::new(lt.text_range().start(), end))
+    }
+    pub fn lt_token(&self) -> Option<SyntaxToken> {
+        token(&self.0, LT)
+    }
+}
+
+impl NestedTypeRef {
+    /// The type before `.`: an instantiation (`GENERIC_TYPE_REF`) or another nested type with
+    /// type arguments (`NESTED_TYPE_REF`).
+    pub fn base(&self) -> Option<TypeSpec> {
+        self.0.children().find_map(TypeSpec::cast)
+    }
+    /// The names after `.` (`TEnumerator`, or `TInner.TItem`).
+    pub fn name(&self) -> Option<QualifiedName> {
+        child(&self.0)
+    }
+    /// The type arguments of the last name (`TInner<string>`), in order.
+    pub fn args(&self) -> impl Iterator<Item = TypeSpec> {
+        self.0.children().filter_map(TypeSpec::cast).skip(1)
+    }
+    /// From `<` to `>` (the type arguments of the last name as written).
     pub fn args_range(&self) -> Option<rowan::TextRange> {
         let lt = self.lt_token()?;
         let end = self.0.text_range().end();
@@ -1839,19 +1874,7 @@ impl DerefExpr {
 
 /// Source range of the expression (from the first to the last token, excluding trivia).
 pub fn trimmed_range(node: &SyntaxNode) -> rowan::TextRange {
-    let first = node
-        .descendants_with_tokens()
-        .filter_map(|e| e.into_token())
-        .find(|t| !t.kind().is_trivia());
-    let last = node
-        .descendants_with_tokens()
-        .filter_map(|e| e.into_token())
-        .filter(|t| !t.kind().is_trivia())
-        .last();
-    match (first, last) {
-        (Some(f), Some(l)) => rowan::TextRange::new(f.text_range().start(), l.text_range().end()),
-        _ => node.text_range(),
-    }
+    super::non_trivia_range(node).unwrap_or_else(|| node.text_range())
 }
 
 /// Source text of the expression with each run of trivia replaced by a single space (for the `Assert` message).

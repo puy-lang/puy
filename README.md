@@ -23,10 +23,14 @@ Free Pascal, while adding modern features and making it hard to write unsafe cod
 It does not promise compatibility with Delphi or Free Pascal, and does not follow the
 ISO Pascal standards (see [Compatibility](#compatibility)).
 
-> **Status: early development.** The current release covers integers, strings,
-> `if` / `while`, procedures and functions, and `WriteLn`. Records, arrays, exceptions,
-> units, classes and the standard library are not implemented yet; using them reports
-> a "not supported yet" error (E3200).
+> **Status: early development.** The current release covers the core of the language:
+> records and arrays, exceptions, units, classes and interfaces, anonymous methods,
+> operator overloading, generics and `System.Generics.Collections` (see
+> [`examples/`](#example)). Lightweight tasks, most of the standard library (files,
+> networking, JSON, HTTP), runtime type information, the testing framework,
+> `puy build`, package dependencies, the formatter and running in the browser are not
+> implemented yet; using a feature that is not implemented reports a "not supported yet"
+> error (E3200).
 
 ## Compatibility
 
@@ -120,10 +124,14 @@ The `puy` command:
 
 | Command | Description |
 |---|---|
-| `puy run <file>` | Compile and run a program (`puy <file>` is the same) |
-| `puy check <file>` | Type-check only; `--dump tokens\|cst\|hir\|bytecode` prints a compiler stage |
+| `puy run <file\|->` | Compile and run a program (`puy <file>` is the same; `-` reads the source from stdin) |
+| `puy check <file\|->` | Type-check only; `--dump tokens\|cst\|hir\|ir\|bytecode` prints a compiler stage |
 | `puy fix <file>` | Apply the safe fixes suggested by diagnostics |
+| `puy explain <code>` | Explain an error code (explanations are not included in this release yet) |
 | `puy -e '<statements>'` | Run statements given on the command line |
+
+Diagnostics can also be printed as JSON with `--format json`. `puy --help` lists all
+options.
 
 ### WebAssembly
 
@@ -157,8 +165,9 @@ crates/
   puy-runtime-wasi/    WASI runtime
   puy-runtime-web/     Browser runtime
   puy-cli/             The puy command (crate `puy`)
+  puy-stdlib/          Pascal sources of the standard library units (embedded; no I/O)
   puy-testsuite/       Test runner for the cases under tests/ (not published)
-tests/                 Differential, golden and CLI test cases
+tests/                 Differential, lifetime, golden and CLI test cases
 examples/              Sample programs
 ```
 

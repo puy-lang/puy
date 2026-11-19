@@ -10,28 +10,25 @@
   .reg t5: TNode temp
   .reg t6: Integer lent
   .reg t7: Int64 temp
-  .reg t8: Int64 temp
-  .reg t9: TNode temp
-  .reg t10: - ref
-  .reg t11: TNode temp
-  .reg t12: TPoint temp
-  .reg t13: string temp
-  .reg t14: Integer temp
-  .reg t15: TNode temp
-  .reg t16: string temp
-  .reg t17: string temp
-  .reg t18: Integer temp
+  .reg t8: TNode temp
+  .reg t9: - ref
+  .reg t10: TNode temp
+  .reg t11: string temp
+  .reg t12: Integer temp
+  .reg t13: TNode temp
+  .reg t14: string temp
+  .reg t15: string temp
+  .reg t16: Integer temp
+  .reg t17: TNode temp
+  .reg t18: string temp
   .reg t19: TNode temp
-  .reg t20: TPoint temp
-  .reg t21: string temp
+  .reg t20: TNode temp
+  .reg t21: TNode temp
   .reg t22: TNode temp
   .reg t23: TNode temp
   .reg t24: TNode temp
   .reg t25: TNode temp
   .reg t26: TNode temp
-  .reg t27: TNode temp
-  .reg t28: TNode temp
-  .reg t29: TNode temp
 bb0:
   .line 31
   LoadZero     t0
@@ -46,51 +43,46 @@ bb0:
   Call         -, f1(t4)
   Unlend
   .line 33
-  LoadGlobal   t11, g0
-  LoadInt      t7, 1
-  Move         t9, t11
-  LoadInt      t8, 1
-  ObjGet       t12, t9, 1
-  Unique       t12, DumpLendObject.TPoint
-  ObjSet       t9, 1, t12
-  Lend         t6, t9, 2, t7, t8
-  MakeRef      t10, t6
-  Call         -, f1(t10)
+  LoadGlobal   t10, g0
+  Move         t8, t10
+  LoadInt      t7, 2
+  Lend         t6, t8, 1, t7
+  MakeRef      t9, t6
+  Call         -, f1(t9)
   Unlend
   .line 34
-  LoadGlobal   t15, g0
-  ObjGet       t14, t15, 0
-  IntToStr     t13, t14
-  LoadConst    t16, " "
-  ConcatStr    t13, t13, t16
-  LoadGlobal   t19, g0
-  ObjGet       t20, t19, 1
-  FieldGet     t18, t20, 1
-  IntToStr     t17, t18
-  ConcatStr    t13, t13, t17
-  LoadConst    t21, "\n"
-  ConcatStr    t13, t13, t21
-  CallHost     -, h0(t13)
+  LoadGlobal   t13, g0
+  ObjGet       t12, t13, 0
+  IntToStr     t11, t12
+  LoadConst    t14, " "
+  ConcatStr    t11, t11, t14
+  LoadGlobal   t17, g0
+  ObjGet       t16, t17, 2
+  IntToStr     t15, t16
+  ConcatStr    t11, t11, t15
+  LoadConst    t18, "\n"
+  ConcatStr    t11, t11, t18
+  CallHost     -, h0(t11)
   .line 35
-  LoadGlobal   t22, g0
-  LoadZero     t23
-  New          t23, DumpLendObject.TNode
-  ObjSet       t22, 2, t23
+  LoadGlobal   t19, g0
+  LoadZero     t20
+  New          t20, DumpLendObject.TNode
+  ObjSet       t19, 3, t20
   .line 36
+  LoadZero     t22
+  LoadGlobal   t23, g0
+  ObjGet       t21, t23, 3
+  ObjSet       t23, 3, t22
+  Free         t21
+  .line 37
   LoadZero     t25
   LoadGlobal   t26, g0
-  ObjGet       t24, t26, 2
-  ObjSet       t26, 2, t25
+  Move         t24, t26
+  StoreGlobal  t25, g0
   Free         t24
-  .line 37
-  LoadZero     t28
-  LoadGlobal   t29, g0
-  Move         t27, t29
-  StoreGlobal  t28, g0
-  Free         t27
   .line 38
   RetVoid
-.finally t13, t16, t17, t21
+.finally t11, t14, t15, t18
 .func f1 DumpLendObject.Bump params=1
   .reg v0 N: Integer var param
   .reg t0: Integer temp

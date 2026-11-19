@@ -11,11 +11,11 @@ program Main uses=Greeting,MyApp.Models.User
         const string "qualified"
   writeln @11
     arg
-      call f2 Describe: string
+      call f1 Describe: string
         const string "nested"
   assign @12 R+
     global g2 P
-    call f1 Origin: TPoint
+    call f2 Origin: TPoint
   writeln @13
     arg
       field Integer X #0

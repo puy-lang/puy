@@ -139,7 +139,7 @@ error[E2000]: variable `J` may be read before it is assigned
     |              ^ read here
     |
     = note: Puy requires every local variable to be assigned before it is read
-    = note: declare `J` on its own to give it an initial value
+    = fix: add `J := 0;` at the start of the body
 
 error[E0700]: undeclared identifier `K`
    --> sema_flow.pas:67:11

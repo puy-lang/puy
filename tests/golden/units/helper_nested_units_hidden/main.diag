@@ -1,0 +1,13 @@
+error[E0700]: `TBox` has no member `Hid`
+   --> main.pas:13:13
+    |
+ 13 |   WriteLn(B.Hid);
+    |             ^^^
+
+error[E0700]: `TBox` has no member `Away`
+   --> main.pas:14:13
+    |
+ 14 |   WriteLn(B.Away);
+    |             ^^^^
+
+error: aborting due to 2 errors

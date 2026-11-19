@@ -1,0 +1,29 @@
+error[E0700]: `TBox` has no member `Pick`
+   --> helper_nested_errors.pas:14:13
+    |
+ 14 |   WriteLn(B.Pick);
+    |             ^^^^
+
+error[E0754]: `Same` is ambiguous: it is declared in helpers `TOuter.TH` and `TTop`
+   --> helper_nested_errors.pas:68:13
+    |
+ 40 |       function Same: Integer;
+    |                ---- candidate
+...
+ 45 |     function Same: Integer;
+    |              ---- candidate
+...
+ 68 |   WriteLn(B.Same);
+    |             ^^^^
+    |
+    = note: name the helper to call, as in `TOuter.TH.Same(X)`
+    = suggestion: call `TOuter.TH.Same`
+    = suggestion: call `TTop.Same`
+
+error[E0700]: `TBox` has no member `Loc`
+   --> helper_nested_errors.pas:69:13
+    |
+ 69 |   WriteLn(B.Loc);
+    |             ^^^
+
+error: aborting due to 3 errors

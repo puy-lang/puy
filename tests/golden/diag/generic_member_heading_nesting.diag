@@ -1,0 +1,9 @@
+error[E0764]: generic instantiation `TFoo<TFoo<TFoo<TFoo<…>>>>` is nested too deeply (limit 32)
+  --> generic_member_heading_nesting.pas:9:24
+   |
+ 9 |     function Deep: TFoo<TFoo<T>>;
+   |                        ^^^^^^^^^
+   |
+   = note: instantiated through `TFoo<TFoo<T>>`, `TFoo<TFoo<TFoo<T>>>`, `TFoo<TFoo<TFoo<TFoo<T>>>>`, `TFoo<TFoo<TFoo<TFoo<…>>>>`, …
+
+error: aborting due to 1 error

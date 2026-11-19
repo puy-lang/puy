@@ -83,6 +83,73 @@ impl<'a, 's> Sema<'a, 's> {
         (x, declared)
     }
 
+    /// Whether `.name` after `e` reads the procedural value of `e` rather than its result
+    /// (`docs/spec/objects.md` 9.11): `e` is a procedural value (in parentheses, converted or not)
+    /// that cannot be called there (`(A).Foo` with a procedure type) or whose result has no member
+    /// `name` (`(F).Invoke`, `Rc.P.Invoke`). A result that has the member is called as usual
+    /// (`F.GetName` with `F: function: TObj`; 9.4).
+    pub(super) fn member_of_procedural(&mut self, e: &ast::Expr, name: &str) -> bool {
+        if !self.dry_run(|s| s.lower_procedural_base(e).0.ty.is_procedural()) {
+            return false;
+        }
+        let range = ast::trimmed_range(e.syntax());
+        !self.dry_run(|s| {
+            let n = s.sink.len();
+            let x = s.lower_expr(e);
+            if x.ty.is_error() || s.sink.iter().skip(n).any(|d| d.is_error()) {
+                return false;
+            }
+            s.result_has_member(x, name, range)
+        })
+    }
+
+    /// Whether the value `x` has a member `name`: a member of its class, interface or record, a
+    /// record's field, or a member of the type's helpers (`docs/spec/objects.md` 10.4). Reports
+    /// nothing.
+    fn result_has_member(&mut self, x: Expr, name: &str, range: TextRange) -> bool {
+        self.dry_run(|s| {
+            let class = match x.ty {
+                Ty::Class(c) | Ty::Intf(c) => Some(c),
+                t @ Ty::ClassRef(_) => s.types.class_ref_target(t),
+                Ty::Record(c) => Some(c),
+                Ty::Param(_) => return true,
+                _ => None,
+            };
+            if let Some(c) = class {
+                if matches!(x.ty, Ty::Record(_))
+                    && s.types
+                        .fields(x.ty)
+                        .iter()
+                        .any(|f| f.name.eq_ignore_ascii_case(name))
+                {
+                    return true;
+                }
+                if s.find_member(c, name, range).is_ok() {
+                    return true;
+                }
+                if matches!(x.ty, Ty::Intf(_)) {
+                    return false;
+                }
+            }
+            s.helper_resolved(x, name, range)
+                .is_some_and(|r| !matches!(r, Resolved::Error))
+        })
+    }
+
+    /// The procedural value `e` before `.` without calling it, in parentheses too (`(A).Foo`),
+    /// and its declared type (see [`Self::lower_value_declared`]).
+    pub(super) fn lower_procedural_base(&mut self, e: &ast::Expr) -> (Expr, Ty) {
+        if let ast::Expr::Paren(p) = e
+            && let Some(inner) = p.inner()
+            && !matches!(inner, ast::Expr::ArrayCtor(_) | ast::Expr::Nil(_))
+        {
+            let (mut x, declared) = self.lower_procedural_base(&inner);
+            x.span = ast::trimmed_range(e.syntax());
+            return (x, declared);
+        }
+        self.lower_value_declared(e)
+    }
+
     /// A procedural value written without parentheses outside a value position is called
     /// (`docs/spec/objects.md` 9.4): `X := F;`, `WriteLn(F)`. A function's result (`MakeCounter`)
     /// is not called again.
@@ -90,19 +157,7 @@ impl<'a, 's> Sema<'a, 's> {
         if !x.ty.is_procedural() || !bare_syntax(e) {
             return x;
         }
-        if matches!(x.kind, ExprKind::Call { .. })
-            && !matches!(
-                self.dry_run(|s| s.resolve_name_expr(e)),
-                Some((
-                    Resolved::Member {
-                        member: Member::Property(..),
-                        ..
-                    },
-                    _,
-                    _
-                ))
-            )
-        {
+        if self.is_function_result(e, &x) {
             return x;
         }
         let span = x.span;
@@ -128,6 +183,74 @@ impl<'a, 's> Sema<'a, 's> {
             return err_expr(span);
         }
         self.call_value(x, &[], span)
+    }
+
+    /// Whether `x`, the value of `e` written as a name, a member or an element, is the result of
+    /// a function called without parentheses (`MakeCounter`), which is not called again; a
+    /// property read through a function is the property's value (`docs/spec/objects.md` 9.4).
+    fn is_function_result(&mut self, e: &ast::Expr, x: &Expr) -> bool {
+        // A call made by an element (`H.Items[0]`, `H[0]`) reads an indexed or default property
+        matches!(x.kind, ExprKind::Call { .. })
+            && !matches!(e, ast::Expr::Index(_))
+            && !matches!(
+                self.dry_run(|s| s.resolve_name_expr(e)),
+                Some((
+                    Resolved::Member {
+                        member: Member::Property(..),
+                        ..
+                    },
+                    _,
+                    _
+                ))
+            )
+    }
+
+    /// E0700 for `X.Name` on a procedural value `x` written as `base`: a procedural value has no
+    /// members, and `Invoke` of an anonymous method type is not a method in Puy
+    /// (`docs/spec/objects.md` 9.10). For `Invoke` the note shows how to call the value: `V()`
+    /// for a variable, a member, an element or a call written with parentheses (`F(1)()`), and
+    /// `F()()` for the result of a function written without them, which `F()` would not call
+    /// (9.4). Other forms (`(V)`, a type cast `TRun(X)`, even to the same type) have no way to call
+    /// the value in place, and no note.
+    pub(super) fn procedural_member_error(
+        &mut self,
+        base: &ast::Expr,
+        x: &Expr,
+        name: &str,
+        range: TextRange,
+    ) {
+        let tn = self.tn(x.ty);
+        let call = if name.eq_ignore_ascii_case("invoke") {
+            let text = self.src(ast::trimmed_range(base.syntax()));
+            if bare_syntax(base) {
+                if self.is_function_result(base, x) {
+                    Some(format!("{text}()()"))
+                } else {
+                    Some(format!("{text}()"))
+                }
+            } else if let ast::Expr::Call(c) = base
+                && !c.callee().is_some_and(|callee| {
+                    matches!(
+                        self.dry_run(|s| s.resolve_name_expr(&callee)),
+                        Some((Resolved::Type(_), ..))
+                    )
+                })
+            {
+                Some(format!("{text}()"))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        let d = self.error(
+            Code::E(700),
+            format!("`{tn}` has no member `{name}`"),
+            range,
+        );
+        if let Some(call) = call {
+            d.notes.push(format!("call the value as `{call}`"));
+        }
     }
 
     /// When `callee` (the callee of a call, or a statement without parentheses) is a value of a
@@ -164,10 +287,8 @@ impl<'a, 's> Sema<'a, 's> {
             .map(|p| (p.name.clone(), p.ty, p.mode))
             .collect();
         if args.len() != params.len() {
-            for a in args {
-                if let Some(v) = a.value() {
-                    self.lower_expr(&v);
-                }
+            if self.lower_miscounted_args(args) {
+                return err_expr(span);
             }
             self.error(
                 Code::E(705),
@@ -297,7 +418,9 @@ impl<'a, 's> Sema<'a, 's> {
     ) {
         let list: Vec<(Option<&str>, Ty, ParamMode)> =
             params.iter().map(|(t, m)| (None, *t, *m)).collect();
-        let found = self.types.signature_text(family, &list, ret, false);
+        let found = self
+            .types
+            .signature_text(family, &list, ret, super::types::NameForm::Marked);
         let msg = format!(
             "type mismatch: expected `{}`, found `{found}`",
             self.tn(expected)
@@ -653,7 +776,7 @@ impl<'a, 's> Sema<'a, 's> {
         let side = |s: &mut Self, e: &ast::Expr| -> Expr {
             if super::expr::is_nil(e) {
                 return Expr {
-                    kind: ExprKind::Const,
+                    kind: ExprKind::Const { explicit: false },
                     ty: target,
                     value: Some(super::types::Const::Nil),
                     span: ast::trimmed_range(e.syntax()),

@@ -17,7 +17,7 @@
 .host
   0: Console.Write params=1 ret=0
 .unit DumpGenericKinds file="dump_generic_kinds.pas" init=- fini=- entry=0
-.func 0 DumpGenericKinds.<main> params=0 regs=18
+.func 0 DumpGenericKinds.<main> params=0 regs=17
   .line 45
   0000  New          r0, ty65
   0001  LoadGlobal   r12, g0
@@ -36,42 +36,40 @@
   000c  Move         r13, r14
   000d  StoreGlobal  r13, g2
   .line 48
-  000e  LoadZero     r12
-  000f  LoadInt      r13, 1
-  0010  LoadGlobal   r14, g3
-  0011  Unique       r14, ty67
-  0012  StoreGlobal  r14, g3
-  0013  ValSet       r14, r12, r13
+  000e  LoadInt      r12, 1
+  000f  LoadGlobal   r13, g3
+  0010  Unique       r13, ty67
+  0011  StoreGlobal  r13, g3
+  0012  FieldSet     r13, 0, r12
   .line 49
-  0014  LoadGlobal   r14, g0
-  0015  AssignObj    r4, r14
-  0016  Move         r13, r4
-  0017  CallIntf     r13, ic0
-  0018  MoveRef      r3, r13
-  0019  Release      r5
-  001a  EqStr        r12, r3, r5
-  001b  BoolToStr    r2, r12
-  001c  LoadGlobalRef r7, g1
-  001d  CallableAssigned r13, r7
-  001e  BoolToStr    r6, r13
-  001f  ConcatStr    r2, r2, r6
-  0020  LoadGlobal   r15, g2
-  0021  ArrLen       r14, r15
-  0022  IntToStr     r8, r14
-  0023  ConcatStr    r2, r2, r8
-  0024  LoadGlobal   r16, g3
-  0025  LoadZero     r17
-  0026  ValGet       r15, r16, r17
-  0027  IntToStr     r9, r15
-  0028  ConcatStr    r2, r2, r9
-  0029  LoadGlobal   r16, g4
-  002a  IntToStr     r10, r16
-  002b  ConcatStr    r2, r2, r10
-  002c  LoadConst    r11, k0
-  002d  ConcatStr    r2, r2, r11
-  002e  CallHost     r2, h0
+  0013  LoadGlobal   r14, g0
+  0014  AssignObj    r4, r14
+  0015  Move         r13, r4
+  0016  CallIntf     r13, ic0
+  0017  MoveRef      r3, r13
+  0018  Release      r5
+  0019  EqStr        r12, r3, r5
+  001a  BoolToStr    r2, r12
+  001b  LoadGlobalRef r7, g1
+  001c  CallableAssigned r13, r7
+  001d  BoolToStr    r6, r13
+  001e  ConcatStr    r2, r2, r6
+  001f  LoadGlobal   r15, g2
+  0020  ArrLen       r14, r15
+  0021  IntToStr     r8, r14
+  0022  ConcatStr    r2, r2, r8
+  0023  LoadGlobal   r16, g3
+  0024  FieldGet     r15, r16, 0
+  0025  IntToStr     r9, r15
+  0026  ConcatStr    r2, r2, r9
+  0027  LoadGlobal   r16, g4
+  0028  IntToStr     r10, r16
+  0029  ConcatStr    r2, r2, r10
+  002a  LoadConst    r11, k0
+  002b  ConcatStr    r2, r2, r11
+  002c  CallHost     r2, h0
   .line 50
-  002f  RetVoid
+  002d  RetVoid
 .finally r0:obj, r1, r2, r3, r4:obj, r5, r6, r7, r8, r9, r10, r11
 .func 1 DumpGenericKinds.TStore<string>.Get params=1 regs=3
   .local r0 Self
@@ -82,8 +80,7 @@
   0002  NarrowOvf    r2, r2, 4
   0003  StoreGlobal  r2, g4
   .line 36
-  0004  ObjGet       r2, r0, 0
-  0005  FieldGetRef  r1, r2, 0
+  0004  ObjGetRef    r1, r0, 0
   .line 37
-  0006  Ret          r1
+  0005  Ret          r1
 .finally r1

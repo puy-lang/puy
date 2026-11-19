@@ -1,0 +1,381 @@
+; puy ir 1
+.global
+  g0 G: string
+  g1 H: string
+  g2 SA: array of string
+  g3 B: array of TObject
+  g4 Box: TBox
+  g5 N: Integer
+  g6 I: Integer
+.func f0 DumpReadCopy.<main> params=0
+  .reg v0 -: Int64 hidden
+  .reg t0: Integer temp
+  .reg t1: string temp
+  .reg t2: Integer temp
+  .reg t3: string temp
+  .reg t4: string temp
+  .reg t5: Integer temp
+  .reg t6: Integer temp
+  .reg t7: Boolean temp
+  .reg t8: string temp
+  .reg t9: string temp
+  .reg t10: string temp
+  .reg t11: string temp
+  .reg t12: Integer temp
+  .reg t13: Integer temp
+  .reg t14: Char temp
+  .reg t15: Char temp
+  .reg t16: string temp
+  .reg t17: Integer temp
+  .reg t18: Char temp
+  .reg t19: Integer temp
+  .reg t20: Integer temp
+  .reg t21: Char temp
+  .reg t22: string temp
+  .reg t23: Integer temp
+  .reg t24: Integer temp
+  .reg t25: Char temp
+  .reg t26: Integer temp
+  .reg t27: Integer temp
+  .reg t28: string temp
+  .reg t29: string temp
+  .reg t30: string temp
+  .reg t31: string temp
+  .reg t32: string temp
+  .reg t33: string temp
+  .reg t34: string temp
+  .reg t35: string temp
+  .reg t36: string temp
+  .reg t37: string temp
+  .reg t38: string temp
+  .reg t39: Int64 temp
+  .reg t40: array of string temp
+  .reg t41: array of string temp
+  .reg t42: Int64 temp
+  .reg t43: string temp
+  .reg t44: array of string temp
+  .reg t45: Int64 temp
+  .reg t46: string temp
+  .reg t47: Integer temp
+  .reg t48: Integer temp
+  .reg t49: TBox temp
+  .reg t50: string temp
+  .reg t51: TBox temp
+  .reg t52: string temp
+  .reg t53: Integer temp
+  .reg t54: Integer temp
+  .reg t55: TBox temp
+  .reg t56: string temp
+  .reg t57: string temp
+  .reg t58: Integer temp
+  .reg t59: Integer temp
+  .reg t60: string temp
+  .reg t61: Int64 temp
+  .reg t62: array of TObject temp
+  .reg t63: array of TObject temp
+  .reg t64: Int64 temp
+  .reg t65: TObject temp
+  .reg t66: array of TObject temp
+  .reg t67: Int64 temp
+  .reg t68: Int64 temp
+  .reg t69: TObject temp
+  .reg t70: Integer temp
+  .reg t71: Integer temp
+  .reg t72: string temp
+  .reg t73: Integer temp
+  .reg t74: string temp
+  .reg t75: string temp
+  .reg t76: string temp
+  .reg t77: string temp
+  .reg t78: string temp
+bb0:
+  .line 31
+  LoadZero     t0
+  StoreGlobal  t0, g5
+  .line 32
+  LoadConst    t1, "a"
+  StoreGlobalRef t1, g0
+  .line 33
+  LoadInt      v0, 1
+  LoadInt      t2, 3
+  JmpIfLtInt   t2, v0, bb18, bb1
+bb1:
+  .line 33
+  Jmp          bb2
+bb2:
+  .line 33
+  StoreGlobal  v0, g6
+  .line 35
+  LoadGlobalRef t3, g0
+  LoadConst    t4, "abc"
+  JmpIfNeStr   t3, t4, bb4, bb3
+bb3:
+  .line 35
+  Release      t3
+  .line 36
+  LoadGlobal   t5, g5
+  LoadInt      t6, 1
+  AddInt       t5, t5, t6
+  NarrowOvf    t5, t5, 4
+  StoreGlobal  t5, g5
+  .line 35
+  Jmp          bb5
+bb4:
+  .line 35
+  Release      t3
+  Jmp          bb5
+bb5:
+  .line 37
+  LoadGlobalRef t8, g0
+  LoadConst    t9, "x"
+  Move         t10, t8
+  Move         t11, t9
+  SameText     t7, t10, t11
+  JmpIfFalse   t7, bb7, bb6
+bb6:
+  .line 37
+  Release      t8
+  .line 38
+  LoadGlobal   t12, g5
+  LoadInt      t13, 1
+  AddInt       t12, t12, t13
+  NarrowOvf    t12, t12, 4
+  StoreGlobal  t12, g5
+  .line 37
+  Jmp          bb8
+bb7:
+  .line 37
+  Release      t8
+  Jmp          bb8
+bb8:
+  .line 39
+  LoadGlobal   t16, g0
+  LoadInt      t17, 1
+  StrIndex     t15, t16, t17
+  UpCaseChar   t14, t15
+  LoadInt      t18, 88
+  JmpIfNeInt   t14, t18, bb10, bb9
+bb9:
+  .line 40
+  LoadGlobal   t19, g5
+  LoadInt      t20, 1
+  AddInt       t19, t19, t20
+  NarrowOvf    t19, t19, 4
+  StoreGlobal  t19, g5
+  .line 39
+  Jmp          bb11
+bb10:
+  .line 39
+  Jmp          bb11
+bb11:
+  .line 41
+  LoadGlobalRef t22, g0
+  Call         t23, f1()
+  StrIndex     t21, t22, t23
+  LoadInt      t25, 120
+  JmpIfNeInt   t21, t25, bb13, bb12
+bb12:
+  .line 41
+  Release      t22
+  .line 42
+  LoadGlobal   t26, g5
+  LoadInt      t27, 1
+  AddInt       t26, t26, t27
+  NarrowOvf    t26, t26, 4
+  StoreGlobal  t26, g5
+  .line 41
+  Jmp          bb14
+bb13:
+  .line 41
+  Release      t22
+  Jmp          bb14
+bb14:
+  .line 43
+  LoadConst    t28, "["
+  LoadGlobalRef t29, g0
+  ConcatStr    t28, t28, t29
+  CallHost     -, h0(t28)
+  Release      t29
+  .line 44
+  LoadGlobalRef t30, g0
+  LoadConst    t31, "x"
+  LoadGlobal   t32, g0
+  AppendStr    t32, t30, t31
+  StoreGlobal  t32, g0
+  Release      t30
+  .line 33
+  Jmp          bb15
+bb15:
+  .line 33
+  JmpIfEqInt   v0, t2, bb17, bb16
+bb16:
+  .line 33
+  AddIntI      v0, v0, 1
+  Jmp          bb2
+bb17:
+  .line 33
+  StoreGlobal  v0, g6
+  Jmp          bb18
+bb18:
+  .line 46
+  LoadConst    t33, "\n"
+  CallHost     -, h0(t33)
+  .line 47
+  Jmp          bb19
+bb19:
+  .line 47
+  LoadGlobalRef t34, g0
+  LoadConst    t35, "axxxxx"
+  JmpIfEqStr   t34, t35, bb21, bb20
+bb20:
+  .line 47
+  Release      t34
+  .line 48
+  LoadGlobalRef t36, g0
+  LoadConst    t37, "x"
+  LoadGlobal   t38, g0
+  AppendStr    t38, t36, t37
+  StoreGlobal  t38, g0
+  Release      t36
+  .line 47
+  Jmp          bb19
+bb21:
+  .line 47
+  Release      t34
+  .line 49
+  LoadInt      t39, 1
+  LoadGlobal   t40, g2
+  Move         t41, t40
+  Move         t42, t39
+  SetLen       t41, array of string, t42
+  Move         t40, t41
+  StoreGlobal  t40, g2
+  .line 50
+  LoadGlobal   t44, g2
+  LoadZero     t45
+  DynGetRef    t43, t44, t45
+  Release      t46
+  JmpIfNeStr   t43, t46, bb23, bb22
+bb22:
+  .line 50
+  Release      t43
+  .line 51
+  LoadGlobal   t47, g5
+  LoadInt      t48, 1
+  AddInt       t47, t47, t48
+  NarrowOvf    t47, t47, 4
+  StoreGlobal  t47, g5
+  .line 50
+  Jmp          bb24
+bb23:
+  .line 50
+  Release      t43
+  Jmp          bb24
+bb24:
+  .line 52
+  LoadZero     t49
+  New          t49, DumpReadCopy.TBox
+  StoreGlobal  t49, g4
+  .line 53
+  LoadGlobal   t51, g4
+  ObjGetRef    t50, t51, 0
+  Release      t52
+  JmpIfNeStr   t50, t52, bb26, bb25
+bb25:
+  .line 53
+  Release      t50
+  .line 54
+  LoadGlobal   t53, g5
+  LoadInt      t54, 1
+  AddInt       t53, t53, t54
+  NarrowOvf    t53, t53, 4
+  StoreGlobal  t53, g5
+  .line 53
+  Jmp          bb27
+bb26:
+  .line 53
+  Release      t50
+  Jmp          bb27
+bb27:
+  .line 55
+  LoadGlobal   t55, g4
+  Free         t55
+  .line 56
+  LoadGlobalRef t56, g0
+  .line 57
+  LoadConst    t57, "axxxxx"
+  JmpIfEqStr   t56, t57, bb29, bb28
+bb28:
+  .line 56
+  Jmp          bb30
+bb29:
+  .line 57
+  LoadGlobal   t58, g5
+  LoadInt      t59, 1
+  AddInt       t58, t58, t59
+  NarrowOvf    t58, t58, 4
+  StoreGlobal  t58, g5
+  .line 56
+  Jmp          bb30
+bb30:
+  .line 56
+  Release      t56
+  .line 59
+  LoadGlobalRef t60, g0
+  StoreGlobalRef t60, g1
+  Release      t60
+  .line 60
+  LoadInt      t61, 1
+  LoadGlobal   t62, g3
+  Move         t63, t62
+  Move         t64, t61
+  SetLen       t63, array of TObject, t64
+  Move         t62, t63
+  StoreGlobal  t62, g3
+  .line 61
+  LoadGlobal   t66, g3
+  LoadZero     t67
+  DynGet       t68, t66, t67
+  AssignObj    t65, t68
+  ReleaseObj   t69
+  JmpIfNeInt   t65, t69, bb32, bb31
+bb31:
+  .line 62
+  LoadGlobal   t70, g5
+  LoadInt      t71, 1
+  AddInt       t70, t70, t71
+  NarrowOvf    t70, t70, 4
+  StoreGlobal  t70, g5
+  .line 61
+  Jmp          bb33
+bb32:
+  .line 61
+  Jmp          bb33
+bb33:
+  .line 63
+  LoadGlobal   t73, g5
+  IntToStr     t72, t73
+  LoadConst    t74, " "
+  ConcatStr    t72, t72, t74
+  LoadGlobalRef t75, g0
+  ConcatStr    t72, t72, t75
+  LoadConst    t76, " "
+  ConcatStr    t72, t72, t76
+  LoadGlobalRef t77, g1
+  ConcatStr    t72, t72, t77
+  LoadConst    t78, "\n"
+  ConcatStr    t72, t72, t78
+  CallHost     -, h0(t72)
+  Release      t77
+  Release      t75
+  .line 64
+  RetVoid
+.finally t1, t3, t4, t8, t9, t22, t28, t29, t30, t31, t33, t34, t35, t36, t37, t43, t46, t50, t52, t56, t57, t60, t65:obj, t69:obj, t72, t74, t75, t76, t77, t78
+.func f1 DumpReadCopy.One params=0
+  .reg v0 Result: Integer result
+bb0:
+  .line 21
+  LoadInt      v0, 1
+  .line 22
+  Ret          v0
+.finally

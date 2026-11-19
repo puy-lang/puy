@@ -42,6 +42,10 @@ pub use expr::{compare_strings, compare_units};
 use hir::*;
 use types::{Const, Ty, TypeTable};
 
+/// The note of E0707 for a nested routine or an anonymous method writing a `for` loop variable
+/// of its enclosing routine (`docs/spec/semantics.md` 4.9, `docs/spec/objects.md` 9.12).
+pub(super) const LOOP_VAR_WRITE_NOTE: &str = "a nested routine or an anonymous method cannot write a variable its enclosing routine uses as a `for` loop variable";
+
 pub struct SemaInput<'a> {
     pub file: FileId,
     pub root: &'a SyntaxNode,
@@ -85,6 +89,9 @@ pub struct UnitInterface {
     /// The name in the unit's heading (the declaration its hint directives are kept under).
     name_span: Option<TextRange>,
     exports: Vec<(String, GSym)>,
+    /// The names of the public types as written (lowercase name, spelling), for fixes that name
+    /// them.
+    type_spellings: Vec<(String, String)>,
     /// The generic types declared in the `interface` section (`docs/spec/generics.md` 2.3).
     generics: Vec<generics::GenericTypeName>,
 }
@@ -116,6 +123,8 @@ pub struct ModuleState {
     instances: instances::InstanceRoutines,
     /// The declarations of the typed constants (`docs/spec/generics.md` 5.2).
     typed_consts: std::collections::HashSet<Span>,
+    /// The declarations of the constants whose type was written (`docs/spec/semantics.md` 3.2).
+    explicit_consts: std::collections::HashSet<Span>,
     /// The type parameter of `KeyEquals` / `KeyHash` for inference, shared by the units.
     key_param: Option<types::TypeId>,
 }
@@ -195,6 +204,7 @@ pub fn analyze(input: &SemaInput<'_>, state: &mut ModuleState, sink: &mut Diagno
         equality_attrs: Default::default(),
         class_scopes: Vec::new(),
         lexical_outer: std::collections::HashMap::new(),
+        generic_helpers: std::collections::HashSet::new(),
         overload_picks: std::collections::HashMap::new(),
         unit_index,
         units: std::mem::take(&mut state.units),
@@ -204,12 +214,15 @@ pub fn analyze(input: &SemaInput<'_>, state: &mut ModuleState, sink: &mut Diagno
         sysutils_item: None,
         generic_types: Vec::new(),
         generic_params: Vec::new(),
+        cycle_check: Default::default(),
         routine_type_params: Vec::new(),
         explicit_sets: std::collections::HashMap::new(),
+        comma_comparisons: Vec::new(),
         param_scopes: Vec::new(),
         deferred_checks: None,
         instances: std::mem::take(&mut state.instances),
         typed_consts: std::mem::take(&mut state.typed_consts),
+        explicit_consts: std::mem::take(&mut state.explicit_consts),
         key_param: state.key_param,
     };
     s.run(state);
@@ -232,6 +245,7 @@ pub fn finish(mut state: ModuleState, sink: &mut DiagnosticSink) -> Program {
             diags: &mut diags,
             unit: program_unit,
             cur_origin: None,
+            cur_from: None,
         };
         // Before the work list, which copies a generic type's into its instantiations
         i.generate_equals();
@@ -261,7 +275,8 @@ pub fn finish(mut state: ModuleState, sink: &mut DiagnosticSink) -> Program {
     let generic_globals = place_class_vars(&mut state);
     // Overloads are `Name`, `Name#2`, `Name#3` in declaration order within a scope
     // (`semantics.md` 4.7), and a nested routine is named after the routines enclosing it
-    // (`Outer.Inner`; 4.9). A routine comes after the routine it is nested in
+    // (`Outer.Inner`; 4.9), as is a method of a local type (`Outer.TLoc.M`). A routine comes after
+    // the routine it is nested in.
     // A generic routine is named with its type parameters (`Max<T>`), an instantiation of one
     // after the generic routine's name with the number of its overload (`Max#2<Integer>`;
     // `docs/spec/generics.md` 4.1)
@@ -276,10 +291,12 @@ pub fn finish(mut state: ModuleState, sink: &mut DiagnosticSink) -> Program {
             names.push(name);
             continue;
         }
-        let key = (r.unit, r.parent, r.name.to_ascii_lowercase());
+        // A method of a local type is named after the routine declaring the type (`A.TLoc.S`)
+        let outer = r.parent.or(r.scope);
+        let key = (r.unit, outer, r.name.to_ascii_lowercase());
         let k = seen.iter().filter(|n| **n == key).count();
         seen.push(key);
-        let mut name = match r.parent {
+        let mut name = match outer {
             Some(p) => format!("{}.{}", names[p.0 as usize], r.name),
             None => r.name.clone(),
         };
@@ -489,7 +506,7 @@ pub fn finish(mut state: ModuleState, sink: &mut DiagnosticSink) -> Program {
                     written: false,
                     cell: false,
                 });
-            let mut routine = r.hir.unwrap_or_else(|| Routine {
+            let mut routine = r.hir.map(|h| *h).unwrap_or_else(|| Routine {
                 name: r.name.clone(),
                 vars: self_var
                     .into_iter()
@@ -949,6 +966,8 @@ struct FilePart {
     fini: Option<Routine>,
     /// The public part (a unit).
     exports: Vec<(String, GSym)>,
+    /// The names of the public types as written ([`UnitInterface::type_spellings`]).
+    type_spellings: Vec<(String, String)>,
 }
 
 /// A unit visible from the file being analyzed.
@@ -1174,7 +1193,7 @@ struct RoutineInfo {
     /// error. Even without a body, E0723 is not reported on top of it.
     implicit_forward: bool,
     name_span: TextRange,
-    hir: Option<Routine>,
+    hir: Option<Box<Routine>>,
     /// Declared with `overload` (`docs/spec/semantics.md` 4.7).
     overload: bool,
     /// Where ` overload;` goes (just after the `;` of the heading) when the declaration has no
@@ -1187,6 +1206,10 @@ struct RoutineInfo {
     interface: bool,
     /// The routine it is nested in (`docs/spec/semantics.md` 4.9).
     parent: Option<RoutineId>,
+    /// The routine whose body declares the local type this is a method of: its name goes
+    /// before the method's (`A.TLoc.S`; `docs/spec/semantics.md` 4.9). Unlike `parent`, the
+    /// method does not see the routine's variables and takes no static link.
+    scope: Option<RoutineId>,
     /// The routines its body calls (for the static link; `docs/spec/semantics.md` 4.9).
     calls: Vec<RoutineId>,
     /// The class of a method (`docs/spec/objects.md` 2.3): the routine takes `Self` first,
@@ -1406,6 +1429,9 @@ struct Sema<'a, 's> {
     class_scopes: Vec<statics::ClassScope>,
     /// The class a nested class is declared in (its members see the enclosing class's).
     lexical_outer: std::collections::HashMap<types::TypeId, types::TypeId>,
+    /// The helpers declared in a generic type, reported with E0757 (`docs/spec/generics.md`
+    /// 2.1): the bodies of their methods are not checked.
+    generic_helpers: std::collections::HashSet<types::TypeId>,
     /// Resolved overloaded calls by the range of the call (`Some`), and calls that failed to
     /// resolve while trying candidates (`None`, only kept in a dry run). Resolution types each
     /// argument against every candidate, so without this a nested overloaded call would be
@@ -1427,12 +1453,19 @@ struct Sema<'a, 's> {
     /// The generic types of the `type` section being declared whose type parameters are not
     /// entered yet.
     generic_params: Vec<generics::PendingParams>,
+    /// The types of the outermost `type` section being declared whose cycles (E0727) are checked
+    /// again once its instantiations have their members.
+    cycle_check: typedecl::CycleCheck,
     /// The type parameters of the generic routines whose heading or body is being analyzed,
     /// innermost last (`docs/spec/generics.md` 2.2): (lowercase name, type parameter).
     routine_type_params: Vec<(String, types::TypeId)>,
     /// The candidates of the routine names written with type arguments, by the start of the
     /// name (`docs/spec/generics.md` 5.4): the first candidate (the routine resolved), and all.
     explicit_sets: std::collections::HashMap<TextSize, (RoutineId, Vec<RoutineId>)>,
+    /// The names read with type arguments holding a comma that were comparisons separated by the
+    /// comma of a call (`F(A < B, C > (D))`; `docs/spec/generics.md` 1.4): a call around one of
+    /// them does not report its number of arguments.
+    comma_comparisons: Vec<TextRange>,
     /// The generic interfaces, procedural types and array types whose type parameters are in
     /// scope (their declarations being resolved; `docs/spec/generics.md` 2.2), innermost last.
     param_scopes: Vec<types::TypeId>,
@@ -1445,6 +1478,10 @@ struct Sema<'a, 's> {
     /// written with a type is a strong candidate of type argument inference
     /// (`docs/spec/generics.md` 5.2).
     typed_consts: std::collections::HashSet<Span>,
+    /// The declarations of the constants whose type was written, of this file and those before
+    /// it: a declared type, a conversion or `High` / `Low` (`docs/spec/semantics.md` 3.2). An
+    /// integer constant named by one keeps its type in the computation-type table.
+    explicit_consts: std::collections::HashSet<Span>,
     /// The type parameter of `KeyEquals` / `KeyHash` for inference, made the first time a unit
     /// of the compilation needs it (`docs/spec/equality.md` chapter 4).
     key_param: Option<types::TypeId>,
@@ -1700,6 +1737,30 @@ impl<'a, 's> Sema<'a, 's> {
         self.last_mut()
     }
 
+    /// Lowers the arguments of a call with the wrong number of arguments (for their own
+    /// diagnostics), and returns whether one of them (not an argument of a call nested in them)
+    /// is a comparison read as type arguments across the comma between two arguments
+    /// (`comma_comparisons`; `docs/spec/generics.md` 1.4): then the call's number of arguments
+    /// is not what was meant, and E0705 is not reported.
+    fn lower_miscounted_args(&mut self, args: &[ast::Arg]) -> bool {
+        for a in args {
+            if let Some(v) = a.value() {
+                self.lower_expr(&v);
+            }
+        }
+        args.iter().any(|a| {
+            let node = a.syntax();
+            self.comma_comparisons.iter().any(|r| {
+                node.text_range().contains_range(*r)
+                    && node
+                        .covering_element(*r)
+                        .ancestors()
+                        .find(|n| n.kind() == SyntaxKind::ARG)
+                        .is_some_and(|n| n == *node)
+            })
+        })
+    }
+
     fn push(&mut self, d: Diagnostic) {
         if d.is_error()
             && let Some(c) = &mut self.cur
@@ -1724,6 +1785,35 @@ impl<'a, 's> Sema<'a, 's> {
         r
     }
 
+    /// Takes the marks of the anonymous records out of the text of the diagnostics from `first`
+    /// on ([`Sema::tn`]), and adds a `record type declared here` at the `record` of each, in the
+    /// order they are named (`docs/spec/diagnostics.md` 2.2, `docs/spec/types.md` 1.2).
+    fn label_anon_records(&mut self, first: usize) {
+        let types = &self.types;
+        for d in self.sink.iter_mut().skip(first) {
+            let mut found = Vec::new();
+            types::take_anon_record_marks(&mut d.message, &mut found);
+            for n in &mut d.notes {
+                types::take_anon_record_marks(n, &mut found);
+            }
+            for f in &mut d.fixes {
+                types::take_anon_record_marks(&mut f.title, &mut found);
+                for e in &mut f.edits {
+                    types::take_anon_record_marks(&mut e.replacement, &mut found);
+                }
+            }
+            for id in found {
+                let Some(&file) = types.anon_record_files.get(&id) else {
+                    continue;
+                };
+                d.secondary.push(crate::diagnostics::Label::new(
+                    Span::new(file, types.get(id).span),
+                    "record type declared here",
+                ));
+            }
+        }
+    }
+
     fn last_mut(&mut self) -> &mut Diagnostic {
         self.sink.iter_mut().last().unwrap()
     }
@@ -1736,6 +1826,7 @@ impl<'a, 's> Sema<'a, 's> {
 
     fn run(mut self, state: &mut ModuleState) {
         let first_global = self.globals.len() as u32;
+        let first_diag = self.sink.len();
         let root = self.input.root.clone();
         let file = ast::SourceFile::cast(root).expect("SOURCE_FILE");
         let part = if let Some(program) = file.program() {
@@ -1755,6 +1846,7 @@ impl<'a, 's> Sema<'a, 's> {
                 init: None,
                 fini: None,
                 exports: Vec::new(),
+                type_spellings: Vec::new(),
             }
         };
         let uses: Vec<String> = {
@@ -1770,6 +1862,7 @@ impl<'a, 's> Sema<'a, 's> {
             v
         };
         self.report_hint_uses();
+        self.label_anon_records(first_diag);
         let is_program = part.main.is_some();
         // Put the shared state back
         state.globals = std::mem::take(&mut self.globals);
@@ -1786,6 +1879,7 @@ impl<'a, 's> Sema<'a, 's> {
         state.units = std::mem::take(&mut self.units);
         state.instances = std::mem::take(&mut self.instances);
         state.typed_consts = std::mem::take(&mut self.typed_consts);
+        state.explicit_consts = std::mem::take(&mut self.explicit_consts);
         state.key_param = self.key_param;
         if is_program {
             state.uses_sysutils = self.sysutils != SysUtils::NotUsed;
@@ -1796,6 +1890,7 @@ impl<'a, 's> Sema<'a, 's> {
             file: self.input.file,
             name_span: self.unit_name_span,
             exports: part.exports,
+            type_spellings: part.type_spellings,
             generics: self
                 .generic_types
                 .iter()
@@ -1907,6 +2002,7 @@ impl<'a, 's> Sema<'a, 's> {
             init,
             fini: None,
             exports: Vec::new(),
+            type_spellings: Vec::new(),
         }
     }
 
@@ -1969,6 +2065,13 @@ impl<'a, 's> Sema<'a, 's> {
         }
         // The public part: the declarations of the `interface` section (4.1)
         let exports = self.global_scope.clone();
+        let type_spellings = exports
+            .iter()
+            .filter_map(|(n, sym)| match sym {
+                GSym::Type { span, .. } => Some((n.clone(), self.src(*span))),
+                _ => None,
+            })
+            .collect();
         if let Some(imp) = unit.implementation() {
             for item in imp.items() {
                 self.declare_item(item, &mut init_body, &mut init_last);
@@ -2018,6 +2121,7 @@ impl<'a, 's> Sema<'a, 's> {
             init,
             fini,
             exports,
+            type_spellings,
         }
     }
 
@@ -2480,12 +2584,14 @@ impl<'a, 's> Sema<'a, 's> {
             let scope = self.declare_names_hints(decl.syntax(), &[name_tok], None);
             self.begin_names_hints(scope);
             let typed = resource || decl.type_ref().is_some();
-            let (value, ty) = self.eval_const_decl(decl.type_ref(), decl.value(), resource);
+            let (value, ty, explicit) =
+                self.eval_const_decl(decl.type_ref(), decl.value(), resource);
             self.end_names_hints(scope);
             if self.check_duplicate(&lower, range) {
                 continue;
             }
             self.note_typed_const(typed, range);
+            self.note_explicit_const(explicit, range);
             if self.cur.is_some() {
                 // Script top level: placed in the global scope
             }
@@ -2508,7 +2614,22 @@ impl<'a, 's> Sema<'a, 's> {
         }
     }
 
-    /// Value and type of a constant declaration (a typed constant is converted to the written type). Error type if there is no value.
+    /// Records the declaration of a constant whose type was written (`docs/spec/semantics.md` 3.2).
+    pub(super) fn note_explicit_const(&mut self, explicit: bool, range: TextRange) {
+        if explicit {
+            let at = self.span(range);
+            self.explicit_consts.insert(at);
+        }
+    }
+
+    /// Whether the constant declared at `decl` had its type written (`note_explicit_const`).
+    pub(super) fn is_explicit_const(&self, decl: Option<Span>) -> bool {
+        decl.is_some_and(|d| self.explicit_consts.contains(&d))
+    }
+
+    /// Value and type of a constant declaration (a typed constant is converted to the written
+    /// type), and whether its type was written (a declared type, or a value such as `Int64(1)`;
+    /// `docs/spec/semantics.md` 3.2). Error type if there is no value.
     /// A `resourcestring` (`resource`) is checked as a typed constant of type `string`; a written type (E0417,
     /// reported by the parser) is not used.
     fn eval_const_decl(
@@ -2516,20 +2637,20 @@ impl<'a, 's> Sema<'a, 's> {
         type_ref: Option<ast::TypeSpec>,
         value: Option<ast::Expr>,
         resource: bool,
-    ) -> (Option<Const>, Ty) {
+    ) -> (Option<Const>, Ty, bool) {
         let declared = if resource {
             Some(Ty::String)
         } else {
             type_ref.map(|t| self.resolve_type(Some(t)))
         };
         let Some(value) = value else {
-            return (None, Ty::Error);
+            return (None, Ty::Error, false);
         };
         let e = match declared {
             Some(t) if !t.is_error() => self.lower_init(&value, t, true),
             Some(_) => {
                 self.lower_expr(&value);
-                return (None, Ty::Error);
+                return (None, Ty::Error, false);
             }
             // `const Digits = ['0'..'9'];` is a set (`docs/spec/types.md` 8.3)
             None => match &value {
@@ -2544,16 +2665,20 @@ impl<'a, 's> Sema<'a, 's> {
             },
         };
         if e.ty.is_error() {
-            return (None, Ty::Error);
+            return (None, Ty::Error, false);
         }
         let range = e.span;
         match const_init_value(&e) {
-            Some(v) => (Some(v), e.ty),
+            Some(v) => {
+                let explicit =
+                    declared.is_some() || matches!(e.kind, hir::ExprKind::Const { explicit: true });
+                (Some(v), e.ty, explicit)
+            }
             None => {
                 if !e.ty.is_error() {
                     self.error(Code::E(713), "constant expression required", range);
                 }
-                (None, Ty::Error)
+                (None, Ty::Error, false)
             }
         }
     }
@@ -2714,7 +2839,7 @@ impl<'a, 's> Sema<'a, 's> {
         let heading_class = generic_class.or_else(|| {
             name_text
                 .rsplit_once('.')
-                .and_then(|(c, _)| self.dry_run(|s| s.class_named(c)))
+                .and_then(|(c, _)| self.dry_run(|s| s.owner_named(c)))
         });
         if let Some(c) = heading_class {
             self.class_scopes.push(statics::ClassScope {
@@ -2880,6 +3005,7 @@ impl<'a, 's> Sema<'a, 's> {
                     file: self.input.file,
                     interface: self.in_interface_part,
                     parent: self.cur.as_ref().and_then(|c| c.routine),
+                    scope: None,
                     calls: Vec::new(),
                     method_of: None,
                     self_kind: types::SelfKind::Instance,
@@ -3122,7 +3248,7 @@ impl<'a, 's> Sema<'a, 's> {
         let routine = self.end_routine(stmts, end_span);
         self.cur = self.outer.pop();
         let info = &mut self.routines[id.0 as usize];
-        info.hir = Some(routine);
+        info.hir = Some(Box::new(routine));
         info.calls = calls;
         info.closure_info.srcs = srcs;
         if let Some(s) = self_at {
@@ -3327,12 +3453,14 @@ impl<'a, 's> Sema<'a, 's> {
             let scope = self.declare_names_hints(decl.syntax(), &[name_tok], None);
             self.begin_names_hints(scope);
             let typed = resource || decl.type_ref().is_some();
-            let (value, ty) = self.eval_const_decl(decl.type_ref(), decl.value(), resource);
+            let (value, ty, explicit) =
+                self.eval_const_decl(decl.type_ref(), decl.value(), resource);
             self.end_names_hints(scope);
             if self.check_duplicate(&lower, range) {
                 continue;
             }
             self.note_typed_const(typed, range);
+            self.note_explicit_const(explicit, range);
             let sym = LSym::Const {
                 ty: if value.is_some() { ty } else { Ty::Error },
                 value: value.unwrap_or(Const::Int(0)),
@@ -3477,12 +3605,16 @@ impl<'a, 's> Sema<'a, 's> {
         routine.groups.made = self.group_blocks(&ctx.members, &ctx.group_vars);
         // Control-flow analysis (skipped for routines containing syntax errors)
         if !routine.has_syntax_errors {
-            // Where W0017 is enabled, an unread parameter gets W0017 alone (`semantics.md` 4.6)
+            // Where W0017 is enabled, an unread parameter gets W0017 alone (`semantics.md` 4.6).
+            // The parameters of an `override` method are not checked: the overridden method
+            // dictates them
+            let overrides = ctx.routine.is_some_and(|id| self.is_override(id));
             let unused_param_on: Vec<bool> = routine
                 .vars
                 .iter()
                 .map(|v| {
-                    matches!(v.kind, VarKind::Param(_))
+                    !overrides
+                        && matches!(v.kind, VarKind::Param(_))
                         && self
                             .input
                             .directives
@@ -3507,7 +3639,7 @@ impl<'a, 's> Sema<'a, 's> {
                                 .find_map(|&a| nesting_distance(&self.routines, r, a))?
                         }
                     };
-                    (up > 0).then(|| (r, self.routines[i].hir.as_ref(), up))
+                    (up > 0).then(|| (r, self.routines[i].hir.as_deref(), up))
                 })
                 .collect();
             let effects = flow::nested_effects(
@@ -3517,8 +3649,13 @@ impl<'a, 's> Sema<'a, 's> {
                 self.input.file,
                 self.input.bytes,
             );
+            // The name of a method of a generic type has its type parameters (`TVec<T>.Make`)
+            let name = ctx.routine.map_or(routine.name.as_str(), |id| {
+                &self.routines[id.0 as usize].name
+            });
             let diags = flow::analyze(
                 &routine,
+                name,
                 &self.types,
                 self.input.file,
                 self.input.bytes,
@@ -3534,6 +3671,17 @@ impl<'a, 's> Sema<'a, 's> {
             }
         }
         routine
+    }
+
+    /// A method declared with `override` that overrides a method of an ancestor
+    /// (`docs/spec/semantics.md` 4.6, W0017).
+    fn is_override(&self, id: RoutineId) -> bool {
+        self.routines[id.0 as usize].method_of.is_some_and(|c| {
+            self.types
+                .class_methods(c)
+                .iter()
+                .any(|m| m.routine == Some(id) && m.is_override)
+        })
     }
 
     /// The group blocks a routine makes for its hidden variables `vars` (group, variable;
@@ -3911,9 +4059,7 @@ impl<'a, 's> Sema<'a, 's> {
                 Stage::Sema,
             )
             .with_primary(self.span(at), "the loop variable of the enclosing routine")
-            .with_note(
-                "an anonymous method cannot write a variable its enclosing routine uses as a `for` loop variable",
-            );
+            .with_note(LOOP_VAR_WRITE_NOTE);
             self.push(d);
             self.cur_mut().has_errors = true;
         }
@@ -4604,11 +4750,13 @@ impl<'a, 's> Sema<'a, 's> {
         }
     }
 
-    /// E0736 when `name` is the name of a value of an enumeration type in scope: the fix qualifies
-    /// it with the type (`safe` when one type has such a value; one `suggestion` per type
-    /// otherwise). Returns whether it reported.
+    /// E0736 when `name` is the name of a value of an enumeration type in scope (declared here, in
+    /// a visible unit or in `System.SysUtils`): the fix qualifies it with the type (`safe` when
+    /// one type has such a value; one `suggestion` per type otherwise). Returns whether it
+    /// reported.
     fn unqualified_enum_value(&mut self, name: &str, range: TextRange) -> bool {
-        let mut types: Vec<Ty> = Vec::new();
+        // Each type with how the fix names it
+        let mut types: Vec<(Ty, String)> = Vec::new();
         let local = self
             .cur
             .iter()
@@ -4627,34 +4775,60 @@ impl<'a, 's> Sema<'a, 's> {
                 _ => None,
             });
         for ty in local.chain(global) {
-            if matches!(ty, Ty::Enum(_)) && !types.contains(&ty) {
-                types.push(ty);
+            if matches!(ty, Ty::Enum(_)) && !types.iter().any(|(t, _)| *t == ty) {
+                types.push((ty, self.types.name(ty)));
+            }
+        }
+        // The public parts of the visible units (`docs/spec/units.md` 3.1)
+        for (_, u) in self.visible_units() {
+            let Some(i) = u.iface else { continue };
+            for (n, sym) in &self.units[i].exports {
+                let GSym::Type { ty, .. } = sym else { continue };
+                if !matches!(ty, Ty::Enum(_)) || types.iter().any(|(t, _)| t == ty) {
+                    continue;
+                }
+                // The public name as written: an alias (`TK = TKind`) is what this file sees
+                let type_name = self.units[i]
+                    .type_spellings
+                    .iter()
+                    .find(|(l, _)| l == n)
+                    .map_or_else(|| self.types.name(*ty), |(_, w)| w.clone());
+                let text = if u.alias.is_none() && self.type_name_names(n, *ty) {
+                    type_name
+                } else {
+                    format!("{}.{type_name}", u.qualifier)
+                };
+                types.push((*ty, text));
             }
         }
         // The enumerated types of `System.SysUtils` (`[rfReplaceAll]` written as in Delphi)
         if self.sysutils == SysUtils::Used {
             let has = |values: &[&str]| values.iter().any(|v| v.eq_ignore_ascii_case(name));
+            let mut builtin = Vec::new();
             if has(&REPLACE_FLAG_VALUES) {
-                types.push(self.replace_flag_types().0);
+                builtin.push(self.replace_flag_types().0);
             }
             if has(&CASE_MAPPING_VALUES) {
-                types.push(self.case_mapping_type());
+                builtin.push(self.case_mapping_type());
             }
             if has(&CASE_FOLD_VALUES) {
-                types.push(self.case_fold_type());
+                builtin.push(self.case_fold_type());
+            }
+            for ty in builtin {
+                types.push((ty, self.types.name(ty)));
             }
         }
         let mut fixes: Vec<(String, String)> = Vec::new();
         // Declaration order of the types
-        types.sort_by_key(|t| t.type_id().map(|id| id.0));
-        for ty in types {
+        types.sort_by_key(|(t, _)| t.type_id().map(|id| id.0));
+        for (ty, text) in types {
             if let Some(v) = self
                 .types
                 .enum_values(ty)
                 .iter()
                 .find(|v| v.name.eq_ignore_ascii_case(name))
             {
-                fixes.push((self.types.name(ty), v.name.clone()));
+                fixes.push((text, v.name.clone()));
             }
         }
         if fixes.is_empty() {
@@ -4679,6 +4853,28 @@ impl<'a, 's> Sema<'a, 's> {
         }
         self.push(d);
         true
+    }
+
+    /// Whether the type name `lower`, written without a unit, names the type `ty` here (no
+    /// diagnostics): a local or own declaration of the name hides the units, and a name in two or
+    /// more units (or in one and in `System.SysUtils`) is ambiguous (`docs/spec/units.md` 3.1).
+    fn type_name_names(&self, lower: &str, ty: Ty) -> bool {
+        if let Some((_, sym)) = self.lookup_scopes(lower) {
+            return matches!(sym, LSym::Type { ty: t, .. } if t == ty);
+        }
+        if let Some((_, sym)) = self.global_scope.iter().rev().find(|(n, _)| n == lower) {
+            return matches!(sym, GSym::Type { ty: t, .. } if *t == ty);
+        }
+        if self.sysutils == SysUtils::Used && builtins::lookup_sysutils(lower).is_some() {
+            return false;
+        }
+        let mut found = self
+            .visible_units()
+            .filter(|(_, u)| u.alias.is_none())
+            .filter_map(|(_, u)| u.iface)
+            .filter_map(|i| self.units[i].exports.iter().find(|(n, _)| n == lower));
+        let first = found.next();
+        found.next().is_none() && matches!(first, Some((_, GSym::Type { ty: t, .. })) if *t == ty)
     }
 
     /// If a name written in a routine (outside `<main>`) is the name of a variable at the script's top level, the position of its declaration (for the 1.2 `notes`).
@@ -4846,6 +5042,48 @@ impl<'a, 's> Sema<'a, 's> {
         }
     }
 
+    /// The class or record a type name in an expression names, as the left side of a nested
+    /// type (`THolder`, `TOuter<Integer>`, `TOuter<Integer>.TInner<string>`;
+    /// `docs/spec/generics.md` 1.4, 2.5), or `None` if it is not such a type or naming it reports
+    /// a diagnostic (the caller then resolves it the usual way, which reports it).
+    fn type_owner_in_expr(&mut self, e: &ast::Expr) -> Option<types::TypeId> {
+        if let Some(chain) = name_chain(e) {
+            // Also a type of a unit (`Shapes.THolder`, or `THolder` after `uses Shapes`)
+            return self.dry_run(|s| s.chain_owner(&chain)).ok().flatten();
+        }
+        self.dry_run(|s| {
+            let n = s.sink.len();
+            let r = s.resolve_name_expr(e);
+            match r {
+                Some((Resolved::Type(t), ..)) if s.sink.len() == n => statics::nested_owner(t),
+                _ => None,
+            }
+        })
+    }
+
+    /// E0761 for a generic type nested in the class or record `c` named without type arguments
+    /// (`TOuter<Integer>.TInner.Create`; `docs/spec/generics.md` 2.5), as in a type position.
+    /// Returns whether it reported it; the caller reports the missing member otherwise.
+    fn nested_generic_without_args(
+        &mut self,
+        c: types::TypeId,
+        name: &str,
+        range: TextRange,
+    ) -> bool {
+        if self
+            .generic_types_named(&name.to_ascii_lowercase(), &generics::GenericScope::Type(c))
+            .is_empty()
+        {
+            return false;
+        }
+        self.error(
+            Code::E(761),
+            format!("generic type `{name}` needs type arguments"),
+            range,
+        );
+        true
+    }
+
     /// A name written with type arguments in an expression (`docs/spec/generics.md` 1.4): a
     /// generic type (`TBox<Integer>.Create`), `TArray<T>`, a generic routine or method
     /// (`Max<Integer>`), or E0761 for a name that is not generic.
@@ -4932,14 +5170,17 @@ impl<'a, 's> Sema<'a, 's> {
     ) -> Option<(Resolved, String, TextRange)> {
         match e {
             ast::Expr::Inherited(i) => {
-                // `inherited Name` (`docs/spec/objects.md` 2.4): the parent's method, statically
+                // `inherited Name` (`docs/spec/objects.md` 2.4): the parent's method, called
+                // statically, or the parent's property, whose accessors are used as for `Self.Name`
                 let whole = ast::trimmed_range(i.syntax());
                 let Some(tok) = i.name() else {
-                    self.error(
+                    let note = self.inherited_default_note(i);
+                    let d = self.error(
                         Code::E(704),
                         "`inherited` without a method name is only allowed as a statement",
                         whole,
                     );
+                    d.notes.extend(note);
                     return Some((Resolved::Error, "inherited".into(), whole));
                 };
                 let name = self.text(&tok).to_string();
@@ -4974,7 +5215,9 @@ impl<'a, 's> Sema<'a, 's> {
                 let recv = self.self_expr(range)?;
                 let r = match self.find_member(parent, &name, range) {
                     Ok(
-                        member @ (methods::Member::Methods { .. } | methods::Member::Builtin(_)),
+                        member @ (methods::Member::Methods { .. }
+                        | methods::Member::Builtin(_)
+                        | methods::Member::Property(..)),
                     ) => Resolved::Member {
                         recv: Box::new(recv),
                         class: parent,
@@ -4985,7 +5228,6 @@ impl<'a, 's> Sema<'a, 's> {
                         methods::Member::Field { .. }
                         | methods::Member::RecField { .. }
                         | methods::Member::Static(..)
-                        | methods::Member::Property(..)
                         | methods::Member::ExcInfo(_)
                         | methods::Member::HelperBuiltin(_),
                     )
@@ -5001,7 +5243,7 @@ impl<'a, 's> Sema<'a, 's> {
                         } else {
                             self.error(
                                 Code::E(700),
-                                format!("`{t}` has no method `{name}`"),
+                                format!("`{t}` has no method or property `{name}`"),
                                 range,
                             );
                         }
@@ -5062,12 +5304,7 @@ impl<'a, 's> Sema<'a, 's> {
                     ));
                 }
                 if let (Some(field), Some(args)) = (f.field(), f.type_args())
-                    && let Some(chain) = f.base().as_ref().and_then(name_chain)
-                    && let Some(c) = {
-                        let text: Vec<&str> = chain.iter().map(|(n, _)| n.as_str()).collect();
-                        let text = text.join(".");
-                        self.dry_run(|s| s.class_named(&text))
-                    }
+                    && let Some(c) = f.base().and_then(|b| self.type_owner_in_expr(&b))
                     && !self
                         .generic_types_named(
                             &field.text().to_ascii_lowercase(),
@@ -5075,8 +5312,9 @@ impl<'a, 's> Sema<'a, 's> {
                         )
                         .is_empty()
                 {
-                    // A generic type nested in a class (`THolder.TBox<Integer>`;
-                    // `docs/spec/generics.md` 2.5)
+                    // A generic type nested in a class or a record (`THolder.TBox<Integer>`), also
+                    // in an instantiation (`TOuter<Integer>.TInner<string>`;
+                    // `docs/spec/generics.md` 1.4, 2.5)
                     return Some(self.type_args_in_expr(
                         &field,
                         &args,
@@ -5132,6 +5370,14 @@ impl<'a, 's> Sema<'a, 's> {
                 // `TFoo.ClassType.ClassName`: a value made from a class's name is a receiver too
                 let value_chain = self.is_value_chain(&base);
                 let base_ty = if value_chain || matches!(base, ast::Expr::Field(_)) {
+                    if self.member_of_procedural(&base, &field_name) {
+                        // A procedural value whose result has no such member has no members
+                        // (`docs/spec/objects.md` 9.11): a field of a record or class, an
+                        // element, a function's result, a value in parentheses or converted
+                        let x = self.lower_procedural_base(&base).0;
+                        self.procedural_member_error(&base, &x, &field_name, field_range);
+                        return Some((Resolved::Error, field_name, field_range));
+                    }
                     self.trial_type(&base)
                 } else {
                     Ty::Error
@@ -5308,7 +5554,7 @@ impl<'a, 's> Sema<'a, 's> {
                                 span: Some(self.type_decl_span(ty, span)),
                             },
                             None => {
-                                let t = self.types.name(ty);
+                                let t = self.tn(ty);
                                 self.error(
                                     Code::E(700),
                                     format!("`{t}` has no member `{field_name}`"),
@@ -5363,8 +5609,14 @@ impl<'a, 's> Sema<'a, 's> {
                                 match self.helper_resolved(recv, &field_name, field_range) {
                                     Some(r) => r,
                                     None => {
-                                        let t = self.types.name(Ty::Class(id));
-                                        self.class_member_missing(&t, &field_name, field_range);
+                                        if !self.nested_generic_without_args(
+                                            id,
+                                            &field_name,
+                                            field_range,
+                                        ) {
+                                            let t = self.types.name(Ty::Class(id));
+                                            self.class_member_missing(&t, &field_name, field_range);
+                                        }
                                         Resolved::Error
                                     }
                                 }
@@ -5415,12 +5667,18 @@ impl<'a, 's> Sema<'a, 's> {
                                 match self.helper_resolved(recv, &field_name, field_range) {
                                     Some(r) => r,
                                     None => {
-                                        let t = self.types.name(Ty::Record(id));
-                                        self.error(
-                                            Code::E(700),
-                                            format!("`{t}` has no member `{field_name}`"),
+                                        if !self.nested_generic_without_args(
+                                            id,
+                                            &field_name,
                                             field_range,
-                                        );
+                                        ) {
+                                            let t = self.tn(Ty::Record(id));
+                                            self.error(
+                                                Code::E(700),
+                                                format!("`{t}` has no member `{field_name}`"),
+                                                field_range,
+                                            );
+                                        }
                                         Resolved::Error
                                     }
                                 }
@@ -5438,22 +5696,9 @@ impl<'a, 's> Sema<'a, 's> {
                             t.is_procedural()
                         } =>
                     {
-                        // A procedural value has no members; `Invoke` of an anonymous method
-                        // type is not a method in Puy (`docs/spec/objects.md` 9.10)
-                        let t = match base_r {
-                            Resolved::Var(id) => self.var(id).ty,
-                            Resolved::Global(id) => self.globals[id.0 as usize].ty,
-                            _ => Ty::Error,
-                        };
-                        let tn = self.tn(t);
-                        let d = self.error(
-                            Code::E(700),
-                            format!("`{tn}` has no member `{field_name}`"),
-                            field_range,
-                        );
-                        if field_name.eq_ignore_ascii_case("invoke") {
-                            d.notes.push(format!("call the value as `{base_name}()`"));
-                        }
+                        // A procedural value has no members (`docs/spec/objects.md` 9.10)
+                        let x = self.lower_value(&base);
+                        self.procedural_member_error(&base, &x, &field_name, field_range);
                         Some((Resolved::Error, field_name, field_range))
                     }
                     Resolved::Var(_)
@@ -5461,10 +5706,14 @@ impl<'a, 's> Sema<'a, 's> {
                     | Resolved::Const { .. }
                     | Resolved::Bool(_)
                     | Resolved::Func(_)
+                    | Resolved::Routine(_)
+                    | Resolved::ClassCreate(..)
                     | Resolved::Key(..) => {
-                        // `.` on a value (a built-in constant such as `True`, or a built-in
-                        // function called without parentheses such as `Pi`): its type's helpers
-                        // (`docs/spec/objects.md` 10.4)
+                        // `.` on a value (a built-in constant such as `True`, a function called
+                        // without parentheses such as `Pi`, or `TFoo.Create`): its type's helpers
+                        // (`docs/spec/objects.md` 10.4). A call that does not resolve (`TFoo.Create`
+                        // with no matching constructor) is the error type, and its member is not
+                        // reported again (`docs/spec/semantics.md` chapter 3)
                         let whole = TextRange::new(base_range.start(), field_range.end());
                         let (b, declared) = self.lower_value_declared(&base);
                         let r = self.value_member(b, declared, &field_name, field_range, whole);
@@ -5540,6 +5789,26 @@ impl<'a, 's> Sema<'a, 's> {
         )
         .notes
         .push("use events or channels instead".into());
+    }
+
+    /// The note of E0704 for `inherited [K]` (`docs/spec/objects.md` 2.4): the parent's default
+    /// array property is used by its name. `None` when `i` is not indexed or the parent of the
+    /// method's class has no default array property.
+    fn inherited_default_note(&self, i: &ast::InheritedExpr) -> Option<String> {
+        let index = i.syntax().parent().and_then(ast::IndexExpr::cast)?;
+        if index.base().is_none_or(|b| b.syntax() != i.syntax()) {
+            return None;
+        }
+        let class = self.method_class()?;
+        if self.types.is_record(class) || self.types.is_helper(class) {
+            return None;
+        }
+        let parent = self.types.parent(class)?;
+        let (_, cands) = self.default_properties(Ty::Class(parent))?;
+        let name = &cands.first()?.name;
+        Some(format!(
+            "write the name of the parent's default array property: `inherited {name}[…]`"
+        ))
     }
 
     pub(super) fn class_member_missing(&mut self, class: &str, name: &str, range: TextRange) {
@@ -5664,10 +5933,7 @@ fn directive_with_semicolon(d: &SyntaxNode) -> TextRange {
 
 /// Whether the node's range contains a syntax error (an `ERROR` node or a diagnostic from the parser).
 fn has_syntax_error(node: &SyntaxNode, sink: &DiagnosticSink, file: FileId) -> bool {
-    if node
-        .descendants()
-        .any(|n| n.kind() == SyntaxKind::ERROR_NODE)
-    {
+    if crate::syntax::has_node_of_kind(node, SyntaxKind::ERROR_NODE) {
         return true;
     }
     let range = node.text_range();
@@ -5690,7 +5956,7 @@ fn script_main_has_syntax_error(script: &ast::Script, sink: &DiagnosticSink, fil
             USES_CLAUSE | CONST_SECTION | RESOURCESTRING_SECTION | ROUTINE_DECL => {}
             ERROR_NODE => return true,
             _ => {
-                if child.descendants().any(|n| n.kind() == ERROR_NODE) {
+                if crate::syntax::has_node_of_kind(&child, ERROR_NODE) {
                     return true;
                 }
                 ranges.push(child.text_range());

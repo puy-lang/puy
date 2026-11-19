@@ -1,0 +1,10 @@
+TRUE
+TRUE
+loc1 loc2 eq=False pair=True hash=True index=1 count=2 key=True cell=True made=1 TCell
+loc1 loc2 eq=False pair=True hash=True index=1 count=2 key=True cell=True made=2 TCell
+loc1 loc2 eq=False pair=True hash=True index=1 count=2 key=True cell=True made=1 TCell
+TRUE
+FALSE
+TRUE
+TRUE
+TRUE

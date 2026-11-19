@@ -346,6 +346,10 @@ pub enum SyntaxKind {
     CONSTRAINT,
     /// `"type" TYPE_REF`: a distinct type after `=` in a `TYPE_DECL` (`docs/spec/types.md` 1.3).
     DISTINCT_TYPE,
+    /// `(GENERIC_TYPE_REF | NESTED_TYPE_REF) "." QUALIFIED_NAME ["<" type arguments ">"]`: a type
+    /// nested in an instantiation, written in a type position (`TList<Integer>.TEnumerator`;
+    /// `docs/spec/grammar.md` 1.3).
+    NESTED_TYPE_REF,
     /// Node wrapping tokens skipped by error recovery.
     ERROR_NODE,
     #[doc(hidden)]
@@ -720,6 +724,7 @@ kind_names![
     TYPE_PARAM_GROUP,
     CONSTRAINT,
     DISTINCT_TYPE,
+    NESTED_TYPE_REF,
     ERROR_NODE,
 ];
 

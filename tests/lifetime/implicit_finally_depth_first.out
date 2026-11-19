@@ -1,0 +1,29 @@
+end of locals hpr12v
+destroy h
+destroy h.c
+destroy h.c.c
+destroy p
+destroy p.c
+destroy r1
+destroy r1.c
+destroy r2
+destroy a0
+destroy a0.c
+destroy a1
+destroy v
+raising hv
+destroy h
+destroy h.c
+destroy v
+caught x
+end of temporaries fieldv
+destroy h
+destroy v
+destroy field
+use abc
+end of nested temporaries v
+destroy v
+destroy a
+destroy b
+destroy c
+end

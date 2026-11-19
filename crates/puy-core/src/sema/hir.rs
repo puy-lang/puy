@@ -142,8 +142,8 @@ pub struct UnitHir {
 pub struct TypeDeclInfo {
     /// The unit declaring it (index into `Program::units`).
     pub unit: u32,
-    /// `None` for a type of the program; otherwise the routine's short name.
-    pub routine: Option<String>,
+    /// `None` for a type of the program; otherwise the routine whose body declares it.
+    pub routine: Option<RoutineId>,
     pub name: String,
     /// The type the name denotes.
     pub ty: Ty,
@@ -416,6 +416,10 @@ pub struct Stmt {
     pub span: TextRange,
 }
 
+// The bodies of the routines are vectors of statements, so a statement is kept small: the
+// operands of the rarer statements are boxed (the largest left is `Assign`)
+const _: () = assert!(std::mem::size_of::<Stmt>() <= 192);
+
 #[derive(Debug, Clone)]
 pub enum StmtKind {
     Assign {
@@ -446,8 +450,8 @@ pub enum StmtKind {
         var: ForVar,
         /// Position of `FOR_VAR` (for `assigned by this loop` in E2004).
         var_span: TextRange,
-        from: Expr,
-        to: Expr,
+        from: Box<Expr>,
+        to: Box<Expr>,
         downto: bool,
         body: Box<Stmt>,
         checks: Checks,
@@ -461,7 +465,7 @@ pub enum StmtKind {
         /// Position of `FOR_VAR` (for `assigned by this loop` in E2004).
         var_span: TextRange,
         /// The collection, evaluated once on entry.
-        coll: Expr,
+        coll: Box<Expr>,
         /// The hidden variable holding the collection during the loop.
         coll_var: VarId,
         /// The hidden variable with the position of the next element (0-based for arrays,
@@ -488,7 +492,7 @@ pub enum StmtKind {
         target: Place,
         /// Type of the target (for `Char`, the range is 0–65535).
         target_ty: Ty,
-        delta: Option<Expr>,
+        delta: Option<Box<Expr>>,
         negative: bool,
         /// Computation type.
         calc: Ty,
@@ -509,8 +513,8 @@ pub enum StmtKind {
     /// `Flush(Output)`: writes out the standard output buffer.
     Flush,
     Assert {
-        cond: Expr,
-        message: Option<Expr>,
+        cond: Box<Expr>,
+        message: Option<Box<Expr>>,
         /// Source text of the condition.
         text: String,
     },
@@ -550,17 +554,17 @@ pub enum StmtKind {
     /// The source has the target's type (a string), or is an element of the dynamic array or,
     /// with `whole`, an array of the same element type.
     Insert {
-        source: Expr,
+        source: Box<Expr>,
         target: Place,
-        index: Expr,
+        index: Box<Expr>,
         whole: bool,
     },
     /// `Exchange(target, first, second)`: the indices are 0-based for a dynamic array and as
     /// written (of the index type) for a static array (`docs/spec/types.md` chapter 7).
     Exchange {
         target: Place,
-        first: Expr,
-        second: Expr,
+        first: Box<Expr>,
+        second: Box<Expr>,
         /// The call (the line for `ERangeError`).
         span: TextRange,
     },
@@ -569,9 +573,26 @@ pub enum StmtKind {
     /// the elements between shifting into the room they leave (a rotation; no count changes).
     ArrayMoveRange {
         target: Place,
-        from: Expr,
-        to: Expr,
-        count: Expr,
+        from: Box<Expr>,
+        to: Box<Expr>,
+        count: Box<Expr>,
+    },
+    /// `ArraySortRange(target, index, count)` (`docs/spec/bytecode.md` 2.22; the units of the
+    /// standard library only): the `count` elements at `index` of the dynamic array sorted
+    /// stably in place by the default order of their type (`I96`; no count changes).
+    ArraySortRange {
+        target: Place,
+        index: Box<Expr>,
+        count: Box<Expr>,
+    },
+    /// `HashRelink(buckets, hashes, next, count)` (`docs/spec/bytecode.md` 2.23; the units of the
+    /// standard library only): the chains of a hash table made again, writing the dynamic arrays
+    /// `buckets` and `next` in place (`I95`).
+    HashRelink {
+        buckets: Place,
+        hashes: Box<Expr>,
+        next: Place,
+        count: Box<Expr>,
     },
     /// `FreeIfClass(value)` (`docs/spec/collections.md` 12.1; the units of the standard library
     /// only): `value.Free` when its type is a class type, only its evaluation otherwise.
@@ -588,14 +609,14 @@ pub enum StmtKind {
     /// standard library only): only the evaluation of `value` and `what` when the type of `value`
     /// is a class type, `EInvalidOperation` with `what` and the name of the type otherwise.
     CheckClassType {
-        value: Expr,
-        what: Expr,
+        value: Box<Expr>,
+        what: Box<Expr>,
     },
     /// `Delete(target, index, count)`.
     Delete {
         target: Place,
-        index: Expr,
-        count: Expr,
+        index: Box<Expr>,
+        count: Box<Expr>,
     },
     /// `O.P := X` with a property whose `write` is a method (`docs/spec/objects.md` 2.6): the
     /// call of the method, whose arguments are the receiver (none for a static method), the
@@ -831,8 +852,13 @@ pub enum Calc {
 
 #[derive(Debug, Clone)]
 pub enum ExprKind {
-    /// A literal or constant (value in `value`).
-    Const,
+    /// A literal or constant (value in `value`). `explicit` marks an integer constant whose type
+    /// was written (a conversion, `High` / `Low`, a constant declared with a type, or a folded
+    /// expression over such an `Int64` / `UInt64` constant) rather than taken from its value: it
+    /// keeps its type in the computation-type table (`docs/spec/semantics.md` 3.2).
+    Const {
+        explicit: bool,
+    },
     Var(VarId),
     Global(GlobalId),
     /// Left-folded sequence: `first op1 rhs1 op2 rhs2 …`.
@@ -1198,6 +1224,26 @@ pub enum Builtin {
     /// of `M` in its virtual method table. The arguments are `Self`, the entry (a constant) and
     /// the method as a [`ExprKind::RoutineRef`] (`IsOverridden`; `docs/spec/bytecode.md` 2.22).
     IsOverridden,
+    /// `HashFind(Hash, Buckets, Hashes, Next, Start)` (`docs/spec/bytecode.md` 2.23; the units of
+    /// the standard library only): the entry of the chain of `Hash` whose remembered hash is
+    /// `Hash` (instruction 90).
+    HashFind,
+    /// `HashLookup(Key, Buckets, Hashes, Next, Keys)` (`docs/spec/bytecode.md` 2.23; the units of
+    /// the standard library only): the entry whose key equals `Key` in the table of `Self`, whose
+    /// four arrays are the consecutive fields `Buckets` to `Keys` of `Self`. Instruction 96 or 98
+    /// when the key equality of the type of `Key` is `EqInt` or `EqStr` (`docs/spec/equality.md`
+    /// 8.3), else `HashFind` from the start with the hash of `Key`. The arguments are
+    /// `KeyHash(Key)` (an [`ExprKind::Key`], whose argument is the key) and the four fields (each
+    /// an [`ExprKind::ObjField`] of `Self`).
+    HashLookup,
+    /// `IsPlainKey(X)` (`docs/spec/bytecode.md` 2.23; the units of the standard library only):
+    /// whether the key equality of the type of `X` is `EqInt` or `EqStr`, a constant once the
+    /// type is known (`X` is not evaluated).
+    IsPlainKey,
+    /// `IsPlainOrder(X)` (`docs/spec/bytecode.md` 2.22; the units of the standard library only):
+    /// whether the default order of the type of `X` is a built-in comparison (`ArraySortRange`
+    /// sorts it), a constant once the type is known (`X` is not evaluated).
+    IsPlainOrder,
     /// `ExceptObject`: the exception of the `except` block being run (`docs/spec/objects.md` 8.4).
     ExceptObject,
     /// `Succ(X)` / `Pred(X)` (`docs/spec/semantics.md` 5.3). Only a name: sema lowers the call to

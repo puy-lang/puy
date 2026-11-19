@@ -13,7 +13,7 @@
 .host
   0: Console.Write params=1 ret=0
 .unit DumpIr file="dump_ir.pas" init=- fini=- entry=0
-.func 0 DumpIr.<main> params=0 regs=18
+.func 0 DumpIr.<main> params=0 regs=20
   .line 25
   0000  LoadConst    r1, k0
   0001  StoreGlobalRef r1, g1
@@ -25,91 +25,110 @@
   0006  StoreGlobal  r17, g1
   .line 27
   0007  LoadInt      r16, 3
-  0008  Call         r16, f1
-  0009  StoreGlobal  r16, g2
+  .inline f1 DumpIr.Twice line=27
+  .line 12
+  0008  MulIntI      r17, r16, 2
+  0009  NarrowOvf    r17, r17, 4
+  .line 13
+  000a  Move         r15, r17
+  .endinline
+  .line 27
+  000b  StoreGlobal  r15, g2
   .line 28
-  000a  MakeGlobalRef r15, g2
-  000b  MakeGlobalRef r16, g3
-  000c  LoadGlobalRef r2, g1
-  000d  Move         r17, r2
-  000e  Call         r15, f2
-  000f  Release      r2
+  000c  MakeGlobalRef r15, g2
+  000d  MakeGlobalRef r16, g3
+  000e  LoadGlobalRef r2, g1
+  000f  Move         r17, r2
+  .inline f2 DumpIr.Fill line=28
+  .line 17
+  0010  LoadRef      r18, r15
+  0011  StrLen       r19, r17
+  0012  AddInt       r18, r18, r19
+  0013  NarrowOvf    r18, r18, 4
+  0014  StoreRef     r15, r18
+  .line 18
+  0015  LoadInt      r18, 1
+  0016  StoreRef     r16, r18
+  .endinline
+  .line 28
+  0017  Release      r2
   .line 29
-  0010  LoadGlobal   r15, g2
-  0011  JmpIfLeIntI  r15, 5, -> 001c
-  0012  LoadGlobal   r15, g3
-  0013  JmpIfNeIntI  r15, 1, -> 001c
+  0018  LoadGlobal   r15, g2
+  0019  JmpIfLeIntI  r15, 5, -> 0024
+  001a  LoadGlobal   r15, g3
+  001b  JmpIfNeIntI  r15, 1, -> 0024
   .line 30
-  0014  LoadConst    r3, k1
-  0015  LoadGlobal   r15, g2
-  0016  IntToStr     r4, r15
-  0017  ConcatStr    r3, r3, r4
-  0018  LoadConst    r5, k2
-  0019  ConcatStr    r3, r3, r5
-  001a  CallHost     r3, h0
+  001c  LoadConst    r3, k1
+  001d  LoadGlobal   r15, g2
+  001e  IntToStr     r4, r15
+  001f  ConcatStr    r3, r3, r4
+  0020  LoadConst    r5, k2
+  0021  ConcatStr    r3, r3, r5
+  0022  CallHost     r3, h0
   .line 29
-  001b  Jmp          -> 001e
+  0023  Jmp          -> 0026
   .line 32
-  001c  LoadConst    r6, k3
-  001d  CallHost     r6, h0
+  0024  LoadConst    r6, k3
+  0025  CallHost     r6, h0
   .line 33
-  001e  LoadGlobal   r15, g2
-  001f  JmpIfLeIntI  r15, 0, -> 0025
+  0026  LoadGlobal   r15, g2
+  0027  JmpIfLeIntI  r15, 0, -> 002d
   .line 34
-  0020  LoadGlobal   r15, g2
-  0021  AddIntI      r15, r15, -4
-  0022  NarrowOvf    r15, r15, 4
-  0023  StoreGlobal  r15, g2
+  0028  LoadGlobal   r15, g2
+  0029  AddIntI      r15, r15, -4
+  002a  NarrowOvf    r15, r15, 4
+  002b  StoreGlobal  r15, g2
   .line 33
-  0024  Jmp          -> 001e
+  002c  Jmp          -> 0026
   .line 36
-  0025  LoadGlobal   r15, g2
-  0026  AddIntI      r15, r15, 1
-  0027  NarrowOvf    r15, r15, 4
-  0028  StoreGlobal  r15, g2
+  002d  LoadGlobal   r15, g2
+  002e  AddIntI      r15, r15, 1
+  002f  NarrowOvf    r15, r15, 4
+  0030  StoreGlobal  r15, g2
   .line 37
-  0029  JmpIfNeIntI  r15, 2, -> 002b
+  0031  JmpIfNeIntI  r15, 2, -> 0033
   .line 38
-  002a  Jmp          -> 002b
+  0032  Jmp          -> 0033
   .line 39
-  002b  LoadGlobal   r15, g2
-  002c  JmpIfLtIntI  r15, 3, -> 0025
+  0033  LoadGlobal   r15, g2
+  0034  JmpIfLtIntI  r15, 3, -> 002d
   .line 40
-  002d  LoadInt      r0, 1
-  002e  LoadInt      r15, 3
-  002f  JmpIfLtInt   r15, r0, -> 0038
-  0030  StoreGlobal  r0, g0
+  0035  LoadInt      r0, 1
+  0036  LoadInt      r15, 3
+  0037  JmpIfLtInt   r15, r0, -> 0040
+  0038  StoreGlobal  r0, g0
   .line 42
-  0031  JmpIfNeIntI  r0, 2, -> 0033
+  0039  JmpIfNeIntI  r0, 2, -> 003b
   .line 43
-  0032  Jmp          -> 0037
+  003a  Jmp          -> 003f
   .line 44
-  0033  LoadGlobal   r16, g0
-  0034  IntToStr     r7, r16
-  0035  CallHost     r7, h0
+  003b  LoadGlobal   r16, g0
+  003c  IntToStr     r7, r16
+  003d  CallHost     r7, h0
   .line 40
-  0036  ForLoopUp    r0, r15, -> 0030
-  0037  StoreGlobal  r0, g0
+  003e  ForLoopUp    r0, r15, -> 0038
+  003f  StoreGlobal  r0, g0
   .line 46
-  0038  LoadConst    r8, k2
-  0039  CallHost     r8, h0
+  0040  LoadConst    r8, k2
+  0041  CallHost     r8, h0
   .line 47
-  003a  LoadGlobalRef r9, g1
-  003b  LoadConst    r10, k4
-  003c  ConcatStr    r9, r9, r10
-  003d  LoadGlobal   r15, g2
-  003e  IntToStr     r11, r15
-  003f  ConcatStr    r9, r9, r11
-  0040  LoadConst    r12, k4
-  0041  ConcatStr    r9, r9, r12
-  0042  LoadGlobal   r16, g3
-  0043  IntToStr     r13, r16
-  0044  ConcatStr    r9, r9, r13
-  0045  LoadConst    r14, k2
-  0046  ConcatStr    r9, r9, r14
-  0047  CallHost     r9, h0
+  0042  LoadGlobalRef r9, g1
+  0043  LoadConst    r10, k4
+  0044  ConcatStr    r9, r9, r10
+  0045  LoadGlobal   r15, g2
+  0046  IntToStr     r11, r15
+  0047  ConcatStr    r9, r9, r11
+  0048  LoadConst    r12, k4
+  0049  ConcatStr    r9, r9, r12
+  004a  LoadGlobal   r16, g3
+  004b  IntToStr     r13, r16
+  004c  ConcatStr    r9, r9, r13
+  004d  LoadConst    r14, k2
+  004e  ConcatStr    r9, r9, r14
+  004f  CallHost     r9, h0
+  0050  Release      r9
   .line 48
-  0048  RetVoid
+  0051  RetVoid
 .finally r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14
 .func 1 DumpIr.Twice params=1 regs=3
   .local r0 X

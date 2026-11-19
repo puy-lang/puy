@@ -61,6 +61,7 @@ bb0:
   LoadConst    t9, "\n"
   ConcatStr    t0, t0, t9
   CallHost     -, h0(t0)
+  Release      t8
   .line 18
   LoadGlobal   t11, g0
   ArrLen       t10, t11

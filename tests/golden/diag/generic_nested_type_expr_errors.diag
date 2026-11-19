@@ -1,0 +1,51 @@
+error[E0700]: `TOuter<Integer>` has no member `TMissing`
+   --> generic_nested_type_expr_errors.pas:38:24
+    |
+ 38 |   O := TOuter<Integer>.TMissing<string>.Create;
+    |                        ^^^^^^^^
+
+error[E0700]: `TOuter<Integer>` has no member `TMissing`
+   --> generic_nested_type_expr_errors.pas:39:24
+    |
+ 39 |   O := TOuter<Integer>.TMissing.Create;
+    |                        ^^^^^^^^
+
+error[E0761]: `TCell` is not generic
+   --> generic_nested_type_expr_errors.pas:40:24
+    |
+ 40 |   O := TOuter<Integer>.TCell<string>.Create;
+    |                        ^^^^^^^^^^^^^
+    |
+    = note: to compare, write `(A < B) > (C)`
+
+error[E0761]: `TInner` expects 1 type argument, found 2
+   --> generic_nested_type_expr_errors.pas:41:30
+    |
+ 41 |   O := TOuter<Integer>.TInner<string, string>.Create;
+    |                              ^^^^^^^^^^^^^^^^
+
+error[E0761]: generic type `TInner` needs type arguments
+   --> generic_nested_type_expr_errors.pas:42:24
+    |
+ 42 |   O := TOuter<Integer>.TInner.Create;
+    |                        ^^^^^^
+
+error[E0761]: generic type `TInner` needs type arguments
+   --> generic_nested_type_expr_errors.pas:43:18
+    |
+ 43 |   O := TIntOuter.TInner.Create;
+    |                  ^^^^^^
+
+error[E0761]: generic type `TBox` needs type arguments
+   --> generic_nested_type_expr_errors.pas:44:16
+    |
+ 44 |   O := THolder.TBox.Create;
+    |                ^^^^
+
+error[E0761]: generic type `TTag` needs type arguments
+   --> generic_nested_type_expr_errors.pas:45:22
+    |
+ 45 |   O := TRec<Integer>.TTag.Create;
+    |                      ^^^^
+
+error: aborting due to 8 errors

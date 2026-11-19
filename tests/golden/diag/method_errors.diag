@@ -184,7 +184,7 @@ error[E0744]: cannot call abstract method `TBase.Area`
  106 |   inherited Area;
      |             ^^^^
 
-error[E0700]: `TBase` has no method `Unknown`
+error[E0700]: `TBase` has no method or property `Unknown`
     --> method_errors.pas:107:13
      |
  107 |   inherited Unknown;

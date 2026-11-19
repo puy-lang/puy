@@ -8,7 +8,7 @@ error[E2000]: variable `A` may be read before it is assigned
     |   ^ read here
     |
     = note: Puy requires every local variable to be assigned before it is read
-    = fix: add an initial value: `var A: TPoint = Default(TPoint);`
+    = fix: add `A := Default(TPoint);` at the start of the body
 
 error[E2000]: variable `B` may be read before it is assigned
    --> record_flow.pas:18:3
@@ -33,7 +33,7 @@ error[E2000]: variable `A` may be read before it is assigned
     |           ^ read here
     |
     = note: Puy requires every local variable to be assigned before it is read
-    = fix: add an initial value: `var A: TPoint = Default(TPoint);`
+    = fix: add `A := Default(TPoint);` at the start of the body
 
 error[E2000]: variable `B` may be read before it is assigned
    --> record_flow.pas:19:16

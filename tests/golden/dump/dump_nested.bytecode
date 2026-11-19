@@ -20,8 +20,9 @@
   0001  LoadConst    r2, k0
   0002  ConcatStr    r1, r1, r2
   0003  CallHost     r1, h0
+  0004  Release      r1
   .line 13
-  0004  RetVoid
+  0005  RetVoid
 .finally r1, r2
 .func 2 DumpNested.Run params=1 regs=4
   .local r0 N
@@ -53,7 +54,7 @@
   0001  Call         r1, f5
   .line 33
   0002  RetVoid
-.func 5 DumpNested.Run.Middle.Deep params=1 regs=7 outer=4
+.func 5 DumpNested.Run.Middle.Deep params=1 regs=9 outer=4
   .local r1 S
   .local r2 N
   .line 26
@@ -62,8 +63,12 @@
   .line 28
   0002  LoadRefRef   r3, r1
   0003  LoadRef      r6, r2
-  0004  Call         r6, f3
-  0005  Move         r5, r6
+  .inline f3 DumpNested.Run.Twice line=28
+  .line 21
+  0004  MulIntI      r5, r6, 2
+  0005  NarrowOvf    r5, r5, 4
+  .endinline
+  .line 28
   0006  IntToStr     r4, r5
   0007  LoadRef      r5, r1
   0008  AppendStr    r5, r3, r4
