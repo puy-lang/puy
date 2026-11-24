@@ -26,6 +26,38 @@ pub type SyntaxToken = rowan::SyntaxToken<PuyLanguage>;
 pub type SyntaxElement = rowan::SyntaxElement<PuyLanguage>;
 pub type SyntaxNodeChildren = rowan::SyntaxNodeChildren<PuyLanguage>;
 
+/// The name an identifier stands for: its spelling without the leading `&` that lets a reserved
+/// word be used as an identifier (`docs/spec/lexical.md` 3.2). Other text is returned as is.
+pub fn ident_name(text: &str) -> &str {
+    match text.strip_prefix('&') {
+        Some(rest) if rest.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_') => rest,
+        _ => text,
+    }
+}
+
+/// Whether an identifier is written with the `&` that escapes a reserved word or name
+/// (`docs/spec/lexical.md` 3.2).
+pub fn is_escaped_ident(text: &str) -> bool {
+    ident_name(text).len() != text.len()
+}
+
+/// [`ident_name`] for a token.
+pub trait TokenName {
+    /// The name the token stands for (its text without the escaping `&`).
+    fn name(&self) -> &str;
+    /// The name with the token's position (a part of a qualified name, a type parameter).
+    fn name_and_range(&self) -> (String, rowan::TextRange);
+}
+
+impl TokenName for SyntaxToken {
+    fn name(&self) -> &str {
+        ident_name(self.text())
+    }
+    fn name_and_range(&self) -> (String, rowan::TextRange) {
+        (self.name().to_string(), self.text_range())
+    }
+}
+
 // ---- Searches over the green tree ----
 //
 // Walking a subtree with the cursor API (`descendants`, `descendants_with_tokens`) allocates a

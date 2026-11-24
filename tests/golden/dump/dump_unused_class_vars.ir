@@ -1,0 +1,110 @@
+; puy ir 1
+.global
+  g0 TUsed.Count: Integer
+  g1 TUsed.Last: string
+  g2 Unread: Integer
+  g3 B: TBox<Integer>
+  g4 S: TBox<string>
+  g5 ExitCode: Integer
+  g6 TBox<Integer>.Made: Integer
+  g7 TBox<Integer>.Tag: string
+.func f0 DumpUnusedClassVars.<main> params=0
+  .reg t0: Integer temp
+  .reg t1: string temp
+  .reg t2: TBox<Integer> temp
+  .reg t3: TBox<Integer> temp
+  .reg t4: TBox<Integer> temp
+  .reg t5: - state
+  .reg t6: Exception exception
+  .reg t7: Integer temp
+  .reg t8: string temp
+  .reg t9: string temp
+  .reg t10: Integer temp
+  .reg t11: string temp
+  .reg t12: string temp
+  .reg t13: string temp
+  .reg t14: string temp
+  .reg t15: Integer temp
+  .reg t16: string temp
+  .reg t17: string temp
+  .reg t18: string temp
+  .reg t19: TBox<Integer> temp
+  .reg t20: Integer temp
+  .try bb1..bb1 finally bb2..bb4 t5, t6
+bb0:
+  .line 45
+  LoadInt      t0, 2
+  StoreGlobal  t0, g0
+  .line 46
+  LoadConst    t1, "last"
+  StoreGlobalRef t1, g1
+  .line 47
+  LoadZero     t3
+  New          t3, DumpUnusedClassVars.TBox<Integer>
+  Jmp          bb1
+bb1:
+  .line 47
+  Move         t4, t3
+  CallMethod   -, f1(t4)
+  LoadZero     t5
+  Jmp          bb2
+bb2:
+  .line 47
+  LoadInt      t7, 1
+  JmpIfNeInt   t5, t7, bb4, bb3
+bb3:
+  .line 47
+  DestroyFailed t3
+  Jmp          bb4
+bb4:
+  .line 47
+  EndFinally   t5, bb5
+bb5:
+  .line 47
+  Move         t2, t3
+  StoreGlobal  t2, g3
+  .line 48
+  LoadConst    t8, "int"
+  StoreGlobalRef t8, g7
+  .line 49
+  LoadGlobal   t10, g0
+  IntToStr     t9, t10
+  LoadConst    t11, " "
+  ConcatStr    t9, t9, t11
+  LoadGlobalRef t12, g1
+  ConcatStr    t9, t9, t12
+  LoadConst    t13, " "
+  ConcatStr    t9, t9, t13
+  LoadGlobal   t15, g6
+  IntToStr     t14, t15
+  ConcatStr    t9, t9, t14
+  LoadConst    t16, " "
+  ConcatStr    t9, t9, t16
+  LoadGlobalRef t17, g7
+  ConcatStr    t9, t9, t17
+  LoadConst    t18, "\n"
+  ConcatStr    t9, t9, t18
+  CallHost     -, h0(t9)
+  Release      t17
+  Release      t12
+  .line 50
+  LoadGlobal   t19, g3
+  Free         t19
+  .line 51
+  LoadZero     t20
+  StoreGlobal  t20, g5
+  .line 52
+  RetVoid
+.finally t1, t6, t8, t9, t11, t12, t13, t14, t16, t17, t18
+.func f1 DumpUnusedClassVars.TBox<Integer>.Create params=1
+  .reg v0 Self: TBox<Integer> self
+  .reg t0: Integer temp
+bb0:
+  .line 36
+  LoadGlobal   t0, g6
+  AddIntI      t0, t0, 1
+  NarrowOvf    t0, t0, 4
+  StoreGlobal  t0, g6
+  .line 37
+  RetVoid
+.finally

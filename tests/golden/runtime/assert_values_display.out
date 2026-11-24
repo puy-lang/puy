@@ -1,0 +1,40 @@
+assertion failed: (I = 0) or (U = 0) or not B or (C = 'x') or (S = '') or (U8 = '')
+  I = -7
+  U = 18446744073709551615
+  B = True
+  C = #9
+  S = 'it''s'#10'ok'
+  U8 = 'héllo'
+assertion failed: (Sg > 1) or (D < 0) or (Cur > 0) or (Color = TColor.Red) or (Digit = 0)
+  Sg = 0.1
+  D = 1e100
+  Cur = -0.5000
+  Color = Green
+  Digit = 3
+assertion failed: (Colors = []) or (Wide = []) or (P.X = 0) or (Box.Name = '')
+  Colors = [Red, Blue]
+  Wide = ['a', 'z']
+  P.X = 1
+  Box.Name = 'box'
+assertion failed: (L4.Deep.Inner.Corner.X = 1) or (Pair[1].X = 5) or (Length(Arr) = 0) or (Length(Empty) = 1)
+  L4.Deep.Inner.Corner.X = 0
+  Pair[1].X = 0
+  Length(Arr) = 12
+  Arr = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, … 2 more]
+  Length(Empty) = 0
+  Empty = []
+assertion failed: Same(Box, L4, Pair)
+  Box = (Corner: (X: 1; Y: 2); Name: 'box')
+  L4 = (Deep: (Inner: (Corner: (…); Name: '')))
+  Pair = [(X: 0; Y: 0), (X: 1; Y: 2)]
+assertion failed: (Shape = nil) or (NoShape <> nil) or (Intf = nil) or (Cls = nil) or not Assigned(Proc) or Assigned(NoProc)
+  Shape = TShape@9
+  NoShape = nil
+  Intf = TShape@9
+  Cls = TShape
+  Assigned(Proc) = True
+  Proc = <procedure>
+  Assigned(NoProc) = False
+  NoProc = nil
+assertion failed: S = ''
+  S = 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…

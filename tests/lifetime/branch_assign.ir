@@ -1,19 +1,24 @@
 ; puy ir 1
 .global
-.func f0 BranchAssign.<main> params=0
+.func f0 System.SysUtils.<fini> params=0
+bb0:
+  .line 50
+  RetVoid
+.finally
+.func f1 BranchAssign.<main> params=0
   .reg t0: Integer temp
   .reg t1: Integer temp
 bb0:
   .line 24
   LoadInt      t0, 1
-  Call         -, f1(t0)
+  Call         -, f2(t0)
   .line 25
   LoadInt      t1, -2
-  Call         -, f1(t1)
+  Call         -, f2(t1)
   .line 26
   RetVoid
 .finally
-.func f1 BranchAssign.Show params=1
+.func f2 BranchAssign.Show params=1
   .reg v0 N: Integer param
   .reg v1 S: string local
   .reg v2 T: string local

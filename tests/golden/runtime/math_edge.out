@@ -1,0 +1,44 @@
+NAN NAN NAN NAN
+NAN TRUE FALSE
+1 1
+1 18446744073709551615
+0 0 -1
+FALSE TRUE
+NAN 10
+NAN -INF NAN INF 0
+INF NAN NAN 0
+NAN NAN INF -INF NAN
+1 1 NAN -8 INF
+INF 0 1
+3.141592653589793 -3.141592653589793 INF
+0.642092616 1.850815718 1.188395106
+0.463647609 1.047197551 0.523598776
+1.313035285 0.648054274 0.850918128
+0.549306144 1.316957897 0.481211825
+1E300 INF -2.0 -0.1200 -0.1200
+TRUE TRUE TRUE FALSE
+TRUE FALSE TRUE FALSE
+0 1 -1
+0 10000000000 0.0
+2.500 1.290994
+6.00 14.00
+0 0 0 0 0
+NAN INF
+1.401298464324817E-45 3.4028234663852886E38 5E-324 1.7976931348623157E308 1.7976931348623157E308
+Floor(NaN): EInvalidOp: invalid floating-point operation: Floor(NAN)
+Floor(1E10): EInvalidOp: invalid floating-point operation: Floor(10000000000)
+Ceil(-1E10): EInvalidOp: invalid floating-point operation: Ceil(-10000000000)
+Floor(-2147483648.5): EInvalidOp: invalid floating-point operation: Floor(-2147483648.5)
+Ceil(2147483647.5): EInvalidOp: invalid floating-point operation: Ceil(2147483647.5)
+-2147483648
+Ceil(-2147483648.5): no exception
+EnsureRange: EInvalidArgument: EnsureRange: the range 10..1 is empty
+EnsureRange(NaN): EInvalidArgument: EnsureRange: the range NAN..1 is empty
+Mean: EInvalidArgument: Mean: the array is empty
+MinValue: EInvalidArgument: MinValue: the array is empty
+MaxIntValue: EInvalidArgument: MaxIntValue: the array is empty
+PopnVariance: EInvalidArgument: PopnVariance: the array is empty
+CompareValue(NaN): EInvalidOp: invalid floating-point operation: CompareValue(NAN, 1)
+SumInt: EIntOverflow: integer overflow in SumInt
+TRUE
+EInvalidArgument is an EMathError: no exception

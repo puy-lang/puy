@@ -1,0 +1,12 @@
+54
+42
+[ab!ab]
+[üé]
+caught ETestError: from the callback 3
+-1
+2
+10
+each 10
+EInvalidOperation: the extension object is in use by a call in progress
+4
+EInvalidOperation: cannot wait inside a callback from an extension

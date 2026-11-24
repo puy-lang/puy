@@ -1,0 +1,6 @@
+// Names of System.Classes in Delphi that Puy does not provide; using one is E3022
+// (docs/spec/stdlib/System.Classes/README.md, which has the same table). One per line: the name
+// (or `<class>.<member>`), `:`, and what to use instead (the note of E3022 is `use … instead`).
+TList: `TList<T>` or `TObjectList`
+TMemoryStream.Memory: `Bytes` of `TBytesStream` or `ToBytes`
+TMemoryStream.Capacity: `Size` (the blocks grow by themselves)

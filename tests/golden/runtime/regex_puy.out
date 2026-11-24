@@ -1,0 +1,47 @@
+w TRUE d TRUE s TRUE
+b 2
+kelvin TRUE
+ascii FALSE
+end FALSE TRUE
+dot FALSE TRUE
+x* 0 4
+lazy 0 2
+lines 2
+-a-b-c-
+5: [] [a] [b] [c] []
+3 FALSE 0 0 [] 1
+3
+3: [a] [1] [b]
+[|b|b]
+FALSE 0 0 [] 0 []
+FALSE
+FALSE FALSE
+[a1a11-a] [b2b22-b1-a ] [c3c33-c1-a 2-b ]
+5 55296 b+c
+2 2 56320
+3 a
+a<1>b<2>
+a11b22
+a31b2
+1 1
+0
+2: [a,b] [c,d]
+(a)\1: invalid regular expression: backreferences are not supported
+a(?=b): invalid regular expression: look-around, including look-ahead and look-behind, is not supported
+(?<=a)b: invalid regular expression: look-around, including look-ahead and look-behind, is not supported
+a*+: ok
+(?>a): invalid regular expression: unrecognized flag
+a\Z: invalid regular expression: unrecognized escape sequence
+a{: invalid regular expression: unclosed counted repetition
+(a: invalid regular expression: unclosed group
+[a: invalid regular expression: unclosed character class
+(?<n>a)(?<n>b): invalid regular expression: duplicate capture group name
+a{,2}: invalid regular expression: repetition quantifier expects a valid decimal
+(?P<n>a): ok
+group index 2 is out of bounds (2 groups)
+there is no group named 'n'
+match index 1 is out of bounds (1 matches)
+start position 4 is out of the bounds of a string of length 3
+length 3 from position 2 is out of the bounds of a string of length 3
+start position 1 is out of the bounds of a string of length 0
+TRUE

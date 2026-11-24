@@ -1,0 +1,10 @@
+// Names of System.Contnrs in Delphi that Puy does not provide; using one is E3022
+// (docs/spec/stdlib/System.Contnrs/README.md, which has the same table). One per line: the
+// name, `:`, and what to use instead (the note of E3022 is `use … instead`).
+TList: `TList<T>` or `TObjectList`
+TStack: `TStack<T>` or `TObjectStack`
+TQueue: `TQueue<T>` or `TObjectQueue`
+TComponentList: `TObjectList`
+TCustomBucketList: `TDictionary<K, V>`
+TBucketList: `TDictionary<K, V>`
+TObjectBucketList: `TDictionary<K, V>`

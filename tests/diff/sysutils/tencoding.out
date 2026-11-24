@@ -1,0 +1,30 @@
+UTF8 (10): 61 C3 A9 E2 82 AC F0 9F 98 80
+TRUE
+TRUE
+Unicode (10): 61 00 E9 00 AC 20 3D D8 00 DE
+TRUE
+BigEndianUnicode (10): 00 61 00 E9 20 AC D8 3D DE 00
+TRUE
+ASCII (3): 48 69 21
+Hi!
+empty (0):
+[]
+UTF8 preamble (3): EF BB BF
+Unicode preamble (2): FF FE
+BigEndianUnicode preamble (2): FE FF
+ASCII preamble (0):
+utf-8 bom: 3 UTF8
+utf-16le bom: 2 Unicode
+utf-16be bom: 2 BigEndianUnicode
+none: 0 Default
+short: 0 Default
+given Unicode: 2
+given Unicode, utf-8 bom: 0
+Convert (4): 00 61 00 E9
+Convert range (5): C3 A9 E2 82 AC
+10 10
+5 5
+65001 1200 1201 20127
+FALSE TRUE
+TRUE FALSE
+FALSE 65001 TRUE

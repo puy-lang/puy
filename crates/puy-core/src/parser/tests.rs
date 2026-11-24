@@ -560,15 +560,18 @@ fn lossless_under_errors() {
 
 #[test]
 // `TArray<T>` in type positions (a variable, a parameter, a return type, nested) and open array
-// parameters read as types; `array of const` parameters are E3200 (types.md chapter 1, 2.4).
+// parameters read as types, `array of const` parameters among them (types.md chapter 1, 2.4,
+// rtti.md 4.1).
 fn generic_and_open_array_types() {
     let p = assert_clean(
         "program P;\nfunction F(A: array of Integer; const B: TArray<TArray<string>>): TArray<Integer>; begin end;\nvar X: TArray<Integer>;\nbegin end.",
     );
     assert_eq!(p.cst.matches("GENERIC_TYPE_REF@").count(), 4, "{}", p.cst);
     assert!(p.cst.contains("ARRAY_TYPE@"), "{}", p.cst);
-    let p = parse_src(b"program P;\nprocedure Q(const A: array of const); begin end;\nbegin end.");
-    assert_eq!(codes(&p), ["E3200"]);
+    let p =
+        assert_clean("program P;\nprocedure Q(const A: array of const); begin end;\nbegin end.");
+    assert!(p.cst.contains("ARRAY_TYPE@"), "{}", p.cst);
+    assert!(p.cst.contains("CONST_KW@"), "{}", p.cst);
 }
 
 #[test]

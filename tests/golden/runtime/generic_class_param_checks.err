@@ -1,0 +1,3 @@
+error: uncaught exception EInvalidCast: invalid class typecast: `TCat` is not `TDog`
+  at GenericClassParamChecks.Expect<GenericClassParamChecks.TDog> (generic_class_param_checks.pas:51)
+  at GenericClassParamChecks.<main> (generic_class_param_checks.pas:101)

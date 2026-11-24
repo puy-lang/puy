@@ -1,0 +1,4 @@
+error: uncaught exception ETestError: deep
+  at ExtCallbackTrace.Run.<anon1> (ext_callback_trace.pas:13)
+  at ExtCallbackTrace.Run (ext_callback_trace.pas:11)
+  at ExtCallbackTrace.<main> (ext_callback_trace.pas:18)

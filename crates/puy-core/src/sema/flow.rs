@@ -340,7 +340,9 @@ fn zero_text(ty: Ty, types: &TypeTable) -> Option<String> {
         | Ty::Intf(_)
         | Ty::Weak(_)
         | Ty::Proc(_)
-        | Ty::Callable(_) => "nil".into(),
+        | Ty::Callable(_)
+        | Ty::TypeInfo
+        | Ty::ValueRef => "nil".into(),
         // `docs/spec/types.md` 8.3
         Ty::Set(_) | Ty::BigSet(_) => "[]".into(),
         // The lowest value, since an ordinal `0` may not be one of its values
@@ -769,7 +771,7 @@ impl<'a> Flow<'a> {
                     self.expr(m, cur);
                 }
             }
-            StmtKind::Nop | StmtKind::Flush => {}
+            StmtKind::Nop | StmtKind::Flush | StmtKind::RequestLeakReport => {}
         }
     }
 
@@ -866,7 +868,7 @@ impl<'a> Flow<'a> {
             ExprKind::Const { .. } | ExprKind::Global(_) => {}
             // An error-typed expression has no children, so the reads recorded by semantic analysis within its range
             // are treated as read here (4.6; also reports E2000 / E2004)
-            ExprKind::Error => self.reads_within(e.span, cur),
+            ExprKind::Error | ExprKind::TypeName => self.reads_within(e.span, cur),
             ExprKind::Var(id) => {
                 self.mark_seen(*id, e.span);
                 self.read(*id, e.span, cur);
@@ -916,13 +918,14 @@ impl<'a> Flow<'a> {
             | ExprKind::ObjField { base, .. }
             | ExprKind::ClassName { base }
             | ExprKind::ClassCheck { operand: base, .. }
+            | ExprKind::Probe { operand: base, .. }
             | ExprKind::Weak(base) => self.expr(base, cur),
             ExprKind::ClassInfo { args, .. } => {
                 for a in args {
                     self.expr(a, cur);
                 }
             }
-            ExprKind::ClassRefValue(_) | ExprKind::RoutineRef(_) => {}
+            ExprKind::ClassRefValue(_) | ExprKind::TypeInfo(_) | ExprKind::RoutineRef(_) => {}
             ExprKind::MethodRef { base, .. } | ExprKind::ToClosure(base) => self.expr(base, cur),
             ExprKind::CallValue { callee, args } => {
                 // The callee is evaluated first (`docs/spec/objects.md` 9.4)

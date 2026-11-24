@@ -288,6 +288,8 @@ impl<'a, 's> Sema<'a, 's> {
             let (params, ret) = self.heading_signature(&header);
             let overload = self.intf_directives(&decl);
             let sig: Vec<(Ty, ast::ParamMode)> = params.iter().map(|p| (p.ty, p.mode)).collect();
+            let decl_params: Vec<(String, TextRange)> =
+                params.iter().map(|p| (p.name.clone(), p.span)).collect();
             // The same name: overloads with different parameters only (`docs/spec/semantics.md`
             // 4.7); an ancestor's method of the same name and parameters is E0701 (an interface
             // overrides nothing)
@@ -343,11 +345,13 @@ impl<'a, 's> Sema<'a, 's> {
                 method_of: Some(id),
                 self_kind: SelfKind::Instance,
                 is_abstract: true,
+                native: false,
                 body_span: None,
                 closure: false,
                 type_params: Vec::new(),
                 closure_info: super::ClosureInfo::default(),
             });
+            self.types.decl_params.insert(routine, decl_params);
             methods.push(ClassMethod {
                 name,
                 routine: Some(routine),
@@ -395,6 +399,7 @@ impl<'a, 's> Sema<'a, 's> {
                 | SyntaxKind::FINAL_KW
                 | SyntaxKind::STATIC_KW
                 | SyntaxKind::MESSAGE_KW
+                | SyntaxKind::NATIVE_KW
                 | SyntaxKind::IDENT => {
                     let what = self.text(&kw).to_ascii_lowercase();
                     self.error(

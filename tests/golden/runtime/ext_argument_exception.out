@@ -1,0 +1,3 @@
+EArgumentException: invalid environment variable name 'A=B'
+EArgumentException: invalid environment variable name ''
+EArgumentException: the callback takes 1 arguments, 2 given

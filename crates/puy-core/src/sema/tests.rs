@@ -1,5 +1,5 @@
 use crate::diagnostics::Diagnostic;
-use crate::driver::{CompileOptions, compile};
+use crate::driver::compile;
 use crate::source::MemorySourceProvider;
 
 fn check(src: &str) -> Vec<Diagnostic> {
@@ -8,7 +8,7 @@ fn check(src: &str) -> Vec<Diagnostic> {
         "t.pas",
         src.as_bytes().to_vec(),
         &mut provider,
-        &CompileOptions::default(),
+        &crate::driver::test_options(),
     );
     out.diagnostics
 }
@@ -115,7 +115,8 @@ fn undeclared_and_types() {
     assert_eq!(codes("var X := ExceptAddr;"), ["E3004"]);
     assert_eq!(codes("var P: Pointer;"), ["E3004"]);
     assert_eq!(codes("var S: AnsiString;"), ["E3003"]);
-    assert_eq!(codes("var I := 1; WriteLn(I.ToHexString);"), ["E3200"]);
+    // `Currency` has no members from the part of `System` written in Pascal yet
+    assert_eq!(codes("var C: Currency := 1; WriteLn(C.Foo);"), ["E3200"]);
 }
 
 #[test]
@@ -597,43 +598,86 @@ fn unused_value_deeply_nested_loops() {
     assert_eq!(codes(&src), ["W0002"]);
 }
 
-/// The public names of a unit of the standard library that uses no other unit, analyzed alone.
+/// The public names of a unit of the standard library that uses no other unit but the
+/// standard library's extensions (`puy-stdlib-ext`), analyzed alone after those.
 fn stdlib_unit_exports(name: &str) -> Vec<String> {
     use crate::diagnostics::DiagnosticSink;
     use crate::source::{SourceFile, SourceMap};
+    use crate::syntax::SyntaxKind;
     let unit = puy_stdlib::find(name).expect("a unit of the standard library");
+    let extensions = puy_stdlib_ext::extensions();
     let mut sources = SourceMap::new();
-    let file = sources.add(SourceFile::new(
-        format!("<stdlib>/{}.pas", unit.name),
-        unit.source.as_bytes().to_vec(),
-    ));
     let mut sink = DiagnosticSink::new();
     let mut provider = MemorySourceProvider::new();
-    let fr = crate::driver::front(
-        file,
-        &mut sources,
-        &mut provider,
-        &crate::directives::BuildConfig::default(),
-        &mut sink,
-    );
-    let bytes = sources.get(file).bytes.clone();
     let mut state = super::ModuleState::with_plan(Default::default());
-    super::analyze(
-        &super::SemaInput {
+    // Analyzes one file, whose `uses` items `uses` name units already in `state`
+    let mut analyze = |path: String,
+                       source: &str,
+                       extension: Option<u64>,
+                       sources: &mut SourceMap,
+                       state: &mut super::ModuleState,
+                       sink: &mut DiagnosticSink| {
+        let file = sources.add(SourceFile::new(path, source.as_bytes().to_vec()));
+        let fr = crate::driver::front(
             file,
-            root: &fr.root,
-            bytes: &bytes,
-            directives: &fr.dir,
-            script_name: "",
-            uses: &[],
-            has_root: false,
-            stdlib: true,
-        },
+            sources,
+            &mut provider,
+            &crate::directives::BuildConfig::default(),
+            sink,
+        );
+        let bytes = sources.get(file).bytes.clone();
+        let mut uses = Vec::new();
+        for clause in crate::syntax::nodes_of_kind(&fr.root, SyntaxKind::USES_CLAUSE) {
+            for q in crate::syntax::nodes_of_kind(&clause, SyntaxKind::QUALIFIED_NAME) {
+                let text: String = q.text().to_string().split_whitespace().collect();
+                if let Some(i) = state.units.iter().position(|u| u.name == text) {
+                    uses.push(super::UsesResolution {
+                        range: q.text_range(),
+                        target: super::UsesTarget::Unit(i),
+                    });
+                }
+            }
+        }
+        super::analyze(
+            &super::SemaInput {
+                file,
+                root: &fr.root,
+                bytes: &bytes,
+                directives: &fr.dir,
+                script_name: "",
+                uses: &uses,
+                has_root: false,
+                stdlib: extension.is_none(),
+                extension,
+                test: None,
+            },
+            state,
+            sink,
+        );
+    };
+    for ext in extensions.iter() {
+        analyze(
+            format!("<ext>/{}.pas", ext.unit),
+            ext.source,
+            Some(ext.fingerprint),
+            &mut sources,
+            &mut state,
+            &mut sink,
+        );
+    }
+    analyze(
+        format!("<stdlib>/{}.pas", unit.name),
+        &unit.source(),
+        None,
+        &mut sources,
         &mut state,
         &mut sink,
     );
     assert!(!sink.has_errors(), "{name} has errors");
-    state.units[0]
+    state
+        .units
+        .last()
+        .expect("the unit analyzed last")
         .exports
         .iter()
         .map(|(n, _)| n.clone())

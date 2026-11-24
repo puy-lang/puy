@@ -48,9 +48,11 @@ program DumpExceptions
           global g0 C: EConvertError
   assert @26 "C <> nil"
     binary Boolean
-      global g0 C: EConvertError
+      probe value #0 EConvertError
+        global g0 C: EConvertError
       <> Boolean ref
         const EConvertError nil
+    probe #0 EConvertError "C"
   expr @27
     call f0 Fail: -
       const string "stop"

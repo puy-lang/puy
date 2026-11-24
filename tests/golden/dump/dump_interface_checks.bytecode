@@ -4,16 +4,29 @@
   1: str " "
 .type
   64: interface DumpInterfaceChecks.IShape parent=ty24 methods=1
-  65: class DumpInterfaceChecks.TSquare ref slots=0 parent=ty20 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4 intf=ty24:;ty64:f1
+  65: class DumpInterfaceChecks.TSquare ref slots=0 parent=ty20 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4 intf=ty24:;ty64:f2
+  66: class System.Classes.Native.TFileHandle ref sealed slots=0 parent=ty20 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
 .global
   0: obj O
   1: obj S
   2: ref Q
 .host
   0: Console.Write params=1 ret=0
-.unit System.SysUtils file="<stdlib>/System.SysUtils.pas" init=- fini=- entry=-
-.unit DumpInterfaceChecks file="dump_interface_checks.pas" init=- fini=- entry=0
-.func 0 DumpInterfaceChecks.<main> params=0 regs=22
+.extunit
+  0: System.Classes.Native fingerprint=e75d2b7f94bae15c classes=[TFileHandle=ty66]
+  1: System.SysUtils.Native fingerprint=1c2f67c8ff109e6e classes=[]
+  2: System.IOUtils.Native fingerprint=555b5d5f60182a69 classes=[]
+  3: System.FileSystem.Native fingerprint=a4c02b03a3d800c1 classes=[]
+.unit System.Classes.Native file="<ext>/System.Classes.Native.pas" init=- fini=- entry=-
+.unit System.SysUtils.Native file="<ext>/System.SysUtils.Native.pas" init=- fini=- entry=-
+.unit System.IOUtils.Native file="<ext>/System.IOUtils.Native.pas" init=- fini=- entry=-
+.unit System.FileSystem.Native file="<ext>/System.FileSystem.Native.pas" init=- fini=- entry=-
+.unit System.SysUtils file="<stdlib>/System.SysUtils.pas" init=- fini=0 entry=-
+.unit DumpInterfaceChecks file="dump_interface_checks.pas" init=- fini=- entry=1
+.func 0 System.SysUtils.<fini> params=0 regs=1
+  .line 50
+  0000  RetVoid
+.func 1 DumpInterfaceChecks.<main> params=0 regs=22
   .line 31
   0000  New          r0, ty65
   0001  LoadGlobal   r15, g0
@@ -102,7 +115,7 @@
   .line 38
   004e  RetVoid
 .finally r0:obj, r1, r2, r3:obj, r4:obj, r5, r6:obj, r7, r8:obj, r9:obj, r10, r11, r12, r13, r14
-.func 1 DumpInterfaceChecks.TSquare.Area params=1 regs=2
+.func 2 DumpInterfaceChecks.TSquare.Area params=1 regs=2
   .local r0 Self
   .local r1 Result
   .line 23

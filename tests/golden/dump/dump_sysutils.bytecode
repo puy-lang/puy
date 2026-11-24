@@ -9,15 +9,29 @@
   6: str "x"
   7: str "-"
   8: str "%d"
+.type
+  64: class System.Classes.Native.TFileHandle ref sealed slots=0 parent=ty20 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
 .global
   0: int V
   1: int S
   2: ref U
 .host
   0: Console.Write params=1 ret=0
-.unit System.SysUtils file="<stdlib>/System.SysUtils.pas" init=- fini=- entry=-
-.unit DumpSysUtils file="dump_sysutils.pas" init=- fini=- entry=0
-.func 0 DumpSysUtils.<main> params=0 regs=30
+.extunit
+  0: System.Classes.Native fingerprint=e75d2b7f94bae15c classes=[TFileHandle=ty64]
+  1: System.SysUtils.Native fingerprint=1c2f67c8ff109e6e classes=[]
+  2: System.IOUtils.Native fingerprint=555b5d5f60182a69 classes=[]
+  3: System.FileSystem.Native fingerprint=a4c02b03a3d800c1 classes=[]
+.unit System.Classes.Native file="<ext>/System.Classes.Native.pas" init=- fini=- entry=-
+.unit System.SysUtils.Native file="<ext>/System.SysUtils.Native.pas" init=- fini=- entry=-
+.unit System.IOUtils.Native file="<ext>/System.IOUtils.Native.pas" init=- fini=- entry=-
+.unit System.FileSystem.Native file="<ext>/System.FileSystem.Native.pas" init=- fini=- entry=-
+.unit System.SysUtils file="<stdlib>/System.SysUtils.pas" init=- fini=0 entry=-
+.unit DumpSysUtils file="dump_sysutils.pas" init=- fini=- entry=1
+.func 0 System.SysUtils.<fini> params=0 regs=1
+  .line 50
+  0000  RetVoid
+.func 1 DumpSysUtils.<main> params=0 regs=30
   .line 15
   0000  LoadInt      r19, -1
   0001  StoreGlobal  r19, g1

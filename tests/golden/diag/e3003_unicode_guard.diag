@@ -1,0 +1,28 @@
+error[E3003]: `RawByteString` is not supported in Puy
+  --> e3003_unicode_guard.pas:6:17
+   |
+ 6 |   TBytesAlias = RawByteString;
+   |                 ^^^^^^^^^^^^^
+   |
+   = note: use `string`; for bytes use `TBytes`, and for UTF-8 data use `UTF8String`
+   = note: Puy always defines `UNICODE`; to exclude this branch in Puy, use `{$IF Defined(UNICODE) and not Defined(PUY)}`
+
+error[E3003]: `AnsiChar` is not supported in Puy
+  --> e3003_unicode_guard.pas:9:15
+   |
+ 9 |     TNested = AnsiChar;
+   |               ^^^^^^^^
+   |
+   = note: use `string`; for bytes use `TBytes`, and for UTF-8 data use `UTF8String`
+   = note: Puy always defines `UNICODE`; to exclude this branch in Puy, use `{$IF Defined(UNICODE) and not Defined(PUY)}`
+
+error[E3003]: `AnsiString` is not supported in Puy
+   --> e3003_unicode_guard.pas:13:16
+    |
+ 13 |   TAnsiAlias = AnsiString;
+    |                ^^^^^^^^^^
+    |
+    = note: use `string`; for bytes use `TBytes`, and for UTF-8 data use `UTF8String`
+    = note: Puy always defines `UNICODE`; to exclude this branch in Puy, use `{$IF Defined(UNICODE) and not Defined(PUY)}`
+
+error: aborting due to 3 errors

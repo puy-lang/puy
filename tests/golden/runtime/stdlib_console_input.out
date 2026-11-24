@@ -1,0 +1,19 @@
+[header line]
+4: 13 10 0 255
+4660
+[ tail]
+42
+4: 32 32 13 10
+3 65533 a
+65533
+3: 99 100 10
+55357
+3: 120 121 10
+[first] TRUE FALSE
+8: 10 115 101 99 111 110 100 10
+reader: [reader one]
+reader: [reader two]
+0 TRUE
+[]
+0
+ERangeError: bytes 4..8 are out of a buffer of 8 bytes

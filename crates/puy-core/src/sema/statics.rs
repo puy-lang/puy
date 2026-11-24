@@ -29,7 +29,7 @@ impl<'a, 's> Sema<'a, 's> {
 
     /// E0701 when the class being declared already has a member named `lower`.
     pub(super) fn class_duplicate(&mut self, lower: &str, range: TextRange) -> bool {
-        if self.check_reserved_name(lower, range) {
+        if self.check_reserved_member_name(lower, range) {
             return true;
         }
         let Some(prev) = self
@@ -43,7 +43,7 @@ impl<'a, 's> Sema<'a, 's> {
             }
             return false;
         };
-        let name = self.src(range);
+        let name = self.name_src(range);
         let d = Diagnostic::error(
             Code::E(701),
             format!("`{name}` is already declared"),
@@ -124,6 +124,7 @@ impl<'a, 's> Sema<'a, 's> {
                     ty,
                     span: Some(span),
                     unit: Some(self.unit_index),
+                    class_var: true,
                 });
                 if self.types.is_generic(class) {
                     // Each instantiation has its own (`docs/spec/generics.md` 2.5)

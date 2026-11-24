@@ -1,0 +1,241 @@
+; puyc format 0
+.const
+  0: str "\n"
+  1: str "destroy\n"
+.type
+  64: class DumpUnreachable.TShape slots=0 parent=ty19 vmt=f2,builtin0,builtin0,builtin1,builtin3,builtin4,f1
+  65: class DumpUnreachable.TSquare slots=1 parent=ty64 vmt=f2,builtin0,builtin0,builtin1,builtin3,builtin4,f3
+  66: interface DumpUnreachable.ICounter parent=ty24 methods=1
+  67: class DumpUnreachable.TCounter ref slots=1 parent=ty20 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4 intf=ty24:;ty66:f5
+  68: class DumpUnreachable.TCircle slots=0 parent=ty64 vmt=f2,builtin0,builtin0,builtin1,builtin3,builtin4,f4
+.intfcall
+  0: ty66 #0
+.global
+  0: int S
+  1: obj C
+  2: int F
+  3: int K
+  4: ref Counter
+  5: ref R
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpUnreachable file="dump_unreachable.pas" init=- fini=- entry=0
+.func 0 DumpUnreachable.<main> params=0 regs=24
+  .try 002e..0031 finally 0031..0033 r8
+  .line 124
+  0000  LoadZero     r20
+  0001  New          r20, ty65
+  0002  StoreGlobal  r20, g0
+  .line 125
+  0003  AsClass      r20, ty65
+  0004  LoadInt      r21, 3
+  0005  ObjSet       r20, 0, r21
+  .line 126
+  0006  LoadGlobal   r21, g0
+  0007  CallVirtual  r21, 6
+  0008  Move         r20, r21
+  0009  IntToStr     r0, r20
+  000a  LoadConst    r1, k0
+  000b  ConcatStr    r0, r0, r1
+  000c  CallHost     r0, h0
+  .line 127
+  000d  LoadGlobal   r20, g0
+  000e  Free         r20
+  .line 128
+  000f  New          r2, ty67
+  0010  LoadGlobal   r20, g1
+  0011  AddRefObj    r2
+  0012  StoreGlobal  r2, g1
+  0013  ReleaseObj   r20
+  .line 129
+  0014  LoadGlobal   r22, g1
+  0015  AssignObj    r4, r22
+  0016  Move         r21, r4
+  0017  CallIntf     r21, ic0
+  0018  Move         r20, r21
+  0019  IntToStr     r3, r20
+  001a  LoadConst    r5, k0
+  001b  ConcatStr    r3, r3, r5
+  001c  CallHost     r3, h0
+  .line 130
+  001d  LoadInt      r20, 10
+  001e  StoreGlobal  r20, g2
+  .line 131
+  001f  Move         r21, r20
+  0020  LoadInt      r23, 1
+  0021  Call         r23, f10
+  0022  Move         r22, r23
+  0023  CallIndirect r22, r21
+  0024  Move         r20, r22
+  0025  IntToStr     r6, r20
+  0026  LoadConst    r7, k0
+  0027  ConcatStr    r6, r6, r7
+  0028  CallHost     r6, h0
+  .line 132
+  0029  LoadInt      r20, 69
+  002a  StoreGlobal  r20, g3
+  .line 133
+  002b  Move         r21, r20
+  002c  LoadZero     r22
+  002d  NewOf        r22, r21
+  002e  Move         r23, r22
+  002f  CallVirtual  r23, 1
+  0030  LoadZero     r8
+  0031  JmpIfNeIntI  r8, 1, -> 0033
+  0032  DestroyFailed r22
+  0033  EndFinally   r8, 0
+  0034  StoreGlobal  r22, g0
+  .line 134
+  0035  Move         r21, r22
+  0036  CallVirtual  r21, 6
+  0037  Move         r20, r21
+  0038  IntToStr     r10, r20
+  0039  LoadConst    r11, k0
+  003a  ConcatStr    r10, r10, r11
+  003b  CallHost     r10, h0
+  .line 135
+  003c  LoadGlobal   r20, g0
+  003d  Free         r20
+  .line 136
+  003e  New          r12, ty67
+  003f  StoreGlobalRef r12, g4
+  .line 137
+  0040  LoadGlobal   r22, g4
+  0041  Move         r20, r22
+  0042  LoadInt      r21, 6
+  0043  MethodRef    r13, r20
+  0044  StoreGlobalRef r13, g5
+  .line 138
+  0045  LoadGlobalRef r14, g5
+  0046  CallClosure  r20, r14
+  .line 139
+  0047  LoadGlobal   r21, g4
+  0048  ObjGet       r20, r21, 0
+  0049  IntToStr     r15, r20
+  004a  LoadConst    r16, k0
+  004b  ConcatStr    r15, r15, r16
+  004c  CallHost     r15, h0
+  .line 140
+  004d  LoadInt      r21, 1
+  004e  Call         r21, f7
+  004f  MoveRef      r18, r21
+  0050  CallClosure  r21, r18
+  0051  Move         r20, r21
+  0052  IntToStr     r17, r20
+  0053  LoadConst    r19, k0
+  0054  ConcatStr    r17, r17, r19
+  0055  CallHost     r17, h0
+  .line 141
+  0056  RetVoid
+.finally r0, r1, r2:obj, r3, r4:obj, r5, r6, r7, r9, r10, r11, r12, r13, r14, r15, r16, r17, r18, r19
+.func 1 DumpUnreachable.TShape.Area params=1 regs=2
+  .local r0 Self
+  .local r1 Result
+  .line 48
+  0000  LoadZero     r1
+  .line 49
+  0001  Ret          r1
+.func 2 DumpUnreachable.TShape.Destroy params=1 regs=3
+  .local r0 Self
+  .line 56
+  0000  LoadInt      r2, 64
+  0001  DtorEnter    r0, r2
+  .line 58
+  0002  LoadConst    r1, k1
+  0003  CallHost     r1, h0
+  .line 59
+  0004  RetVoid
+.finally r1
+.func 3 DumpUnreachable.TSquare.Area params=1 regs=3
+  .local r0 Self
+  .local r1 Result
+  .line 63
+  0000  ObjGet       r1, r0, 0
+  0001  ObjGet       r2, r0, 0
+  0002  MulInt       r1, r1, r2
+  0003  NarrowOvf    r1, r1, 4
+  .line 64
+  0004  Ret          r1
+.func 4 DumpUnreachable.TCircle.Area params=1 regs=2
+  .local r0 Self
+  .local r1 Result
+  .line 68
+  0000  LoadInt      r1, 7
+  .line 69
+  0001  Ret          r1
+.func 5 DumpUnreachable.TCounter.Next params=1 regs=4
+  .local r0 Self
+  .local r1 Result
+  .line 78
+  0000  ObjGet       r2, r0, 0
+  0001  AddIntI      r2, r2, 1
+  0002  NarrowOvf    r2, r2, 4
+  0003  ObjSet       r0, 0, r2
+  .line 79
+  0004  ObjGet       r1, r0, 0
+  .line 80
+  0005  Ret          r1
+.func 6 DumpUnreachable.TCounter.Reset params=1 regs=2
+  .local r0 Self
+  .line 84
+  0000  LoadZero     r1
+  0001  ObjSet       r0, 0, r1
+  .line 85
+  0002  RetVoid
+.func 7 DumpUnreachable.Captured params=1 regs=6
+  .local r0 X
+  .local r1 Result
+  .local r2 X
+  .line 87
+  0000  NewCell      r2
+  0001  CellSet      r2, r0
+  0002  CellRef      r0, r2
+  .line 89
+  0003  LoadInt      r3, 8
+  0004  LoadInt      r4, 1
+  0005  Move         r5, r2
+  0006  MakeClosure  r1, r3
+  .line 93
+  0007  Ret          r1
+.finally r1, r2
+.func 8 DumpUnreachable.Captured.<anon1> params=1 regs=5
+  .local r1 Result
+  .local r2 X
+  .local r3 X
+  .line 89
+  0000  CapGet       r3, r0, 0
+  0001  CellRef      r2, r3
+  .line 91
+  0002  LoadRef      r1, r2
+  0003  AddIntI      r1, r1, 10
+  0004  NarrowOvf    r1, r1, 4
+  .line 92
+  0005  Ret          r1
+.func 9 DumpUnreachable.Twice params=1 regs=3
+  .local r0 X
+  .local r1 Result
+  .line 102
+  0000  MulIntI      r1, r0, 2
+  0001  NarrowOvf    r1, r1, 4
+  .line 103
+  0002  Ret          r1
+.func 10 DumpUnreachable.Outer params=1 regs=3
+  .local r0 X
+  .local r1 Result
+  .line 113
+  0000  OuterRef     r2, 0, 0
+  0001  Call         r2, f11
+  0002  Move         r1, r2
+  .line 114
+  0003  Ret          r1
+.func 11 DumpUnreachable.Outer.Inner params=1 regs=4 outer=10
+  .local r1 Result
+  .local r2 X
+  .line 107
+  0000  OuterRef     r2, 0, 1
+  .line 109
+  0001  LoadRef      r1, r2
+  0002  AddIntI      r1, r1, 1
+  0003  NarrowOvf    r1, r1, 4
+  .line 110
+  0004  Ret          r1

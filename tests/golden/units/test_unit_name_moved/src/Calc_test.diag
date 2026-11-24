@@ -1,0 +1,11 @@
+error[E2503]: unit name `Sums_test` does not match its path
+  --> src/Calc_test.pas:3:6
+   |
+ 3 | unit Sums_test;
+   |      ^^^^^^^^^
+   |
+   = note: the unit name is the path under `src/` with folders joined by `.`
+   = note: move the file to `src/Sums_test.pas`
+   = suggestion: replace with `Calc_test`
+
+error: aborting due to 1 error

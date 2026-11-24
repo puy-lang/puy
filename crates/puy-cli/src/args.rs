@@ -15,14 +15,22 @@ Commands:
   run <file|-> [args...]   Compile and run a program (`-` reads the source from stdin)
   check <file|->           Type-check only (`--dump tokens|cst|hir|ir|bytecode` prints a stage)
   fix <file>               Apply safe fixes to the file
+  test [paths...]          Run the tests of the package (or the test files given)
   explain <code>           Explain an error code
 
 Options:
-  --format text|json       Output format for diagnostics (default: text)
+  --format text|json       Output format for diagnostics and test reports (default: text)
   --color auto|always|never
   --define NAME            Define a conditional symbol (repeatable)
   --stdout-buffering auto|line|full|none
   --keep-line-endings      `fix`: keep the file's line endings
+  --filter TEXT            `test`: run the tests whose names contain TEXT (repeatable)
+  --exact                  `test`: `--filter` matches whole names
+  --seed N                 `test`: the seed of the run (an Int64)
+  --timeout SECONDS        `test`: time limit of each test (default 60; 0 for none)
+  --show-output            `test`: print the output of every test
+  --junit FILE             `test`: write a JUnit XML report to FILE
+  --update                 `test`: write the snapshots that differ or are missing
   -V, --version            Print the version
   -h, --help               Print this help
 ";
@@ -111,8 +119,24 @@ pub enum Command {
     Explain {
         code: String,
     },
+    Test(TestArgs),
     /// Subcommands for M5 and later.
     Unavailable(String),
+}
+
+/// The arguments of `puy test` (`docs/spec/test.md` 1).
+#[derive(Debug, Clone, Default)]
+pub struct TestArgs {
+    pub paths: Vec<String>,
+    pub filters: Vec<String>,
+    pub exact: bool,
+    pub seed: Option<i64>,
+    /// Seconds; 0 for no limit.
+    pub timeout: u64,
+    pub show_output: bool,
+    pub junit: Option<String>,
+    /// `--update`: the snapshots that differ or are missing are written (`docs/spec/test.md` 12).
+    pub update: bool,
 }
 
 pub struct Parsed {
@@ -144,6 +168,12 @@ pub fn parse(argv: &[OsString]) -> Result<Parsed, String> {
     // Leading options and subcommand
     let mut positional: Vec<String> = Vec::new();
     let mut rest: Vec<String> = Vec::new();
+    let mut test = TestArgs {
+        timeout: 60,
+        ..Default::default()
+    };
+    // The options of `test`, to refuse them with another command
+    let mut test_option: Option<&'static str> = None;
     while i < argv.len() {
         let a = to_str(&argv[i])?;
         i += 1;
@@ -206,6 +236,50 @@ pub fn parse(argv: &[OsString]) -> Result<Parsed, String> {
                 };
             }
             "--keep-line-endings" => opts.keep_line_endings = true,
+            "--filter" => {
+                test.filters.push(next_value(argv, &mut i, "--filter")?);
+                test_option.get_or_insert("--filter");
+            }
+            "--exact" => {
+                test.exact = true;
+                test_option.get_or_insert("--exact");
+            }
+            "--show-output" => {
+                test.show_output = true;
+                test_option.get_or_insert("--show-output");
+            }
+            "--update" => {
+                test.update = true;
+                test_option.get_or_insert("--update");
+            }
+            "--junit" => {
+                let path = next_value(argv, &mut i, "--junit")?;
+                if path.is_empty() || path.starts_with("--") {
+                    return Err(usage_error("`--junit` needs a file name"));
+                }
+                test.junit = Some(path);
+                test_option.get_or_insert("--junit");
+            }
+            "--seed" => {
+                let v = next_value(argv, &mut i, "--seed")?;
+                test.seed = Some(v.parse::<i64>().map_err(|_| {
+                    usage_error(&format!(
+                        "invalid value `{v}` for `--seed`: expected an integer from {} to {}",
+                        i64::MIN,
+                        i64::MAX
+                    ))
+                })?);
+                test_option.get_or_insert("--seed");
+            }
+            "--timeout" => {
+                let v = next_value(argv, &mut i, "--timeout")?;
+                test.timeout = v.parse::<u64>().map_err(|_| {
+                    usage_error(&format!(
+                        "invalid value `{v}` for `--timeout`: expected a number of seconds (0 for no limit)"
+                    ))
+                })?;
+                test_option.get_or_insert("--timeout");
+            }
             "--dump" => {
                 let v = next_value(argv, &mut i, "--dump")?;
                 dump = Some(match v.as_str() {
@@ -275,6 +349,12 @@ pub fn parse(argv: &[OsString]) -> Result<Parsed, String> {
             }
         }
     }
+    let cmd = command.as_deref().unwrap_or("run");
+    if cmd != "test"
+        && let Some(o) = test_option
+    {
+        return Err(usage_error(&format!("`{o}` is only available with `test`")));
+    }
     if let Some(stmts) = eval {
         if command.is_some() || !positional.is_empty() {
             return Err(usage_error(
@@ -296,8 +376,7 @@ pub fn parse(argv: &[OsString]) -> Result<Parsed, String> {
             options: opts,
         });
     }
-    let cmd = command.clone().unwrap_or_else(|| "run".to_string());
-    match cmd.as_str() {
+    match cmd {
         "run" => {
             let Some(target) = positional.first().cloned() else {
                 return Err(usage_error("`run` needs a file"));
@@ -369,6 +448,16 @@ pub fn parse(argv: &[OsString]) -> Result<Parsed, String> {
                 .unwrap_or_else(|| rest[0].clone());
             Ok(Parsed {
                 command: Command::Explain { code },
+                options: opts,
+            })
+        }
+        "test" => {
+            if dump.is_some() {
+                return Err(usage_error("`--dump` cannot be used with `test`"));
+            }
+            test.paths = positional.into_iter().chain(rest).collect();
+            Ok(Parsed {
+                command: Command::Test(test),
                 options: opts,
             })
         }

@@ -4,17 +4,30 @@
 //! For distribution, bytecode is appended to the end of a prebuilt runtime (`deno compile` style;
 //! §4.5; M5).
 
-use std::io::{BufRead, IsTerminal, Read, Write};
+use std::io::{IsTerminal, Read, Write};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use puy_core::bytecode::Module;
 use puy_core::source::{MAX_SOURCE_SIZE, SourceProvider, TOO_LARGE_MESSAGE};
 use puy_core::vm::{ExitStatus, Isolate, IsolateConfig, RunOutcome, VmError};
-use puy_host::{HostError, HostErrorKind, HostFuture, HostSet, OutStream, ready};
+use puy_host::{AbsentSet, HostError, HostErrorKind, HostFuture, HostSet, OutStream, ready};
+
+mod fs;
+mod os;
+mod tz;
+
+pub use fs::StdFs;
+pub use os::StdOs;
+pub use puy_host::alloc::ProcessMemory;
 
 /// Standard I/O. Does not buffer (the VM owns the stdout buffer).
-pub struct StdConsole;
+#[derive(Default)]
+pub struct StdConsole {
+    /// What `read` reads into, kept between reads (a read gives a line at a terminal, far less
+    /// than `max`; only the bytes read are copied out).
+    buf: Vec<u8>,
+}
 
 impl puy_host::Console for StdConsole {
     fn write(&mut self, stream: OutStream, bytes: &[u8]) -> HostFuture<()> {
@@ -31,24 +44,23 @@ impl puy_host::Console for StdConsole {
         ready(r.map_err(|e| HostError::from_io(&e)))
     }
 
-    fn read_line(&mut self) -> HostFuture<Option<String>> {
-        // Read one line as bytes; invalid UTF-8 sequences become U+FFFD
-        // (`design/host-interface.md` 3.2, `spec/semantics.md` 6.2). On the Windows console std
-        // converts from UTF-16, so a lone surrogate becomes an `InvalidData` error, which surfaces
-        // as EInOutError as is
-        let mut line = Vec::new();
-        let r = std::io::stdin().lock().read_until(b'\n', &mut line);
-        ready(match r {
-            Ok(0) => Ok(None),
-            Ok(_) => {
-                if line.ends_with(b"\n") {
-                    line.pop();
-                    if line.ends_with(b"\r") {
-                        line.pop();
-                    }
-                }
-                Ok(Some(String::from_utf8_lossy(&line).into_owned()))
+    fn read(&mut self, max: usize) -> HostFuture<Vec<u8>> {
+        // The bytes as they come (a terminal gives a line at a time); the VM cuts lines and
+        // decodes UTF-8 (`design/host-interface.md` 3.2, `spec/semantics.md` 6.2). On the Windows
+        // console std converts from UTF-16, so a lone surrogate becomes an `InvalidData` error,
+        // which surfaces as EInOutError as is
+        if self.buf.len() < max {
+            self.buf.resize(max, 0);
+        }
+        let buf = &mut self.buf[..max];
+        let r = loop {
+            match std::io::stdin().lock().read(buf) {
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+                r => break r,
             }
+        };
+        ready(match r {
+            Ok(n) => Ok(buf[..n].to_vec()),
             Err(e) => Err(HostError::from_io(&e)),
         })
     }
@@ -60,6 +72,21 @@ pub struct StdEnv;
 impl puy_host::Env for StdEnv {
     fn get(&mut self, name: &str) -> Result<Option<String>, HostError> {
         Ok(std::env::var_os(name).map(|v| v.to_string_lossy().into_owned()))
+    }
+
+    fn vars(&mut self) -> Result<Vec<(String, String)>, HostError> {
+        Ok(std::env::vars_os()
+            .map(|(k, v)| {
+                (
+                    k.to_string_lossy().into_owned(),
+                    v.to_string_lossy().into_owned(),
+                )
+            })
+            .collect())
+    }
+
+    fn ignores_case(&self) -> bool {
+        cfg!(windows)
     }
 }
 
@@ -80,6 +107,17 @@ impl puy_host::Clock for StdClock {
     fn monotonic_nanos(&mut self) -> Result<u64, HostError> {
         Ok(self.start.elapsed().as_nanos() as u64)
     }
+
+    fn local_offset(&mut self, utc_nanos: i64) -> Result<Option<i32>, HostError> {
+        Ok(tz::local_offset(utc_nanos.div_euclid(1_000_000_000)))
+    }
+
+    // Blocks the thread of the isolate: one task per isolate until M5c, where a wait lets the
+    // other tasks run (requirements §7.1)
+    fn sleep(&mut self, nanos: u64) -> puy_host::HostFuture<()> {
+        std::thread::sleep(std::time::Duration::from_nanos(nanos));
+        puy_host::ready(Ok(()))
+    }
 }
 
 /// Source of randomness (§8.9). On failure, returns a `HostError` instead of falling back to a
@@ -93,24 +131,15 @@ impl puy_host::Random for OsRandom {
     }
 }
 
-/// Process-wide usage (counted by the allocator wrapper; §5.12).
-pub struct ProcessMemory;
-
-static ALLOCATED: AtomicUsize = AtomicUsize::new(0);
-static PEAK: AtomicUsize = AtomicUsize::new(0);
-
 /// Global allocator wrapper that counts usage. Use it as `#[global_allocator]` in the runtime
 /// executable.
 pub struct CountingAlloc;
 
-// SAFETY: delegates to System; the accounting is just atomic add/subtract
+// SAFETY: delegates allocation and deallocation to the same shared counting allocator.
 unsafe impl std::alloc::GlobalAlloc for CountingAlloc {
     unsafe fn alloc(&self, layout: std::alloc::Layout) -> *mut u8 {
-        let p = unsafe { std::alloc::System.alloc(layout) };
-        if !p.is_null() {
-            let now = ALLOCATED.fetch_add(layout.size(), Ordering::Relaxed) + layout.size();
-            PEAK.fetch_max(now, Ordering::Relaxed);
-        } else if !puy_host::alloc::in_fallible() {
+        let p = unsafe { puy_host::alloc::CountingAlloc.alloc(layout) };
+        if p.is_null() && !puy_host::alloc::in_fallible() {
             // Rust would abort on this refusal (SIGABRT, not 101), so the wrapper ends the
             // process itself (`docs/design/host-interface.md` 3.8). A refusal under the mark
             // returns null to the VM, which raises `EOutOfMemory`
@@ -120,8 +149,7 @@ unsafe impl std::alloc::GlobalAlloc for CountingAlloc {
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: std::alloc::Layout) {
-        ALLOCATED.fetch_sub(layout.size(), Ordering::Relaxed);
-        unsafe { std::alloc::System.dealloc(ptr, layout) }
+        unsafe { puy_host::alloc::CountingAlloc.dealloc(ptr, layout) }
     }
 }
 
@@ -205,29 +233,29 @@ fn out_of_memory(size: usize) -> ! {
     std::process::exit(101)
 }
 
-impl puy_host::MemoryStats for ProcessMemory {
-    fn current(&self) -> Option<usize> {
-        Some(ALLOCATED.load(Ordering::Relaxed))
-    }
-    fn peak(&self) -> Option<usize> {
-        Some(PEAK.load(Ordering::Relaxed))
-    }
-    fn limit(&self) -> Option<usize> {
-        None
-    }
-}
-
-/// The M1 `HostSet` (`Console`, `Env`, `Clock`, `Random`, `MemoryStats`).
+/// The `HostSet` of the runtime: every capability (`Console`, `Env`, `Clock`, `Random`,
+/// `MemoryStats`, `Fs`, `Os`).
 pub fn host_set() -> HostSet {
     HostSet {
-        console: Some(Box::new(StdConsole)),
+        console: Some(Box::new(StdConsole::default())),
         env: Some(Box::new(StdEnv)),
         clock: Some(Box::new(StdClock {
             start: std::time::Instant::now(),
         })),
         random: Some(Box::new(OsRandom)),
         memory: Some(Box::new(ProcessMemory)),
+        fs: Some(Box::new(StdFs)),
+        os: Some(Box::new(StdOs)),
+        absent: AbsentSet::unsupported(),
+        test: None,
     }
+}
+
+/// The extensions of the runtime (`docs/design/extensions.md` 3.12): the standard library's,
+/// which every target registers alike, so that a module runs on all of them. The compiler (the
+/// units it finds) and the isolate (the functions it binds) take the same set.
+pub fn extensions() -> puy_core::ext::ExtensionSet {
+    puy_stdlib_ext::extensions()
 }
 
 /// Whether stdout is a terminal (`auto` for `stdout-buffering`).
@@ -341,7 +369,9 @@ pub fn run_module(
                 });
             }
             RunOutcome::BudgetExhausted => continue,
-            RunOutcome::Waiting => continue, // does not happen in M1 (futures complete immediately)
+            // The native console's futures complete at once, so the VM does not wait; were one
+            // pending, running again polls it again
+            RunOutcome::Waiting => continue,
             RunOutcome::Fatal(e) => return Ok(RunResult::Fatal(e)),
         }
     }

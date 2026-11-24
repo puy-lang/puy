@@ -1,0 +1,21 @@
+host:
+  PUY_TEST_HOME=[/home/puy] EMPTY=[]
+[a] [/home/other] []
+changed:
+  PUY_OS_B=[b]
+  PUY_OS_A=[a]
+  PUY_TEST_HOME=[/home/other] EMPTY=(none)
+again:
+  PUY_OS_B=[]
+  PUY_TEST_HOME=[/home/other] EMPTY=[back]
+rewritten:
+  PUY_OS_B=[b2]
+  PUY_OS_A=[a2]
+  PUY_TEST_HOME=[/home/other] EMPTY=[back]
+EArgumentException: invalid environment variable name ''
+EArgumentException: invalid environment variable name 'A=B'
+EArgumentException: invalid environment variable name 'A#0B'
+EArgumentException: the value of the environment variable 'PUY_OS_C' contains #0
+EArgumentException: invalid environment variable name '='
+accepted
+é ü

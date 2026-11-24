@@ -4,11 +4,11 @@
 use super::expr::{PlaceResult, PlaceUse, err_expr};
 use super::hir::{Expr, RoutineId};
 use super::infer::Excluded;
-use super::types::Ty;
+use super::types::{ProcFamily, ProcParam, Ty, TypeDef, TypeKind};
 use super::{GSym, LSym, ParamInfo, Sema, const_init_value};
 use crate::diagnostics::{Code, Diagnostic, Fix, Stage, TextEdit};
 use crate::source::{TextRange, TextSize};
-use crate::syntax::ast::{self, ParamMode};
+use crate::syntax::ast::{self, AstNode, ParamMode};
 
 /// The routine a call resolves to.
 pub(super) enum Pick {
@@ -18,15 +18,32 @@ pub(super) enum Pick {
 }
 
 /// What resolution knows of an argument before a candidate is chosen.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 enum ArgKind {
     /// The type of the expression by itself, and whether it is a constant.
     Typed(Ty, bool),
     /// `nil` or `[…]`: the type comes from the parameter (stage 0 when it fits).
     Contextual(&'static str),
+    /// An anonymous method written as the argument: it fits an anonymous method type with its
+    /// parameters and return type (stage 0; `docs/spec/objects.md` 9.6): its parameters and
+    /// return type.
+    Anon(Signature, Option<Ty>),
+    /// A procedural value written without parentheses that is called outside a value position
+    /// (`docs/spec/objects.md` 9.4): its type as a value, and the type of its result when it can
+    /// be called without arguments. A procedural parameter takes the value; another parameter
+    /// takes the result at a stage after every value (`docs/spec/semantics.md` 4.7).
+    ProcValue(Ty, Option<(Ty, bool)>),
     /// The argument has an error (no resolution diagnostic; `docs/spec/semantics.md` 4.7).
     Error,
 }
+
+/// The parameter types and modes of an anonymous method.
+type Signature = Vec<(Ty, ParamMode)>;
+
+/// The stage of passing the result of calling a procedural value written without parentheses,
+/// added to the stage of the result's type: after every way of passing a value, a user's
+/// `Implicit` included (`docs/spec/semantics.md` 4.7).
+const CALLED: u8 = 8;
 
 /// Whether two parameter lists are the same for overloading: the count, the types and the modes,
 /// with value and `const` counted as the same (`docs/spec/semantics.md` 4.7).
@@ -271,7 +288,7 @@ impl<'a, 's> Sema<'a, 's> {
         if prev != Some(self.routines[last.0 as usize].name_span) {
             return self.check_duplicate(lower, name_range);
         }
-        let name = self.src(name_range);
+        let name = self.name_src(name_range);
         let same = set
             .iter()
             .copied()
@@ -389,10 +406,9 @@ impl<'a, 's> Sema<'a, 's> {
         let set = if unit == self.unit_index {
             self.overload_set(&lower)
         } else {
-            // A routine of another unit: the overloads its `interface` section declares
-            self.units[unit as usize]
-                .exports
-                .iter()
+            // A routine of another unit: the overloads its `interface` section declares (and its
+            // `implementation` section, for the unit paired with a test unit)
+            self.unit_names(unit as usize)
                 .filter(|(n, _)| *n == lower)
                 .filter_map(|(_, s)| match s {
                     GSym::Routine(id) => Some(*id),
@@ -612,6 +628,9 @@ impl<'a, 's> Sema<'a, 's> {
                 .map(|k| match k {
                     ArgKind::Typed(t, _) => format!("`{}`", self.tn(*t)),
                     ArgKind::Contextual(s) => format!("`{s}`"),
+                    ArgKind::Anon(_, Some(_)) => "`function(…)`".to_string(),
+                    ArgKind::Anon(_, None) => "`procedure(…)`".to_string(),
+                    ArgKind::ProcValue(t, _) => format!("`{}`", self.tn(*t)),
                     ArgKind::Error => "`<error>`".to_string(),
                 })
                 .collect();
@@ -629,6 +648,14 @@ impl<'a, 's> Sema<'a, 's> {
         let Some(v) = a.value() else {
             return ArgKind::Error;
         };
+        // An anonymous method has no type of its own: each candidate's parameter type is tried
+        // (in parentheses it is called, and reported, whatever the candidate)
+        if let ast::Expr::Anon(an) = &v {
+            return match self.anon_signature(an) {
+                Some((sig, ret)) => ArgKind::Anon(sig, ret),
+                None => ArgKind::Error,
+            };
+        }
         match strip_parens(&v) {
             ast::Expr::Nil(_) => ArgKind::Contextual("nil"),
             // A class's name is a value of its class reference type (`docs/spec/objects.md` 2.8)
@@ -670,20 +697,91 @@ impl<'a, 's> Sema<'a, 's> {
             }
             _ => {
                 let e = self.dry_run(|s| s.lower_expr(&v));
-                if e.ty.is_error() {
-                    ArgKind::Error
-                } else {
-                    ArgKind::Typed(e.ty, e.value.is_some())
+                let called = (!e.ty.is_error()).then_some((e.ty, e.value.is_some()));
+                // Only a name, a member or an element can be a procedural value that a call
+                // reads as its result (`docs/spec/objects.md` 9.4)
+                if !matches!(
+                    v,
+                    ast::Expr::NameRef(_) | ast::Expr::Field(_) | ast::Expr::Index(_)
+                ) {
+                    return match called {
+                        Some((t, is_const)) => ArgKind::Typed(t, is_const),
+                        None => ArgKind::Error,
+                    };
+                }
+                // A procedural value is a value for a procedural parameter, called or not
+                // (`docs/spec/objects.md` 9.4)
+                let n = self.sink.len();
+                let (ty, failed) = self.dry_run(|s| {
+                    let x = s.lower_value(&v);
+                    (x.ty, s.sink.iter().skip(n).any(|d| d.is_error()))
+                });
+                match called {
+                    Some((t, _)) if failed || !ty.is_procedural() || t == ty => {
+                        ArgKind::Typed(e.ty, e.value.is_some())
+                    }
+                    _ if !failed && ty.is_procedural() => ArgKind::ProcValue(ty, called),
+                    _ => ArgKind::Error,
                 }
             }
         }
     }
 
+    /// The parameters and return type of an anonymous method, resolved without reporting
+    /// anything; `None` when they have an error.
+    fn anon_signature(&mut self, an: &ast::AnonRoutine) -> Option<(Signature, Option<Ty>)> {
+        self.dry_run(|s| {
+            let n = s.sink.len();
+            let (ps, ret) = s.signature_of(an.params(), an.is_function(), an.return_type());
+            let failed = s.sink.iter().skip(n).any(|d| d.is_error())
+                || ps.iter().any(|p| p.ty.is_error())
+                || ret.is_some_and(|r| r.is_error());
+            (!failed).then(|| (ps.iter().map(|p| (p.ty, p.mode)).collect(), ret))
+        })
+    }
+
+    /// Analyzes an anonymous method with an anonymous method type of its own parameters and
+    /// return type (a call that does not resolve; reports its signature's errors otherwise).
+    fn lower_anon_own_type(&mut self, an: &ast::AnonRoutine) {
+        if self.anon_signature(an).is_none() {
+            self.signature_of(an.params(), an.is_function(), an.return_type());
+            return;
+        }
+        let (ps, ret) = self.signature_of(an.params(), an.is_function(), an.return_type());
+        let params = ps
+            .into_iter()
+            .map(|p| ProcParam {
+                name: p.name,
+                ty: p.ty,
+                mode: p.mode,
+            })
+            .collect();
+        let id = self.types.add(TypeDef {
+            name: None,
+            full_name: None,
+            kind: TypeKind::Proc {
+                family: ProcFamily::Reference,
+                params,
+                ret,
+            },
+            span: ast::trimmed_range(an.syntax()),
+        });
+        self.lower_anon(an, Ty::Proc(id));
+    }
+
     /// Types the arguments of a call that does not resolve, for their own diagnostics.
     fn lower_args_quietly(&mut self, args: &[ast::Arg]) {
         for a in args {
-            if let Some(v) = a.value() {
-                self.lower_expr_unchecked_ctor(&v);
+            match a.value() {
+                // Without a candidate it has no type: it is analyzed with the type of its own
+                // signature (no E0729), so its body is checked and its captures count as read
+                Some(ast::Expr::Anon(an)) => self.lower_anon_own_type(&an),
+                // A procedural value is read as a value, not called (no E0705 on top)
+                Some(v) if self.dry_run(|s| s.lower_value(&v)).ty.is_procedural() => {
+                    self.lower_value(&v);
+                }
+                Some(v) => self.lower_expr_unchecked_ctor(&v),
+                None => {}
             }
         }
     }
@@ -714,14 +812,31 @@ impl<'a, 's> Sema<'a, 's> {
                     }
                     out.push(0);
                 }
+                ParamMode::Value | ParamMode::Const if let ArgKind::Anon(sig, ret) = k => {
+                    // Typed without its body, which is analyzed once for the candidate chosen
+                    let fits = self.types.proc_family(p.ty) == Some(ProcFamily::Reference)
+                        && self.types.has_signature(p.ty, sig, *ret);
+                    if !fits {
+                        return None;
+                    }
+                    out.push(0);
+                }
                 ParamMode::Value | ParamMode::Const => {
                     let fits = self.dry_run(|s| {
                         let e = s.lower_expected(&v, p.ty);
                         !e.ty.is_error() && !s.coerce_with(e, p.ty, true, None, false).ty.is_error()
                     });
                     if fits {
-                        out.push(match *k {
-                            ArgKind::Typed(t, is_const) => self.conversion_stage(t, is_const, p.ty),
+                        out.push(match k {
+                            ArgKind::Typed(t, is_const) => {
+                                self.conversion_stage(*t, *is_const, p.ty)
+                            }
+                            ArgKind::ProcValue(t, _) if p.ty.is_procedural() => {
+                                self.conversion_stage(*t, false, p.ty)
+                            }
+                            ArgKind::ProcValue(_, Some((t, is_const))) => {
+                                CALLED + self.conversion_stage(*t, *is_const, p.ty)
+                            }
                             _ => 0,
                         });
                         continue;
@@ -738,7 +853,8 @@ impl<'a, 's> Sema<'a, 's> {
                     if !implicit {
                         return None;
                     }
-                    out.push(6);
+                    let called = matches!(k, ArgKind::ProcValue(..)) && !p.ty.is_procedural();
+                    out.push(if called { CALLED + 6 } else { 6 });
                 }
             }
         }

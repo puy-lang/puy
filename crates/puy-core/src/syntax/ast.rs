@@ -1,6 +1,6 @@
 //! Typed accessors over the CST (`docs/design/compiler-pipeline.md` 3.3). No separate tree is built.
 
-use super::{SyntaxKind, SyntaxNode, SyntaxToken};
+use super::{SyntaxKind, SyntaxNode, SyntaxToken, TokenName};
 use SyntaxKind::*;
 
 pub trait AstNode: Sized {
@@ -360,10 +360,10 @@ impl QualifiedName {
     pub fn idents(&self) -> impl Iterator<Item = SyntaxToken> {
         tokens(&self.0, IDENT)
     }
-    /// The spelling joined with `.`.
+    /// The names joined with `.` (each without the escaping `&`).
     pub fn text(&self) -> String {
         self.idents()
-            .map(|t| t.text().to_string())
+            .map(|t| t.name().to_string())
             .collect::<Vec<_>>()
             .join(".")
     }
@@ -665,6 +665,10 @@ impl ArrayType {
     }
     pub fn element(&self) -> Option<TypeSpec> {
         self.0.children().find_map(TypeSpec::cast)
+    }
+    /// `array of const` (a parameter's; `docs/spec/rtti.md` 4.1).
+    pub fn of_const(&self) -> bool {
+        token(&self.0, CONST_KW).is_some()
     }
 }
 
@@ -1248,6 +1252,19 @@ impl RoutineHeader {
     pub fn keyword(&self) -> Option<SyntaxToken> {
         token(&self.0, PROCEDURE_KW).or_else(|| token(&self.0, FUNCTION_KW))
     }
+    /// The word naming the kind of routine: `procedure` / `function` / `constructor` /
+    /// `destructor` / `operator` (the one after `class` of a class method).
+    pub fn routine_keyword(&self) -> Option<SyntaxToken> {
+        self.0
+            .children_with_tokens()
+            .filter_map(|e| e.into_token())
+            .find(|t| {
+                matches!(
+                    t.kind(),
+                    PROCEDURE_KW | FUNCTION_KW | CONSTRUCTOR_KW | DESTRUCTOR_KW | OPERATOR_KW
+                )
+            })
+    }
     pub fn name(&self) -> Option<QualifiedName> {
         child(&self.0)
     }
@@ -1702,9 +1719,10 @@ impl NameRef {
     pub fn token(&self) -> Option<SyntaxToken> {
         self.0.first_token()
     }
+    /// The name (without the escaping `&`).
     pub fn text(&self) -> String {
         self.token()
-            .map(|t| t.text().to_string())
+            .map(|t| t.name().to_string())
             .unwrap_or_default()
     }
     pub fn is_string_keyword(&self) -> bool {
@@ -1879,11 +1897,18 @@ pub fn trimmed_range(node: &SyntaxNode) -> rowan::TextRange {
 
 /// Source text of the expression with each run of trivia replaced by a single space (for the `Assert` message).
 pub fn source_text_normalized(node: &SyntaxNode) -> String {
+    source_text_in(node, node.text_range())
+}
+
+/// Source text of the tokens of `node` within `range`, each run of trivia between them replaced
+/// by a single space (the subexpressions of an `Assert` condition; `docs/spec/semantics.md` 5.4).
+pub fn source_text_in(node: &SyntaxNode, range: rowan::TextRange) -> String {
     let mut out = String::new();
     let mut pending_space = false;
     for t in node
         .descendants_with_tokens()
         .filter_map(|e| e.into_token())
+        .filter(|t| range.contains_range(t.text_range()))
     {
         if t.kind().is_trivia() {
             pending_space = true;

@@ -1,0 +1,47 @@
+src / main.pas: [src/main.pas]
+src / lib / a.pas: [src/lib/a.pas]
+src/ / a: [src/a]
+src / /etc: [/etc]
+src / empty: [src]
+empty / a: [a]
+string / path: [top/src]
+path / path: [src/b]
+Join: [src/x/y.txt]
+[a/b/c.txt] parent [a/b] name [c.txt] stem [c] extension [.txt]
+[a/b/c.tar.gz] parent [a/b] name [c.tar.gz] stem [c.tar] extension [.gz]
+[a/b/] parent [a] name [b] stem [b] extension []
+[a//b//] parent [a] name [b] stem [b] extension []
+[c.txt] parent [.] name [c.txt] stem [c] extension [.txt]
+[/a] parent [/] name [a] stem [a] extension []
+[/] parent [/] name [] stem [] extension []
+[] parent [] name [] stem [] extension []
+[.bashrc] parent [.] name [.bashrc] stem [] extension [.bashrc]
+[a.] parent [.] name [a.] stem [a] extension [.]
+[.] parent [.] name [.] stem [.] extension []
+[..] parent [.] name [..] stem [..] extension []
+[a\b.txt] parent [.] name [a\b.txt] stem [a\b] extension [.txt]
+WithName: [a/c.pas]
+WithName trailing: [a/c]
+WithExtension pas: [a/b.pas]
+WithExtension .pas: [a/b.pas]
+WithExtension empty: [a/b.tar]
+WithExtension none: [a.d/b.x]
+WithName of /: EArgumentException: cannot change the name of '/': it has no name
+WithName empty: EArgumentException: invalid file name ''
+WithName c/d: EArgumentException: invalid file name 'c/d'
+WithName ..: EArgumentException: invalid file name '..'
+WithExtension of empty: EArgumentException: cannot change the extension of '': it has no name
+WithExtension .: EArgumentException: invalid extension '.'
+WithExtension x/y: EArgumentException: invalid extension 'x/y'
+WithExtension empty of .bashrc: EArgumentException: cannot remove the extension of 'a/.bashrc': it is the whole name
+WithExtension txt of .bashrc: [a/.txt]
+IsAbsolute: TRUE FALSE FALSE FALSE
+Normalize a/./b/../c//: [a/c]
+Normalize ../a/../../b: [../../b]
+Normalize /../a/..: [/]
+Normalize //a///b: [/a/b]
+Normalize a/..: [.]
+Normalize ./: [.]
+Normalize empty: []
+Normalize a\..\b: [a\..\b]
+kept as written: [a//./b/]

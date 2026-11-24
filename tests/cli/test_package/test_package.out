@@ -1,0 +1,44 @@
+running 10 tests (seed 1)
+ok    Integration_test.Works (Nms)
+ok    MyApp.Calc_test.Adds (Nms)
+ok    MyApp.Calc_test.AddsCase(1, 2, 3) (Nms)
+FAIL  MyApp.Calc_test.AddsCase(2, 2, 5) (Nms)
+ERROR MyApp.Calc_test.Raises (Nms)
+ERROR MyApp.Calc_test.CallsHalt (Nms)
+FAIL  MyApp.Calc_test.Leaks (Nms)
+ok    MyApp.Calc_test.FreshGlobals (Nms)
+ok    MyApp.Calc_test.FreshGlobalsAgain (Nms)
+skip  MyApp.Calc_test.Later: not ready
+
+---- MyApp.Calc_test.AddsCase(2, 2, 5) ----
+error: uncaught exception EAssertionFailed: assertion failed: Add(A, B) = Want (sum)
+    Add(A, B) = 4
+    A = 2
+    B = 2
+    Want = 5
+  at MyApp.Calc_test.AddsCase (src/MyApp/Calc_test.pas:31)
+  at MyApp.Calc_test.<test:AddsCase(2, 2, 5)> (src/MyApp/Calc_test.pas:28)
+stdout:
+adding 2 and 2
+
+---- MyApp.Calc_test.Raises ----
+error: uncaught exception EDivByZero: division by zero
+  at MyApp.Calc_test.Raises (src/MyApp/Calc_test.pas:40)
+  at MyApp.Calc_test.<test:Raises> (src/MyApp/Calc_test.pas:35)
+
+---- MyApp.Calc_test.CallsHalt ----
+error: the test called `Halt` (exit code 0)
+stdout:
+before Halt
+
+---- MyApp.Calc_test.Leaks ----
+warning: 1 heap block was not freed
+  MyApp.Calc_test.TNode: 1
+
+test result: FAILED. 5 ok; 2 failed; 2 errors; 1 skipped; 0 filtered out
+
+to run a failed test again:
+  puy test --seed 1 --filter 'MyApp.Calc_test.AddsCase(2, 2, 5)' --exact
+  puy test --seed 1 --filter 'MyApp.Calc_test.Raises' --exact
+  puy test --seed 1 --filter 'MyApp.Calc_test.CallsHalt' --exact
+  puy test --seed 1 --filter 'MyApp.Calc_test.Leaks' --exact

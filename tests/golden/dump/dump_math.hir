@@ -1,0 +1,33 @@
+program DumpMath
+.global g0 X: Double
+.global g1 N: Integer
+.routine <main>
+  assign @11 R+
+    global g0 X
+    const Double 0.5
+  assign @12 R+
+    global g1 N
+    const Integer 2
+  writeln @13
+    arg
+      builtin Sin Double
+        global g0 X: Double
+    arg
+      builtin Cos Double
+        convert num->Double
+          global g1 N: Integer
+    arg
+      builtin ArcTan Double
+        global g0 X: Double
+    arg
+      builtin Ln Double
+        global g0 X: Double
+    arg
+      builtin Exp Double
+        global g0 X: Double
+    arg
+      builtin Int Double
+        global g0 X: Double
+    arg
+      builtin Frac Double
+        global g0 X: Double

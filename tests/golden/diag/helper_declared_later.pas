@@ -8,7 +8,7 @@ var
   S: string;
 begin
   S := 'a';
-  WriteLn(S.Shout);                                // E3200: no helper here yet
+  WriteLn(S.Shout);                                // E0700: no helper here yet
 end;
 
 type

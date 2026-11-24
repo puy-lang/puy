@@ -7,11 +7,19 @@
   66: array DumpValueEquality.TDigits slots=3 elem=val
   67: record DumpValueEquality.TInner slots=2 refs=0
 .global
+  0: int S
 .host
 .unit DumpValueEquality file="dump_value_equality.pas" init=- fini=- entry=0
-.func 0 DumpValueEquality.<main> params=0 regs=1
-  .line 31
-  0000  RetVoid
+.func 0 DumpValueEquality.<main> params=0 regs=2
+  .line 34
+  0000  ArgCount     r0
+  0001  JmpIfLeIntI  r0, 100, -> 0005
+  .line 35
+  0002  LoadZero     r0
+  0003  New          r0, ty64
+  0004  StoreGlobal  r0, g0
+  .line 36
+  0005  RetVoid
 .func 1 DumpValueEquality.TShape.Equals params=2 regs=24
   .local r0 Self
   .local r1 Obj

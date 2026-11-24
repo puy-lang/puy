@@ -1,0 +1,13 @@
+FileExists: ENotSupportedException: the file system is not permitted by the host (ekNoPermission)
+DirectoryExists: ENotSupportedException: the file system is not permitted by the host (ekNoPermission)
+DeleteFile: ENotSupportedException: the file system is not permitted by the host (ekNoPermission)
+RenameFile: ENotSupportedException: the file system is not permitted by the host (ekNoPermission)
+CreateDir: ENotSupportedException: the file system is not permitted by the host (ekNoPermission)
+ForceDirectories: ENotSupportedException: the file system is not permitted by the host (ekNoPermission)
+RemoveDir: ENotSupportedException: the file system is not permitted by the host (ekNoPermission)
+SetCurrentDir: ENotSupportedException: the OS information is not permitted by the host (ekNoPermission)
+/
+/b
+pfEmbedded arOther [] 0 TRUE FALSE
+/ [] :
+dir\name.txt

@@ -1,0 +1,125 @@
+; puyc format 0
+.const
+  0: str " "
+  1: str "a"
+  2: str "\n"
+  3: utf8 "x"
+.type
+  64: dynarray TArray<UTF8String> slots=0 elem=ref
+  65: class TestExt.TCounter ref sealed slots=0 parent=ty20 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+  66: class TestExt.THolder ref sealed slots=0 parent=ty20 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+  67: class TestExt.TTicket ref sealed slots=0 parent=ty20 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+  68: class TestExt.ETestError ref slots=2 refs=0,1 parent=ty0 vmt=builtin0,builtin0,builtin0,builtin2,builtin3,builtin4
+  69: class TestExt.ETestRange ref slots=2 refs=0,1 parent=ty3 vmt=builtin0,builtin0,builtin0,builtin2,builtin3,builtin4
+  70: record TestExt.TSpan slots=2
+  71: dynarray TArray<TestExt.TEntry> slots=0 elem=ref
+  72: record TestExt.TEntry slots=18 refs=0,6,7,8
+  73: dynarray TArray<Byte> bytes slots=0 elem=val
+  74: dynarray TArray<TestExt.TSpan> slots=0 width=2 elem=val,val
+.global
+  0: ref C
+  1: ref S
+.host
+  0: Console.Write params=1 ret=0
+.extunit
+  0: TestExt fingerprint=1eaf175ceff377d2 classes=[TCounter=ty65,THolder=ty66,TTicket=ty67]
+.ext
+  0: Add unit=0 params=[int,int] ret=int[-2147483648..2147483647]
+  1: TCounter.Create unit=0 params=[int] ret=obj type=ty65
+  2: TCounter.Increment unit=0 params=[obj] ret=none
+  3: TCounter.Value unit=0 params=[obj] ret=int[-2147483648..2147483647]
+  4: Upper unit=0 params=[str] ret=str
+  5: TCounter.Live unit=0 params=[] ret=int[-2147483648..2147483647]
+  6: Apply unit=0 params=[callable(int[-2147483648..2147483647]):int,int] ret=int[-2147483648..2147483647]
+  7: ShiftSpan unit=0 params=[record(ty70:int,int[-2147483648..2147483647]),int] ret=record(ty70:int,int[-2147483648..2147483647])
+  8: MakeEntries unit=0 params=[array(ty64:utf8)] ret=array(ty71:record(ty72:str,double,single,int[0..2],int[0..65535],int[0..1],utf8,bytes,array(ty74:record(ty70:int,int[-2147483648..2147483647])),record(ty70:int,int[-2147483648..2147483647]),int[0..255],int[-32768..32767],int[0..65535],int[0..4294967295],int,int[-128..127],int[0..4294967295]))
+.unit TestExt file="<ext>/TestExt.pas" init=- fini=- entry=-
+.unit DumpExt file="dump_ext.pas" init=- fini=- entry=0
+.func 0 DumpExt.<main> params=0 regs=27
+  .line 13
+  0000  LoadInt      r23, 1
+  0001  LoadInt      r24, 2
+  0002  CallExt      r23, x0
+  0003  Move         r22, r23
+  0004  CallExt      r22, x1
+  0005  MoveRef      r0, r22
+  0006  StoreGlobalRef r0, g0
+  .line 14
+  0007  LoadGlobalRef r1, g0
+  0008  Move         r22, r1
+  0009  CallExt      r22, x2
+  .line 15
+  000a  LoadGlobalRef r3, g0
+  000b  Move         r23, r3
+  000c  CallExt      r23, x3
+  000d  Move         r22, r23
+  000e  IntToStr     r2, r22
+  000f  LoadConst    r4, k0
+  0010  ConcatStr    r2, r2, r4
+  0011  LoadConst    r6, k1
+  0012  Move         r23, r6
+  0013  CallExt      r23, x4
+  0014  MoveRef      r5, r23
+  0015  ConcatStr    r2, r2, r5
+  0016  LoadConst    r7, k0
+  0017  ConcatStr    r2, r2, r7
+  0018  CallExt      r24, x5
+  0019  Move         r23, r24
+  001a  IntToStr     r8, r23
+  001b  ConcatStr    r2, r2, r8
+  001c  LoadConst    r9, k2
+  001d  ConcatStr    r2, r2, r9
+  001e  CallHost     r2, h0
+  .line 16
+  001f  LoadInt      r25, 1
+  0020  LoadZero     r26
+  0021  MakeClosure  r11, r25
+  0022  Move         r23, r11
+  .line 19
+  0023  LoadInt      r24, 1
+  .line 16
+  0024  CallExt      r23, x6
+  0025  Move         r22, r23
+  0026  IntToStr     r10, r22
+  0027  LoadConst    r12, k2
+  0028  ConcatStr    r10, r10, r12
+  0029  CallHost     r10, h0
+  .line 20
+  002a  LoadGlobalRef r14, g1
+  002b  Move         r22, r14
+  002c  LoadInt      r23, 2
+  002d  CallExt      r22, x7
+  002e  MoveRef      r13, r22
+  002f  StoreGlobalRef r13, g1
+  0030  Release      r14
+  .line 21
+  0031  LoadGlobal   r23, g1
+  0032  FieldGet     r22, r23, 0
+  0033  IntToStr     r15, r22
+  0034  LoadConst    r16, k0
+  0035  ConcatStr    r15, r15, r16
+  0036  LoadConst    r20, k3
+  0037  LoadInt      r25, 1
+  0038  NewArr       r25, ty64
+  0039  LoadZero     r26
+  003a  DynSetRef    r25, r26, r20
+  003b  MoveRef      r19, r25
+  003c  Move         r24, r19
+  003d  CallExt      r24, x8
+  003e  MoveRef      r18, r24
+  003f  ArrLen       r23, r18
+  0040  IntToStr     r17, r23
+  0041  ConcatStr    r15, r15, r17
+  0042  LoadConst    r21, k2
+  0043  ConcatStr    r15, r15, r21
+  0044  CallHost     r15, h0
+  0045  Release      r19
+  0046  Release      r18
+  .line 22
+  0047  RetVoid
+.finally r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16, r17, r18, r19, r20, r21
+.func 1 DumpExt.<main>.<anon1> params=2 regs=3
+  .local r1 X
+  .local r2 Result
+  .line 19
+  0000  Ret          r1

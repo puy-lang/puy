@@ -30,25 +30,16 @@ impl puy_host::Console for CaptureConsole {
         ready(Ok(()))
     }
 
-    fn read_line(&mut self) -> HostFuture<Option<String>> {
+    fn read(&mut self, max: usize) -> HostFuture<Vec<u8>> {
+        // One line at a time, as a terminal gives it
         let mut input = self.stdin.borrow_mut();
-        if input.is_empty() {
-            return ready(Ok(None));
-        }
         let end = input
             .iter()
             .position(|b| *b == b'\n')
             .map(|p| p + 1)
-            .unwrap_or(input.len());
-        let line: Vec<u8> = input.drain(..end).collect();
-        let mut s = String::from_utf8_lossy(&line).into_owned();
-        if s.ends_with('\n') {
-            s.pop();
-            if s.ends_with('\r') {
-                s.pop();
-            }
-        }
-        ready(Ok(Some(s)))
+            .unwrap_or(input.len())
+            .min(max);
+        ready(Ok(input.drain(..end).collect()))
     }
 }
 
@@ -61,6 +52,19 @@ impl puy_host::Env for FixedEnv {
             .iter()
             .find(|(k, _)| k == name)
             .map(|(_, v)| v.clone()))
+    }
+
+    fn vars(&mut self) -> Result<Vec<(String, String)>, HostError> {
+        Ok(self.0.clone())
+    }
+}
+
+/// The extensions a case is compiled and run with (`test-ext`; `docs/design/testing.md` 3.2).
+fn test_extensions(cfg: &CaseConfig) -> puy_core::ext::ExtensionSet {
+    if cfg.test_ext {
+        puy_testsuite::ext::extensions()
+    } else {
+        puy_stdlib_ext::extensions()
     }
 }
 
@@ -108,10 +112,12 @@ fn run_case_inner(case: &Case) -> Result<(), String> {
         extra_diagnostics: Vec::new(),
         script_name: Some(script_name(case.stem)),
         extra_files: Vec::new(),
+        // The passed file is `main.pas` at the root, or a test unit under `src/`
         package: case.package.then(|| puy_core::driver::PackageRoot {
-            levels: 0,
+            levels: path.matches('/').count() as u32,
             file: Some(path.clone()),
         }),
+        extensions: test_extensions(&cfg),
         ..Default::default()
     };
     let out = compile(&path, src.to_vec(), &mut provider, &opts);
@@ -376,7 +382,29 @@ fn execute(
     let stdin = Rc::new(RefCell::new(
         case.file("in").map(|b| b.to_vec()).unwrap_or_default(),
     ));
+    let mem = puy_testsuite::memfs::MemHost::new();
     let host = HostSet {
+        fs: cfg.test_fs.then(|| mem.fs()),
+        clock: cfg.clock.map(|nanos| {
+            Box::new(puy_testsuite::FixedClock {
+                nanos,
+                offset: cfg.tz_offset,
+                changes: cfg.tz_changes.clone(),
+                mono: cfg.mono,
+                mono_step: cfg.mono_step,
+            }) as Box<dyn puy_host::Clock>
+        }),
+        random: cfg
+            .random
+            .map(|seed| Box::new(puy_testsuite::FixedRandom(seed)) as Box<dyn puy_host::Random>),
+        os: cfg
+            .test_fs
+            .then(|| mem.os(cfg.os.as_deref().unwrap_or("linux"))),
+        absent: if cfg.absent_unsupported {
+            puy_host::AbsentSet::unsupported()
+        } else {
+            puy_host::AbsentSet::default()
+        },
         console: if cfg.no_console {
             None
         } else {
@@ -399,9 +427,7 @@ fn execute(
                 ("EMPTY".into(), String::new()),
             ])))
         },
-        clock: None,
-        random: None,
-        memory: None,
+        ..HostSet::empty()
     };
     let config = IsolateConfig {
         memory_limit: cfg.memory_limit,
@@ -414,6 +440,7 @@ fn execute(
             _ => StdoutBuffering::Full,
         },
         leak_check: true,
+        extensions: test_extensions(cfg),
     };
     let mut iso = Isolate::new(module, host, config).expect("isolate");
     let mut args = vec![path.to_string()];
@@ -458,9 +485,9 @@ fn execute(
 fn expected_path(case: &Case, ext: &str) -> std::path::PathBuf {
     let dir = std::path::Path::new(puy_testsuite::TESTS_DIR).join(case.group);
     if case.package {
-        // `<group>/…/<name>/main.<ext>`: find the package directory by its `main.pas`
+        // `<group>/…/<name>/<stem>.<ext>`: find the package directory by its `puy.toml`
         let pkg = find_dir(&dir, case.name).unwrap_or_else(|| dir.join(case.name));
-        return pkg.join(format!("main.{ext}"));
+        return pkg.join(format!("{}.{ext}", case.stem));
     }
     // Case in a subfolder: find where the .pas is
     let want = format!("{}.pas", case.name);

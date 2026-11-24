@@ -1,0 +1,7 @@
+error[E0761]: generic type `TList` needs type arguments
+   --> unavailable_names_generic_only.pas:10:6
+    |
+ 10 |   A: TList;
+    |      ^^^^^
+
+error: aborting due to 1 error

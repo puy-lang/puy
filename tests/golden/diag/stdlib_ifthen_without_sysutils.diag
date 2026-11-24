@@ -1,0 +1,9 @@
+error[E0700]: undeclared identifier `IfThen`
+  --> stdlib_ifthen_without_sysutils.pas:9:11
+   |
+ 9 |   WriteLn(IfThen(True, 'a', 'b'), Max(1, 2));
+   |           ^^^^^^
+   |
+   = fix: add `uses System.SysUtils`
+
+error: aborting due to 1 error

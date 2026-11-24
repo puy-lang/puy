@@ -290,6 +290,8 @@ fn routine_directive_kind(lower: &str) -> Option<SyntaxKind> {
         "experimental" => EXPERIMENTAL_KW,
         "platform" => PLATFORM_KW,
         "external" => EXTERNAL_KW,
+        // The body is a Rust function of an extension (`docs/spec/extensions.md`)
+        "native" => NATIVE_KW,
         "varargs" => VARARGS_KW,
         "cdecl" => CDECL_KW,
         "stdcall" => STDCALL_KW,
@@ -1877,14 +1879,9 @@ impl<'a> Parser<'a> {
             TypeCtx::Param
                 if cur == ARRAY_KW && self.nth(1) == OF_KW && self.nth(2) == CONST_KW =>
             {
-                // `array of const` declared by the user (M5, with `TValue`; `docs/spec/semantics.md` 5.3)
-                let tok = self.current_tok();
-                self.error_at(
-                    Code::E(3200),
-                    "`array of const` parameters are not supported yet (planned for M5)",
-                    tok.range,
-                );
-                self.start_node(ERROR_NODE);
+                // `array of const` declared by the user: an open array of `TValue`
+                // (`docs/spec/rtti.md` 4.1)
+                self.start_node(ARRAY_TYPE);
                 for _ in 0..3 {
                     self.bump();
                 }
@@ -3548,6 +3545,16 @@ impl<'a> Parser<'a> {
             ) || (self.nth(1) == IDENT && self.nth_lower(1) == "operator"))
     }
 
+    /// Whether the current token starts a routine declaration in a routine body: a nested
+    /// routine (`docs/spec/semantics.md` 4.9) or the body of a method of a local type, which may
+    /// be a constructor, a destructor or a class method (`docs/spec/types.md` 1.1).
+    fn at_routine_decl_in_body(&self) -> bool {
+        matches!(
+            self.current(),
+            PROCEDURE_KW | FUNCTION_KW | CONSTRUCTOR_KW | DESTRUCTOR_KW
+        ) || self.at_class_routine()
+    }
+
     /// A routine heading in the `interface` section (`ROUTINE_HEADER_DECL`; `docs/spec/units.md`
     /// chapter 1). A body written after it is E0415 and goes into an `ERROR` node.
     fn parse_routine_heading_decl(&mut self) {
@@ -3663,8 +3670,9 @@ impl<'a> Parser<'a> {
             } else {
                 self.bump_as(kind);
             }
-            if kind == FORWARD_KW || kind == EXTERNAL_KW {
-                // `external` has no body either (sema reports E3011; `grammar.md` 1.3)
+            if kind == FORWARD_KW || kind == EXTERNAL_KW || kind == NATIVE_KW {
+                // `external` has no body either (sema reports E3011; `grammar.md` 1.3), nor has
+                // `native` (its body is in Rust)
                 has_forward = true;
             }
             if kind == EXTERNAL_KW {
@@ -3706,17 +3714,12 @@ impl<'a> Parser<'a> {
             // Do not read a body
         } else if matches!(
             self.current(),
-            CONST_KW
-                | VAR_KW
-                | TYPE_KW
-                | LABEL_KW
-                | RESOURCESTRING_KW
-                | BEGIN_KW
-                | PROCEDURE_KW
-                | FUNCTION_KW
-        ) {
-            // A body starting with `procedure` / `function` (a nested routine) or with a local
-            // `type` / `label` / `resourcestring` section (E3001 / E0416) (1.3)
+            CONST_KW | VAR_KW | TYPE_KW | LABEL_KW | RESOURCESTRING_KW | BEGIN_KW
+        ) || self.at_routine_decl_in_body()
+        {
+            // A body starting with a routine declaration (a nested routine or the body of a
+            // method of a local type) or with a local `type` / `label` / `resourcestring` section
+            // (E3001 / E0416) (1.3)
             if self.parse_routine_body(false, in_script) {
                 self.expect_semicolon_after_body();
             }
@@ -3880,12 +3883,11 @@ impl<'a> Parser<'a> {
             match self.current() {
                 CONST_KW => self.parse_const_section(),
                 VAR_KW => self.parse_var_section(),
-                PROCEDURE_KW | FUNCTION_KW => {
+                _ if self.at_routine_decl_in_body() => {
                     if self.routine_depth >= MAX_NESTING {
                         self.skip_too_deep_routines();
                         break;
                     }
-                    // A nested routine (`docs/spec/semantics.md` 4.9)
                     self.parse_routine_decl(false);
                 }
                 // A nested routine takes no attributes; they are read into it and refused by the

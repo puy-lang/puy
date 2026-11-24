@@ -1,0 +1,9 @@
+error: uncaught exception EAssertionFailed: assertion failed: (N + 1 - P.X = 3) or (Same(P) and (P.C = TColor.Green))
+    N + 1 - P.X = 0
+    N + 1 = 2
+    N = 1
+    P.X = 2
+    Same(P) = True
+    P = (X: 2; C: Red)
+    P.C = Red
+  at DumpAssertProbes.<main> (dump_assert_probes.pas:25)

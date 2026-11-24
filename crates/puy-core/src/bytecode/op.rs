@@ -347,6 +347,9 @@ ops! {
     SUB_CURR = 213, "SubCurr", ABC;
     MUL_CURR = 214, "MulCurr", ABC;
     DIV_CURR = 215, "DivCurr", ABC;
+    // `docs/spec/bytecode.md` 2.9 (the elements of a dynamic array of bytes)
+    BYTES_GET = 216, "BytesGet", ABC;
+    BYTES_SET = 217, "BytesSet", ABC;
     // `docs/spec/equality.md` 8.1
     HASH_INT = 224, "HashInt", AB;
     HASH_F64 = 225, "HashF64", AB;
@@ -354,6 +357,7 @@ ops! {
     HASH_MIX = 227, "HashMix", ABC;
     KEY_EQ_F64 = 228, "KeyEqF64", ABC;
     AGG_LOAD = 229, "AggLoad", ABCursorType;
+    CALL_EXT = 230, "CallExt", ABx;
     U8_LEN = 232, "U8Len", AB;
     U8_INDEX = 233, "U8Index", ABC;
     CONCAT_U8 = 234, "ConcatU8", ABC;
@@ -493,6 +497,64 @@ pub mod intr {
         HASH_RELINK = 95, "HashRelink", ABRange3;
         // `docs/spec/bytecode.md` 2.22 (the units of the standard library only)
         ARRAY_SORT_RANGE = 96, "ArraySortRange", ABRange3;
+        // `docs/spec/bytecode.md` 2.22 (the floating-point functions)
+        MATH_F64 = 97, "MathF64", ABRange2;
+        MATH_F64X2 = 98, "MathF64x2", ABRange3;
+        // `docs/spec/bytecode.md` 2.22 (the units of the standard library only)
+        UNICODE_CATEGORY = 101, "UnicodeCategory", AB;
+        CODE_POINT_CLASS = 102, "CodePointClass", AB;
+        NUMERIC_VALUE = 103, "NumericValue", AB;
+        CHAR_CLASS = 105, "CharClass", AB;
+        // `docs/spec/bytecode.md` 2.22 (the units of the standard library only)
+        BYTES_COPY = 109, "BytesCopy", ABRange4;
+        BYTES_FILL = 110, "BytesFill", ABRange3;
+        // `docs/spec/bytecode.md` 2.22 (the units of the standard library only)
+        CONSOLE_READ = 113, "ConsoleRead", ABRange3;
+        CONSOLE_WRITE = 114, "ConsoleWrite", ABRange3;
+        CONSOLE_WRITE_ERROR = 115, "ConsoleWriteError", ABRange3;
+        // `docs/spec/bytecode.md` 2.22 (the units of the standard library only)
+        CLOCK_NOW = 117, "ClockNow", A;
+        LOCAL_OFFSET = 118, "LocalOffset", AB;
+        CONVERT_ERROR = 119, "ConvertError", ABRange2;
+        CLOCK_MONO = 120, "ClockMono", A;
+        // `docs/spec/bytecode.md` 2.24 (`TValue`; the part of `System` written in Pascal, and
+        // `Format` of an `array of const`)
+        FORMAT_VALUES = 121, "FormatValues", ABRange2;
+        VALUE_TO_STRING = 122, "ValueToString", ABRange3;
+        VALUE_READ = 123, "ValueRead", ABRange4;
+        VALUE_MATCH = 124, "ValueMatch", ABRange4;
+        VALUE_READ_STRING = 125, "ValueReadString", ABRange3;
+        TYPE_KIND_OF = 126, "TypeKindOf", AB;
+        VALUE_OF_OBJECT = 127, "ValueOfObject", ABRange2;
+        VALUE_ARRAY = 128, "ValueArray", ABRange5;
+        // `docs/spec/bytecode.md` 2.24 (the type information section; the units of the
+        // standard library only)
+        RTTI_TYPE_FIELD = 129, "RttiTypeField", ABRange3;
+        RTTI_MEMBER_FIELD = 130, "RttiMemberField", ABRange3;
+        RTTI_NAME = 131, "RttiName", AB;
+        RTTI_FIND_TYPE = 132, "RttiFindType", ABRange2;
+        // `docs/spec/bytecode.md` 2.24 (`System.Rtti`: the fields and properties read and
+        // written, the class of a class reference)
+        RTTI_FIELD_GET = 133, "RttiFieldGet", ABRange3;
+        RTTI_FIELD_SET = 134, "RttiFieldSet", ABRange4;
+        RTTI_CLASS_TYPE = 135, "RttiClassType", ABRange2;
+        // `docs/spec/bytecode.md` 2.24 (`TRttiMethod.Invoke`, the properties read and written by
+        // their methods, the attributes)
+        RTTI_METHOD_REF = 141, "RttiMethodRef", ABRange2;
+        RTTI_BRIDGE = 142, "RttiBridge", ABRange3;
+        RTTI_ATTR_FUNC = 143, "RttiAttrFunc", AB;
+        RTTI_PROP_REF = 144, "RttiPropRef", ABRange3;
+        // `docs/spec/bytecode.md` 2.19 (the generated routines of the tests of classes)
+        ADD_SUPPRESSED = 145, "AddSuppressed", AB;
+        // `docs/spec/bytecode.md` 2.10 (`Assert` under `{$C+}`; `docs/spec/semantics.md` 5.4)
+        ASSERT_VALUE = 147, "AssertValue", ABRange3;
+        // `docs/spec/bytecode.md` 2.22 (the virtual clock of `Puy.Testing` and `Sleep`)
+        CLOCK_CONTROL = 151, "ClockControl", ABRange2;
+        CLOCK_SLEEP = 152, "ClockSleep", AB;
+        // `docs/spec/bytecode.md` 2.24 (`TRttiMethod.Invoke`'s `var` arguments written back)
+        RTTI_ARG_SET = 153, "RttiArgSet", ABRange3;
+        // `docs/spec/bytecode.md` 2.22 (`System` finalization)
+        REQUEST_LEAK_REPORT = 154, "RequestLeakReport", None;
     }
 
     /// Looks up the information of an intrinsic.
@@ -587,18 +649,20 @@ mod tests {
 
     // The numbers freed by moving rare instructions to `Intrinsic` (M4-109;
     // `docs/spec/bytecode.md` 2.19) stay free but 90, 96 and 98 (the hash table lookups; 2.23;
-    // 91 was `HashFindKey` until M4-132), `Ext` took one of them, and no instruction is numbered
-    // past 255 yet besides the one of the unit tests.
+    // 91 was `HashFindKey` until M4-132), 216, 217 (the elements of a dynamic array of bytes;
+    // 2.9) and 230 (`CallExt`; M5-7), `Ext` took one of them, and no instruction is numbered past
+    // 255 yet besides the one of the unit tests.
     #[test]
     fn freed_numbers_and_ext() {
-        for code in [
-            91, 157, 216, 217, 218, 219, 220, 221, 222, 223, 230, 231, 237, 238,
-        ] {
+        for code in [91, 157, 218, 219, 220, 221, 222, 223, 231, 237, 238] {
             assert!(info(code).is_none(), "{code}");
         }
+        assert_eq!(info(216).map(|i| i.name), Some("BytesGet"));
+        assert_eq!(info(217).map(|i| i.name), Some("BytesSet"));
         assert_eq!(info(90).map(|i| i.name), Some("HashFind"));
         assert_eq!(info(96).map(|i| i.name), Some("HashLookupInt"));
         assert_eq!(info(98).map(|i| i.name), Some("HashLookupStr"));
+        assert_eq!(info(230).map(|i| i.name), Some("CallExt"));
         assert_eq!(info(254).map(|i| i.name), Some("Ext"));
         assert_eq!(info(TEST_EXT).map(|i| i.name), Some("TestExt"));
         for code in EXT_BASE..LIMIT {
@@ -625,6 +689,7 @@ mod tests {
                         | Shape::ABRange2
                         | Shape::ABRange3
                         | Shape::ABRange4
+                        | Shape::ABRange5
                 ),
                 "{}",
                 x.name
@@ -642,7 +707,28 @@ mod tests {
         assert_eq!(resolve(INTRINSIC, 94).unwrap().name, "SliceRange");
         assert_eq!(resolve(INTRINSIC, 95).unwrap().name, "HashRelink");
         assert_eq!(resolve(INTRINSIC, 96).unwrap().name, "ArraySortRange");
-        assert!(resolve(INTRINSIC, 97).is_none());
+        assert_eq!(resolve(INTRINSIC, 97).unwrap().name, "MathF64");
+        assert_eq!(resolve(INTRINSIC, 98).unwrap().name, "MathF64x2");
+        assert!(resolve(INTRINSIC, 99).is_none());
+        assert_eq!(resolve(INTRINSIC, 101).unwrap().name, "UnicodeCategory");
+        assert_eq!(resolve(INTRINSIC, 103).unwrap().name, "NumericValue");
+        assert_eq!(resolve(INTRINSIC, 105).unwrap().name, "CharClass");
+        assert!(resolve(INTRINSIC, 106).is_none());
+        assert_eq!(resolve(INTRINSIC, 109).unwrap().name, "BytesCopy");
+        assert_eq!(resolve(INTRINSIC, 110).unwrap().name, "BytesFill");
+        assert!(resolve(INTRINSIC, 111).is_none());
+        assert_eq!(resolve(INTRINSIC, 113).unwrap().name, "ConsoleRead");
+        assert_eq!(resolve(INTRINSIC, 114).unwrap().name, "ConsoleWrite");
+        assert_eq!(resolve(INTRINSIC, 115).unwrap().name, "ConsoleWriteError");
+        assert!(resolve(INTRINSIC, 116).is_none());
+        assert_eq!(resolve(INTRINSIC, 117).unwrap().name, "ClockNow");
+        assert_eq!(resolve(INTRINSIC, 118).unwrap().name, "LocalOffset");
+        assert_eq!(resolve(INTRINSIC, 119).unwrap().name, "ConvertError");
+        assert_eq!(resolve(INTRINSIC, 120).unwrap().name, "ClockMono");
+        assert_eq!(resolve(INTRINSIC, 121).unwrap().name, "FormatValues");
+        assert_eq!(resolve(INTRINSIC, 128).unwrap().name, "ValueArray");
+        assert_eq!(resolve(INTRINSIC, 151).unwrap().name, "ClockControl");
+        assert_eq!(resolve(INTRINSIC, 152).unwrap().name, "ClockSleep");
         assert_eq!(resolve(INTRINSIC, 53).unwrap().name, "ExceptObject");
         assert_eq!(resolve(INTRINSIC, 46).unwrap().name, "Free");
         assert_eq!(resolve(CALL, 0).unwrap().name, "Call");

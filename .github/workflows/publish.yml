@@ -48,6 +48,24 @@ jobs:
     with: {crate: puy-host}
     secrets: inherit
 
+  puy-ext-macros:
+    needs: [version]
+    uses: ./.github/workflows/publish-crate.yml
+    with: {crate: puy-ext-macros}
+    secrets: inherit
+
+  puy-ext:
+    needs: [puy-host, puy-ext-macros]
+    uses: ./.github/workflows/publish-crate.yml
+    with: {crate: puy-ext}
+    secrets: inherit
+
+  puy-stdlib-ext:
+    needs: [puy-ext]
+    uses: ./.github/workflows/publish-crate.yml
+    with: {crate: puy-stdlib-ext}
+    secrets: inherit
+
   puy-stdlib:
     needs: [version]
     uses: ./.github/workflows/publish-crate.yml
@@ -55,7 +73,7 @@ jobs:
     secrets: inherit
 
   puy-core:
-    needs: [puy-host, puy-stdlib]
+    needs: [puy-ext, puy-host, puy-stdlib]
     uses: ./.github/workflows/publish-crate.yml
     with: {crate: puy-core}
     secrets: inherit
@@ -67,13 +85,13 @@ jobs:
     secrets: inherit
 
   puy-runtime-native:
-    needs: [puy-core, puy-host]
+    needs: [puy-core, puy-host, puy-stdlib-ext]
     uses: ./.github/workflows/publish-crate.yml
     with: {crate: puy-runtime-native}
     secrets: inherit
 
   puy-runtime-web:
-    needs: [puy-core, puy-host]
+    needs: [puy-core, puy-host, puy-stdlib-ext]
     uses: ./.github/workflows/publish-crate.yml
     with: {crate: puy-runtime-web}
     secrets: inherit

@@ -479,7 +479,7 @@ impl Values<'_> {
                     self.expr(m, cur);
                 }
             }
-            StmtKind::Nop | StmtKind::Flush => {}
+            StmtKind::Nop | StmtKind::Flush | StmtKind::RequestLeakReport => {}
         }
     }
 
@@ -722,7 +722,7 @@ impl Values<'_> {
     fn expr(&mut self, e: &Expr, cur: &mut Cursor) {
         match &e.kind {
             ExprKind::Const { .. } | ExprKind::Global(_) => {}
-            ExprKind::Error => {
+            ExprKind::Error | ExprKind::TypeName => {
                 for i in 0..self.sema_reads.len() {
                     let (id, at) = self.sema_reads[i];
                     if e.span.contains_range(at) {
@@ -770,6 +770,7 @@ impl Values<'_> {
             | ExprKind::ObjField { base, .. }
             | ExprKind::ClassName { base }
             | ExprKind::ClassCheck { operand: base, .. }
+            | ExprKind::Probe { operand: base, .. }
             | ExprKind::Weak(base) => self.expr(base, cur),
             ExprKind::ClassInfo { args, .. } => {
                 for a in args {
@@ -777,6 +778,7 @@ impl Values<'_> {
                 }
             }
             ExprKind::ClassRefValue(_)
+            | ExprKind::TypeInfo(_)
             | ExprKind::RoutineRef(_)
             | ExprKind::Anon { .. }
             | ExprKind::NestedRef { .. } => {}

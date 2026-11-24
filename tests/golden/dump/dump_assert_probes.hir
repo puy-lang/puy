@@ -1,0 +1,64 @@
+program DumpAssertProbes
+.type TColor = (Red = 0, Green = 1)
+.type TPoint = record
+  .field 0 X: Integer
+  .field 1 C: TColor
+.global g0 P: TPoint
+.global g1 N: Integer
+.routine f0 Same(const Q: TPoint): Boolean
+  .var v0 Q: TPoint const param
+  .var v1 Result: Boolean result
+  assign @16 R+
+    var v1 Result
+    binary Boolean
+      field Integer X #0
+        var v0 Q: TPoint
+      = Boolean int:Integer
+        const Integer 2
+.routine <main>
+  assign @23 R+
+    global g1 N
+    const Integer 1
+  assign @24 R+
+    field Integer X #0
+      global g0 P
+    const Integer 2
+  assert @25 "(N + 1 - P.X = 3) or (Same(P) and (P.C = TColor.Green))"
+    binary Boolean
+      binary Boolean
+        probe value #0 Integer
+          binary Integer
+            probe value #1 Integer
+              binary Integer
+                probe value #2 Integer
+                  global g1 N: Integer
+                + Integer int:Integer
+                  const Integer 1
+            - Integer int:Integer
+              probe value #3 Integer
+                field Integer X #0
+                  global g0 P: TPoint
+        = Boolean int:Integer
+          const Integer 3
+      or Boolean bool
+        probe reached mark#0 Boolean
+          binary Boolean
+            probe value #4 Boolean
+              call f0 Same: Boolean
+                probe value #5 TPoint
+                  global g0 P: TPoint
+            and Boolean bool
+              probe reached mark#1 Boolean
+                binary Boolean
+                  probe value #6 TColor
+                    field TColor C #1
+                      global g0 P: TPoint
+                  = Boolean ord
+                    const TColor 1
+    probe #0 Integer "N + 1 - P.X"
+    probe #1 Integer "N + 1"
+    probe #2 Integer "N"
+    probe #3 Integer "P.X"
+    probe #4 Boolean "Same(P)" mark#0
+    probe #5 TPoint "P" mark#0
+    probe #6 TColor "P.C" mark#1

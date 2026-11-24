@@ -1,0 +1,52 @@
+TRUE
+FALSE
+TRUE 3 5 12-ab
+3
+0 TRUE 3 5 [12-ab]
+1 TRUE 3 2 [12]
+2 TRUE 6 2 [ab]
+named ab 6
+TRUE 11 345-cd 345
+FALSE [] 0
+m 1 1-a
+m 5 2-b
+m 9 3-c
+2 2-b
+0
+g 7-z
+g 7
+g z
+FALSE
+TRUE
+2
+2
+pair 4 1
+pair2 1 2
+kana 5 2 6
+han TRUE
+caseless TRUE
+3
+FALSE
+FALSE
+2 b
+3 c
+FALSE
+TRUE
+FALSE
+2
+TRUE
+m 4
+s FALSE TRUE
+x TRUE
+n 2
+c TRUE
+a\.b\*c\+\?d\(e\)\[f\]\{g\}\|h\^\$\\i/j-k#l m
+a\.b(.*)c(.)d
+TRUE
+group index ERegularExpressionError
+group name ERegularExpressionError
+match index ERegularExpressionError
+no match has no groups ERegularExpressionError
+start position ERegularExpressionError
+length ERegularExpressionError
+pattern ERegularExpressionError

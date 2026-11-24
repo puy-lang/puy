@@ -1,0 +1,17 @@
+a.bin TRUE
+written: Size=12 Position=12
+Read 3 0 3 5
+Seek 8
+-2 0
+cut: Size=5 Position=5
+4 5 0 0
+EStreamError: the stream is closed
+opened: Size=7 Position=0
+EWriteError TRUE
+read and write: Size=8 Position=0
+99
+EFOpenError: cannot open file 'missing.bin': file not found TRUE
+EFCreateError: cannot create file 'no/such/dir/x.bin': file not found TRUE
+EFOpenError: cannot open file 'a.bin': the mode 3 is not a way to open a file
+loaded: Size=8 Position=0
+8 TRUE

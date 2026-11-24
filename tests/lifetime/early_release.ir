@@ -3,7 +3,12 @@
   g0 A: array of Integer
   g1 E: TArray<Exception>
   g2 S: string
-.func f0 EarlyRelease.<main> params=0
+.func f0 System.SysUtils.<fini> params=0
+bb0:
+  .line 50
+  RetVoid
+.finally
+.func f1 EarlyRelease.<main> params=0
   .reg t0: Int64 temp
   .reg t1: array of Integer temp
   .reg t2: array of Integer temp
@@ -23,11 +28,11 @@ bb0:
   LoadConst    t4, "x"
   StoreGlobalRef t4, g2
   .line 27
-  Call         -, f1()
+  Call         -, f2()
   .line 28
   RetVoid
 .finally t4
-.func f1 EarlyRelease.Run params=0
+.func f2 EarlyRelease.Run params=0
   .reg t0: string temp
   .reg t1: Integer temp
   .reg t2: array of Integer temp

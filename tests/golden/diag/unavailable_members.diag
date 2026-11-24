@@ -1,0 +1,55 @@
+error[E3022]: `System.Classes.TList` is not supported in Puy
+   --> unavailable_members.pas:20:6
+    |
+ 20 |   L: TList;
+    |      ^^^^^
+    |
+    = note: use `TList<T>` or `TObjectList` instead
+
+error[E3022]: `System.Classes.TMemoryStream.Memory` is not supported in Puy
+   --> unavailable_members.pas:24:13
+    |
+ 24 |   WriteLn(M.Memory = nil);
+    |             ^^^^^^
+    |
+    = note: use `Bytes` of `TBytesStream` or `ToBytes` instead
+
+error[E3022]: `System.Classes.TMemoryStream.Memory` is not supported in Puy
+   --> unavailable_members.pas:26:5
+    |
+ 26 |   B.memory;
+    |     ^^^^^^
+    |
+    = note: use `Bytes` of `TBytesStream` or `ToBytes` instead
+
+error[E3022]: `System.Classes.TMemoryStream.Memory` is not supported in Puy
+   --> unavailable_members.pas:28:5
+    |
+ 28 |   X.Memory;
+    |     ^^^^^^
+    |
+    = note: use `Bytes` of `TBytesStream` or `ToBytes` instead
+
+error[E0700]: `TMemoryStream` has no member `NoSuchMember`
+   --> unavailable_members.pas:29:5
+    |
+ 29 |   M.NoSuchMember;
+    |     ^^^^^^^^^^^^
+
+error[E3022]: `System.Classes.TMemoryStream.Capacity` is not supported in Puy
+   --> unavailable_members.pas:30:5
+    |
+ 30 |   M.Capacity := 10;
+    |     ^^^^^^^^
+    |
+    = note: use `Size` (the blocks grow by themselves) instead
+
+error[E3022]: `System.Classes.TMemoryStream.Capacity` is not supported in Puy
+   --> unavailable_members.pas:31:25
+    |
+ 31 |   WriteLn(TMemoryStream.Capacity);
+    |                         ^^^^^^^^
+    |
+    = note: use `Size` (the blocks grow by themselves) instead
+
+error: aborting due to 7 errors

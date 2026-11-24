@@ -390,7 +390,7 @@ mod tests {
             "t.pas",
             src.as_bytes().to_vec(),
             &mut p,
-            &CompileOptions::default(),
+            &crate::driver::test_options(),
             false,
         )
     }
@@ -454,7 +454,7 @@ mod tests {
             "t.pas",
             b"procedure P;\nvar\n  A, B: Integer;\nbegin\n  WriteLn(A, B, A);\nend;\n".to_vec(),
             &mut p,
-            &CompileOptions::default(),
+            &crate::driver::test_options(),
         );
         let e2000 = out
             .diagnostics
@@ -472,7 +472,7 @@ mod tests {
             "t.pas",
             b"program Hello\r\nbegin\r\n  X := StrToInt('1');\r\nend.\r\n".to_vec(),
             &mut p,
-            &CompileOptions::default(),
+            &crate::driver::test_options(),
             true,
         );
         let text = String::from_utf8(r.fixed("t.pas").unwrap().to_vec()).unwrap();

@@ -1,0 +1,29 @@
+error[E0774]: `native` routine `Inc1` cannot be used as a value
+   --> ext_native_value.pas:20:8
+    |
+ 20 |   F := Inc1;
+    |        ^^^^
+    |
+    = note: wrap it in an anonymous method, as in `function(…) begin Result := …(…) end`
+
+error[E0774]: a `native` constructor cannot be called through a class reference
+   --> ext_native_value.pas:22:10
+    |
+ 22 |   C := R.Create(1);
+    |          ^^^^^^
+
+error[E0774]: class `TTicket` has no `native` constructor `Create`
+   --> ext_native_value.pas:23:16
+    |
+ 23 |   T := TTicket.Create;
+    |                ^^^^^^
+
+error[E0774]: `native` routine `TCounter.Value` cannot be used as a value
+   --> ext_native_value.pas:25:8
+    |
+ 25 |   G := C.Value;
+    |        ^^^^^^^
+    |
+    = note: wrap it in an anonymous method, as in `function(…) begin Result := …(…) end`
+
+error: aborting due to 4 errors

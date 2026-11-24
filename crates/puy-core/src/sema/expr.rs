@@ -312,8 +312,14 @@ impl<'a, 's> Sema<'a, 's> {
         let written = ac.elements();
         let mut elems = Vec::with_capacity(written.len());
         let mut failed = false;
+        // `array of const` (`docs/spec/rtti.md` 4.1)
+        let of_const = matches!(expected, Ty::OpenArray(_)) && self.types.is_tvalue(elem);
         for el in &written {
             match el {
+                ast::CtorElem::Expr(x) if of_const => match self.const_array_elem(x, elem) {
+                    Some(v) => elems.push(v),
+                    None => failed = true,
+                },
                 ast::CtorElem::Expr(x) => {
                     let v = self.lower_expected(x, elem);
                     if v.ty.is_error() || elem.is_error() {
@@ -595,6 +601,21 @@ impl<'a, 's> Sema<'a, 's> {
             self.push(d);
             return err_expr(span);
         }
+        if set.is_empty() && self.is_extension_class(id) {
+            // An instance without a Rust value (`docs/spec/extensions.md` 2.2)
+            for a in args {
+                if let Some(v) = a.value() {
+                    self.lower_expr_unchecked_ctor(&v);
+                }
+            }
+            let t = self.types.name(Ty::Class(id));
+            self.error(
+                Code::E(774),
+                format!("class `{t}` has no `native` constructor `{name}`"),
+                name_range,
+            );
+            return err_expr(span);
+        }
         if set.is_empty() {
             // The built-in `TObject.Create`
             self.check_no_width(args);
@@ -636,6 +657,16 @@ impl<'a, 's> Sema<'a, 's> {
         };
         self.routine_hint_use(ctor, name_range);
         let call = self.lower_routine_call(ctor, args, span);
+        if !named && self.routines[ctor.0 as usize].native {
+            // `CallExt` makes the instance of the class it was declared for
+            // (`docs/spec/extensions.md` 2.2)
+            self.error(
+                Code::E(774),
+                "a `native` constructor cannot be called through a class reference",
+                name_range,
+            );
+            return err_expr(span);
+        }
         if named && self.check_abstract_create(id, span) {
             return err_expr(span);
         }
@@ -706,7 +737,11 @@ impl<'a, 's> Sema<'a, 's> {
         let is_self = self_up.is_some();
         if info.ret.is_none() {
             // A procedure used in an expression
-            self.routine_no_value(id, range);
+            if self.const_elem {
+                self.routine_in_const_array(range);
+            } else {
+                self.routine_no_value(id, range);
+            }
             return err_expr(span);
         }
         if is_self {
@@ -1084,36 +1119,38 @@ impl<'a, 's> Sema<'a, 's> {
         if lower == "result" && self.result_owner().is_some() {
             return true;
         }
-        // `Self` and the members of `Self` in a method (`docs/spec/objects.md` 2.3)
+        // `Self` and the members of `Self` in a method (`docs/spec/objects.md` 2.3); a member
+        // with a reserved name (`&Result`) only after `.` (`docs/spec/semantics.md` 4.1)
         if let Some(class) = self.method_class()
             && (lower == "self"
-                || self.types.class_chain(class).iter().any(|&c| {
-                    // A class, or a record with methods (chapter 6)
-                    let has_field = match &self.types.get(c).kind {
-                        super::types::TypeKind::Class { fields, .. } => {
-                            fields.iter().any(|f| f.name.eq_ignore_ascii_case(lower))
-                        }
-                        super::types::TypeKind::Record { fields, .. } => {
-                            fields.iter().any(|f| f.name.eq_ignore_ascii_case(lower))
-                        }
-                        _ => false,
-                    };
-                    has_field
-                        || self
-                            .types
-                            .class_methods(c)
-                            .iter()
-                            .any(|m| m.name.eq_ignore_ascii_case(lower))
-                        || self
-                            .types
-                            .class_properties(c)
-                            .iter()
-                            .any(|p| p.name.eq_ignore_ascii_case(lower))
-                        || self.types.class_statics(c).iter().any(|s| {
-                            s.name.eq_ignore_ascii_case(lower)
-                                && !matches!(s.kind, super::types::StaticKind::Type(_))
-                        })
-                }))
+                || !super::is_reserved_name(lower)
+                    && self.types.class_chain(class).iter().any(|&c| {
+                        // A class, or a record with methods (chapter 6)
+                        let has_field = match &self.types.get(c).kind {
+                            super::types::TypeKind::Class { fields, .. } => {
+                                fields.iter().any(|f| f.name.eq_ignore_ascii_case(lower))
+                            }
+                            super::types::TypeKind::Record { fields, .. } => {
+                                fields.iter().any(|f| f.name.eq_ignore_ascii_case(lower))
+                            }
+                            _ => false,
+                        };
+                        has_field
+                            || self
+                                .types
+                                .class_methods(c)
+                                .iter()
+                                .any(|m| m.name.eq_ignore_ascii_case(lower))
+                            || self
+                                .types
+                                .class_properties(c)
+                                .iter()
+                                .any(|p| p.name.eq_ignore_ascii_case(lower))
+                            || self.types.class_statics(c).iter().any(|s| {
+                                s.name.eq_ignore_ascii_case(lower)
+                                    && !matches!(s.kind, super::types::StaticKind::Type(_))
+                            })
+                    }))
         {
             return true;
         }
@@ -1257,13 +1294,7 @@ impl<'a, 's> Sema<'a, 's> {
                 }
                 Ok(_) => self.cannot_assign(whole, "not a variable", None),
                 Err(true) => {}
-                Err(false) => {
-                    self.error(
-                        Code::E(3200),
-                        "type helpers for built-in types are not supported yet (planned for M5)",
-                        whole,
-                    );
-                }
+                Err(false) => self.builtin_member_missing(ty, &name, name_tok.text_range(), whole),
             }
             return None;
         }
@@ -1845,7 +1876,24 @@ impl<'a, 's> Sema<'a, 's> {
         };
         let found = match resolved {
             Some((Resolved::Type(Ty::Class(id) | Ty::Intf(id)), ..)) => return Some(id),
+            // A type parameter with a class constraint, checked against the type argument of each
+            // instantiation (`docs/spec/generics.md` 3.3)
+            Some((Resolved::Type(Ty::Param(p)), ..)) if self.param_class(p).is_some() => {
+                return Some(p);
+            }
             Some((Resolved::Type(Ty::Error), ..)) => return None,
+            Some((Resolved::Type(t @ Ty::Param(_)), ..)) => {
+                let name = self.tn(t);
+                let d = self.error(
+                    Code::E(702),
+                    format!("type mismatch: expected a class or an interface, found `{name}`"),
+                    range,
+                );
+                d.notes.push(format!(
+                    "add a class constraint to the type parameter, as in `<{name}: class>`"
+                ));
+                return None;
+            }
             Some((Resolved::Type(t), ..)) => format!("`{}`", self.tn(t)),
             _ => {
                 let e = self.lower_expr(r);
@@ -1873,46 +1921,13 @@ impl<'a, 's> Sema<'a, 's> {
         span: TextRange,
         node: &ast::BinaryExpr,
     ) -> Expr {
-        let target = self.class_or_intf(class);
-        // A value of a type parameter is seen as its constraint's class (any class or
-        // interface constraint for an interface; `docs/spec/generics.md` 3.3)
-        let x = match x.ty {
-            Ty::Param(p) => {
-                let view = if self.types.is_interface(class) {
-                    self.param_reference(x.ty)
-                } else {
-                    self.param_class(p).map(Ty::Class)
-                };
-                match view {
-                    Some(v) => Expr { ty: v, ..x },
-                    None => {
-                        let what = match op {
-                            ClassCheckOp::Is => super::generics::ParamOp::TypeTest,
-                            _ => super::generics::ParamOp::Convert,
-                        };
-                        self.param_misuse(p, what, span);
-                        return err_expr(span);
-                    }
-                }
-            }
-            _ => x,
-        };
-        if !matches!(x.ty, Ty::Class(_) | Ty::Intf(_)) {
-            let d = self.error(
-                Code::E(702),
-                format!(
-                    "type mismatch: expected an instance of a class or an interface, found `{}`",
-                    self.tn(x.ty)
-                ),
-                x.span,
-            );
-            if matches!(x.ty, Ty::ClassRef(_)) {
-                d.notes.push(
-                    "check a class reference with `InheritsFrom`, and convert it with the name of a class reference type, as in `TShapeClass(C)`".into(),
-                );
-            }
-            return err_expr(span);
+        if self.types.is_param(class) {
+            return self.param_class_check(x, class, op, span);
         }
+        let target = self.class_or_intf(class);
+        let Some(x) = self.class_check_operand(x, self.types.is_interface(class), op, span) else {
+            return err_expr(span);
+        };
         let Some(holds) = self.check_holds_statically(x.ty, target, span) else {
             return err_expr(span);
         };
@@ -1951,6 +1966,99 @@ impl<'a, 's> Sema<'a, 's> {
                 Ty::Boolean
             } else {
                 target
+            },
+            value: None,
+            span,
+        }
+    }
+
+    /// The checked value of `x is T` / `x as T`: a value of a type parameter is seen as its
+    /// constraint's class (any class or interface constraint when `T` is an interface, `to_intf`;
+    /// `docs/spec/generics.md` 3.3); `None` after the E0702 of a value that is not an instance
+    /// (or the misuse of a type parameter without such a constraint).
+    fn class_check_operand(
+        &mut self,
+        x: Expr,
+        to_intf: bool,
+        op: ClassCheckOp,
+        span: TextRange,
+    ) -> Option<Expr> {
+        // A value of a type parameter is seen as its constraint's class (any class or
+        // interface constraint for an interface; `docs/spec/generics.md` 3.3)
+        let x = match x.ty {
+            Ty::Param(p) => {
+                let view = if to_intf {
+                    self.param_reference(x.ty)
+                } else {
+                    self.param_class(p).map(Ty::Class)
+                };
+                match view {
+                    Some(v) => Expr { ty: v, ..x },
+                    None => {
+                        let what = match op {
+                            ClassCheckOp::Is => super::generics::ParamOp::TypeTest,
+                            _ => super::generics::ParamOp::Convert,
+                        };
+                        self.param_misuse(p, what, span);
+                        return None;
+                    }
+                }
+            }
+            _ => x,
+        };
+        if !matches!(x.ty, Ty::Class(_) | Ty::Intf(_)) {
+            let d = self.error(
+                Code::E(702),
+                format!(
+                    "type mismatch: expected an instance of a class or an interface, found `{}`",
+                    self.tn(x.ty)
+                ),
+                x.span,
+            );
+            if matches!(x.ty, Ty::ClassRef(_)) {
+                d.notes.push(
+                    "check a class reference with `InheritsFrom`, and convert it with the name of a class reference type, as in `TShapeClass(C)`".into(),
+                );
+            }
+            return None;
+        }
+        Some(x)
+    }
+
+    /// `x is T` / `x as T` of a type parameter `T` with a class constraint
+    /// (`docs/spec/generics.md` 3.3): always checked at run time against the type argument
+    /// (the instantiation replaces `T` in the check), even where the constraint's class holds
+    /// statically, since the argument may be a descendant of it. A class that can never be the
+    /// constraint's class or a descendant of it is the E0702 of `class_check`.
+    fn param_class_check(
+        &mut self,
+        x: Expr,
+        param: super::types::TypeId,
+        op: ClassCheckOp,
+        span: TextRange,
+    ) -> Expr {
+        let Some(class) = self.param_class(param) else {
+            return err_expr(span);
+        };
+        let Some(x) = self.class_check_operand(x, false, op, span) else {
+            return err_expr(span);
+        };
+        if self
+            .check_holds_statically(x.ty, Ty::Class(class), span)
+            .is_none()
+        {
+            return err_expr(span);
+        }
+        Expr {
+            kind: ExprKind::ClassCheck {
+                operand: Box::new(x),
+                class: param,
+                op,
+            },
+            ty: if op == ClassCheckOp::Is {
+                Ty::Boolean
+            } else {
+                Ty::Param(param)
             },
             value: None,
             span,
@@ -2241,6 +2349,19 @@ impl<'a, 's> Sema<'a, 's> {
                 )
             {
                 // The same instance or not, whatever the types (`docs/spec/objects.md` 7.4)
+                return Some((
+                    BinStep {
+                        op,
+                        rhs,
+                        calc: Calc::Ref,
+                        ty: Ty::Boolean,
+                        span: op_range,
+                    },
+                    None,
+                ));
+            }
+            if matches!(op, BinOp::Eq | BinOp::Ne) && lt == Ty::TypeInfo && rt == Ty::TypeInfo {
+                // The same entry or not (`docs/spec/rtti.md` 2.1)
                 return Some((
                     BinStep {
                         op,
@@ -3557,6 +3678,14 @@ impl<'a, 's> Sema<'a, 's> {
         let mut value_arg = None;
         let ty = match self.type_name_arg(&a) {
             Some(t) => t,
+            None if f == Builtin::TypeInfo => {
+                // `docs/spec/rtti.md` 2.2
+                let x = self.lower_expr(&a);
+                if !x.ty.is_error() {
+                    self.error(Code::E(776), "`TypeInfo` expects a type", arg_span);
+                }
+                return err_expr(span);
+            }
             None => {
                 if f == Builtin::Default {
                     let x = self.lower_expr(&a);
@@ -3575,6 +3704,26 @@ impl<'a, 's> Sema<'a, 's> {
         };
         if ty.is_error() {
             return err_expr(span);
+        }
+        if f == Builtin::TypeInfo && matches!(ty, Ty::Helper(_)) {
+            // A helper is not the type of a value, and has no type information
+            // (`docs/spec/rtti.md` 1.4)
+            self.error(Code::E(753), "a helper cannot be used as a type", arg_span);
+            return err_expr(span);
+        }
+        if f == Builtin::TypeInfo {
+            // A constant of each type (`docs/spec/rtti.md` 2.2); in a generic body, of each
+            // instantiation
+            return Expr {
+                kind: ExprKind::TypeInfo(match ty {
+                    Ty::OpenArray(id) => Ty::DynArray(id),
+                    Ty::Weak(id) => Ty::Class(id),
+                    t => t,
+                }),
+                ty: Ty::TypeInfo,
+                value: None,
+                span,
+            };
         }
         // `Low` / `High` of a distinct type are of the distinct type, with the bounds of its
         // root; `SizeOf` is its root's (`docs/spec/types.md` 1.3)
@@ -4148,11 +4297,25 @@ impl<'a, 's> Sema<'a, 's> {
         span: TextRange,
     ) -> Expr {
         match f {
-            Builtin::Low | Builtin::High | Builtin::Default | Builtin::SizeOf => {
-                self.lower_type_query(f, args, span)
-            }
+            Builtin::Low
+            | Builtin::High
+            | Builtin::Default
+            | Builtin::SizeOf
+            | Builtin::TypeInfo => self.lower_type_query(f, args, span),
             Builtin::Concat => self.concat(args, span),
             Builtin::Format => self.format_call(args, span),
+            Builtin::ValueWrap
+            | Builtin::ValueIs
+            | Builtin::ValueCast
+            | Builtin::ValueArrayValue
+            | Builtin::ValueArraySetValue
+            | Builtin::RttiFieldGet
+            | Builtin::RttiFieldSet
+            | Builtin::RttiMethodRef
+            | Builtin::RttiPropRef
+            | Builtin::RttiBridge
+            | Builtin::RttiAttrFunc
+            | Builtin::RttiArgSet => self.value_builtin(f, args, span),
             Builtin::TryStrToInt => self.try_str_to_int(args, span),
             Builtin::Supports => self.supports(args, span),
             Builtin::Eof | Builtin::Eoln => self.eof_call(f, args, name_range, span),
@@ -4241,9 +4404,10 @@ impl<'a, 's> Sema<'a, 's> {
         }
     }
 
-    /// `HashFind` / `HashLookup` / `IsPlainKey` (`docs/spec/bytecode.md` 2.23; the units of the
-    /// standard library only): the integers converted to their parameter types, the arrays
-    /// checked against theirs, and a key of any type (the keys of `HashLookup` are of its type,
+    /// `HashFind` / `HashLookup` / `IsPlainKey` (`docs/spec/bytecode.md` 2.23) and `BytesCopy` /
+    /// `BytesFill` / `ConsoleRead` / `ConsoleWrite` / `ConsoleWriteError` (2.22; the units of the
+    /// standard library only): the integers converted to
+    /// their parameter types, the arrays checked against theirs, and a key of any type (the keys of `HashLookup` are of its type,
     /// and its arrays four consecutive fields of `Self`); lower expands the call by the type of
     /// the key.
     fn hash_table_call(&mut self, f: Builtin, args: &[ast::Arg], span: TextRange) -> Expr {
@@ -4299,6 +4463,12 @@ impl<'a, 's> Sema<'a, 's> {
                 (3, Some(Ty::Integer)),
                 (4, Some(lowered[0].ty)),
             ],
+            // `BytesCopy` / `BytesFill`: dynamic arrays of `Byte` (`docs/spec/bytecode.md` 2.22)
+            Builtin::BytesCopy => &[(0, Some(Ty::Byte)), (2, Some(Ty::Byte))],
+            Builtin::BytesFill
+            | Builtin::ConsoleRead
+            | Builtin::ConsoleWrite
+            | Builtin::ConsoleWriteError => &[(0, Some(Ty::Byte))],
             _ => &[],
         };
         for &(i, elem) in arrays {
@@ -4406,7 +4576,15 @@ impl<'a, 's> Sema<'a, 's> {
         }
         if matches!(
             f,
-            Builtin::HashFind | Builtin::HashLookup | Builtin::IsPlainKey | Builtin::IsPlainOrder
+            Builtin::HashFind
+                | Builtin::HashLookup
+                | Builtin::IsPlainKey
+                | Builtin::IsPlainOrder
+                | Builtin::BytesCopy
+                | Builtin::BytesFill
+                | Builtin::ConsoleRead
+                | Builtin::ConsoleWrite
+                | Builtin::ConsoleWriteError
         ) {
             return self.hash_table_call(f, args, span);
         }
@@ -5481,8 +5659,10 @@ impl<'a, 's> Sema<'a, 's> {
                         }
                         Err(true) => None,
                         Err(false) => {
-                            let t = self.tn(Ty::Class(class));
-                            self.class_member_missing(&t, &fname, frange);
+                            if !self.unavailable_member(class, &fname, frange) {
+                                let t = self.tn(Ty::Class(class));
+                                self.class_member_missing(&t, &fname, frange);
+                            }
                             None
                         }
                     };
@@ -5611,6 +5791,17 @@ impl<'a, 's> Sema<'a, 's> {
                         ..
                     } => {
                         self.property_place_error(usage, diag);
+                        None
+                    }
+                    // Assigning to the name of a function the method of a local type is
+                    // declared in (`docs/spec/types.md` 1.1)
+                    Resolved::Routine(id)
+                        if usage == PlaceUse::Assign
+                            && self.enclosing_function(id).is_none()
+                            && let Some(up) = self.enclosing_function_any(id) =>
+                    {
+                        let decl = self.ctx_at(up).name_span;
+                        self.local_method_outer_error("`Result`", up, decl, range);
                         None
                     }
                     Resolved::Routine(id)
@@ -6101,5 +6292,7 @@ pub(super) fn takes_nil(ty: Ty) -> bool {
             | Ty::Intf(_)
             | Ty::Proc(_)
             | Ty::Callable(_)
+            | Ty::TypeInfo
+            | Ty::ValueRef
     )
 }

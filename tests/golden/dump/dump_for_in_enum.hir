@@ -187,5 +187,15 @@ program DumpForInEnum
   expr @110
     call f10 Captured: -
       create TCountedColl builtin
-  free @111
+  if @112
+    cond
+      binary Boolean
+        builtin ParamCount Integer
+        > Boolean int:Integer
+          const Integer 100
+    then
+      expr @113
+        call f9 ByContents: -
+          create TIntfColl builtin
+  free @114
     global g1 C: TColl

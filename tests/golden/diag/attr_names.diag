@@ -46,16 +46,26 @@ warning[W0025]: unknown attribute `Later` (unknown-attribute)
     = note: this attribute is ignored
     = note: disable with `{$WARN unknown-attribute OFF}`
 
-error[E3200]: `[Test]` is not supported yet (planned for M5)
+error[E0781]: `[Test]` can only be used in a test unit
    --> attr_names.pas:48:2
     |
  48 | [Test]
     |  ^^^^
+    |
+    = note: a test unit is a unit in a file named `*_test.pas`
 
-error[E3200]: `[TestCase]` is not supported yet (planned for M5)
+error[E0781]: `[TestCase]` can only be used in a test unit
    --> attr_names.pas:58:2
     |
  58 | [TestCase(1, 2)]
     |  ^^^^^^^^
+    |
+    = note: a test unit is a unit in a file named `*_test.pas`
 
-error: aborting due to 5 errors; 2 warnings emitted
+error[E3200]: `[Benchmark]` is not supported yet (planned for M5)
+   --> attr_names.pas:63:2
+    |
+ 63 | [Benchmark]
+    |  ^^^^^^^^^
+
+error: aborting due to 6 errors; 2 warnings emitted

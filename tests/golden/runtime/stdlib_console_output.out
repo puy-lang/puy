@@ -1,0 +1,20 @@
+abE1
+c
+d€
+e6
+E2 E3
+fg
+h
+FALSE FALSE FALSE
+TRUE FALSE
+9: ERangeError: bytes 0..0 are out of a buffer of 0 bytes
+1: EStreamError: the stream of standard output cannot seek
+2: EStreamError: the stream of standard error cannot seek
+3: EStreamError: the stream of standard input cannot seek
+4: EStreamError: the stream of standard output cannot seek
+5: EReadError: cannot read the stream of standard output
+6: EWriteError: cannot write the stream of standard input
+7: EStreamError: the stream is closed
+8: EStreamError: the stream is closed
+still written
+E4

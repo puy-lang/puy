@@ -1,13 +1,13 @@
-error[E3200]: type helpers for built-in types are not supported yet (planned for M5)
-   --> helper_builtin_hidden.pas:30:11
+error[E0700]: `string` has no member `Length`
+   --> helper_builtin_hidden.pas:30:13
     |
- 30 |   WriteLn(S.Length);    // E3200
-    |           ^^^^^^^^
+ 30 |   WriteLn(S.Length);    // E0700
+    |             ^^^^^^
 
-error[E3200]: type helpers for built-in types are not supported yet (planned for M5)
-   --> helper_builtin_hidden.pas:31:11
+error[E0700]: `Integer` has no member `ToString`
+   --> helper_builtin_hidden.pas:31:13
     |
- 31 |   WriteLn(I.ToString);  // E3200
-    |           ^^^^^^^^^^
+ 31 |   WriteLn(I.ToString);  // E0700
+    |             ^^^^^^^^
 
 error: aborting due to 2 errors

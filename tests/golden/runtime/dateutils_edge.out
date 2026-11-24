@@ -1,0 +1,46 @@
+before 1899-12-29 06:00:00.000 (-1.250000)
+IncHour 1 1899-12-29 07:00:00.000 (-1.291667)
+IncHour 20 1899-12-30 02:00:00.000 (0.083333)
+IncMinute -1 1899-12-29 05:59:00.000 (-1.249306)
+DateOf 1899-12-29 00:00:00.000 (-1.000000)
+TimeOf 1899-12-30 06:00:00.000 (0.250000)
+EndOfTheDay 1899-12-29 23:59:59.999 (-2.000000)
+24 5 363
+1 0 14 0 3 4 1
+FALSE FALSE
+FALSE 0.0
+'2026-11-20' 2026-11-20 00:00:00.000
+'2026-11-20T12:34' 2026-11-20 12:34:00.000
+'2026-11-20t12:34:56z' 2026-11-20 12:34:56.000
+'2026-11-20 12:34:56.7' 2026-11-20 12:34:56.700
+'2026-11-20T12:34:56.123456789' 2026-11-20 12:34:56.123
+'2026-11-20T12:34:56+0930' 2026-11-20 03:04:56.000
+'2026-11-20T12:34:56-02' 2026-11-20 14:34:56.000
+'0001-01-01T00:00:00Z' 0001-01-01 00:00:00.000
+'9999-12-31T23:59:59.999Z' 9999-12-31 23:59:59.999
+'0001-01-01T00:00:00+00:01' fails
+'9999-12-31T23:59:59-00:01' fails
+'2026-11-20T24:00:00Z' fails
+'2026-02-30' fails
+'26-11-20' fails
+'2026-11-20T12' fails
+'2026-11-20T12:34:56.' fails
+'2026-11-20T12:34:56+24:00' fails
+'2026-11-20Z' fails
+' 2026-11-20' fails
+'2026-11-20T12:34:56Zx' fails
+0001-01-01T00:00:00.000Z 9999-12-31T23:59:59.999Z
+ISO8601ToDate: EConvertError: '2026-13-01' is not a valid ISO 8601 date and time
+IncDay: ERangeError: the resulting date is out of range (the years 1 to 9999)
+IncDay huge: ERangeError: the resulting date is out of range (the years 1 to 9999)
+IncMilliSecond: ERangeError: the resulting date is out of range (the years 1 to 9999)
+IncHour huge: ERangeError: the resulting date is out of range (the years 1 to 9999)
+IncYear: ERangeError: IncMonth goes out of the years 1 to 9999
+IncYear huge: ERangeError: IncMonth goes out of the years 1 to 9999
+EndOfTheWeek: ERangeError: the resulting date is out of range (the years 1 to 9999)
+YearOf: ERangeError: TDateTime value 3000000 is out of range (the years 1 to 9999)
+UnixToDateTime: ERangeError: the resulting date is out of range (the years 1 to 9999)
+UnixToDateTime huge: ERangeError: the resulting date is out of range (the years 1 to 9999)
+EndOfAMonth: EConvertError: '2024-13-1' is not a valid date
+UnixToDateTime 9999-12-31 23:59:59.000 (2958465.999988)
+UnixToDateTime 0001-01-01 00:00:00.000 (-693593.000000)

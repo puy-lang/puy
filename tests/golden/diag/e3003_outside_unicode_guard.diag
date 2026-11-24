@@ -1,0 +1,25 @@
+error[E3003]: `RawByteString` is not supported in Puy
+  --> e3003_outside_unicode_guard.pas:8:17
+   |
+ 8 |   TAfterGuard = RawByteString;
+   |                 ^^^^^^^^^^^^^
+   |
+   = note: use `string`; for bytes use `TBytes`, and for UTF-8 data use `UTF8String`
+
+error[E3003]: `AnsiString` is not supported in Puy
+   --> e3003_outside_unicode_guard.pas:11:11
+    |
+ 11 |   TElse = AnsiString;
+    |           ^^^^^^^^^^
+    |
+    = note: use `string`; for bytes use `TBytes`, and for UTF-8 data use `UTF8String`
+
+error[E3003]: `AnsiChar` is not supported in Puy
+   --> e3003_outside_unicode_guard.pas:14:15
+    |
+ 14 |   TCompound = AnsiChar;
+    |               ^^^^^^^^
+    |
+    = note: use `string`; for bytes use `TBytes`, and for UTF-8 data use `UTF8String`
+
+error: aborting due to 3 errors

@@ -128,45 +128,45 @@ error[E0753]: a helper cannot be used as a type
     |      ^^^^^^^^^^
 
 error[E0743]: `FSecret` is private to `TFoo`
-   --> helper_errors.pas:91:11
+   --> helper_errors.pas:92:11
     |
  18 |     FSecret: Integer;
     |     ------- declared here
 ...
- 91 |   WriteLn(FSecret);                              // E0743: private to `TFoo`
+ 92 |   WriteLn(FSecret);                              // E0743: private to `TFoo`
     |           ^^^^^^^
 
 error[E0743]: `Hidden` is protected in `TFoo`
-   --> helper_errors.pas:92:3
+   --> helper_errors.pas:93:3
     |
  20 |     procedure Hidden;
     |               ------ declared here
 ...
- 92 |   Hidden;                                        // E0743: protected in `TFoo`
+ 93 |   Hidden;                                        // E0743: protected in `TFoo`
     |   ^^^^^^
 
 error[E0753]: `inherited` is not allowed in a helper
-   --> helper_errors.pas:93:3
+   --> helper_errors.pas:94:3
     |
- 93 |   inherited Go;                                  // E0753: no `inherited`
+ 94 |   inherited Go;                                  // E0753: no `inherited`
     |   ^^^^^^^^^^^^
 
 error[E0707]: cannot assign to `S.Length`
-    --> helper_errors.pas:118:3
-     |
- 118 |   S.Length := 3;                                 // E0707: a read-only property
-     |   ^^^^^^^^ a read-only property
-
-error[E3200]: type helpers for built-in types are not supported yet (planned for M5)
     --> helper_errors.pas:119:3
      |
- 119 |   N.Foo := 1;                                    // E3200: no helper has `Foo` (planned for M5)
-     |   ^^^^^
+ 119 |   S.Length := 3;                                 // E0707: a read-only property
+     |   ^^^^^^^^ a read-only property
+
+error[E0700]: `Integer` has no member `Foo`
+    --> helper_errors.pas:120:5
+     |
+ 120 |   N.Foo := 1;                                    // E0700: no helper has `Foo`
+     |     ^^^
 
 error[E3200]: type helpers for built-in types are not supported yet (planned for M5)
-    --> helper_errors.pas:120:11
+    --> helper_errors.pas:121:11
      |
- 120 |   WriteLn(N.ToHexString);                        // E3200
-     |           ^^^^^^^^^^^^^
+ 121 |   WriteLn(Cur.ToHexString);                      // E3200: `Currency` has no members yet
+     |           ^^^^^^^^^^^^^^^
 
 error: aborting due to 22 errors

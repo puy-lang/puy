@@ -1,0 +1,11 @@
+error[E2503]: unit name `Helpers.Utils` does not match its path
+  --> tests/Helpers/Util.pas:2:6
+   |
+ 2 | unit Helpers.Utils;
+   |      ^^^^^^^^^^^^^
+   |
+   = note: the unit name is the path under `tests/` with folders joined by `.`
+   = note: move the file to `tests/Helpers/Utils.pas`
+   = suggestion: replace with `Helpers.Util`
+
+error: aborting due to 1 error

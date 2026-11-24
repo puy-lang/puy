@@ -225,6 +225,8 @@ fn operand(o: &Operand, types: &TypeTable) -> String {
     match o {
         Operand::Type(t) => types.full_name(*t),
         Operand::ClassRef(t) => format!("class {}", types.full_name(*t)),
+        Operand::TypeInfo(t) => format!("typeinfo {}", types.full_name(*t)),
+        Operand::DebugType(t) => format!("debugtype {}", types.full_name(*t)),
         Operand::Agg(t, c) => format!("{} {}", types.full_name(*t), const_value_text(c, *t, types)),
         Operand::Reg(r) => reg(*r),
         Operand::Imm(v) | Operand::Int(v) => v.to_string(),
@@ -238,6 +240,7 @@ fn operand(o: &Operand, types: &TypeTable) -> String {
         Operand::Global(g) => format!("g{g}"),
         Operand::Func(f) => format!("f{f}"),
         Operand::Host(h) => format!("h{h}"),
+        Operand::Ext(x) => format!("x{x}"),
         Operand::Virtual { index, name } => format!("{name}[{index}]"),
         Operand::Intf { method, name, .. } => format!("{name}[{method}]"),
     }

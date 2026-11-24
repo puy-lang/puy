@@ -14,7 +14,7 @@ use super::types::{
 };
 use super::{ParamInfo, RoutineInfo, Sema};
 use crate::diagnostics::{Code, Diagnostic, Stage};
-use crate::source::{FileId, TextRange};
+use crate::source::{FileId, Span, TextRange};
 use crate::syntax::ast::ParamMode;
 
 /// What the declaration checks of a class or record decide about its equality
@@ -166,6 +166,7 @@ impl Sema<'_, '_> {
                 method_of: Some(id),
                 self_kind: SelfKind::Instance,
                 is_abstract: false,
+                native: false,
                 body_span: None,
                 closure: false,
                 type_params: Vec::new(),
@@ -211,12 +212,12 @@ impl Sema<'_, '_> {
 }
 
 /// Builds the HIR of a generated body, every node at one position.
-struct Gen {
-    span: TextRange,
+pub(super) struct Gen {
+    pub(super) span: TextRange,
 }
 
 impl Gen {
-    fn expr(&self, kind: ExprKind, ty: Ty) -> Expr {
+    pub(super) fn expr(&self, kind: ExprKind, ty: Ty) -> Expr {
         Expr {
             kind,
             ty,
@@ -225,11 +226,11 @@ impl Gen {
         }
     }
 
-    fn var(&self, v: u32, ty: Ty) -> Expr {
+    pub(super) fn var(&self, v: u32, ty: Ty) -> Expr {
         self.expr(ExprKind::Var(VarId(v)), ty)
     }
 
-    fn constant(&self, value: super::types::Const, ty: Ty) -> Expr {
+    pub(super) fn constant(&self, value: super::types::Const, ty: Ty) -> Expr {
         Expr {
             kind: ExprKind::Const { explicit: false },
             ty,
@@ -239,7 +240,7 @@ impl Gen {
     }
 
     /// An ordinal constant of the type `ty` (a bound of a static array's index).
-    fn ordinal(&self, n: i128, ty: Ty) -> Expr {
+    pub(super) fn ordinal(&self, n: i128, ty: Ty) -> Expr {
         use super::types::Const;
         let value = match ty {
             Ty::Boolean => Const::Bool(n != 0),
@@ -249,17 +250,17 @@ impl Gen {
         self.constant(value, ty)
     }
 
-    fn int64(&self, n: usize) -> Expr {
+    pub(super) fn int64(&self, n: usize) -> Expr {
         self.constant(super::types::Const::Int(n as i128), Ty::Int64)
     }
 
-    fn boolean(&self, b: bool) -> Expr {
+    pub(super) fn boolean(&self, b: bool) -> Expr {
         self.constant(super::types::Const::Bool(b), Ty::Boolean)
     }
 
     /// `KeyEquals(A, B)` / `KeyHash(X)`; its routine is found once the body is filled
     /// ([`Inst::fill_keys`]).
-    fn key(&self, op: KeyOp, args: Vec<Expr>) -> Expr {
+    pub(super) fn key(&self, op: KeyOp, args: Vec<Expr>) -> Expr {
         let ty = match op {
             KeyOp::Equals => Ty::Boolean,
             KeyOp::Hash => Ty::Int64,
@@ -276,7 +277,7 @@ impl Gen {
     }
 
     /// `First and R1 and R2 …` (short-circuit).
-    fn and_all(&self, first: Expr, rest: Vec<Expr>) -> Expr {
+    pub(super) fn and_all(&self, first: Expr, rest: Vec<Expr>) -> Expr {
         if rest.is_empty() {
             return first;
         }
@@ -300,7 +301,7 @@ impl Gen {
     }
 
     /// `L op R` of two values compared or computed as `calc`.
-    fn binary(&self, l: Expr, op: BinOp, r: Expr, calc: Calc, ty: Ty) -> Expr {
+    pub(super) fn binary(&self, l: Expr, op: BinOp, r: Expr, calc: Calc, ty: Ty) -> Expr {
         self.expr(
             ExprKind::Binary {
                 first: Box::new(l),
@@ -317,7 +318,7 @@ impl Gen {
     }
 
     /// `HashCombine(H, X)`.
-    fn combine(&self, h: Expr, x: Expr) -> Expr {
+    pub(super) fn combine(&self, h: Expr, x: Expr) -> Expr {
         self.expr(
             ExprKind::Builtin {
                 func: Builtin::HashCombine,
@@ -329,7 +330,7 @@ impl Gen {
 
     /// `Length(A)` of a dynamic array, widened to `Int64` (the loop over its elements counts in
     /// `Int64`).
-    fn length(&self, a: Expr) -> Expr {
+    pub(super) fn length(&self, a: Expr) -> Expr {
         self.expr(
             ExprKind::Builtin {
                 func: Builtin::Length,
@@ -340,7 +341,7 @@ impl Gen {
     }
 
     /// `High(A)` of a dynamic array, in `Int64`.
-    fn high(&self, a: Expr) -> Expr {
+    pub(super) fn high(&self, a: Expr) -> Expr {
         self.expr(
             ExprKind::Builtin {
                 func: Builtin::High,
@@ -350,7 +351,7 @@ impl Gen {
         )
     }
 
-    fn assign(&self, v: u32, value: Expr) -> Stmt {
+    pub(super) fn assign(&self, v: u32, value: Expr) -> Stmt {
         Stmt {
             kind: StmtKind::Assign {
                 target: Place::Var(VarId(v), self.span),
@@ -365,7 +366,7 @@ impl Gen {
         }
     }
 
-    fn if_then(&self, cond: Expr, then: Stmt) -> Stmt {
+    pub(super) fn if_then(&self, cond: Expr, then: Stmt) -> Stmt {
         Stmt {
             kind: StmtKind::If {
                 branches: vec![(cond, then)],
@@ -375,7 +376,7 @@ impl Gen {
         }
     }
 
-    fn not(&self, e: Expr) -> Expr {
+    pub(super) fn not(&self, e: Expr) -> Expr {
         self.expr(
             ExprKind::Unary {
                 op: UnOp::Not,
@@ -386,7 +387,7 @@ impl Gen {
         )
     }
 
-    fn exit(&self) -> Stmt {
+    pub(super) fn exit(&self) -> Stmt {
         Stmt {
             kind: StmtKind::Exit(None),
             span: self.span,
@@ -394,7 +395,7 @@ impl Gen {
     }
 
     /// `for V := From to To do Body` over the local variable `v`.
-    fn for_to(&self, v: u32, from: Expr, to: Expr, body: Stmt) -> Stmt {
+    pub(super) fn for_to(&self, v: u32, from: Expr, to: Expr, body: Stmt) -> Stmt {
         Stmt {
             kind: StmtKind::For {
                 var: ForVar::Local(VarId(v)),
@@ -413,14 +414,14 @@ impl Gen {
         }
     }
 
-    fn block(&self, stmts: Vec<Stmt>) -> Stmt {
+    pub(super) fn block(&self, stmts: Vec<Stmt>) -> Stmt {
         Stmt {
             kind: StmtKind::Block(stmts),
             span: self.span,
         }
     }
 
-    fn decl(&self, name: &str, ty: Ty, kind: VarKind) -> Var {
+    pub(super) fn decl(&self, name: &str, ty: Ty, kind: VarKind) -> Var {
         Var {
             name: name.into(),
             ty,
@@ -438,7 +439,7 @@ impl Gen {
     }
 
     /// The loop variable of a generated body.
-    fn loop_var(&self, ty: Ty) -> Var {
+    pub(super) fn loop_var(&self, ty: Ty) -> Var {
         Var {
             is_loop_var: true,
             written: true,
@@ -447,7 +448,7 @@ impl Gen {
     }
 
     /// The field of a record read: a `[weak]` one through `ExprKind::Weak`.
-    fn field(&self, base: Expr, index: u32, name: &str, ty: Ty, strong: Ty) -> Expr {
+    pub(super) fn field(&self, base: Expr, index: u32, name: &str, ty: Ty, strong: Ty) -> Expr {
         let read = self.expr(
             ExprKind::Field {
                 base: Box::new(base),
@@ -462,7 +463,7 @@ impl Gen {
         }
     }
 
-    fn routine(
+    pub(super) fn routine(
         &self,
         name: String,
         vars: Vec<Var>,
@@ -486,8 +487,10 @@ impl Gen {
             parent: None,
             link: false,
             is_abstract: false,
+            native: false,
             builtin: false,
             generic: false,
+            unreached: false,
             dtor_of: None,
             helper: false,
             operator: false,
@@ -502,6 +505,8 @@ impl Gen {
 /// The walk filling in the routines of the [`ExprKind::Key`]s of a body.
 struct KeyFill<'i, 'x> {
     inst: &'i mut Inst<'x>,
+    /// The routine filled (`None` for `<main>` and the units' `<init>` / `<finalization>`).
+    routine: Option<RoutineId>,
     /// The unit and the file of the routine filled (the generated functions it asks for first
     /// are shown with its unit in the `hir` dump).
     unit: u32,
@@ -512,6 +517,11 @@ impl HirVisit for KeyFill<'_, '_> {
     fn ty(&mut self, _t: &mut Ty) {}
 
     fn key(&mut self, op: KeyOp, ty: Ty, func: &mut Option<RoutineId>, span: TextRange) {
+        if op != KeyOp::Compare && self.inst.types.contains_tvalue(ty) {
+            self.inst
+                .tvalue_key(ty, self.routine, Span::new(self.file, span));
+            return;
+        }
         if func.is_none() {
             *func = self.inst.key_func(op, ty, (self.unit, self.file, span));
         }
@@ -680,6 +690,7 @@ impl Inst<'_> {
                 h,
                 &mut KeyFill {
                     inst: self,
+                    routine: None,
                     unit,
                     file,
                 },
@@ -710,12 +721,43 @@ impl Inst<'_> {
                 &mut h,
                 &mut KeyFill {
                     inst: self,
+                    routine: Some(r),
                     unit,
                     file,
                 },
             );
             self.routines[r.0 as usize].hir = Some(h);
         }
+    }
+
+    /// E0778: the key equality or hash of a type holding a `TValue` (`docs/spec/rtti.md` 3.8),
+    /// reported where the instantiation whose body asks for it was asked for (the type
+    /// arguments the user wrote), or at the expression in a body that is not an instantiation's;
+    /// once per place.
+    fn tvalue_key(&mut self, ty: Ty, routine: Option<RoutineId>, at: Span) {
+        let origin = routine.and_then(|r| {
+            if let Some(t) = self.inst.owner.get(&r) {
+                return self.types.instance_of(*t).and_then(|i| i.origin);
+            }
+            let ri = self.inst.rowner.get(&r).copied().unwrap_or(r);
+            self.inst.rorigin.get(&ri).copied()
+        });
+        let at = origin.unwrap_or(at);
+        if self.inst.tvalue_keys.contains(&at) {
+            return;
+        }
+        self.inst.tvalue_keys.push(at);
+        let name = self.types.name(ty);
+        let d = Diagnostic::error(
+            Code::E(778),
+            format!("`{name}` has no key equality"),
+            Stage::Sema,
+        )
+        .with_primary(at, "")
+        .with_note(
+            "a `TValue` is compared by the type it holds; compare the values taken out of it",
+        );
+        self.diags.push(d);
     }
 
     /// The routine the key equality or hash of `ty` calls (`docs/spec/equality.md` 8.3): a
@@ -822,6 +864,7 @@ impl Inst<'_> {
             method_of: None,
             self_kind: super::types::SelfKind::Instance,
             is_abstract: false,
+            native: false,
             body_span: None,
             closure: false,
             type_params: Vec::new(),

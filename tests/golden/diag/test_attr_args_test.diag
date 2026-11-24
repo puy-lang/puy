@@ -1,0 +1,133 @@
+error[E0787]: class `TTwoSetups` has more than one `[Setup]` method
+   --> test_attr_args_test.pas:19:6
+    |
+ 17 |     [Setup]
+    |      ----- the first one
+ 18 |     procedure A;
+ 19 |     [Setup]
+    |      ^^^^^
+
+error[E0786]: a `[TearDown]` method cannot have parameters
+   --> test_attr_args_test.pas:22:15
+    |
+ 22 |     procedure C(X: Integer);
+    |               ^
+
+error[E0787]: `[TearDown]` is written in class `TNoTests`, which has no tests
+   --> test_attr_args_test.pas:28:6
+    |
+ 28 |     [TearDown]
+    |      ^^^^^^^^
+    |
+    = note: `[Setup]` and `[TearDown]` run around each test of their class
+
+error[E0788]: test class `TNeedsArgs` cannot be created with `Create` and no arguments
+   --> test_attr_args_test.pas:32:3
+    |
+ 32 |   TNeedsArgs = class
+    |   ^^^^^^^^^^
+    |
+    = note: an instance of the test class is created with `Create` for each test
+
+error[E0788]: test class `TAbstract` is abstract
+   --> test_attr_args_test.pas:39:3
+    |
+ 39 |   TAbstract = class
+    |   ^^^^^^^^^
+    |
+    = note: an instance of the test class is created with `Create` for each test
+
+error[E0786]: a test with parameters needs `[TestCase]`
+   --> test_attr_args_test.pas:50:15
+    |
+ 50 |     procedure T(X: Integer);
+    |               ^
+    |
+    = note: each `[TestCase(…)]` runs the test with its arguments
+
+error[E0786]: a test with parameters needs `[TestCase]`
+   --> test_attr_args_test.pas:65:11
+    |
+ 65 | procedure Params(X: Integer);
+    |           ^^^^^^
+    |
+    = note: each `[TestCase(…)]` runs the test with its arguments
+
+error[E0705]: wrong number of arguments: expected 1, found 2
+   --> test_attr_args_test.pas:74:10
+    |
+ 74 | [TestCase(1, 2)]
+    |          ^^^^^^
+...
+ 79 | procedure Cases(X: Integer);
+    |           ----- declared here
+
+error[E0702]: type mismatch: expected `Integer`, found `Char` (argument 1, parameter `X`)
+   --> test_attr_args_test.pas:75:11
+    |
+ 75 | [TestCase('a')]
+    |           ^^^
+
+warning[W0027]: duplicate test case `Test_attr_args_test.Cases(1)` (duplicate-test-case)
+   --> test_attr_args_test.pas:78:2
+    |
+ 76 | [TestCase(1)]
+    |  -------- first written here
+ 77 | [TestCase(Big)]
+ 78 | [TestCase(1)]
+    |  ^^^^^^^^
+    |
+    = note: the test runs again as `Test_attr_args_test.Cases(1) #2`
+    = note: disable with `{$WARN duplicate-test-case OFF}`
+
+error[E0713]: constant expression required
+   --> test_attr_args_test.pas:87:11
+    |
+ 87 | [TestCase(G)]
+    |           ^
+
+error[E0705]: wrong number of arguments: expected 0, found 1
+   --> test_attr_args_test.pas:92:6
+    |
+ 92 | [Test(1)]
+    |      ^^^
+
+error[E0705]: wrong number of arguments: expected 0 to 1, found 2
+   --> test_attr_args_test.pas:93:6
+    |
+ 93 | [Skip('a', 'b')]
+    |      ^^^^^^^^^^
+
+error[E0702]: type mismatch: expected `string`, found `Integer`
+   --> test_attr_args_test.pas:99:7
+    |
+ 99 | [Skip(1)]
+    |       ^
+
+error[E0713]: constant expression required
+    --> test_attr_args_test.pas:105:7
+     |
+ 105 | [Skip(Why)]
+     |       ^^^
+
+warning[W0027]: duplicate test case `Test_attr_args_test.Over` (duplicate-test-case)
+    --> test_attr_args_test.pas:117:11
+     |
+ 112 | procedure Over; overload;
+     |           ---- first written here
+...
+ 117 | procedure Over(X: Integer = 1); overload;
+     |           ^^^^
+     |
+     = note: the test runs again as `Test_attr_args_test.Over #2`
+     = note: disable with `{$WARN duplicate-test-case OFF}`
+
+error[E0706]: argument 1 must be a variable (parameter `X` is `var`)
+    --> test_attr_args_test.pas:121:11
+     |
+ 121 | [TestCase(1)]
+     |           ^
+ 122 | procedure Out(var X: Integer);
+     |                   - declared here
+
+error: aborting due to 15 errors; 2 warnings emitted

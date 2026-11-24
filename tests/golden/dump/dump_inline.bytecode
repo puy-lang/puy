@@ -5,15 +5,28 @@
   2: str "n"
 .type
   64: class DumpInline.TCounter slots=1 parent=ty19 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+  65: class System.Classes.Native.TFileHandle ref sealed slots=0 parent=ty20 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
 .global
   0: int C
   1: int X
   2: int Y
 .host
   0: Console.Write params=1 ret=0
-.unit System.SysUtils file="<stdlib>/System.SysUtils.pas" init=- fini=- entry=-
-.unit DumpInline file="dump_inline.pas" init=- fini=- entry=0
-.func 0 DumpInline.<main> params=0 regs=19
+.extunit
+  0: System.Classes.Native fingerprint=e75d2b7f94bae15c classes=[TFileHandle=ty65]
+  1: System.SysUtils.Native fingerprint=1c2f67c8ff109e6e classes=[]
+  2: System.IOUtils.Native fingerprint=555b5d5f60182a69 classes=[]
+  3: System.FileSystem.Native fingerprint=a4c02b03a3d800c1 classes=[]
+.unit System.Classes.Native file="<ext>/System.Classes.Native.pas" init=- fini=- entry=-
+.unit System.SysUtils.Native file="<ext>/System.SysUtils.Native.pas" init=- fini=- entry=-
+.unit System.IOUtils.Native file="<ext>/System.IOUtils.Native.pas" init=- fini=- entry=-
+.unit System.FileSystem.Native file="<ext>/System.FileSystem.Native.pas" init=- fini=- entry=-
+.unit System.SysUtils file="<stdlib>/System.SysUtils.pas" init=- fini=0 entry=-
+.unit DumpInline file="dump_inline.pas" init=- fini=- entry=1
+.func 0 System.SysUtils.<fini> params=0 regs=1
+  .line 50
+  0000  RetVoid
+.func 1 DumpInline.<main> params=0 regs=19
   .line 62
   0000  LoadZero     r10
   0001  New          r10, ty64
@@ -27,13 +40,13 @@
   .line 65
   0007  LoadGlobal   r11, g1
   0008  LoadGlobal   r12, g2
-  .inline f3 DumpInline.AddTwice line=65
-  .inline f2 DumpInline.Add line=33
+  .inline f4 DumpInline.AddTwice line=65
+  .inline f3 DumpInline.Add line=33
   .line 27
   0009  AddInt       r18, r11, r12
   000a  NarrowOvf    r18, r18, 4
   .endinline
-  .inline f2 DumpInline.Add line=33
+  .inline f3 DumpInline.Add line=33
   000b  AddInt       r10, r18, r12
   000c  NarrowOvf    r10, r10, 4
   .endinline
@@ -44,7 +57,7 @@
   000f  ConcatStr    r0, r0, r1
   0010  LoadGlobal   r12, g0
   0011  ClassType    r16, r12
-  .inline f1 DumpInline.TCounter.Next line=65
+  .inline f2 DumpInline.TCounter.Next line=65
   .line 20
   0012  ObjGet       r14, r12, 0
   0013  AddInt32I    r14, r14, 1
@@ -58,21 +71,21 @@
   0018  LoadConst    r3, k0
   0019  ConcatStr    r0, r0, r3
   001a  LoadInt      r13, 4
-  001b  Call         r13, f4
+  001b  Call         r13, f5
   001c  Move         r12, r13
   001d  IntToStr     r4, r12
   001e  ConcatStr    r0, r0, r4
   001f  LoadConst    r5, k0
   0020  ConcatStr    r0, r0, r5
   0021  LoadZero     r14
-  0022  Call         r14, f5
+  0022  Call         r14, f6
   0023  Move         r13, r14
   0024  IntToStr     r6, r13
   0025  ConcatStr    r0, r0, r6
   0026  LoadConst    r7, k0
   0027  ConcatStr    r0, r0, r7
   0028  LoadGlobal   r14, g1
-  0029  Call         r14, f6
+  0029  Call         r14, f7
   002a  MoveRef      r8, r14
   002b  ConcatStr    r0, r0, r8
   002c  LoadConst    r9, k1
@@ -84,7 +97,7 @@
   .line 67
   0031  RetVoid
 .finally r0, r1, r2, r3, r4, r5, r6, r7, r8, r9
-.func 1 DumpInline.TCounter.Next params=1 regs=4
+.func 2 DumpInline.TCounter.Next params=1 regs=4
   .local r0 Self
   .local r1 Result
   .line 20
@@ -95,7 +108,7 @@
   0003  ObjGet       r1, r0, 0
   .line 22
   0004  Ret          r1
-.func 2 DumpInline.Add params=2 regs=3
+.func 3 DumpInline.Add params=2 regs=3
   .local r0 A
   .local r1 B
   .local r2 Result
@@ -104,22 +117,22 @@
   0001  NarrowOvf    r2, r2, 4
   .line 28
   0002  Ret          r2
-.func 3 DumpInline.AddTwice params=2 regs=8
+.func 4 DumpInline.AddTwice params=2 regs=8
   .local r0 A
   .local r1 B
   .local r2 Result
-  .inline f2 DumpInline.Add line=33
+  .inline f3 DumpInline.Add line=33
   .line 27
   0000  AddInt       r7, r0, r1
   0001  NarrowOvf    r7, r7, 4
   .endinline
-  .inline f2 DumpInline.Add line=33
+  .inline f3 DumpInline.Add line=33
   0002  AddInt       r2, r7, r1
   0003  NarrowOvf    r2, r2, 4
   .endinline
   .line 34
   0004  Ret          r2
-.func 4 DumpInline.Fact params=1 regs=5
+.func 5 DumpInline.Fact params=1 regs=5
   .local r0 N
   .local r1 Result
   .line 38
@@ -130,11 +143,11 @@
   0002  Jmp          -> 0006
   .line 41
   0003  AddInt32I    r3, r0, -1
-  0004  Call         r3, f4
+  0004  Call         r3, f5
   0005  MulInt32     r1, r0, r3
   .line 42
   0006  Ret          r1
-.func 5 DumpInline.Safe params=1 regs=4
+.func 6 DumpInline.Safe params=1 regs=4
   .local r0 N
   .local r1 Result
   .try 0000..0005 except 0005..0007 r2
@@ -152,7 +165,7 @@
   .line 51
   0007  Ret          r1
 .finally r2
-.func 6 DumpInline.Name params=1 regs=3
+.func 7 DumpInline.Name params=1 regs=3
   .local r0 N
   .local r1 Result
   .line 55

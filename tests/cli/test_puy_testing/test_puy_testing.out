@@ -1,0 +1,85 @@
+running 16 tests (seed 1)
+skip  Testing_test.TNeedsSetup.NeverRuns: no database
+skip  Testing_test.SkipsWhileRunning: needs a network
+skip  Testing_test.SkipsWithoutReason
+skip  Testing_test.SkipsWithDescendant: not on this platform
+ok    Testing_test.CatchesSkip (Nms)
+ERROR Testing_test.SkipThenHalt (Nms)
+ok    Testing_test.RaisesReturnsTheException (Nms)
+ok    Testing_test.RaisesAcceptsDescendants (Nms)
+FAIL  Testing_test.RaisesNothing (Nms)
+FAIL  Testing_test.RaisesAnotherClass (Nms)
+FAIL  Testing_test.SkipInsideRaisesFails (Nms)
+ok    Testing_test.NearPasses (Nms)
+FAIL  Testing_test.NearFails (Nms)
+FAIL  Testing_test.NearNaNFails (Nms)
+FAIL  Testing_test.NearInfinityFails (Nms)
+ERROR Testing_test.NearNegativeTolerance (Nms)
+
+---- Testing_test.SkipThenHalt ----
+error: the test called `Halt` (exit code 3)
+
+---- Testing_test.RaisesNothing ----
+error: uncaught exception EAssertionFailed: expected an exception of class EConvertError, but none was raised
+  at Puy.Testing.AssertRaises<EConvertError> (<stdlib>/Puy.Testing/Asserts.Implementation.inc:15)
+  at Testing_test.RaisesNothing (tests/Testing_test.pas:107)
+  at Testing_test.<test:RaisesNothing> (tests/Testing_test.pas:105)
+
+---- Testing_test.RaisesAnotherClass ----
+error: uncaught exception EAssertionFailed: expected an exception of class EConvertError, but EArgumentException was raised
+  at Puy.Testing.AssertRaises<EConvertError> (<stdlib>/Puy.Testing/Asserts.Implementation.inc:12)
+  at Testing_test.RaisesAnotherClass (tests/Testing_test.pas:116)
+  at Testing_test.<test:RaisesAnotherClass> (tests/Testing_test.pas:114)
+  caused by: EArgumentException: bad argument
+    at Testing_test.RaisesAnotherClass.<anon1> (tests/Testing_test.pas:119)
+    at Puy.Testing.AssertRaises<EConvertError> (<stdlib>/Puy.Testing/Asserts.Implementation.inc:6)
+    at Testing_test.RaisesAnotherClass (tests/Testing_test.pas:116)
+    at Testing_test.<test:RaisesAnotherClass> (tests/Testing_test.pas:114)
+
+---- Testing_test.SkipInsideRaisesFails ----
+error: uncaught exception EAssertionFailed: expected an exception of class EConvertError, but ESkipTest was raised
+  at Puy.Testing.AssertRaises<EConvertError> (<stdlib>/Puy.Testing/Asserts.Implementation.inc:12)
+  at Testing_test.SkipInsideRaisesFails (tests/Testing_test.pas:127)
+  at Testing_test.<test:SkipInsideRaisesFails> (tests/Testing_test.pas:124)
+  caused by: ESkipTest: too late
+    at Puy.Testing.Skip (<stdlib>/Puy.Testing.pas:40)
+    at Testing_test.SkipInsideRaisesFails.<anon1> (tests/Testing_test.pas:130)
+    at Puy.Testing.AssertRaises<EConvertError> (<stdlib>/Puy.Testing/Asserts.Implementation.inc:6)
+    at Testing_test.SkipInsideRaisesFails (tests/Testing_test.pas:127)
+    at Testing_test.<test:SkipInsideRaisesFails> (tests/Testing_test.pas:124)
+
+---- Testing_test.NearFails ----
+error: uncaught exception EAssertionFailed: expected 1.25 to be within 0.1 of 1.5, but the difference is 0.25
+  at Puy.Testing.AssertNear (<stdlib>/Puy.Testing/Asserts.Implementation.inc:35)
+  at Testing_test.NearFails (tests/Testing_test.pas:148)
+  at Testing_test.<test:NearFails> (tests/Testing_test.pas:146)
+
+---- Testing_test.NearNaNFails ----
+error: uncaught exception EAssertionFailed: expected NAN to be within 1 of NAN, but the difference is NAN
+  at Puy.Testing.AssertNear (<stdlib>/Puy.Testing/Asserts.Implementation.inc:35)
+  at Testing_test.NearNaNFails (tests/Testing_test.pas:154)
+  at Testing_test.<test:NearNaNFails> (tests/Testing_test.pas:152)
+
+---- Testing_test.NearInfinityFails ----
+error: uncaught exception EAssertionFailed: expected INF to be within INF of 1, but the difference is INF
+  at Puy.Testing.AssertNear (<stdlib>/Puy.Testing/Asserts.Implementation.inc:35)
+  at Testing_test.NearInfinityFails (tests/Testing_test.pas:162)
+  at Testing_test.<test:NearInfinityFails> (tests/Testing_test.pas:158)
+
+---- Testing_test.NearNegativeTolerance ----
+error: uncaught exception EArgumentException: the tolerance of AssertNear is negative or NaN: -1
+  at Puy.Testing.AssertNear (<stdlib>/Puy.Testing/Asserts.Implementation.inc:27)
+  at Testing_test.NearNegativeTolerance (tests/Testing_test.pas:168)
+  at Testing_test.<test:NearNegativeTolerance> (tests/Testing_test.pas:166)
+
+test result: FAILED. 4 ok; 6 failed; 2 errors; 4 skipped; 0 filtered out
+
+to run a failed test again:
+  puy test --seed 1 --filter 'Testing_test.SkipThenHalt' --exact
+  puy test --seed 1 --filter 'Testing_test.RaisesNothing' --exact
+  puy test --seed 1 --filter 'Testing_test.RaisesAnotherClass' --exact
+  puy test --seed 1 --filter 'Testing_test.SkipInsideRaisesFails' --exact
+  puy test --seed 1 --filter 'Testing_test.NearFails' --exact
+  puy test --seed 1 --filter 'Testing_test.NearNaNFails' --exact
+  puy test --seed 1 --filter 'Testing_test.NearInfinityFails' --exact
+  puy test --seed 1 --filter 'Testing_test.NearNegativeTolerance' --exact

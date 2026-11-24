@@ -7,7 +7,12 @@
   g4 Box: TBox
   g5 N: Integer
   g6 I: Integer
-.func f0 DumpReadCopy.<main> params=0
+.func f0 System.SysUtils.<fini> params=0
+bb0:
+  .line 50
+  RetVoid
+.finally
+.func f1 DumpReadCopy.<main> params=0
   .reg v0 -: Int64 hidden
   .reg t0: Integer temp
   .reg t1: string temp
@@ -170,7 +175,7 @@ bb10:
 bb11:
   .line 41
   LoadGlobalRef t22, g0
-  Call         t23, f1()
+  Call         t23, f2()
   StrIndex     t21, t22, t23
   LoadInt      t25, 120
   JmpIfNeInt   t21, t25, bb13, bb12
@@ -371,7 +376,7 @@ bb33:
   .line 64
   RetVoid
 .finally t1, t3, t4, t8, t9, t22, t28, t29, t30, t31, t33, t34, t35, t36, t37, t43, t46, t50, t52, t56, t57, t60, t65:obj, t69:obj, t72, t74, t75, t76, t77, t78
-.func f1 DumpReadCopy.One params=0
+.func f2 DumpReadCopy.One params=0
   .reg v0 Result: Integer result
 bb0:
   .line 21

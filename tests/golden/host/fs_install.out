@@ -1,0 +1,66 @@
+installed: FALSE
+installed: TRUE
+-- System.SysUtils
+CreateDir docs: TRUE
+CreateDir docs again: FALSE
+CreateDir x/y: FALSE
+ForceDirectories a/b/c: TRUE
+DirectoryExists a/b: TRUE
+FileExists a/b: FALSE
+RemoveDir a: FALSE
+RemoveDir a/b/c: TRUE
+RenameFile a -> e: TRUE
+DeleteFile unsupported: FALSE
+DirectoryExists e/b: TRUE
+-- TFileStream
+  (memfs open docs/s.bin omCreate)
+Size: 5 Position: 5
+Read: 3 2 3 4
+Size: 2 Position: 2
+Handle nil: TRUE
+  (memfs closed docs/s.bin)
+FileExists docs/s.bin: TRUE
+-- System.IOUtils
+  (memfs open docs/a.txt omCreate)
+  (memfs closed docs/a.txt)
+  (memfs open docs/a.txt omRead)
+  (memfs closed docs/a.txt)
+hello
+GetSize: 5
+Exists c b: FALSE TRUE
+LastWrite: 2026-11-21
+ReadOnly: TRUE
+GetFiles docs: docs/a.txt docs/b.txt docs/s.bin
+GetDirectories .: ./docs ./e
+GetFiles docs3: docs3/a.txt docs3/b.txt docs3/s.bin
+Exists docs2: FALSE
+  (memfs open e/b/d/x.txt omCreate)
+  (memfs closed e/b/d/x.txt)
+Exists e: FALSE
+DeleteFile docs/s.bin: TRUE
+GetFiles docs: docs/a.txt
+-- TFilePath
+Resolve: /mem/docs/a.txt
+IsDirectory: TRUE IsFile: TRUE
+  (memfs open docs/a.txt omRead)
+  (memfs closed docs/a.txt)
+hello
+-- failures
+ReadAllText missing: EFileNotFoundException: cannot read file 'missing.txt': file not found (ekNotFound)
+TFileStream missing: EFOpenError: memfs cannot open 'missing.txt'
+  (memfs open docs/a.txt omRead)
+Write read-only stream: EWriteError: memfs cannot write 'docs/a.txt'
+  (memfs closed docs/a.txt)
+GetFiles nowhere: EDirectoryNotFoundException: cannot list directory 'nowhere': directory not found (ekNotFound)
+Resolve missing: EFileNotFoundException: cannot resolve path 'missing': file not found (ekNotFound)
+WriteAllText nowhere/x.txt: EDirectoryNotFoundException: cannot write file 'nowhere/x.txt': directory not found (ekNotFound)
+  (memfs open docs/greedy.bin omCreate)
+  (memfs closed docs/greedy.bin)
+  (memfs open docs/greedy.bin omRead)
+Read more than asked: EReadError: cannot read file 'docs/greedy.bin': the file system gave 3 bytes for 2
+  (memfs closed docs/greedy.bin)
+-- uninstalled
+  (memfs destroyed)
+installed: FALSE
+FileExists docs/a.txt: ENotSupportedException (ekNoPermission)
+ReadAllText missing.txt: ENotSupportedException (ekNoPermission)

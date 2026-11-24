@@ -1,0 +1,55 @@
+running 8 tests (seed 1)
+ok    Snap_test.TReport.Matches (Nms)
+FAIL  Snap_test.Differs (Nms)
+FAIL  Snap_test.Missing (Nms)
+ok    Snap_test.Numbered (Nms)
+ok    Snap_test.Cases(1) (Nms)
+FAIL  Snap_test.Cases(2) (Nms)
+ok    Snap_test.LineEndings (Nms)
+ERROR Snap_test.BadName (Nms)
+
+---- Snap_test.Differs ----
+error: uncaught exception EAssertionFailed: snapshot `Snap_test.Differs` differs from `tests/snapshots/Snap_test.Differs.snap` (`puy test --update` writes the new value)
+    --- tests/snapshots/Snap_test.Differs.snap
+    +++ actual
+    @@ -1,3 +1,3 @@
+     one
+    -two
+    +TWO
+     three
+  at Puy.Testing.AssertSnapshot (<stdlib>/Puy.Testing/Snapshot.Implementation.inc:12)
+  at Snap_test.Differs (tests/Snap_test.pas:30)
+  at Snap_test.<test:Differs> (tests/Snap_test.pas:28)
+
+---- Snap_test.Missing ----
+error: uncaught exception EAssertionFailed: snapshot `Snap_test.Missing` does not exist: no file `tests/snapshots/Snap_test.Missing.snap` (`puy test --update` writes it)
+  at Puy.Testing.AssertSnapshot (<stdlib>/Puy.Testing/Snapshot.Implementation.inc:12)
+  at Snap_test.Missing (tests/Snap_test.pas:36)
+  at Snap_test.<test:Missing> (tests/Snap_test.pas:34)
+
+---- Snap_test.Cases(2) ----
+error: uncaught exception EAssertionFailed: snapshot `Snap_test.Cases#2` differs from `tests/snapshots/Snap_test.Cases#2.snap` (`puy test --update` writes the new value)
+    --- tests/snapshots/Snap_test.Cases#2.snap
+    +++ actual
+    @@ -1 +1 @@
+    -case 3
+    \ No newline at end of file
+    +case 2
+    \ No newline at end of file
+  at Puy.Testing.AssertSnapshot (<stdlib>/Puy.Testing/Snapshot.Implementation.inc:12)
+  at Snap_test.Cases (tests/Snap_test.pas:51)
+  at Snap_test.<test:Cases(2)> (tests/Snap_test.pas:49)
+
+---- Snap_test.BadName ----
+error: uncaught exception EArgumentException: the name of a snapshot contains #47: 'a/b'
+  at Puy.Testing.AssertSnapshot#2 (<stdlib>/Puy.Testing/Snapshot.Implementation.inc:19)
+  at Snap_test.BadName (tests/Snap_test.pas:63)
+  at Snap_test.<test:BadName> (tests/Snap_test.pas:61)
+
+test result: FAILED. 4 ok; 3 failed; 1 errors; 0 skipped; 0 filtered out
+
+to run a failed test again:
+  puy test --seed 1 --filter 'Snap_test.Differs' --exact
+  puy test --seed 1 --filter 'Snap_test.Missing' --exact
+  puy test --seed 1 --filter 'Snap_test.Cases(2)' --exact
+  puy test --seed 1 --filter 'Snap_test.BadName' --exact

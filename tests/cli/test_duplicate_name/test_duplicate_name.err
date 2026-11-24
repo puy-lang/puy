@@ -1,0 +1,10 @@
+error[E2506]: two files map to the unit name `Same_test`
+  --> tests/Same_test.pas:2:6
+   |
+ 2 | unit Same_test;
+   |      ^^^^^^^^^
+   |
+   = note: `src/Same_test.pas`
+   = note: `tests/Same_test.pas`
+
+error: aborting due to 1 error

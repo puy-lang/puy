@@ -1,0 +1,25 @@
+ReadAllText missing: EFileNotFoundException (EInOutError, ekNotFound): cannot read file 'missing.txt': file not found
+WriteAllText no directory: EDirectoryNotFoundException (EInOutError, ekNotFound): cannot write file 'nodir/a.txt': directory not found
+GetFiles missing: EDirectoryNotFoundException (EInOutError, ekNotFound): cannot list directory 'nodir': directory not found
+CreateDirectory empty: EArgumentException: the path is empty
+Delete missing: EInOutError (EInOutError, ekNotFound): cannot delete file 'missing.txt': file not found
+Copy over existing: EInOutError (EInOutError, ekAlreadyExists): cannot copy file to 'b.txt': already exists
+Copy to no directory: EDirectoryNotFoundException (EInOutError, ekNotFound): cannot copy file to 'nodir/b.txt': directory not found
+Move to no directory: EDirectoryNotFoundException (EInOutError, ekNotFound): cannot move file to 'nodir/b.txt': directory not found
+TDirectory.Delete not empty: EInOutError (EInOutError, ekOther): cannot delete directory 'd': directory not empty
+ReadAllText of a directory: EFOpenError (EStreamError, ekIsDirectory): cannot open file 'd': is a directory
+GetSize missing: EFileNotFoundException (EInOutError, ekNotFound): cannot read the size of 'missing.txt': file not found
+ReadLines missing: EFileNotFoundException (EInOutError, ekNotFound): cannot read file 'missing.txt': file not found
+SetCurrentDirectory missing: EDirectoryNotFoundException (EInOutError, ekNotFound): cannot change to directory 'nodir': directory not found
+Open fmCreateNew existing: EInOutError (EInOutError, ekAlreadyExists): cannot create file 'a.txt': already exists
+Open fmTruncate missing: EFileNotFoundException (EInOutError, ekNotFound): cannot open file 'missing.txt': file not found
+Open fmOpen missing: EFileNotFoundException (EInOutError, ekNotFound): cannot open file 'missing.txt': file not found
+TDirectory.Move over a file: EInOutError (EInOutError, ekAlreadyExists): cannot move directory to 'a.txt': already exists
+ReadAllText nil encoding: EArgumentException: the encoding is nil
+GetFullPath empty: EArgumentException: the path is empty
+SetLastWriteTimeUtc out of range: EArgumentException: the time 1000000000 is out of the range of file times
+TDirectory.Copy into itself: EArgumentException: cannot copy directory 'd' into itself ('d/e/c')
+Copy over a directory: EInOutError (EInOutError, ekIsDirectory): cannot copy file 'a.txt' to 'd': is a directory
+Move over an existing name: EInOutError (EInOutError, ekAlreadyExists): cannot move file to 'd/e/': already exists
+TDirectory.Copy into itself (same): EArgumentException: cannot copy directory '/work/d' into itself ('d/')
+ab

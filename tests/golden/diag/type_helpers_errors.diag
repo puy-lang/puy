@@ -1,0 +1,121 @@
+error[E0700]: `Integer` has no member `Foo`
+   --> type_helpers_errors.pas:20:13
+    |
+ 20 |   WriteLn(I.Foo);                    // E0700
+    |             ^^^
+
+error[E0700]: `Double` has no member `IsFinite`
+   --> type_helpers_errors.pas:21:13
+    |
+ 21 |   WriteLn(D.IsFinite);               // E0700
+    |             ^^^^^^^^
+
+error[E0700]: `Integer` has no member `Foo`
+   --> type_helpers_errors.pas:22:19
+    |
+ 22 |   WriteLn(Integer.Foo);              // E0700
+    |                   ^^^
+
+error[E0700]: `Boolean` has no member `Bar`
+   --> type_helpers_errors.pas:23:19
+    |
+ 23 |   WriteLn(Boolean.Bar(True));        // E0700
+    |                   ^^^
+
+error[E0700]: `ToHexString` is an instance member and cannot be used through a class
+   --> type_helpers_errors.pas:24:19
+    |
+ 24 |   WriteLn(Integer.ToHexString);      // E0700: an instance member
+    |                   ^^^^^^^^^^^
+   ::: <stdlib>/System/IntegerHelpers.Interface.inc:95:14
+ 95 |     function ToHexString: string; overload;
+    |              ----------- declared here
+
+error[E0700]: `IsDigit` is an instance member and cannot be used through a class
+   --> type_helpers_errors.pas:25:16
+    |
+ 25 |   WriteLn(Char.IsDigit);             // E0700: an instance member (the static one takes C)
+    |                ^^^^^^^
+   ::: <stdlib>/System/TCharHelper.Interface.inc:22:14
+ 22 |     function IsDigit: Boolean; overload;
+    |              ------- declared here
+
+error[E0700]: `ToString` is an instance member and cannot be used through a class
+   --> type_helpers_errors.pas:26:18
+    |
+ 26 |   WriteLn(Double.ToString);          // E0700: the built-in ToString needs a value
+    |                  ^^^^^^^^
+
+error[E0700]: `Trim` is an instance member and cannot be used through a class
+   --> type_helpers_errors.pas:27:18
+    |
+ 27 |   WriteLn(string.Trim);              // E0700: an instance member
+    |                  ^^^^
+   ::: <stdlib>/System/TStringHelper.Interface.inc:51:14
+ 51 |     function Trim: string; overload;
+    |              ---- declared here
+
+error[E0700]: `string` has no member `Empty`
+   --> type_helpers_errors.pas:28:18
+    |
+ 28 |   WriteLn(string.Empty);             // E0700
+    |                  ^^^^^
+
+error[E3200]: type helpers for built-in types are not supported yet (planned for M5)
+   --> type_helpers_errors.pas:29:11
+    |
+ 29 |   WriteLn(UTF8String.Foo);           // E3200
+    |           ^^^^^^^^^^^^^^
+
+error[E0707]: cannot assign to `Integer.MaxValue`
+   --> type_helpers_errors.pas:30:3
+    |
+ 30 |   Integer.MaxValue := 3;             // E0707
+    |   ^^^^^^^^^^^^^^^^ a constant
+   ::: <stdlib>/System/IntegerHelpers.Interface.inc:87:11
+ 87 |     const MaxValue = High(Integer);
+    |           -------- declared here
+
+error[E0734]: ambiguous call to overloaded `TCharHelper.IsDigit`
+   --> type_helpers_errors.pas:31:11
+    |
+ 31 |   WriteLn(TCharHelper.IsDigit(C));   // E0734
+    |           ^^^^^^^^^^^^^^^^^^^^^^
+   ::: <stdlib>/System/TCharHelper.Interface.inc:8:20
+  8 |     class function IsDigit(C: Char): Boolean; overload; static;
+    |                    ------- candidate
+...
+ 22 |     function IsDigit: Boolean; overload;
+    |              ------- candidate
+
+error[E0702]: type mismatch: expected `string`, found `Integer` (argument 1, parameter `S`)
+   --> type_helpers_errors.pas:32:25
+    |
+ 32 |   WriteLn(Integer.Parse(1));         // E0702
+    |                         ^
+
+error[E0700]: undeclared identifier `CharClass`
+   --> type_helpers_errors.pas:33:11
+    |
+ 33 |   WriteLn(CharClass(C));             // E0700: only the standard library sees it
+    |           ^^^^^^^^^
+
+error[E0700]: undeclared identifier `SingleToBits`
+   --> type_helpers_errors.pas:34:11
+    |
+ 34 |   WriteLn(SingleToBits(1.5));        // E0700
+    |           ^^^^^^^^^^^^
+
+error[E3200]: type helpers for built-in types are not supported yet (planned for M5)
+   --> type_helpers_errors.pas:35:11
+    |
+ 35 |   WriteLn(M.ToHexString);            // E3200
+    |           ^^^^^^^^^^^^^
+
+error[E3200]: type helpers for built-in types are not supported yet (planned for M5)
+   --> type_helpers_errors.pas:36:11
+    |
+ 36 |   WriteLn(Currency.Parse('1'));      // E3200
+    |           ^^^^^^^^^^^^^^
+
+error: aborting due to 17 errors

@@ -41,10 +41,10 @@ const fn w(n: u16, m: u8, name: &'static str) -> CodeInfo {
     }
 }
 
-const fn f(n: u16) -> CodeInfo {
+const fn f(n: u16, m: u8) -> CodeInfo {
     CodeInfo {
         code: Code::F(n),
-        milestone: Some(1),
+        milestone: Some(m),
         name: None,
     }
 }
@@ -169,6 +169,21 @@ pub const CODES: &[CodeInfo] = &[
     e(767, 4),
     e(768, 4),
     e(769, 4),
+    e(770, 5),
+    e(771, 5),
+    e(772, 5),
+    e(773, 5),
+    e(774, 5),
+    e(775, 5),
+    e(776, 5),
+    e(777, 5),
+    e(778, 5),
+    e(780, 5),
+    e(781, 5),
+    e(785, 5),
+    e(786, 5),
+    e(787, 5),
+    e(788, 5),
     // 4.5 Control flow
     e(2000, 1),
     e(2001, 1),
@@ -207,6 +222,7 @@ pub const CODES: &[CodeInfo] = &[
     e(3019, 3),
     e(3020, 3),
     e(3021, 3),
+    e(3022, 5),
     // 4.8 Unsupported features and code generation limits
     e(3200, 1),
     e(3400, 1),
@@ -240,13 +256,15 @@ pub const CODES: &[CodeInfo] = &[
     w(24, 3, "self-capture-cycle"),
     w(25, 3, "unknown-attribute"),
     w(26, 3, "unneeded-reintroduce"),
+    w(27, 5, "duplicate-test-case"),
     // 4.9 Fatal errors
-    f(1),
-    f(2),
-    f(3),
-    f(4),
-    f(5),
-    f(6),
+    f(1, 1),
+    f(2, 1),
+    f(3, 1),
+    f(4, 1),
+    f(5, 1),
+    f(6, 1),
+    f(7, 5),
 ];
 
 /// Warnings disabled by default (chapter 5).

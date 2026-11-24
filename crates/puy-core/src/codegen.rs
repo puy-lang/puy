@@ -17,6 +17,8 @@ use crate::sema::hir::VarKind;
 use crate::sema::types::{Const, IntfEntry, Ty, TypeTable, VmtEntry};
 use crate::source::{FileId, Span};
 
+mod debug;
+mod rtti;
 mod share;
 
 /// Where a function loads function indexes as values (`ir::Operand::FuncValue`): (word position
@@ -30,6 +32,8 @@ const MAX_WORDS: usize = i32::MAX as usize;
 
 /// Generates the module. Returns `None` on an error (E3400).
 pub fn generate(m: &ir::Module, sink: &mut DiagnosticSink) -> Option<Module> {
+    // The type information numbers (`docs/spec/rtti.md` 7.1), which `TypeInfo(T)` loads
+    let (rtti_order, rtti_numbers) = rtti::numbers(m);
     let mut consts = ConstPool {
         entries: Vec::new(),
         types: Vec::new(),
@@ -37,11 +41,13 @@ pub fn generate(m: &ir::Module, sink: &mut DiagnosticSink) -> Option<Module> {
         table: &m.types,
         func_index: &m.func_index,
         intf_calls: Vec::new(),
+        rtti_numbers: &rtti_numbers,
+        debug: debug::DebugTypes::default(),
     };
     let mut failed = false;
     let mut funcs = Vec::with_capacity(m.funcs.len());
     let mut func_values = Vec::with_capacity(m.funcs.len());
-    for f in inline_and_optimize(m) {
+    for f in inline_and_optimize(m, &rtti_numbers) {
         let mut g = FuncGen::new(&f, &mut consts);
         match g.generate() {
             Ok((func, values)) => {
@@ -58,9 +64,9 @@ pub fn generate(m: &ir::Module, sink: &mut DiagnosticSink) -> Option<Module> {
         return None;
     }
     let mut module = Module {
-        consts: consts.entries,
-        types: consts.types,
-        intf_calls: consts.intf_calls,
+        consts: std::mem::take(&mut consts.entries),
+        types: Vec::new(),
+        intf_calls: Vec::new(),
         funcs,
         globals: m
             .globals
@@ -91,8 +97,52 @@ pub fn generate(m: &ir::Module, sink: &mut DiagnosticSink) -> Option<Module> {
                 global_count: u.global_count,
             })
             .collect(),
+        included: m.included.clone(),
         hosts: m.hosts.clone(),
+        exts: Vec::new(),
+        ext_units: Vec::new(),
+        rtti: None,
+        tests: m.tests.clone(),
+        debug: None,
     };
+    // The extension sections (`docs/spec/extensions.md` 4): the classes take their type indexes
+    // (an extension unit's exception classes are put in the type section, so that the VM finds
+    // one an extension raises by name)
+    for u in &m.ext_units {
+        let classes = u
+            .classes
+            .iter()
+            .map(|(n, t)| (n.clone(), consts.ty(*t)))
+            .collect();
+        for t in &u.exceptions {
+            consts.ty(*t);
+        }
+        module.ext_units.push(bytecode::ExtUnitEntry {
+            name: u.name.clone(),
+            fingerprint: u.fingerprint,
+            classes,
+        });
+    }
+    for e in &m.exts {
+        module.exts.push(bytecode::ExtEntry {
+            name: e.name.clone(),
+            unit: e.unit,
+            params: e.params.clone(),
+            ret: e.ret,
+            ret_type: e.ret_type.map_or(bytecode::NONE_INDEX, |t| consts.ty(t)),
+            ret_range: e.ret_range,
+            sigs: e.sigs.clone(),
+            shapes: e
+                .shapes
+                .iter()
+                .map(|sh| ext_shape(&mut consts, sh))
+                .collect(),
+        });
+    }
+    module.rtti = rtti::section(m, &rtti_order, &rtti_numbers, &mut consts);
+    module.types = consts.types;
+    module.intf_calls = consts.intf_calls;
+    module.debug = consts.debug.section();
     let origins: Vec<Option<&GenericOrigin>> = m.funcs.iter().map(|f| f.origin.as_ref()).collect();
     share::share(&mut module, &origins, &func_values);
     Some(module)
@@ -100,8 +150,12 @@ pub fn generate(m: &ir::Module, sink: &mut DiagnosticSink) -> Option<Module> {
 
 /// The functions of `m` with the calls of small routines inlined (`ir::inline`) and optimized
 /// (`ir::opt`), in function table order. Callees go first, so that a caller inlines a callee
-/// with the calls inlined into it.
-fn inline_and_optimize(m: &ir::Module) -> Vec<ir::Function> {
+/// with the calls inlined into it. `rtti_numbers` are the module's type information numbers
+/// ([`rtti::numbers`], made once).
+fn inline_and_optimize(
+    m: &ir::Module,
+    rtti_numbers: &std::collections::HashMap<Ty, u32>,
+) -> Vec<ir::Function> {
     let n = m.funcs.len();
     let (order, recursive) = ir::inline::call_order(m);
     let mut is_outer = vec![false; n];
@@ -122,7 +176,7 @@ fn inline_and_optimize(m: &ir::Module) -> Vec<ir::Function> {
         let mut f = ir::inline::inline_calls(&m.funcs[i], &|g| inlinable[g as usize].as_ref());
         let mut o = optimize(&f);
         let candidate = !recursive[i] && ir::inline::may_inline(&f, &m.types, is_outer[i]);
-        let size = |o: &ir::Function| instruction_count(m, o);
+        let size = |o: &ir::Function| instruction_count(m, rtti_numbers, o);
         if candidate && size(&o) > ir::inline::MAX_SIZE && !f.inlines.is_empty() {
             // Small without the calls inlined into it: it keeps its calls and stays small
             // enough to be inlined (`docs/design/inlining.md` 3.5)
@@ -146,7 +200,11 @@ fn inline_and_optimize(m: &ir::Module) -> Vec<ir::Function> {
 /// The size of an optimized function for the inlining (`docs/design/inlining.md` 3.5): the
 /// number of instructions codegen lays out for it (not counting `Wide`, `Ext` and type words).
 /// `u32::MAX` if it cannot be generated.
-fn instruction_count(m: &ir::Module, f: &ir::Function) -> u32 {
+fn instruction_count(
+    m: &ir::Module,
+    rtti_numbers: &std::collections::HashMap<Ty, u32>,
+    f: &ir::Function,
+) -> u32 {
     let mut scratch = ConstPool {
         entries: Vec::new(),
         types: Vec::new(),
@@ -154,6 +212,8 @@ fn instruction_count(m: &ir::Module, f: &ir::Function) -> u32 {
         table: &m.types,
         func_index: &m.func_index,
         intf_calls: Vec::new(),
+        rtti_numbers,
+        debug: debug::DebugTypes::default(),
     };
     let mut g = FuncGen::new(f, &mut scratch);
     if g.generate().is_err() {
@@ -163,6 +223,20 @@ fn instruction_count(m: &ir::Module, f: &ir::Function) -> u32 {
         .iter()
         .filter(|(i, _)| !matches!(i, Instr::TypeWord(_)))
         .count() as u32
+}
+
+/// The shape of a record or dynamic array of an extension function with its types' indexes
+/// (adding them to the type section).
+fn ext_shape(
+    consts: &mut ConstPool<'_>,
+    s: &crate::sema::native::NativeShape,
+) -> bytecode::ExtShape {
+    bytecode::ExtShape {
+        kind: s.kind,
+        ty: s.ty.map_or(bytecode::NONE_INDEX, |t| consts.ty(t)),
+        range: s.range,
+        items: s.items.iter().map(|i| ext_shape(consts, i)).collect(),
+    }
 }
 
 /// The constant pool and the type section (entries are shared in order of first use).
@@ -176,9 +250,37 @@ struct ConstPool<'t> {
     func_index: &'t [u32],
     /// The interface call targets (`docs/spec/objects.md` 14.7), in order of first use.
     intf_calls: Vec<(u32, u32)>,
+    /// The type information number of each type with type information (`docs/spec/rtti.md`
+    /// 7.1).
+    rtti_numbers: &'t std::collections::HashMap<Ty, u32>,
+    /// The entries of the debug information section (`docs/spec/semantics.md` 5.4).
+    debug: debug::DebugTypes,
 }
 
 impl ConstPool<'_> {
+    /// The type index of a type already in the type section (or a built-in type's), without
+    /// adding it.
+    fn existing(&self, ty: Ty) -> Option<u32> {
+        if let Some(id) = ty.type_id()
+            && TypeTable::is_builtin(id)
+        {
+            return Some(id.0);
+        }
+        self.type_ids
+            .iter()
+            .position(|t| *t == ty)
+            .map(|i| FIRST_TYPE_INDEX + i as u32)
+    }
+
+    /// The type information number of a type (`TypeInfo(T)`; `docs/spec/rtti.md` 7.1).
+    fn type_info(&self, ty: Ty) -> u32 {
+        let t = ir::rtti::normalize(self.table, ty).expect("`TypeInfo` of a type of a value");
+        *self
+            .rtti_numbers
+            .get(&t)
+            .expect("`ir::reach` gives every `TypeInfo` operand an entry")
+    }
+
     /// The type index of a type: a built-in type's own index (below 64), or the type section
     /// entry (64 and up), adding it (and an exception class's parent first) to the section.
     fn ty(&mut self, ty: Ty) -> u32 {
@@ -241,7 +343,7 @@ impl ConstPool<'_> {
                     .class_vmt(id)
                     .iter()
                     .map(|e| match e {
-                        VmtEntry::Func(r) => self.func_index[r.0 as usize],
+                        VmtEntry::Func(r) => self.method(*r),
                         VmtEntry::Builtin(k) => crate::bytecode::VMT_BUILTIN + k,
                         VmtEntry::Abstract => crate::bytecode::VMT_ABSTRACT,
                     })
@@ -261,7 +363,7 @@ impl ConstPool<'_> {
                         .entries
                         .iter()
                         .map(|x| match x {
-                            IntfEntry::Func(r) => self.func_index[r.0 as usize],
+                            IntfEntry::Func(r) => self.method(*r),
                             IntfEntry::Virtual(k) => vmt[*k as usize],
                             IntfEntry::Missing => {
                                 unreachable!("a class missing an interface method has an error")
@@ -305,6 +407,9 @@ impl ConstPool<'_> {
                     .expect("a dynamic array type has an element type");
                 let mut refs = Vec::new();
                 self.table.flat_kinds(elem, &mut refs);
+                if self.table.is_bytes_array(ty) {
+                    flags = crate::bytecode::DYN_BYTES;
+                }
                 (TYPE_DYNARRAY, 0, refs)
             }
             _ => {
@@ -346,6 +451,18 @@ impl ConstPool<'_> {
         });
         self.type_ids.push(ty);
         FIRST_TYPE_INDEX + self.types.len() as u32 - 1
+    }
+
+    /// The function index of a method in a table of a class in the type section: `ir::reach`
+    /// keeps the methods of these classes.
+    fn method(&self, r: crate::sema::hir::RoutineId) -> u32 {
+        let f = self.func_index[r.0 as usize];
+        assert_ne!(
+            f,
+            ir::reach::DROPPED,
+            "a method of a class in the type section is kept"
+        );
+        f
     }
 
     /// The index of an interface call target (`docs/spec/objects.md` 14.7), adding it on first
@@ -779,7 +896,7 @@ impl<'a, 't> FuncGen<'a, 't> {
                         continue;
                     }
                     let x = match callee {
-                        Operand::Func(f) | Operand::Host(f) => *f,
+                        Operand::Func(f) | Operand::Host(f) | Operand::Ext(f) => *f,
                         Operand::Virtual { index, .. } => *index,
                         Operand::Intf { intf, method, .. } => self.consts.intf_call(*intf, *method),
                         _ => unreachable!("a call names a function or a host function"),
@@ -924,7 +1041,10 @@ impl<'a, 't> FuncGen<'a, 't> {
                 let b = match info.shape {
                     op::Shape::None | op::Shape::A => 0,
                     op::Shape::AB => self.reg_operand(&rest[1]),
-                    op::Shape::ABRange2 | op::Shape::ABRange3 | op::Shape::ABRange4 => {
+                    op::Shape::ABRange2
+                    | op::Shape::ABRange3
+                    | op::Shape::ABRange4
+                    | op::Shape::ABRange5 => {
                         let b = self.reg_operand(&rest[1]);
                         for (i, o) in rest.iter().enumerate().skip(2) {
                             assert_eq!(
@@ -989,8 +1109,18 @@ impl<'a, 't> FuncGen<'a, 't> {
                         self.func_values.push((self.instrs.len(), *add));
                         i64::from(*func) + add
                     }
-                    o @ (Operand::Type(t) | Operand::ClassRef(t)) => {
-                        let t = self.consts.ty(*t) + u32::from(matches!(o, Operand::ClassRef(_)));
+                    o @ (Operand::Type(t)
+                    | Operand::ClassRef(t)
+                    | Operand::TypeInfo(t)
+                    | Operand::DebugType(t)) => {
+                        let t = match o {
+                            Operand::TypeInfo(_) => self.consts.type_info(*t),
+                            Operand::DebugType(_) => {
+                                let table = self.consts.table;
+                                self.consts.debug.number(table, *t)
+                            }
+                            _ => self.consts.ty(*t) + u32::from(matches!(o, Operand::ClassRef(_))),
+                        };
                         if t > i16::MAX as u32 {
                             self.oversize
                                 .get_or_insert("the module has more than 32768 types");
@@ -1457,7 +1587,7 @@ fn invert_fused(opc: u16, a: u32, b: u32) -> (u16, u32, u32) {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use crate::driver::{CompileOptions, compile};
+    use crate::driver::compile;
     use crate::source::MemorySourceProvider;
     use crate::source::TextRange;
 
@@ -1467,7 +1597,7 @@ pub(crate) mod tests {
             "Hello.pas",
             src.as_bytes().to_vec(),
             &mut provider,
-            &CompileOptions::default(),
+            &crate::driver::test_options(),
         );
         assert!(
             out.diagnostics.iter().all(|d| !d.is_error()),
@@ -1561,7 +1691,7 @@ end.
         src.push_str(
             "  A, B, C, Sum: Integer;\n  L: Int64;\n  S, T: string;\n  Arr: TArray<Integer>;\n\
              \x20 P: TPair;\n  Fn: TIntFn;\n  Pf: TIntProc;\n  Box: TBox;\n\
-             \x20 O, O2: TObject;\n  Tag: TTag;\n  Strs: TArray<string>;\n\
+             \x20 O, O2: TObject;\n  Tag: TTag;\n  Strs: TArray<string>;\n  Bs: TArray<Byte>;\n\
              begin\n\
              \x20 A := 1000;\n  B := -77;\n  L := -5000000000;\n\
              \x20 WriteLn(A * 3, ' ', A div 7, ' ', A mod -7, ' ', B and 127, ' ', B or 15, ' ', B xor -1);\n\
@@ -1597,6 +1727,7 @@ end.
              \x20 Tag := TTag.Create;\n  Tag.Name := S;\n  O := Tag;\n  O2 := O;\n  Tag := nil;\n  O := nil;\n\
              \x20 Box.Ref := O2;\n  O2 := nil;\n  WriteLn(Box.Ref.ClassName, ' ', O = nil);\n  Box.Ref := nil;\n  Box.Free;\n\
              \x20 SetLength(Strs, 2);\n  Strs[0] := S;\n  Strs[1] := Strs[0] + '!';\n  WriteLn(Strs[1]);\n\
+             \x20 SetLength(Bs, 2);\n  Bs[1] := 7;\n  Bs[0] := Bs[1] + 1;\n  WriteLn(Bs[0], Bs[1]);\n\
              end;\n\
              begin\n  Run;\nend.\n",
         );
@@ -1652,6 +1783,8 @@ end.
             "CapGet",
             "DynGetRef",
             "DynSetRef",
+            "BytesGet",
+            "BytesSet",
         ] {
             assert!(d.contains(&format!("w.{name} ")), "{name}\n{d}");
         }
@@ -1719,7 +1852,7 @@ end.
                 "t.pas",
                 src.as_bytes().to_vec(),
                 &mut provider,
-                &CompileOptions::default(),
+                &crate::driver::test_options(),
             );
             assert!(
                 out.diagnostics.iter().all(|d| !d.is_error()),
@@ -1769,6 +1902,8 @@ end.
             table: &table,
             func_index: &[],
             intf_calls: Vec::new(),
+            rtti_numbers: &std::collections::HashMap::new(),
+            debug: debug::DebugTypes::default(),
         };
         let mut g = FuncGen::new(&f, &mut consts);
         g.generate().expect("small function").0.code
@@ -1862,7 +1997,7 @@ end.
             "Big.pas",
             src.into_bytes(),
             &mut provider,
-            &CompileOptions::default(),
+            &crate::driver::test_options(),
         );
         let codes: Vec<String> = out
             .diagnostics

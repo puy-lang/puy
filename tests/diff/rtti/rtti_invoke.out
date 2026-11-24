@@ -1,0 +1,9 @@
+TCircle c1
+circle c1 x3
+circle kind
+42
+TRUE
+10 2 7
+49
+30
+EConvertError: bad

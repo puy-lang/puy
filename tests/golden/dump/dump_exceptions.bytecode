@@ -4,35 +4,38 @@
   1: str " "
   2: str "\n"
   3: str "assertion failed: C <> nil"
-  4: str "stop"
-  5: str "!"
-  6: str ": "
+  4: str "C"
+  5: str "stop"
+  6: str "!"
+  7: str ": "
 .type
   64: class DumpExceptions.EAppError ref slots=2 refs=0,1 parent=ty0 vmt=builtin0,builtin0,builtin0,builtin2,builtin3,builtin4
   65: class DumpExceptions.EConfigError ref slots=2 refs=0,1 parent=ty64 vmt=builtin0,builtin0,builtin0,builtin2,builtin3,builtin4
+.debug
+  dt1: class
 .global
   0: ref C
 .host
   0: Console.Write params=1 ret=0
 .unit DumpExceptions file="dump_exceptions.pas" init=- fini=- entry=0
-.func 0 DumpExceptions.<main> params=0 regs=17
+.func 0 DumpExceptions.<main> params=0 regs=18
   .line 24
   0000  LoadConst    r1, k0
   0001  New          r0, ty5
   0002  ObjSetRef    r0, 0, r1
   0003  StoreGlobalRef r0, g0
   .line 25
-  0004  LoadGlobal   r15, g0
-  0005  ObjGetRef    r3, r15, 2
+  0004  LoadGlobal   r16, g0
+  0005  ObjGetRef    r3, r16, 2
   0006  Release      r4
-  0007  EqStr        r14, r3, r4
-  0008  BoolToStr    r2, r14
+  0007  EqStr        r15, r3, r4
+  0008  BoolToStr    r2, r15
   0009  LoadConst    r5, k1
   000a  ConcatStr    r2, r2, r5
-  000b  LoadGlobal   r16, g0
-  000c  ExcInfo      r7, r16, 0
-  000d  StrLen       r15, r7
-  000e  IntToStr     r6, r15
+  000b  LoadGlobal   r17, g0
+  000c  ExcInfo      r7, r17, 0
+  000d  StrLen       r16, r7
+  000e  IntToStr     r6, r16
   000f  ConcatStr    r2, r2, r6
   0010  LoadConst    r8, k2
   0011  ConcatStr    r2, r2, r8
@@ -41,18 +44,23 @@
   .line 26
   0014  LoadGlobalRef r9, g0
   0015  Release      r10
-  0016  JmpIfNeInt   r9, r10, -> 001b
+  0016  JmpIfNeInt   r9, r10, -> 0020
   0017  LoadConst    r11, k3
   0018  New          r12, ty7
   0019  ObjSetRef    r12, 0, r11
-  001a  Raise        r12
+  001a  LoadConst    r13, k4
+  001b  Move         r15, r13
+  001c  Move         r16, r9
+  001d  LoadInt      r17, 1
+  001e  AssertValue  r12, r15
+  001f  Raise        r12
   .line 27
-  001b  LoadConst    r13, k4
-  001c  Move         r14, r13
-  001d  Call         r14, f1
+  0020  LoadConst    r14, k5
+  0021  Move         r15, r14
+  0022  Call         r15, f1
   .line 28
-  001e  RetVoid
-.finally r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13
+  0023  RetVoid
+.finally r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14
 .func 1 DumpExceptions.Fail params=1 regs=9
   .local r0 Why
   .local r1 E
@@ -61,12 +69,12 @@
   0001  ObjSetRef    r1, 0, r0
   .line 16
   0002  ObjGetRef    r2, r1, 0
-  0003  LoadConst    r3, k5
+  0003  LoadConst    r3, k6
   0004  ConcatStr    r2, r2, r3
   0005  ObjSetRef    r1, 0, r2
   .line 17
   0006  ClassName    r4, r1
-  0007  LoadConst    r5, k6
+  0007  LoadConst    r5, k7
   0008  ConcatStr    r4, r4, r5
   0009  ObjGetRef    r6, r1, 0
   000a  ConcatStr    r4, r4, r6

@@ -1,0 +1,40 @@
+; puyc format 0
+.const
+  0: str "\n"
+.type
+  64: class TestExt.TCounter ref sealed slots=0 parent=ty20 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+  65: class TestExt.THolder ref sealed slots=0 parent=ty20 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+  66: class TestExt.TTicket ref sealed slots=0 parent=ty20 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+  67: class TestExt.ETestError ref slots=2 refs=0,1 parent=ty0 vmt=builtin0,builtin0,builtin0,builtin2,builtin3,builtin4
+  68: class TestExt.ETestRange ref slots=2 refs=0,1 parent=ty3 vmt=builtin0,builtin0,builtin0,builtin2,builtin3,builtin4
+.global
+.host
+  0: Console.Write params=1 ret=0
+.extunit
+  0: TestExt fingerprint=1eaf175ceff377d2 classes=[TCounter=ty64,THolder=ty65,TTicket=ty66]
+.ext
+  0: Negate unit=0 params=[int] ret=int[0..1]
+  1: Add unit=0 params=[int,int] ret=int[-2147483648..2147483647]
+.unit TestExt file="<ext>/TestExt.pas" init=- fini=- entry=-
+.unit DumpUnreachableExt file="dump_unreachable_ext.pas" init=- fini=- entry=0
+.func 0 DumpUnreachableExt.<main> params=0 regs=7
+  .line 16
+  0000  LoadZero     r5
+  0001  CallExt      r5, x0
+  0002  Move         r4, r5
+  0003  BoolToStr    r0, r4
+  0004  LoadConst    r1, k0
+  0005  ConcatStr    r0, r0, r1
+  0006  CallHost     r0, h0
+  .line 17
+  0007  LoadInt      r5, 1
+  0008  LoadInt      r6, 2
+  0009  CallExt      r5, x1
+  000a  Move         r4, r5
+  000b  IntToStr     r2, r4
+  000c  LoadConst    r3, k0
+  000d  ConcatStr    r2, r2, r3
+  000e  CallHost     r2, h0
+  .line 18
+  000f  RetVoid
+.finally r0, r1, r2, r3

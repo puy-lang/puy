@@ -1,0 +1,25 @@
+2 3
+2 5 10
+0 1 2 5 6
+5 1 4
+TCircle TShape TRUE
+field Radius: Double of TCircle 2
+field Center: Integer of TCircle 2
+field Name: string of TShape 2
+field Color: TColor of TShape 2
+field Width: Integer of TShape 2
+declared field Radius
+declared field Center
+property R: Double TRUE TRUE
+property W: Integer TRUE TRUE
+property ShapeName: string TRUE FALSE
+method Draw 0 FALSE
+  Times: Integer
+  Done: Boolean 0
+  Msg: string 5
+  Tag: Integer 1
+method Area 1 FALSE -> Double
+method Count 5 TRUE -> Integer
+9 2.5 2
+disc Blue 2.5 disc
+2

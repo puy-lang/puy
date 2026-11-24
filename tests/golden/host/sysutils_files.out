@@ -1,0 +1,35 @@
+/work
+CreateDir a: TRUE
+CreateDir a again: FALSE
+CreateDir x/y (no parent): FALSE
+ForceDirectories a/b/c: TRUE
+ForceDirectories a/b/c again: TRUE
+ForceDirectories /work/d/: TRUE
+ForceDirectories empty: FALSE
+DirectoryExists a/b: TRUE
+DirectoryExists /work/a/b/c: TRUE
+FileExists a/b: FALSE
+FileExists missing: FALSE
+DirectoryExists empty: FALSE
+RemoveDir a (not empty): FALSE
+DeleteFile a/b/c (a directory): FALSE
+DeleteFile missing: FALSE
+RenameFile a -> e: TRUE
+DirectoryExists e/b/c: TRUE
+DirectoryExists a: FALSE
+RenameFile missing: FALSE
+RemoveDir e/b/c: TRUE
+RemoveDir e/b/c again: FALSE
+SetCurrentDir e/b: TRUE
+/work/e/b
+/work/e/b/x.txt
+/work/y/z.txt
+/b/
+/work/e
+SetCurrentDir missing: FALSE
+SetCurrentDir ..: TRUE
+/work/e
+Puy Test OS 1.2.3 (x86_64)
+pfLinux arIntelX64 Puy Test OS 1.2.3 0 0
+TRUE FALSE TRUE FALSE TRUE FALSE TRUE
+on Linux

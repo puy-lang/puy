@@ -1,0 +1,3 @@
+warning: 3 heap blocks were not freed
+  LeakReport.TNode: 2
+  TObject: 1

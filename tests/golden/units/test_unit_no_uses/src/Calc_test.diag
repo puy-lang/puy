@@ -1,0 +1,7 @@
+error[E0700]: undeclared identifier `Offset`
+   --> src/Calc_test.pas:12:10
+    |
+ 12 |   Assert(Offset = 10);
+    |          ^^^^^^
+
+error: aborting due to 1 error

@@ -1,0 +1,9 @@
+error[E0700]: undeclared identifier `TIndex`
+  --> main.pas:8:19
+   |
+ 8 |   WriteLn(Default(TIndex));
+   |                   ^^^^^^
+   |
+   = fix: replace with `I.TIndex`
+
+error: aborting due to 1 error

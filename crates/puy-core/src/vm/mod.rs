@@ -5,20 +5,26 @@
 //! - Rust panics are not converted into Pascal exceptions (§5.10).
 
 mod destroy;
+mod display;
 mod exec;
+mod ext;
 mod format;
 pub mod hash;
 pub mod heap;
 mod input;
 mod lend;
 pub mod report;
+mod rtti;
 mod sort;
 mod strconv;
 mod task;
 mod text;
+mod tvalue;
+mod unicode;
+mod unicode_tables;
 
-use std::future::Future;
-use std::pin::Pin;
+use std::borrow::Cow;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 
@@ -27,9 +33,10 @@ use crate::numfmt;
 use crate::sema::types::MAX_STRING_LEN;
 use destroy::DTOR_FN;
 use heap::{BadRef, Heap, OutOfMemory, PStr, Piece, Trace, try_join};
-use puy_host::{HostError, HostErrorKind, HostSet, OutStream};
+use puy_ext::IsolateTypeUsage;
+use puy_host::{HostError, HostFuture, HostSet, OutStream};
 pub use report::{ExceptionReport, PropValue, StackFrame, leaks_json, render_leaks};
-use task::{FRAME_COUNTED_SELF, Frame, PendingHost, PendingKind, Task};
+use task::{FRAME_COUNTED_SELF, Frame, Task};
 
 /// A register / global variable slot (8 bytes).
 pub type Slot = i64;
@@ -52,6 +59,55 @@ fn slot_f32(v: Slot) -> f32 {
 
 fn f32_slot(v: f32) -> Slot {
     v.to_bits() as Slot
+}
+
+/// The floating-point function `kind` (`bytecode::MATH_SIN` ...) of `x` (`MathF64`, `I97`;
+/// `docs/spec/bytecode.md` 2.22). Computed with `libm`, not the platform's mathematical library,
+/// so that every target gives the same bits (requirements §5.11). An unknown `kind` gives NaN.
+fn math_f64(kind: Slot, x: f64) -> f64 {
+    use crate::bytecode as b;
+    match kind {
+        b::MATH_SIN => libm::sin(x),
+        b::MATH_COS => libm::cos(x),
+        b::MATH_TAN => libm::tan(x),
+        b::MATH_ARC_SIN => libm::asin(x),
+        b::MATH_ARC_COS => libm::acos(x),
+        b::MATH_ARC_TAN => libm::atan(x),
+        b::MATH_SINH => libm::sinh(x),
+        b::MATH_COSH => libm::cosh(x),
+        b::MATH_TANH => libm::tanh(x),
+        b::MATH_ARC_SINH => libm::asinh(x),
+        b::MATH_ARC_COSH => libm::acosh(x),
+        b::MATH_ARC_TANH => libm::atanh(x),
+        b::MATH_EXP => libm::exp(x),
+        b::MATH_LN => libm::log(x),
+        b::MATH_LOG10 => libm::log10(x),
+        b::MATH_LOG2 => libm::log2(x),
+        b::MATH_LN_XP1 => libm::log1p(x),
+        b::MATH_INT => libm::trunc(x),
+        // An infinity has no fraction: `X - Int(X)` is NaN, as `INF - INF`
+        b::MATH_FRAC => x - libm::trunc(x),
+        _ => f64::NAN,
+    }
+}
+
+/// The floating-point function `kind` (`bytecode::MATH2_ARC_TAN2` ...) of `x` and `y`
+/// (`MathF64x2`, `I98`; `docs/spec/bytecode.md` 2.22). As `math_f64`.
+fn math_f64x2(kind: Slot, x: f64, y: f64) -> f64 {
+    use crate::bytecode as b;
+    match kind {
+        b::MATH2_ARC_TAN2 => libm::atan2(x, y),
+        b::MATH2_POWER => libm::pow(x, y),
+        b::MATH2_HYPOT => libm::hypot(x, y),
+        _ => f64::NAN,
+    }
+}
+
+/// The Unicode properties of the `Char` in the slot `c` as a set of bits (`CharClass`, `I105`;
+/// `docs/spec/bytecode.md` 2.22): those of the code point of its UTF-16 code unit
+/// ([`unicode::code_point_class`]).
+fn char_class(c: Slot) -> Slot {
+    unicode::code_point_class(c & 0xFFFF)
 }
 
 /// The registers an 8-bit operand reaches from a frame's base. the registers of the running task
@@ -159,6 +215,8 @@ pub struct IsolateConfig {
     /// Count the blocks left on the heap when the isolate finishes, and never reuse the indexes of freed
     /// blocks so that releasing too often is an internal error (`docs/design/lifetime.md` 3.12).
     pub leak_check: bool,
+    /// The extensions the module's `native` routines are bound to (`docs/spec/extensions.md` 4).
+    pub extensions: crate::ext::ExtensionSet,
 }
 
 impl Default for IsolateConfig {
@@ -170,7 +228,25 @@ impl Default for IsolateConfig {
             budget_default: 100_000,
             stdout_buffering: StdoutBuffering::Full,
             leak_check: false,
+            extensions: crate::ext::ExtensionSet::new(),
         }
+    }
+}
+
+/// A module that passed [`Module::verify`] (`docs/spec/bytecode.md` 3.3), which the fast path of
+/// the execution loop relies on (`docs/design/vm.md` 3.14). Isolates made from it with
+/// [`Isolate::from_verified`] do not verify it again.
+#[derive(Debug, Clone)]
+pub struct VerifiedModule(Arc<Module>);
+
+impl VerifiedModule {
+    pub fn new(module: Arc<Module>) -> Result<VerifiedModule, bytecode::LoadError> {
+        module.verify()?;
+        Ok(VerifiedModule(module))
+    }
+
+    pub fn module(&self) -> &Module {
+        &self.0
     }
 }
 
@@ -185,9 +261,14 @@ pub enum IsolateError {
     Random(String),
     /// `start_main` was called twice.
     AlreadyStarted,
+    /// `start_test` was given an index past the module's test table.
+    NoSuchTest(usize),
     /// The module does not pass the verification (F0004; `docs/spec/bytecode.md` 3.3), which the
     /// fast path of the execution loop relies on (`docs/design/vm.md` 3.14).
     InvalidModule(bytecode::LoadError),
+    /// An extension unit, function or class of the module cannot be bound to the runtime's
+    /// extensions (F0007; `docs/spec/extensions.md` 4).
+    Extension(String),
 }
 
 impl std::fmt::Display for IsolateError {
@@ -199,7 +280,9 @@ impl std::fmt::Display for IsolateError {
             IsolateError::NoRandom => write!(f, "no random source and no hash seed"),
             IsolateError::Random(m) => write!(f, "{m}"),
             IsolateError::AlreadyStarted => write!(f, "isolate already started"),
+            IsolateError::NoSuchTest(i) => write!(f, "the module has no test {i}"),
             IsolateError::InvalidModule(e) => write!(f, "{e}"),
+            IsolateError::Extension(m) => write!(f, "{m}"),
         }
     }
 }
@@ -226,7 +309,8 @@ pub struct ExitStatus {
     /// Failure to flush the standard output buffer before exiting (`semantics.md` 7.2).
     pub stdout_error: Option<HostError>,
     /// Blocks left on the heap after the finishing stage, as (type name, count) in byte order of the name
-    /// (`docs/spec/diagnostics.md` 8.1). Only with `leak_check`, and only in the status after [`Isolate::finish`].
+    /// (`docs/spec/diagnostics.md` 8.1). Only after [`Isolate::finish`] and when enabled by
+    /// `leak_check` or `System.ReportMemoryLeaksOnShutdown`.
     pub leaks: Vec<(String, u64)>,
     /// Exceptions that left a `finally` block while `Halt` was unwinding, in the order they
     /// occurred (`docs/spec/exceptions.md` 5.3, 7.1). The runtime reports them as warnings.
@@ -234,6 +318,9 @@ pub struct ExitStatus {
     /// Uncaught exceptions of the units' `<fini>`, in the order they occurred
     /// (`docs/spec/units.md` 5.4). Only in the status after [`Isolate::finish`].
     pub fini_exceptions: Vec<ExceptionReport>,
+    /// The program ended with `Halt` (`docs/spec/semantics.md` 7.2) rather than by returning
+    /// from its entry: `puy test` reports such a test as an error (`docs/spec/test.md` 4).
+    pub halted: bool,
 }
 
 impl ExitStatus {
@@ -307,8 +394,14 @@ enum Extra {
     None,
     /// `EConvertError.Value`.
     Str(String),
-    /// `EInOutError.ErrorCode`.
+    /// `EInOutError.ErrorCode` (its `ErrorKind` is `ekNone`).
     Int(i64),
+    /// The error of the host: `EInOutError.ErrorCode` and `ErrorKind`, or the `ErrorKind` of
+    /// `ENotSupportedException` (`docs/spec/exceptions.md` 2.2).
+    Host {
+        code: i64,
+        kind: i64,
+    },
 }
 
 fn rt(class: u32, message: impl Into<String>) -> RtError {
@@ -337,6 +430,10 @@ enum Phase {
 pub struct Isolate {
     module: Arc<Module>,
     host: HostSet,
+    /// The isolate's own changes to the environment variables (`docs/design/stdlib.md` 3.4.3).
+    env: puy_ext::EnvTable,
+    /// The clock the program reads: the host's, or the virtual clock of a test (`clock.rs`).
+    clock: clock::ClockLayer,
     /// The keys of the key hash, made from the seed (`docs/spec/equality.md` 7.2).
     hash_keys: hash::HashKeys,
     config: IsolateConfig,
@@ -357,6 +454,8 @@ pub struct Isolate {
     /// `lend.rs`).
     place_buf: Vec<Slot>,
     host_table: Vec<HostFn>,
+    /// The extension functions and the state of callbacks (`ext.rs`).
+    ext: ext::ExtState,
     stdout_buf: Vec<u8>,
     phase: Phase,
     finished: Option<ExitStatus>,
@@ -375,6 +474,23 @@ pub struct Isolate {
     fini_next: usize,
     /// See [`ExitStatus::fini_exceptions`].
     fini_exceptions: Vec<ExceptionReport>,
+    /// `System` requested a leak report in its `finalization` section.
+    leak_report_requested: bool,
+    /// See [`ExitStatus::halted`].
+    halted: bool,
+    /// The function run after the units' `<init>` in place of the module's entry: a test's
+    /// routine ([`Isolate::start_test`]).
+    entry_override: Option<u32>,
+    /// The type information number of each fully qualified name in ASCII lowercase, made on the
+    /// first `RttiFindType` (`docs/spec/bytecode.md` 2.24).
+    rtti_names: Option<std::collections::HashMap<String, u32>>,
+    /// The type information number of each class of the type section that has one, made by the
+    /// first `ValueOfObject` (`docs/spec/rtti.md` 7.1).
+    rtti_classes: Option<std::collections::HashMap<u32, i64>>,
+    /// The type information number of the type declaring each field and each property (the
+    /// tables 0 and 1), made by the first `RttiFieldGet` or `RttiFieldSet` (`docs/spec/rtti.md`
+    /// 5.6).
+    rtti_owners: Option<[Vec<i64>; 3]>,
 }
 
 const FULL_BUFFER: usize = 8192;
@@ -522,6 +638,10 @@ macro_rules! try_oom {
     };
 }
 
+// After the macros, which it uses
+mod clock;
+mod host;
+
 /// Whether `v` is in the range of the `NarrowOvf` / `NarrowRng` width `c`
 /// (`docs/spec/bytecode.md` 2.2), that is, whether the check passes and the value stays as it is.
 /// Width 6 (Int64) checks UInt64 → Int64 (u64 bits above i64::MAX look negative), width 7 (UInt64)
@@ -564,12 +684,21 @@ fn width_type(c: u32) -> (&'static str, i128, i128) {
 impl Isolate {
     pub fn new(
         module: Arc<Module>,
+        host: HostSet,
+        config: IsolateConfig,
+    ) -> Result<Isolate, IsolateError> {
+        let module = VerifiedModule::new(module).map_err(IsolateError::InvalidModule)?;
+        Isolate::from_verified(&module, host, config)
+    }
+
+    /// An isolate of a module verified once: `puy test` makes one isolate per test of the same
+    /// module (`docs/spec/test.md` 3) without verifying it each time.
+    pub fn from_verified(
+        module: &VerifiedModule,
         mut host: HostSet,
         config: IsolateConfig,
     ) -> Result<Isolate, IsolateError> {
-        // The fast path reads the instruction stream, the global variables and the constant cache
-        // without bounds checks on what the verification guarantees (`docs/design/vm.md` 3.14)
-        module.verify().map_err(IsolateError::InvalidModule)?;
+        let module = Arc::clone(&module.0);
         let seed = match config.hash_seed {
             HashSeed::Fixed(s) => s,
             HashSeed::FromHost => match host.random.as_mut() {
@@ -587,6 +716,7 @@ impl Isolate {
             };
             host_table.push(kind);
         }
+        let ext = ext::bind(&module, &config.extensions)?;
         let globals = vec![0; module.globals.len()];
         let const_cache = module
             .consts
@@ -605,6 +735,7 @@ impl Isolate {
             loan_container_buf: Vec::new(),
             place_buf: Vec::new(),
             host_table,
+            ext,
             stdout_buf: Vec::new(),
             phase: Phase::NotStarted,
             finished: None,
@@ -618,8 +749,16 @@ impl Isolate {
             inited: 0,
             fini_next: 0,
             fini_exceptions: Vec::new(),
+            leak_report_requested: false,
+            halted: false,
+            entry_override: None,
+            rtti_names: None,
+            rtti_classes: None,
+            rtti_owners: None,
             module,
             host,
+            env: puy_ext::EnvTable::default(),
+            clock: clock::ClockLayer::Real,
             config,
         })
     }
@@ -634,10 +773,22 @@ impl Isolate {
         Ok(())
     }
 
+    /// Starts the test `index` of the module's test table (`docs/spec/bytecode.md` 3.2, section
+    /// 13): the units' `<init>` run as for [`Isolate::start_main`], then the test's routine in
+    /// place of `<main>` (`docs/spec/test.md` 3). The program ends when the routine returns; the
+    /// finishing stage is the same.
+    pub fn start_test(&mut self, index: usize, args: Vec<String>) -> Result<(), IsolateError> {
+        let Some(test) = self.module.tests.get(index) else {
+            return Err(IsolateError::NoSuchTest(index));
+        };
+        self.entry_override = Some(test.func);
+        self.start_main(args)
+    }
+
     /// Starts the finishing stage (`docs/spec/exceptions.md` 7.2, `docs/spec/units.md` 5.4): the following
     /// `run` calls run the `<fini>` of the units that finished their `<init>`, in reverse initialization order,
     /// releasing each unit's global variables after its `<fini>`, then release the constant cache, count leaks
-    /// (`leak_check`), flush standard output, and return the final `Finished`. Only takes effect after the first
+    /// when requested, flush standard output, and return the final `Finished`. Only takes effect after the first
     /// `Finished`; otherwise it does nothing.
     pub fn finish(&mut self) {
         if matches!(self.phase, Phase::Done) {
@@ -652,6 +803,24 @@ impl Isolate {
     /// Heap usage (bytes).
     pub fn memory_used(&self) -> usize {
         self.heap.used()
+    }
+
+    /// Counts the live heap blocks under the same names used in the shutdown leak report.
+    fn live_type_usage(&self) -> Vec<IsolateTypeUsage> {
+        let funcs = &self.module.funcs;
+        count_live_types(self.heap.live_blocks(
+            |f| {
+                funcs
+                    .get(f as usize)
+                    .map_or_else(|| "<built-in>".to_string(), |f| f.name.clone())
+            },
+            |f, reg| {
+                funcs
+                    .get(f as usize)
+                    .and_then(|f| f.locals.iter().find(|(r, _)| *r == reg))
+                    .map_or_else(|| "<unknown>".to_string(), |(_, n)| n.clone())
+            },
+        ))
     }
 
     /// Grows the registers to `need` slots, counting the growth toward the usage limit
@@ -720,6 +889,16 @@ impl Isolate {
                         return o;
                     }
                 }
+                Err(PollError::Throw(x)) => {
+                    if let Some(o) = self.throw(x) {
+                        return o;
+                    }
+                }
+                Err(PollError::Halt) => {
+                    if let Some(o) = self.halt(None) {
+                        return o;
+                    }
+                }
                 Err(PollError::Fatal(e)) => {
                     self.flush_stdout().ok();
                     return RunOutcome::Fatal(VmError { message: e.message });
@@ -776,6 +955,13 @@ impl Isolate {
                     return RunOutcome::Fatal(VmError { message: m });
                 }
                 Step::Done(o) => return *o,
+                // Only a callback's loop meets its boundary frame (`ext.rs`)
+                Step::CallbackDone => {
+                    self.flush_stdout().ok();
+                    return RunOutcome::Fatal(VmError {
+                        message: "a callback's boundary frame outside its call".into(),
+                    });
+                }
             }
         }
     }
@@ -830,6 +1016,7 @@ impl Isolate {
             leaks: Vec::new(),
             halt_exceptions: std::mem::take(&mut self.halt_exceptions),
             fini_exceptions: Vec::new(),
+            halted: self.halted,
         };
         self.finished = Some(st.clone());
         RunOutcome::Finished(st)
@@ -856,6 +1043,20 @@ impl Isolate {
                 Err(e) => return Some(self.fatal(e)),
             }
         }
+        // References a Rust value let go of in the last destructions (`ext.rs`); a destruction
+        // they start runs before the stage completes
+        if !self.ext.queue.is_empty() {
+            if let Err(e) = self.drain_ext_queue() {
+                return Some(self.fatal(e));
+            }
+            if self.heap.job_open() {
+                self.heap.stamp_job(
+                    heap::JobOrigin::Globals { unit: 0 },
+                    self.task.frames.len() as u32,
+                );
+                return None;
+            }
+        }
         Some(self.complete_finishing())
     }
 
@@ -880,6 +1081,9 @@ impl Isolate {
                 _ => {}
             }
         }
+        // What the Rust values freed with them held (`ext.rs`): let go of here, where a
+        // destruction it starts can still run
+        self.drain_ext_queue()?;
         if self.heap.job_open() {
             self.heap.stamp_job(
                 heap::JobOrigin::Globals { unit: unit as u32 },
@@ -907,27 +1111,16 @@ impl Isolate {
                 return RunOutcome::Fatal(VmError { message: e.message });
             }
         }
+        // `advance_finishing` let go of the references Rust held, running what they started
+        debug_assert!(self.ext.queue.is_empty(), "the queue is empty at the end");
         // The table of short strings holds one reference of each it made, as the cache does
         for r in std::mem::take(&mut self.small_strs) {
             if let Err(e) = self.heap.release(r) {
                 return RunOutcome::Fatal(VmError { message: e.message });
             }
         }
-        let leaks = if self.config.leak_check {
-            let funcs = &module.funcs;
-            count_leaks(self.heap.live_type_names(
-                |f| {
-                    funcs
-                        .get(f as usize)
-                        .map_or_else(|| "<built-in>".to_string(), |f| f.name.clone())
-                },
-                |f, reg| {
-                    funcs
-                        .get(f as usize)
-                        .and_then(|f| f.locals.iter().find(|(r, _)| *r == reg))
-                        .map_or_else(|| "<unknown>".to_string(), |(_, n)| n.clone())
-                },
-            ))
+        let leaks = if self.config.leak_check || self.leak_report_requested {
+            leak_counts(self.live_type_usage())
         } else {
             Vec::new()
         };
@@ -940,6 +1133,7 @@ impl Isolate {
             leaks,
             halt_exceptions: std::mem::take(&mut self.halt_exceptions),
             fini_exceptions: std::mem::take(&mut self.fini_exceptions),
+            halted: self.halted,
         };
         // The program's failure carries over; the stage's own failures are `ExitStatus::failed`
         if program_failed && st.code == 0 {
@@ -997,20 +1191,37 @@ impl Isolate {
                 return Err(o);
             }
         };
-        let extra = match &e.extra {
+        // The slots the class adds: `EConvertError.Value`, `EInOutError.ErrorCode` and
+        // `ErrorKind`, `ENotSupportedException.ErrorKind`
+        let ints: &[(u32, i64)] = match &e.extra {
             Extra::None => return Ok(x),
-            Extra::Int(n) => *n,
-            Extra::Str(t) => match PStr::from_text(t).and_then(|p| self.heap.alloc_str(p)) {
-                Ok(v) => v,
-                Err(o) => {
-                    self.heap.release(x).expect("a new exception");
-                    return Err(o);
-                }
-            },
+            Extra::Int(n) => &[(bytecode::EXC_SLOT_EXTRA, *n)],
+            Extra::Host { kind, .. } if self.heap.class_is(e.class, exc::NOT_SUPPORTED) => {
+                &[(bytecode::EXC_SLOT_EXTRA, *kind)]
+            }
+            Extra::Host { code, kind } => &[
+                (bytecode::EXC_SLOT_EXTRA, *code),
+                (bytecode::EXC_SLOT_EXTRA + 1, *kind),
+            ],
+            Extra::Str(t) => {
+                let v = match PStr::from_text(t).and_then(|p| self.heap.alloc_str(p)) {
+                    Ok(v) => v,
+                    Err(o) => {
+                        self.heap.release(x).expect("a new exception");
+                        return Err(o);
+                    }
+                };
+                self.heap
+                    .exc_replace(x, bytecode::EXC_SLOT_EXTRA, v)
+                    .expect("a new exception has the slot of its class");
+                return Ok(x);
+            }
         };
-        self.heap
-            .exc_replace(x, bytecode::EXC_SLOT_EXTRA, extra)
-            .expect("a new exception has the slot of its class");
+        for &(slot, v) in ints {
+            self.heap
+                .exc_replace(x, slot, v)
+                .expect("a new exception has the slots of its class");
+        }
         Ok(x)
     }
 
@@ -1072,6 +1283,10 @@ impl Isolate {
         while let Some(&fr) = self.task.frames.last() {
             // The values lent to a call of this frame go back first (`docs/spec/bytecode.md` 2.8)
             self.give_back(false)?;
+            if fr.func == ext::CALLBACK_FN {
+                // The callback's call fails with it (`docs/spec/extensions.md` 5.2)
+                return Ok(self.callback_unwound(x));
+            }
             if fr.func == DTOR_FN {
                 // The destruction procedure records it and goes on (`docs/spec/objects.md` 14.8)
                 self.dtor_caught(x)?;
@@ -1142,7 +1357,7 @@ impl Isolate {
     fn except_object(&self) -> Slot {
         let last = self.task.frames.len().saturating_sub(1);
         for (i, fr) in self.task.frames.iter().enumerate().rev() {
-            if fr.func == DTOR_FN {
+            if fr.func == DTOR_FN || fr.func == ext::CALLBACK_FN {
                 continue;
             }
             let pc = frame_pos(fr, i == last);
@@ -1205,6 +1420,12 @@ impl Isolate {
                     self.halt_job()?;
                     return Ok(true);
                 }
+                if fr.func == ext::CALLBACK_FN {
+                    // The extension function's call goes on with it once it returns
+                    // (`docs/spec/extensions.md` 5.2)
+                    self.callback_halted();
+                    return Ok(true);
+                }
                 self.give_back(false)?;
                 if fr.func == DTOR_FN {
                     // The rest of the destruction without the destructors (`docs/spec/objects.md`
@@ -1258,7 +1479,12 @@ impl Isolate {
         })();
         match result {
             Ok(true) => None,
-            Ok(false) => self.frames_done(ExitKind::Code(self.exit_code_byte())),
+            Ok(false) => {
+                if !matches!(self.phase, Phase::Fini(_)) {
+                    self.halted = true;
+                }
+                self.frames_done(ExitKind::Code(self.exit_code_byte()))
+            }
             Err(b) => Some(self.fatal(b)),
         }
     }
@@ -1287,13 +1513,32 @@ impl Isolate {
         if self.heap.exc_trace(x)?.is_some() {
             return Ok(());
         }
-        // The frames of the destruction procedure are not shown (`docs/spec/objects.md` 3.3).
-        // A frame running inlined code stands for the frames of the calls inlined there
-        // (`docs/spec/diagnostics.md` chapter 8): (function shown, where its line comes from)
+        let visible = self.visible_frames();
+        let n = visible.len();
+        let kept: Vec<(u32, TraceLine)> = if n > 32 {
+            let mut v: Vec<_> = visible.iter().rev().take(16).copied().collect();
+            v.extend(visible[..16].iter().rev().copied());
+            v
+        } else {
+            visible.into_iter().rev().collect()
+        };
+        let omitted = n.saturating_sub(32);
+        let frames = kept
+            .into_iter()
+            .map(|(func, line)| (func, self.trace_line(line)))
+            .collect();
+        self.heap.set_exc_trace(x, Trace { frames, omitted })
+    }
+
+    /// The frames a stack trace shows, outermost first, as (function shown, where its line
+    /// comes from). The frames of the destruction procedure are not shown
+    /// (`docs/spec/objects.md` 3.3); a frame running inlined code stands for the frames of the
+    /// calls inlined there (`docs/spec/diagnostics.md` chapter 8).
+    fn visible_frames(&self) -> Vec<(u32, TraceLine)> {
         let last = self.task.frames.len().saturating_sub(1);
         let mut visible: Vec<(u32, TraceLine)> = Vec::with_capacity(self.task.frames.len());
         for (i, f) in self.task.frames.iter().enumerate() {
-            if f.func == DTOR_FN {
+            if f.func == DTOR_FN || f.func == ext::CALLBACK_FN {
                 continue;
             }
             let pos = frame_pos(f, i == last);
@@ -1309,26 +1554,36 @@ impl Isolate {
             }
             visible.push((shown, TraceLine::At(f.func, pos)));
         }
-        let n = visible.len();
-        let kept: Vec<(u32, TraceLine)> = if n > 32 {
-            let mut v: Vec<_> = visible.iter().rev().take(16).copied().collect();
-            v.extend(visible[..16].iter().rev().copied());
-            v
-        } else {
-            visible.into_iter().rev().collect()
-        };
-        let omitted = n.saturating_sub(32);
-        let frames = kept
+        visible
+    }
+
+    /// The line of a frame of [`Self::visible_frames`].
+    fn trace_line(&self, line: TraceLine) -> u32 {
+        match line {
+            TraceLine::Line(l) => l,
+            TraceLine::At(f, pos) => self.module.funcs[f as usize].line_at(pos),
+        }
+    }
+
+    /// The Pascal routines running, innermost first, with the file and the line each is at, as a
+    /// stack trace shows them (`CallCtx::frames`; `docs/spec/extensions.md` 5.5).
+    pub(super) fn ext_frames(&self) -> Vec<puy_ext::Frame> {
+        self.visible_frames()
             .into_iter()
+            .rev()
             .map(|(func, line)| {
-                let line = match line {
-                    TraceLine::Line(l) => l,
-                    TraceLine::At(f, pos) => self.module.funcs[f as usize].line_at(pos),
-                };
-                (func, line)
+                let f = &self.module.funcs[func as usize];
+                puy_ext::Frame {
+                    function: f.name.clone(),
+                    file: self
+                        .module
+                        .file_path(f.file)
+                        .unwrap_or_default()
+                        .to_string(),
+                    line: self.trace_line(line),
+                }
             })
-            .collect();
-        self.heap.set_exc_trace(x, Trace { frames, omitted })
+            .collect()
     }
 
     /// The stack trace of an exception as report frames.
@@ -1345,15 +1600,95 @@ impl Isolate {
                     function: f.name.clone(),
                     file: self
                         .module
-                        .units
-                        .get(f.file as usize)
-                        .map(|u| u.path.clone())
-                        .unwrap_or_default(),
+                        .file_path(f.file)
+                        .unwrap_or_default()
+                        .to_string(),
                     line,
                 }
             })
             .collect();
         Ok((frames, t.omitted))
+    }
+
+    /// `AssertValue` (`docs/spec/semantics.md` 5.4): the text `rB` and the value `r(B+1)` of the
+    /// debug type `r(B+2)` (0: not evaluated) on the new `EAssertionFailed` `rA`. Out of the
+    /// way of the instruction loop: it runs only when an `Assert` fails.
+    #[cold]
+    #[inline(never)]
+    fn assert_value(&mut self, ra: usize, rb: usize) -> Result<(), Step> {
+        let (x, text, v, ty) = (
+            self.task.regs[ra],
+            self.task.regs[rb],
+            self.task.regs[rb + 1],
+            self.task.regs[rb + 2],
+        );
+        let expr = self
+            .heap
+            .get(text)
+            .map_err(|e| Step::Fatal(e.message))?
+            .text();
+        let shown = match u32::try_from(ty) {
+            Ok(0) => "<not evaluated>".to_string(),
+            Ok(n)
+                if self
+                    .module
+                    .debug
+                    .as_ref()
+                    .and_then(|d| d.entry(n))
+                    .is_some() =>
+            {
+                display::show(&self.heap, self.module.debug.as_ref(), v, n)
+            }
+            _ => return Err(Step::Fatal(format!("debug type {ty} out of range"))),
+        };
+        self.heap
+            .exc_push_value(x, expr, shown)
+            .map_err(|e| Step::Fatal(e.message))
+    }
+
+    /// `EAssertionFailed.Values` of the exception `x` (`docs/spec/exceptions.md` 2.1): a new
+    /// `TArray<TAssertionValue>` of the subexpressions and values recorded (0 when none were).
+    #[cold]
+    #[inline(never)]
+    fn assertion_values(&mut self, x: Slot) -> Result<Slot, Step> {
+        let items = match self.heap.exc_values(x) {
+            Ok(v) => v.to_vec(),
+            Err(e) => return Err(Step::Fatal(e.message)),
+        };
+        if items.is_empty() {
+            return Ok(0);
+        }
+        let mut slots = Vec::with_capacity(items.len() * 2);
+        let release = |vm: &mut Self, slots: &[Slot]| -> Result<(), Step> {
+            for &s in slots {
+                vm.heap.release(s).map_err(|e| Step::Fatal(e.message))?;
+            }
+            Ok(())
+        };
+        for (e, v) in &items {
+            for t in [e, v] {
+                let s = PStr::from_text(t)
+                    .map_err(|_| ())
+                    .and_then(|p| self.alloc_string(p).map_err(|_| ()));
+                match s {
+                    Ok(s) => slots.push(s),
+                    Err(()) => {
+                        release(self, &slots)?;
+                        return Err(Step::Error(rt(exc::OUT_OF_MEMORY, "out of memory")));
+                    }
+                }
+            }
+        }
+        match self
+            .heap
+            .alloc_agg(bytecode::ASSERTION_VALUES_TYPE, slots.clone())
+        {
+            Ok(a) => Ok(a),
+            Err(_) => {
+                release(self, &slots)?;
+                Err(Step::Error(rt(exc::OUT_OF_MEMORY, "out of memory")))
+            }
+        }
     }
 
     /// The `StackTrace` string: the `  at …` lines joined by `#10` (`docs/spec/exceptions.md` 2.1).
@@ -1394,9 +1729,16 @@ impl Isolate {
             ));
         } else if self.heap.class_is(ty, exc::IN_OUT_ERROR) {
             properties.push(("ErrorCode".to_string(), PropValue::Int(extra)));
+        } else if self.heap.class_is(ty, exc::ASSERTION_FAILED) {
+            let values = self.heap.exc_values(x)?;
+            if !values.is_empty() {
+                properties.push(("Values".to_string(), PropValue::Values(values.to_vec())));
+            }
         }
+        let class_types = self.heap.class_chain(ty);
         let mut report = ExceptionReport {
             class: self.class_name(x)?,
+            class_types,
             message,
             stack,
             omitted,
@@ -1430,6 +1772,11 @@ impl Isolate {
             self.give_back(false)?;
             if fr.func == DTOR_FN {
                 self.dtor_abandon()?;
+                continue;
+            }
+            if fr.func == ext::CALLBACK_FN {
+                // Its values are the call's (`ext.rs`)
+                self.task.frames.pop();
                 continue;
             }
             self.release_frame(&fr)?;
@@ -1472,77 +1819,48 @@ impl Isolate {
 
     // ---- Standard output buffer ----
 
-    /// Appends `bytes` to the standard output buffer and writes it out as `stdout_buffering` says.
-    /// The copy into the buffer is a copy an instruction makes of a Pascal value, so a refusal of
-    /// the system is `EOutOfMemory` (`docs/spec/semantics.md` 7.1); a failed write is the
-    /// exception of the host error.
+    /// Appends `bytes` to the standard output buffer; [`Isolate::stdout_due`] tells whether to
+    /// write it out now. The copy into the buffer is a copy an instruction makes of a Pascal
+    /// value, so a refusal of the system is `EOutOfMemory` (`docs/spec/semantics.md` 7.1).
     fn write_stdout(&mut self, bytes: &[u8]) -> Result<(), RtError> {
-        heap::try_extend(&mut self.stdout_buf, bytes).map_err(|OutOfMemory| oom())?;
-        let flush = match self.config.stdout_buffering {
+        heap::try_extend(&mut self.stdout_buf, bytes).map_err(|OutOfMemory| oom())
+    }
+
+    /// Whether `stdout_buffering` says to write out the buffer after a write of `bytes`.
+    fn stdout_due(&self, bytes: &[u8]) -> bool {
+        match self.config.stdout_buffering {
             StdoutBuffering::None => true,
             StdoutBuffering::Line => bytes.contains(&b'\n'),
             StdoutBuffering::Full => self.stdout_buf.len() >= FULL_BUFFER,
-        };
-        if flush {
-            self.flush_stdout().map_err(host_error_to_rt)?;
         }
-        Ok(())
     }
 
-    fn flush_stdout(&mut self) -> Result<(), HostError> {
+    /// Takes the standard output buffer and starts writing it through the host. `None` when it
+    /// is empty, or when there is no `Console` (the buffer is dropped; §9.5).
+    fn take_stdout(&mut self) -> Option<HostFuture<()>> {
         if self.stdout_buf.is_empty() {
-            return Ok(());
+            return None;
         }
         let data = std::mem::take(&mut self.stdout_buf);
-        let Some(console) = self.host.console.as_mut() else {
-            return Ok(()); // discard when there is no Console (§9.5)
+        let console = self.host.console.as_mut()?;
+        Some(console.write(OutStream::Stdout, &data))
+    }
+
+    /// Writes out the standard output buffer and waits there until it is written: for the end of
+    /// the run (the program, the finishing stage, a fatal error), which has no instruction to go
+    /// on at. Instructions write it out through the host call path instead
+    /// ([`Isolate::flush_out`]).
+    fn flush_stdout(&mut self) -> Result<(), HostError> {
+        let Some(mut fut) = self.take_stdout() else {
+            return Ok(());
         };
-        let mut fut = console.write(OutStream::Stdout, &data);
         let waker = noop_waker();
         let mut cx = Context::from_waker(&waker);
         loop {
-            match fut.as_mut().poll(&mut cx) {
-                Poll::Ready(r) => return r,
-                Poll::Pending => {
-                    // M1 writes complete immediately. For an implementation that does not complete, wait until everything is written
-                    continue;
-                }
+            if let Poll::Ready(r) = fut.as_mut().poll(&mut cx) {
+                return r;
             }
         }
-    }
-
-    // ---- Host functions ----
-
-    fn poll_pending(&mut self) -> Result<bool, PollError> {
-        let Some(p) = self.task.pending.as_mut() else {
-            return Ok(true);
-        };
-        let waker = noop_waker();
-        let mut cx = Context::from_waker(&waker);
-        let result: Result<Option<(Option<String>, bool)>, HostError> = match &mut p.kind {
-            PendingKind::Write(f) => match Pin::new(f).poll(&mut cx) {
-                Poll::Pending => return Ok(false),
-                Poll::Ready(Ok(())) => Ok(None),
-                Poll::Ready(Err(e)) => Err(e),
-            },
-            PendingKind::ReadLine { fut, ahead } => match Pin::new(fut).poll(&mut cx) {
-                Poll::Pending => return Ok(false),
-                Poll::Ready(Ok(line)) => Ok(Some((line, *ahead))),
-                Poll::Ready(Err(e)) => Err(e),
-            },
-        };
-        let resume_pc = p.resume_pc;
-        self.task.pending = None;
-        match result {
-            Ok(None) => {}
-            // The line goes into the buffer; the input instruction runs again (`input.rs`)
-            Ok(Some((line, ahead))) => self.input.receive(line, ahead)?,
-            Err(e) => return Err(PollError::Rt(host_error_to_rt(e))),
-        }
-        if let Some(fr) = self.task.frames.last_mut() {
-            fr.pc = resume_pc;
-        }
-        Ok(true)
     }
 
     /// The shared string at `i` of the table of short strings, with a reference of its own: below
@@ -1651,6 +1969,11 @@ impl Isolate {
     fn run_loop(&mut self, budget: &mut u32) -> Step {
         let module = Arc::clone(&self.module);
         loop {
+            if !self.ext.queue.is_empty() {
+                // References an extension let go of outside a call (the `Drop` of a Rust value
+                // that held them; `ext.rs`)
+                try_ref!(self.drain_ext_queue());
+            }
             if self.heap.has_jobs() {
                 // Release jobs of the current frames first (`docs/design/objects.md` 3.8)
                 match self.run_jobs() {
@@ -1665,6 +1988,10 @@ impl Isolate {
                 // The destruction procedure (`destroy.rs`), out of the hot loop: `run` calls
                 // `run_loop` again after it
                 return self.dtor_run(budget);
+            }
+            if frame.func == ext::CALLBACK_FN {
+                // A callback returned to its boundary (`ext.rs`)
+                return Step::CallbackDone;
             }
             // The running function's information. A call or a return on the fast path replaces it
             // and goes on in the inner loop (`enter!`)
@@ -2127,7 +2454,8 @@ impl Isolate {
                         macro_rules! back {
                             () => {{
                                 let caller = *self.task.frames.last().expect("not the first frame");
-                                if caller.func == DTOR_FN || self.heap.has_jobs() {
+                                // `DTOR_FN` and `CALLBACK_FN` are the largest function numbers
+                                if caller.func >= ext::CALLBACK_FN || self.heap.has_jobs() {
                                     break;
                                 }
                                 enter!(
@@ -2243,6 +2571,17 @@ impl Isolate {
                     },
                     op::word::DYN_SET => {
                         match self.heap.dyn_set_fast(regs[a!()], regs[b!()], regs[c!()]) {
+                            Some(()) => {}
+                            None => shared!(),
+                        }
+                    }
+                    // The elements of a dynamic array of bytes (`docs/spec/bytecode.md` 2.9)
+                    op::word::BYTES_GET => match self.heap.bytes_get_fast(regs[b!()], regs[c!()]) {
+                        Some(v) => regs[a!()] = v,
+                        None => shared!(),
+                    },
+                    op::word::BYTES_SET => {
+                        match self.heap.bytes_set_fast(regs[a!()], regs[b!()], regs[c!()]) {
                             Some(()) => {}
                             None => shared!(),
                         }
@@ -2445,6 +2784,9 @@ impl Isolate {
         if frame.func == DTOR_FN {
             return self.dtor_step();
         }
+        if frame.func == ext::CALLBACK_FN {
+            return Step::CallbackDone;
+        }
         let module = Arc::clone(&self.module);
         let func = &module.funcs[frame.func as usize];
         let code = &func.code;
@@ -2505,6 +2847,8 @@ impl Isolate {
                     Ok(_) => {}
                     Err(PollError::Rt(e)) => return Step::Error(e),
                     Err(PollError::Fatal(e)) => return Step::Fatal(e.message),
+                    Err(PollError::Throw(x)) => return Step::Throw(x),
+                    Err(PollError::Halt) => return Step::Halt(None),
                 };
                 try_op!(self.op_load_cached_const(ra, bx as usize));
             }
@@ -2719,54 +3063,12 @@ impl Isolate {
                 }
             }
             op::word::FORMAT => {
-                let fmt = try_oom!(get_str!(self.heap, regs[rb]).units());
-                let mut args = Vec::with_capacity(c as usize);
-                for i in 0..c as usize {
-                    let kind = regs[rb + 1 + 2 * i];
-                    let v = regs[rb + 2 + 2 * i];
-                    args.push(match kind {
-                        0..=bytecode::FORMAT_KIND_INT_LAST => {
-                            let (_, lo, _) = width_type(kind as u32);
-                            let value = if lo == 0 { v as u64 as i128 } else { v as i128 };
-                            let bits = match kind {
-                                0 | 1 => 8,
-                                2 | 3 => 16,
-                                4 | 5 => 32,
-                                _ => 64,
-                            };
-                            format::FmtArg::Int { value, bits }
-                        }
-                        bytecode::FORMAT_KIND_CHAR => format::FmtArg::Char(v as u16),
-                        bytecode::FORMAT_KIND_BOOLEAN => format::FmtArg::Bool,
-                        bytecode::FORMAT_KIND_STRING => {
-                            format::FmtArg::Str(try_oom!(get_str!(self.heap, v).units()))
-                        }
-                        bytecode::FORMAT_KIND_UTF8 => {
-                            let b = get_u8!(self.heap, v);
-                            let p = try_oom!(PStr::from_text(&String::from_utf8_lossy(b)));
-                            format::FmtArg::Str(try_oom!(p.units()))
-                        }
-                        bytecode::FORMAT_KIND_SINGLE => format::FmtArg::Single(slot_f32(v)),
-                        bytecode::FORMAT_KIND_DOUBLE => format::FmtArg::Double(slot_f64(v)),
-                        bytecode::FORMAT_KIND_CURRENCY => format::FmtArg::Curr(v),
-                        k => return Step::Fatal(format!("unknown `Format` argument kind {k}")),
-                    });
-                }
-                match format::format(&fmt, &args, self.heap.str_room()) {
-                    Ok(units) => match self.alloc_string(try_oom!(PStr::from_units(&units))) {
-                        Ok(x) => try_ref!(self.put(ra, x)),
-                        Err(e) => return Step::Error(e),
-                    },
-                    Err(format::FormatError::OutOfMemory) => {
-                        return Step::Error(rt(exc::OUT_OF_MEMORY, "out of memory"));
-                    }
-                    Err(format::FormatError::Invalid) => {
-                        let text = String::from_utf16_lossy(&fmt);
-                        return Step::Error(convert_error(text, |t| {
-                            format!("format '{t}' invalid or incompatible with argument")
-                        }));
-                    }
-                }
+                let fmt = regs[rb];
+                let pairs = FormatArgs::Regs {
+                    first: rb + 1,
+                    count: c as usize,
+                };
+                try_op!(self.format_into(ra, fmt, pairs));
             }
             // `NegF64` / `NegF32` have the shape `A B`: `C` is not verified, so it is not read
             op::word::NEG_F64 => regs[ra] = f64_slot(-slot_f64(regs[rb])),
@@ -2890,12 +3192,13 @@ impl Isolate {
             }
             op::word::CALL_CLOSURE => return self.call_closure(ra, rb, pc, next, budget),
             op::word::CALL_HOST => {
-                // Advance `pc` only on success (so that a failure is reported at the `CallHost` line)
-                let step = self.call_host(bx as usize, ra as u32, next as u32);
-                if matches!(step, Step::Continue) {
-                    self.task.frames.last_mut().unwrap().pc = next as u32;
-                }
-                return step;
+                // `pc` advances only when the call is done (so that a failure is reported at the
+                // `CallHost` line)
+                return self.call_host(bx as usize, ra as u32, pc as u32, next as u32);
+            }
+            op::word::CALL_EXT => {
+                // The same: `pc` advances when the call is done (`docs/spec/extensions.md` 5.1)
+                return self.call_ext(bx as usize, ra as u32, pc as u32, next as u32);
             }
             op::word::RET | op::word::RET_VOID => {
                 let value = (opc == op::word::RET).then_some(ra);
@@ -2987,6 +3290,10 @@ impl Isolate {
                     return Step::Error(rt(exc::ACCESS_VIOLATION, NIL_ACCESS));
                 }
                 let v = match c {
+                    bytecode::EXC_INFO_VALUES => match self.assertion_values(x) {
+                        Ok(v) => v,
+                        Err(step) => return step,
+                    },
                     bytecode::EXC_INFO_SUPPRESSED => {
                         let items = match self.heap.exc_suppressed(x) {
                             Ok(s) => s.to_vec(),
@@ -3850,6 +4157,95 @@ impl Isolate {
         }
     }
 
+    /// The type information number of a fully qualified name in ASCII lowercase, 0 if none
+    /// (`RttiFindType`; the table is made on first use).
+    fn rtti_find(&mut self, lower: &str) -> u32 {
+        let module = &self.module;
+        let table = self.rtti_names.get_or_insert_with(|| {
+            let mut t = std::collections::HashMap::new();
+            if let Some(s) = &module.rtti {
+                for (k, e) in s.types.iter().enumerate() {
+                    t.entry(s.name(e.full_name).to_ascii_lowercase())
+                        .or_insert(k as u32 + 1);
+                }
+            }
+            t
+        });
+        table.get(lower).copied().unwrap_or(0)
+    }
+
+    /// `Format` of the format `fmt` with the elements of an `array of const` as { kind, value }
+    /// pairs (`docs/spec/bytecode.md` 2.16; the values are borrowed) into `rA`: the one body of
+    /// `Format` (248) and `FormatValues` (`I121`; `docs/spec/rtti.md` 4.2).
+    fn format_into(&mut self, ra: usize, fmt: Slot, pairs: FormatArgs<'_>) -> Result<(), RefError> {
+        let fmt = self
+            .heap
+            .get(fmt)?
+            .units()
+            .map_err(|OutOfMemory| RefError::Rt(oom()))?;
+        let count = match pairs {
+            FormatArgs::Regs { count, .. } => count,
+            FormatArgs::Pairs(p) => p.len(),
+        };
+        let mut args = Vec::with_capacity(count);
+        for i in 0..count {
+            let (kind, v) = match pairs {
+                FormatArgs::Regs { first, .. } => (
+                    self.task.regs[first + 2 * i],
+                    self.task.regs[first + 2 * i + 1],
+                ),
+                FormatArgs::Pairs(p) => p[i],
+            };
+            args.push(match kind {
+                0..=bytecode::FORMAT_KIND_INT_LAST => {
+                    let (_, lo, _) = width_type(kind as u32);
+                    let value = if lo == 0 { v as u64 as i128 } else { v as i128 };
+                    let bits = match kind {
+                        0 | 1 => 8,
+                        2 | 3 => 16,
+                        4 | 5 => 32,
+                        _ => 64,
+                    };
+                    format::FmtArg::Int { value, bits }
+                }
+                bytecode::FORMAT_KIND_CHAR => format::FmtArg::Char(v as u16),
+                bytecode::FORMAT_KIND_BOOLEAN => format::FmtArg::Bool,
+                bytecode::FORMAT_KIND_STRING => format::FmtArg::Str(
+                    self.heap
+                        .get(v)?
+                        .units()
+                        .map_err(|OutOfMemory| RefError::Rt(oom()))?,
+                ),
+                bytecode::FORMAT_KIND_UTF8 => {
+                    let b = self.heap.get_u8(v)?;
+                    let p = PStr::from_text(&String::from_utf8_lossy(b))
+                        .and_then(|p| p.units())
+                        .map_err(|OutOfMemory| RefError::Rt(oom()))?;
+                    format::FmtArg::Str(p)
+                }
+                bytecode::FORMAT_KIND_SINGLE => format::FmtArg::Single(slot_f32(v)),
+                bytecode::FORMAT_KIND_DOUBLE => format::FmtArg::Double(slot_f64(v)),
+                bytecode::FORMAT_KIND_CURRENCY => format::FmtArg::Curr(v),
+                k => {
+                    return Err(RefError::Fatal(format!(
+                        "unknown `Format` argument kind {k}"
+                    )));
+                }
+            });
+        }
+        match format::format(&fmt, &args, self.heap.str_room()) {
+            Ok(units) => {
+                let s = PStr::from_units(&units).map_err(|OutOfMemory| RefError::Rt(oom()))?;
+                let x = self.alloc_string(s).map_err(RefError::Rt)?;
+                Ok(self.put(ra, x)?)
+            }
+            Err(format::FormatError::OutOfMemory) => Err(RefError::Rt(oom())),
+            Err(format::FormatError::Invalid) => Err(RefError::Rt(tvalue::format_error(
+                String::from_utf16_lossy(&fmt),
+            ))),
+        }
+    }
+
     /// The declared name of the class `ty` as a new string (`ClassRefName`).
     fn type_name_string(&mut self, ty: u32) -> Result<Slot, Step> {
         let Some(entry) = self.heap.type_entry(ty) else {
@@ -4318,6 +4714,13 @@ impl Isolate {
                     Err(e) => return Step::Error(e),
                 }
             }
+            op::intr::CONVERT_ERROR => {
+                let text = try_oom!(get_str!(self.heap, regs[rb]).to_utf8());
+                let what = try_oom!(get_str!(self.heap, regs[rb + 1]).to_utf8());
+                return Step::Error(convert_error(text, |t| {
+                    format!("'{t}' is not a valid {what}")
+                }));
+            }
             op::intr::QUOTED_STR => {
                 let units = try_oom!(get_str!(self.heap, regs[rb]).units());
                 let units = try_oom!(text::quoted(&units));
@@ -4404,6 +4807,10 @@ impl Isolate {
             | op::intr::IN_EOF
             | op::intr::IN_EOLN
             | op::intr::FLUSH_OUT => return self.input_op(id, ra, pc as u32, next as u32),
+            // `docs/spec/bytecode.md` 2.22
+            op::intr::CONSOLE_READ | op::intr::CONSOLE_WRITE | op::intr::CONSOLE_WRITE_ERROR => {
+                return self.console_op(id, ra, rb, pc as u32, next as u32);
+            }
             op::intr::ARG_COUNT => regs[ra] = self.args.len().saturating_sub(1) as i64,
             op::intr::ARG_GET => {
                 let i = regs[rb];
@@ -4514,8 +4921,166 @@ impl Isolate {
                     return e.into_step();
                 }
             }
+            // `docs/spec/bytecode.md` 2.22
+            op::intr::BYTES_COPY => {
+                let (dst, to, src, from, count) =
+                    (regs[ra], regs[rb], regs[rb + 1], regs[rb + 2], regs[rb + 3]);
+                if let Err(e) = self.bytes_copy(dst, to, src, from, count) {
+                    return e.into_step();
+                }
+            }
+            op::intr::BYTES_FILL => {
+                let (dst, index, count, value) = (regs[ra], regs[rb], regs[rb + 1], regs[rb + 2]);
+                if let Err(e) = self.bytes_fill(dst, index, count, value) {
+                    return e.into_step();
+                }
+            }
             // `docs/spec/bytecode.md` 2.23
             op::intr::HASH_RELINK => try_op!(self.op_hash_relink(ra, rb)),
+            op::intr::CHAR_CLASS => regs[ra] = char_class(regs[rb]),
+            // `docs/spec/bytecode.md` 2.24: `TValue`
+            op::intr::FORMAT_VALUES => try_op!(self.format_values(ra, rb)),
+            op::intr::VALUE_TO_STRING => {
+                let v = tvalue::Value::at(regs, rb);
+                try_op!(self.value_to_string(ra, v));
+            }
+            op::intr::VALUE_READ => {
+                let v = tvalue::Value::at(regs, rb);
+                let mode = regs[rb + 3];
+                self.task.regs[ra] = try_op!(self.value_read(v, mode));
+            }
+            op::intr::VALUE_MATCH => {
+                let (ty, h, target, raise) = (regs[rb], regs[rb + 1], regs[rb + 2], regs[rb + 3]);
+                let yes = try_op!(self.value_match(ty, h, target));
+                if !yes && raise != 0 {
+                    let to = self.rtti_short_name(target);
+                    return self.value_cast_error(ty, &to).into_step();
+                }
+                self.task.regs[ra] = Slot::from(yes);
+            }
+            op::intr::VALUE_READ_STRING => {
+                let v = tvalue::Value::at(regs, rb);
+                try_op!(self.value_read_string(ra, v));
+            }
+            op::intr::TYPE_KIND_OF => {
+                let n = regs[rb];
+                self.task.regs[ra] = self.type_kind_of(n);
+            }
+            op::intr::VALUE_OF_OBJECT => {
+                let (h, fallback) = (regs[rb], regs[rb + 1]);
+                self.task.regs[ra] = try_op!(self.value_of_object(h, fallback));
+            }
+            op::intr::VALUE_ARRAY => try_op!(self.value_array(ra, rb)),
+            // `docs/spec/bytecode.md` 2.24: the type information section
+            op::intr::RTTI_TYPE_FIELD => {
+                regs[ra] = self
+                    .module
+                    .rtti
+                    .as_ref()
+                    .map_or(0, |s| s.type_field(regs[rb], regs[rb + 1], regs[rb + 2]));
+            }
+            op::intr::RTTI_MEMBER_FIELD => {
+                regs[ra] = self
+                    .module
+                    .rtti
+                    .as_ref()
+                    .map_or(0, |s| s.member_field(regs[rb], regs[rb + 1], regs[rb + 2]));
+            }
+            op::intr::RTTI_NAME => {
+                let name = usize::try_from(regs[rb])
+                    .ok()
+                    .and_then(|i| self.module.rtti.as_ref().and_then(|s| s.names.get(i)));
+                let s = try_oom!(PStr::from_text(name.map_or("", String::as_str)));
+                match self.alloc_string(s) {
+                    Ok(x) => try_ref!(self.put(ra, x)),
+                    Err(e) => return Step::Error(e),
+                }
+            }
+            op::intr::RTTI_FIND_TYPE => {
+                let n = if regs[rb + 1] == 1 {
+                    self.module
+                        .rtti
+                        .as_ref()
+                        .map_or(0, |s| s.types.len() as i64)
+                } else {
+                    let s = get_str!(self.heap, regs[rb]);
+                    let name = try_oom!(s.to_utf8()).to_ascii_lowercase();
+                    i64::from(self.rtti_find(&name))
+                };
+                self.task.regs[ra] = n;
+            }
+            // `docs/spec/bytecode.md` 2.24: `System.Rtti`
+            op::intr::RTTI_FIELD_GET => try_op!(self.rtti_field_get(ra, rb)),
+            op::intr::RTTI_FIELD_SET => try_op!(self.rtti_field_set(ra, rb)),
+            op::intr::RTTI_CLASS_TYPE => {
+                let (v, mode) = (regs[rb], regs[rb + 1]);
+                self.task.regs[ra] = try_op!(self.rtti_class_type(v, mode));
+            }
+            op::intr::RTTI_METHOD_REF => try_op!(self.rtti_method_ref(ra, rb)),
+            op::intr::RTTI_PROP_REF => try_op!(self.rtti_prop_ref(ra, rb)),
+            op::intr::RTTI_BRIDGE => {
+                let (table, index, which) = (regs[rb], regs[rb + 1], regs[rb + 2]);
+                self.task.regs[ra] = try_op!(self.rtti_bridge(table, index, which));
+            }
+            op::intr::RTTI_ATTR_FUNC => {
+                let index = regs[rb];
+                self.task.regs[ra] = try_op!(self.rtti_attr_func(index));
+            }
+            op::intr::RTTI_ARG_SET => {
+                let (arr, index, v) = (regs[rb], regs[rb + 1], regs[rb + 2]);
+                self.task.regs[ra] = try_op!(self.rtti_arg_set(arr, index, v));
+            }
+            op::intr::UNICODE_CATEGORY => {
+                regs[ra] = Slot::from(unicode::unicode_category(regs[rb]));
+            }
+            op::intr::CODE_POINT_CLASS => regs[ra] = unicode::code_point_class(regs[rb]),
+            op::intr::NUMERIC_VALUE => regs[ra] = f64_slot(unicode::numeric_value(regs[rb])),
+            op::intr::MATH_F64 => {
+                regs[ra] = f64_slot(math_f64(regs[rb + 1], slot_f64(regs[rb])));
+            }
+            op::intr::MATH_F64X2 => {
+                let (x, y) = (slot_f64(regs[rb]), slot_f64(regs[rb + 1]));
+                regs[ra] = f64_slot(math_f64x2(regs[rb + 2], x, y));
+            }
+            // `docs/spec/bytecode.md` 2.22: the clock layer (`clock.rs`)
+            op::intr::CLOCK_NOW => match self.clock.now(&mut self.host) {
+                Ok(n) => regs[ra] = n,
+                Err(e) => return Step::Error(e),
+            },
+            op::intr::CLOCK_MONO => match self.clock.mono(&mut self.host) {
+                Ok(n) => regs[ra] = n,
+                Err(e) => return Step::Error(e),
+            },
+            op::intr::CLOCK_CONTROL => {
+                let (kind, value) = (regs[rb], regs[rb + 1]);
+                match self.clock.control(&mut self.host, kind, value) {
+                    Ok(n) => self.task.regs[ra] = n,
+                    Err(e) => return Step::Error(e),
+                }
+            }
+            op::intr::CLOCK_SLEEP => {
+                let nanos = regs[rb];
+                return self.clock_sleep(ra, nanos, pc as u32, next as u32);
+            }
+            op::intr::REQUEST_LEAK_REPORT => self.leak_report_requested = true,
+            op::intr::LOCAL_OFFSET => match Self::local_offset(&mut self.host, regs[rb]) {
+                Ok(n) => regs[ra] = i64::from(n),
+                Err(e) => return Step::Error(e),
+            },
+            op::intr::ASSERT_VALUE => {
+                if let Err(step) = self.assert_value(ra, rb) {
+                    return step;
+                }
+            }
+            op::intr::ADD_SUPPRESSED => {
+                // `rB`, counted once more, at the end of `Suppressed` of `rA` unless that makes
+                // a cycle (`docs/spec/exceptions.md` 5.4)
+                let (x, y) = (regs[ra], regs[rb]);
+                if x != 0 && y != 0 {
+                    try_ref!(self.heap.add_ref(y));
+                    try_ref!(self.attach_suppressed(x, y));
+                }
+            }
             op::intr::IS_REF_OBJ => {
                 // A live instance of a reference counted class (one being destroyed too); `nil`
                 // and a freed handle are not, as an instance managed by hand (`docs/spec/objects.md`
@@ -4725,7 +5290,7 @@ impl Isolate {
             None => {
                 self.inited = self.module.units.len();
                 self.phase = Phase::Main;
-                let entry = self.module.entry;
+                let entry = self.entry_override.unwrap_or(self.module.entry);
                 self.push_frame(entry, 0, 0);
             }
         }
@@ -4742,62 +5307,6 @@ impl Isolate {
             _ => Step::Finished(ExitKind::Code(self.exit_code_byte())),
         }
     }
-
-    fn call_host(&mut self, index: usize, dst: u32, resume_pc: u32) -> Step {
-        let kind = self.host_table[index];
-        match kind {
-            HostFn::ConsoleWrite | HostFn::ConsoleWriteError => {
-                let text = try_oom!(get_str!(self.heap, self.task.regs[dst as usize]).to_utf8());
-                if kind == HostFn::ConsoleWrite {
-                    if let Err(e) = self.write_stdout(text.as_bytes()) {
-                        return Step::Error(e);
-                    }
-                    return Step::Continue;
-                }
-                if let Err(e) = self.flush_stdout() {
-                    return Step::Error(host_error_to_rt(e));
-                }
-                let Some(console) = self.host.console.as_mut() else {
-                    return Step::Continue;
-                };
-                let fut = console.write(OutStream::Stderr, text.as_bytes());
-                self.task.pending = Some(PendingHost {
-                    kind: PendingKind::Write(fut),
-                    resume_pc,
-                });
-            }
-            HostFn::EnvGet => {
-                let name = try_oom!(get_str!(self.heap, self.task.regs[dst as usize]).to_utf8());
-                let value = if name.is_empty() || name.contains('=') || name.contains('\0') {
-                    None
-                } else {
-                    match self.host.env.as_mut() {
-                        Some(env) => match env.get(&name) {
-                            Ok(v) => v,
-                            Err(e) => return Step::Error(host_error_to_rt(e)),
-                        },
-                        None => None,
-                    }
-                };
-                let text = value.unwrap_or_default();
-                if text.encode_utf16().count() > MAX_STRING_LEN {
-                    return Step::Error(rt(exc::OUT_OF_MEMORY, "out of memory"));
-                }
-                // The value takes the place of the name, which is let go
-                match self.alloc_string(try_oom!(PStr::from_text(&text))) {
-                    Ok(x) => try_ref!(self.put(dst as usize, x)),
-                    Err(e) => return Step::Error(e),
-                }
-                return Step::Continue;
-            }
-        }
-        match self.poll_pending() {
-            Ok(true) => Step::Continue,
-            Ok(false) => Step::Waiting,
-            Err(PollError::Rt(e)) => Step::Error(e),
-            Err(PollError::Fatal(e)) => Step::Fatal(e.message),
-        }
-    }
 }
 
 /// Where a reference slot leads (`docs/spec/bytecode.md` 1.5, 6.1), or a slot on the path of a
@@ -4812,6 +5321,14 @@ enum Loc {
     ObjSlot(usize, usize),
     /// The value of a cell (`docs/spec/objects.md` 14.9).
     Cell(Slot),
+}
+
+/// The elements of an `array of const` given to [`Isolate::format_into`] as { kind, value }
+/// pairs: in the registers of `Format` (248), or read from an array of `TValue` (`I121`).
+#[derive(Clone, Copy)]
+enum FormatArgs<'a> {
+    Regs { first: usize, count: usize },
+    Pairs(&'a [(i64, Slot)]),
 }
 
 /// A failure of an instruction body: a Pascal exception or an internal error.
@@ -4866,13 +5383,9 @@ impl From<BadRef> for RefError {
 impl Isolate {
     /// Element `i` of a dynamic array or open array block (0 is empty), range-checked.
     fn dyn_slot(&self, container: Slot, i: i64) -> Result<Slot, RefError> {
-        let elems = self.heap.elems(container)?;
-        match usize::try_from(i).ok().and_then(|i| elems.get(i)) {
-            Some(v) => Ok(*v),
-            None => Err(RefError::Rt(rt(
-                exc::RANGE_ERROR,
-                dyn_index_message(i, elems.len()),
-            ))),
+        match self.heap.elem(container, i)? {
+            Ok(v) => Ok(v),
+            Err(n) => Err(RefError::Rt(rt(exc::RANGE_ERROR, dyn_index_message(i, n)))),
         }
     }
 
@@ -4906,6 +5419,47 @@ impl Isolate {
             self.heap.check_slot(arr, i as i64)?;
         }
         self.heap.rotate_slots(arr, lo, hi, count, from < to)?;
+        Ok(())
+    }
+
+    /// `BytesCopy A B` (`I109`; `docs/spec/bytecode.md` 2.22): the `count` bytes at `from` of the
+    /// dynamic array of bytes `src` copied to `to` in `dst` (0 is empty), written in place. Both
+    /// ranges are checked as `ArrayMoveRange`'s, then the lent elements of the destination's,
+    /// before a byte changes.
+    fn bytes_copy(
+        &mut self,
+        dst: Slot,
+        to: i64,
+        src: Slot,
+        from: i64,
+        count: i64,
+    ) -> Result<(), RefError> {
+        let src_len = self.heap.bytes_of(src)?.len();
+        let dst_len = self.heap.bytes_of_mut(dst)?.len();
+        check_array_range(from, count, src_len)?;
+        check_array_range(to, count, dst_len)?;
+        self.heap.check_slots(dst, to, to + count)?;
+        // In range, so they fit in `usize`
+        self.heap
+            .copy_bytes(dst, to as usize, src, from as usize, count as usize)?;
+        Ok(())
+    }
+
+    /// `BytesFill A B` (`I110`; `docs/spec/bytecode.md` 2.22): the `count` bytes at `index` of the
+    /// dynamic array of bytes `dst` (0 is empty) set to the low 8 bits of `value`, in place. The
+    /// range is checked as `ArrayMoveRange`'s, then its lent elements.
+    fn bytes_fill(
+        &mut self,
+        dst: Slot,
+        index: i64,
+        count: i64,
+        value: i64,
+    ) -> Result<(), RefError> {
+        let len = self.heap.bytes_of_mut(dst)?.len();
+        check_array_range(index, count, len)?;
+        self.heap.check_slots(dst, index, index + count)?;
+        let (lo, hi) = (index as usize, (index + count) as usize);
+        self.heap.bytes_of_mut(dst)?[lo..hi].fill(value as u8);
         Ok(())
     }
 
@@ -4979,7 +5533,7 @@ impl Isolate {
         Ok(match loc {
             Loc::Reg(i) => std::mem::replace(&mut self.task.regs[i], v),
             Loc::Global(i) => std::mem::replace(&mut self.globals[i], v),
-            Loc::Slot(b, i) => std::mem::replace(self.heap.slot_mut(b, i)?, v),
+            Loc::Slot(b, i) => self.heap.slot_replace(b, i, v)?,
             Loc::ObjSlot(index, i) => self.heap.obj_replace_at(index, i, v)?,
             Loc::Cell(r) => std::mem::replace(self.heap.cell_mut(r)?, v),
         })
@@ -5182,22 +5736,41 @@ fn is_managed_const(c: &ConstEntry) -> bool {
     )
 }
 
-/// Counts type names into (type name, count) sorted by the bytes of the name (`docs/spec/diagnostics.md` 8.1).
-fn count_leaks<'a>(names: impl Iterator<Item = std::borrow::Cow<'a, str>>) -> Vec<(String, u64)> {
-    let mut counts: std::collections::BTreeMap<std::borrow::Cow<'a, str>, u64> =
-        std::collections::BTreeMap::new();
-    for n in names {
-        *counts.entry(n).or_default() += 1;
+/// Groups live blocks by their reported name, which can be shared by different type entries.
+fn count_live_types<'a>(
+    blocks: impl Iterator<Item = (Cow<'a, str>, usize)>,
+) -> Vec<IsolateTypeUsage> {
+    let mut types = HashMap::<_, (usize, usize)>::new();
+    for (name, size) in blocks {
+        let (count, bytes) = types.entry(name).or_default();
+        *count += 1;
+        *bytes += size;
     }
-    counts
+    types
         .into_iter()
-        .map(|(n, c)| (n.into_owned(), c))
+        .map(|(name, (count, bytes))| IsolateTypeUsage {
+            type_name: name.into_owned(),
+            count,
+            bytes,
+        })
         .collect()
 }
 
-/// Failure of a pending host call: a runtime error, or a bad reference when storing its result (F0001).
+/// The leak report lists only counts, sorted by the bytes of the type name (diagnostics.md 8.1).
+fn leak_counts(mut types: Vec<IsolateTypeUsage>) -> Vec<(String, u64)> {
+    types.sort_unstable_by(|a, b| a.type_name.cmp(&b.type_name));
+    types
+        .into_iter()
+        .map(|usage| (usage.type_name, usage.count as u64))
+        .collect()
+}
+
+/// Failure of a pending host call: a runtime error, an exception object to raise again (from an
+/// extension), `Halt`, or a bad reference when storing its result (F0001).
 enum PollError {
     Rt(RtError),
+    Throw(Slot),
+    Halt,
     Fatal(BadRef),
 }
 
@@ -5219,6 +5792,9 @@ enum Step {
     Fatal(String),
     /// The end of a release job ended the run (the finishing stage is over).
     Done(Box<RunOutcome>),
+    /// The top frame is the boundary of a callback from an extension (`ext.rs`): the callback
+    /// has returned.
+    CallbackDone,
 }
 
 /// How the unwinding of an exception ended.
@@ -5279,20 +5855,6 @@ const NIL_ACCESS: &str = "access to a nil reference";
 /// The message of an access through a handle to a destroyed instance (`docs/spec/objects.md` 14.4).
 const FREED_ACCESS: &str = "access to a freed object";
 
-fn host_error_to_rt(e: HostError) -> RtError {
-    match e.kind {
-        HostErrorKind::Unsupported | HostErrorKind::NoPermission => rt(
-            exc::NOT_SUPPORTED,
-            format!("not supported on this target: {}", e.message),
-        ),
-        _ => RtError {
-            class: exc::IN_OUT_ERROR,
-            message: e.message,
-            extra: Extra::Int(e.os_code.unwrap_or(0) as i64),
-        },
-    }
-}
-
 /// Reference slot: the upper 8 bits are the kind (1: register, 2: global variable, 3: cell, 4: flat
 /// place), the lower 56 bits the index (the cell's heap reference for a cell, the loan table entry
 /// for a flat place).
@@ -5339,25 +5901,16 @@ pub(crate) mod testing {
             }
             puy_host::ready(Ok(()))
         }
-        fn read_line(&mut self) -> HostFuture<Option<String>> {
+        fn read(&mut self, max: usize) -> HostFuture<Vec<u8>> {
+            // One line at a time, as a terminal gives it
             let mut input = self.stdin.borrow_mut();
-            if input.is_empty() {
-                return puy_host::ready(Ok(None));
-            }
             let end = input
                 .iter()
                 .position(|b| *b == b'\n')
                 .map(|p| p + 1)
-                .unwrap_or(input.len());
-            let line: Vec<u8> = input.drain(..end).collect();
-            let mut s = String::from_utf8_lossy(&line).into_owned();
-            if s.ends_with('\n') {
-                s.pop();
-                if s.ends_with('\r') {
-                    s.pop();
-                }
-            }
-            puy_host::ready(Ok(Some(s)))
+                .unwrap_or(input.len())
+                .min(max);
+            puy_host::ready(Ok(input.drain(..end).collect()))
         }
     }
 
@@ -5371,6 +5924,10 @@ pub(crate) mod testing {
                 .find(|(k, _)| k == name)
                 .map(|(_, v)| v.clone()))
         }
+
+        fn vars(&mut self) -> Result<Vec<(String, String)>, HostError> {
+            Ok(self.0.clone())
+        }
     }
 }
 
@@ -5378,15 +5935,59 @@ pub(crate) mod testing {
 mod tests {
     use super::testing::*;
     use super::*;
-    use crate::driver::{CompileOptions, compile};
+    use crate::driver::compile;
     use crate::source::MemorySourceProvider;
     use puy_host::HostFuture;
     use std::cell::RefCell;
+    use std::pin::Pin;
     use std::rc::Rc;
 
     struct Run {
         stdout: String,
         status: ExitStatus,
+    }
+
+    // `CharClass` (`I105`) reads only the low 16 bits of its slot, a UTF-16 code unit, and gives
+    // the properties of its code point.
+    #[test]
+    fn char_class_reads_a_code_unit() {
+        for (slot, bits) in [
+            (0x41, 1 | 2),     // `A`: Alphabetic, Uppercase
+            (0x1_0041, 1 | 2), // the low 16 bits are `A`
+            (0xFF10, 32 | 64), // fullwidth digit zero: a number, a decimal digit
+            (0x0009, 8 | 16),  // tab: White_Space, a control character
+            (0xD800, 0),       // a surrogate
+            (-1, 0),           // U+FFFF, a noncharacter
+        ] {
+            assert_eq!(char_class(slot), bits, "{slot:X}");
+        }
+    }
+
+    // `MathF64` / `MathF64x2` (`I97` / `I98`) give NaN for a number no function has; the standard
+    // library passes only constants, so no Pascal program reaches it.
+    #[test]
+    fn math_functions_of_unknown_numbers_are_nan() {
+        for kind in [-1, 19, 1000] {
+            assert!(math_f64(kind, 0.5).is_nan(), "{kind}");
+        }
+        for kind in [-1, 3, 1000] {
+            assert!(math_f64x2(kind, 0.5, 2.0).is_nan(), "{kind}");
+        }
+    }
+
+    // The functions are `libm`'s, the same bits on every target (requirements §5.11), not the
+    // platform's: `Exp(1)` is one ULP above the correctly rounded 2.718281828459045.
+    #[test]
+    fn math_functions_use_the_bits_of_libm() {
+        assert_eq!(
+            math_f64(crate::bytecode::MATH_EXP, 1.0).to_bits(),
+            0x4005_BF0A_8B14_576A
+        );
+        assert!(math_f64(crate::bytecode::MATH_FRAC, f64::INFINITY).is_nan());
+        assert_eq!(
+            math_f64x2(crate::bytecode::MATH2_POWER, f64::NAN, 0.0).to_bits(),
+            1.0f64.to_bits()
+        );
     }
 
     fn run_with(src: &str, stdin: &str, args: &[&str], config: IsolateConfig) -> Run {
@@ -5407,7 +6008,7 @@ mod tests {
             "t.pas",
             src.as_bytes().to_vec(),
             &mut provider,
-            &CompileOptions::default(),
+            &crate::driver::test_options(),
             stdlib,
         );
         assert!(
@@ -5427,6 +6028,11 @@ mod tests {
             env: Some(Box::new(MapEnv(vec![("HOME".into(), "/home/x".into())]))),
             ..HostSet::empty()
         };
+        // The runtime's extensions, which the module was compiled with
+        let mut config = config;
+        if config.extensions.is_empty() {
+            config.extensions = crate::driver::test_options().extensions;
+        }
         let mut iso = Isolate::new(module, host, config).unwrap();
         let mut argv = vec!["t.pas".to_string()];
         argv.extend(args.iter().map(|s| s.to_string()));
@@ -5520,7 +6126,8 @@ mod tests {
                  42\n\
                  4 <1000|-69><1000|-69>\n\
                  TTag TRUE\n\
-                 <1000|-69>!\n",
+                 <1000|-69>!\n\
+                 87\n",
                 "{pad}"
             );
         }
@@ -5549,7 +6156,9 @@ mod tests {
     /// standard library uses (`docs/spec/collections.md` 12.1): wrappers the tests call.
     const TEST_STDLIB: puy_stdlib::Unit = puy_stdlib::Unit {
         name: "TestStd",
-        source: "unit TestStd;
+        files: &[puy_stdlib::File {
+            path: "TestStd.pas",
+            text: "unit TestStd;
 interface
 procedure MoveRange<T>(var A: TArray<T>; FromIndex, ToIndex, Count: Integer);
 procedure SortRange<T>(var A: TArray<T>; Index, Count: Integer);
@@ -5559,6 +6168,9 @@ function IsCounted<T>(const X: T): Boolean;
 function Same<T>(const X, Y: T): Boolean;
 function NameOf<T>(const X: T): string;
 procedure NeedClass<T>(const X: T; const What: string);
+function CopyBytes(const Dst: TArray<Byte>; DstIndex: Integer; const Src: TArray<Byte>;
+  SrcIndex, Count: Integer): Integer;
+function FillBytes(const Dst: TArray<Byte>; Index, Count: Integer; Value: Byte): Integer;
 type
   TProbe<T> = class
   protected
@@ -5640,8 +6252,20 @@ procedure NeedClass<T>(const X: T; const What: string);
 begin
   CheckClassType(X, What);
 end;
+function CopyBytes(const Dst: TArray<Byte>; DstIndex: Integer; const Src: TArray<Byte>;
+  SrcIndex, Count: Integer): Integer;
+begin
+  Result := BytesCopy(Dst, DstIndex, Src, SrcIndex, Count);
+end;
+function FillBytes(const Dst: TArray<Byte>; Index, Count: Integer; Value: Byte): Integer;
+begin
+  Result := BytesFill(Dst, Index, Count, Value);
+end;
 end.
 ",
+        }],
+        pieces: &[],
+        parts: &[],
     };
 
     /// The output of a program that uses [`TEST_STDLIB`].
@@ -5706,6 +6330,211 @@ begin
 end.
 "
         )
+    }
+
+    /// Whether `src` runs to its end (printing `expected`) with the isolate's memory limited to
+    /// `limit` bytes; `false` if it runs out of memory.
+    fn fits_in(src: &str, limit: usize, expected: &str) -> bool {
+        let r = run_with(
+            src,
+            "",
+            &[],
+            IsolateConfig {
+                hash_seed: HashSeed::Fixed(0),
+                memory_limit: Some(limit),
+                ..Default::default()
+            },
+        );
+        match r.status.kind {
+            ExitKind::Code(0) => {
+                assert_eq!(r.stdout, expected, "{src}");
+                true
+            }
+            ExitKind::UncaughtException(rep) if rep.class == "EOutOfMemory" => false,
+            other => panic!("{other:?}\n{}", r.stdout),
+        }
+    }
+
+    // A `TMemoryStream` holds its bytes one byte per byte (requirements §5.5; spec
+    // stdlib/System.Classes/TStream.md 4): n bytes written piece by piece fit in at most twice n
+    // (the blocks double), here about 1.5 times n (for this n the blocks add up to 4 MiB), and n
+    // bytes after `Size := n` in about n, while the limit is real (the
+    // same stream does not fit in less than n). Growing never needs the old and a new copy of the
+    // bytes at once.
+    #[test]
+    fn memory_stream_holds_one_byte_per_byte() {
+        const N: usize = 3_000_000;
+        let pieces = format!(
+            "program T;
+uses System.SysUtils, System.Classes;
+begin
+  var M := TMemoryStream.Create;
+  var B: TBytes;
+  SetLength(B, 65536);
+  var Left := {N};
+  while Left > 0 do
+  begin
+    var K := 65536;
+    if K > Left then
+      K := Left;
+    M.WriteBuffer(B, K);
+    Dec(Left, K);
+  end;
+  WriteLn(M.Size);
+end.
+"
+        );
+        let expected = format!("{N}\n");
+        // The blocks reach 4 MiB (256 bytes doubled), with the buffer and the program around them
+        assert!(fits_in(&pieces, N * 3 / 2 + 512 * 1024, &expected));
+        assert!(!fits_in(&pieces, N * 9 / 10, &expected));
+        let sized = format!(
+            "program T;
+uses System.SysUtils, System.Classes;
+begin
+  var M := TMemoryStream.Create;
+  M.Size := {N};
+  var B: TBytes;
+  SetLength(B, 1000);
+  M.Position := {N} - 1000;
+  M.WriteBuffer(B, 1000);
+  WriteLn(M.Size);
+end.
+"
+        );
+        assert!(fits_in(&sized, N + 512 * 1024, &expected));
+        assert!(!fits_in(&sized, N * 9 / 10, &expected));
+    }
+
+    /// A program on two arrays of bytes `A` (`a`) and `B` (`b`) that runs `call` and prints both,
+    /// the value, and `C`, a copy of the reference to `A` taken before the call.
+    fn bytes_program(a: &str, b: &str, call: &str) -> String {
+        format!(
+            "program T;
+uses TestStd;
+var
+  A, B, C: TArray<Byte>;
+  N: Integer;
+begin
+  A := [{a}];
+  B := [{b}];
+  C := A;
+  N := {call};
+  for var X in A do
+    Write(X, ' ');
+  Write('| ');
+  for var X in B do
+    Write(X, ' ');
+  Write('| ', N, ' |');
+  for var X in C do
+    Write(' ', X);
+  WriteLn;
+end.
+"
+        )
+    }
+
+    // `BytesCopy` copies a range between two arrays, or within one when the ranges overlap (as
+    // `Move` would), writing the array in place: a copy of the reference sees it (bytecode.md
+    // 2.22). Its value is the count.
+    #[test]
+    fn bytes_copy_copies_in_place() {
+        for (call, expected) in [
+            (
+                "CopyBytes(A, 1, B, 0, 2)",
+                "1 7 8 4 5 | 7 8 9 | 2 | 1 7 8 4 5\n",
+            ),
+            (
+                "CopyBytes(A, 3, B, 1, 2)",
+                "1 2 3 8 9 | 7 8 9 | 2 | 1 2 3 8 9\n",
+            ),
+            (
+                "CopyBytes(A, 0, B, 3, 0)",
+                "1 2 3 4 5 | 7 8 9 | 0 | 1 2 3 4 5\n",
+            ),
+            (
+                "CopyBytes(A, 1, A, 0, 4)",
+                "1 1 2 3 4 | 7 8 9 | 4 | 1 1 2 3 4\n",
+            ),
+            (
+                "CopyBytes(A, 0, A, 1, 4)",
+                "2 3 4 5 5 | 7 8 9 | 4 | 2 3 4 5 5\n",
+            ),
+            (
+                "CopyBytes(B, 0, A, 2, 3)",
+                "1 2 3 4 5 | 3 4 5 | 3 | 1 2 3 4 5\n",
+            ),
+        ] {
+            assert_eq!(
+                out_std(&bytes_program("1, 2, 3, 4, 5", "7, 8, 9", call)),
+                expected,
+                "{call}"
+            );
+        }
+    }
+
+    // `BytesCopy` checks both ranges as `ArrayMoveRange` does and raises `ERangeError` before any
+    // byte changes; an empty array is a range of 0 bytes (bytecode.md 2.22).
+    #[test]
+    fn bytes_copy_checks_ranges() {
+        for (call, message) in [
+            (
+                "CopyBytes(A, 4, B, 0, 2)",
+                "array range 4..5 is out of range 0..4",
+            ),
+            (
+                "CopyBytes(A, 0, B, 2, 2)",
+                "array range 2..3 is out of range 0..2",
+            ),
+            (
+                "CopyBytes(A, 0, B, 0, -1)",
+                "array count -1 is out of range",
+            ),
+            (
+                "CopyBytes(A, -1, B, 0, 1)",
+                "array range -1..-1 is out of range 0..4",
+            ),
+            (
+                "CopyBytes(C, 0, B, 0, 1)",
+                "array range 0..0 is out of range 0..-1",
+            ),
+        ] {
+            let src = bytes_program("1, 2, 3, 4, 5", "7, 8, 9", call).replace("C := A;", "");
+            let (class, msg, printed) = error_std(&src);
+            assert_eq!(
+                (class.as_str(), msg.as_str()),
+                ("ERangeError", message),
+                "{call}"
+            );
+            assert_eq!(printed, "", "{call}");
+        }
+        assert_eq!(
+            out_std(&bytes_program("1", "2", "CopyBytes(C, 0, C, 0, 0)").replace("C := A;", "")),
+            "1 | 2 | 0 |\n"
+        );
+    }
+
+    // `BytesFill` sets a range to the value, in place, and checks the range first
+    // (bytecode.md 2.22).
+    #[test]
+    fn bytes_fill_sets_a_range() {
+        assert_eq!(
+            out_std(&bytes_program(
+                "1, 2, 3, 4, 5",
+                "7",
+                "FillBytes(A, 1, 3, 255)"
+            )),
+            "1 255 255 255 5 | 7 | 3 | 1 255 255 255 5\n"
+        );
+        assert_eq!(
+            out_std(&bytes_program("1, 2", "7", "FillBytes(A, 2, 0, 9)")),
+            "1 2 | 7 | 0 | 1 2\n"
+        );
+        let (class, msg, _) = error_std(&bytes_program("1, 2", "7", "FillBytes(A, 1, 2, 9)"));
+        assert_eq!(
+            (class.as_str(), msg.as_str()),
+            ("ERangeError", "array range 1..2 is out of range 0..1")
+        );
     }
 
     // `ArrayMoveRange` rotates: the moved range lands at `ToIndex` and the elements between fill
@@ -6241,7 +7070,9 @@ end.
     fn hash_lookup_wants_consecutive_fields_of_self() {
         const BAD_STD: puy_stdlib::Unit = puy_stdlib::Unit {
             name: "BadStd",
-            source: "unit BadStd;
+            files: &[puy_stdlib::File {
+                path: "BadStd.pas",
+                text: "unit BadStd;
 interface
 type
   TBad = class
@@ -6279,13 +7110,19 @@ begin
 end;
 end.
 ",
+            }],
+            pieces: &[],
+            parts: &[],
         };
         let mut provider = MemorySourceProvider::new();
         let out = crate::driver::compile_with_stdlib(
             "t.pas",
-            b"program T;\nuses BadStd;\nbegin\nend.\n".to_vec(),
+            // The bodies of a standard library type's methods are analyzed when used (units.md 6.1)
+            b"program T;\nuses BadStd;\nvar B: TBad;\nbegin\n  B := TBad.Create;\n  \
+              B.Qualified(1); B.Swapped(1); B.Locals(1); B.Fine(1);\nend.\n"
+                .to_vec(),
             &mut provider,
-            &CompileOptions::default(),
+            &crate::driver::test_options(),
             &[BAD_STD],
         );
         let errors: Vec<(Option<String>, String)> = out
@@ -6300,6 +7137,231 @@ end.
         );
         // `Qualified`, `Swapped` and `Locals`; `Fine` passes
         assert_eq!(errors, vec![one; 3]);
+    }
+
+    /// A unit of the standard library reading the type information section (`RttiTypeField`,
+    /// `RttiMemberField`, `RttiName`, `RttiFindType`, `RttiTypeCount`; bytecode.md 2.24), whose
+    /// wrappers the tests call; `System.Rtti` (M5-50) is not there yet.
+    const RTTI_STD: puy_stdlib::Unit = puy_stdlib::Unit {
+        name: "RttiStd",
+        files: &[puy_stdlib::File {
+            path: "RttiStd.pas",
+            text: "unit RttiStd;
+interface
+function TypeField(P: PTypeInfo; Field, Index: Integer): Int64;
+function MemberField(Table, Index, Field: Integer): Int64;
+function NameAt(I: Int64): string;
+function Find(const Name: string): PTypeInfo;
+function Count: Integer;
+function Numbered(N: Integer): PTypeInfo;
+implementation
+function TypeField(P: PTypeInfo; Field, Index: Integer): Int64;
+begin
+  Result := RttiTypeField(P, Field, Index);
+end;
+function MemberField(Table, Index, Field: Integer): Int64;
+begin
+  Result := RttiMemberField(Table, Index, Field);
+end;
+function NameAt(I: Int64): string;
+begin
+  Result := RttiName(I);
+end;
+function Find(const Name: string): PTypeInfo;
+begin
+  Result := RttiFindType(Name);
+end;
+function Count: Integer;
+begin
+  Result := RttiTypeCount;
+end;
+function Numbered(N: Integer): PTypeInfo;
+begin
+  Result := TypeInfoOfNumber(N);
+end;
+end.
+",
+        }],
+        pieces: &[],
+        parts: &[],
+    };
+
+    /// Runs `src` with [`RTTI_STD`], which it uses.
+    fn rtti_out(src: &str) -> String {
+        let config = IsolateConfig {
+            hash_seed: HashSeed::Fixed(0),
+            ..Default::default()
+        };
+        let r = run_with_stdlib(src, "", &[], config, &[RTTI_STD]);
+        assert!(
+            matches!(r.status.kind, ExitKind::Code(0)),
+            "{:?}\n{}",
+            r.status.kind,
+            r.stdout
+        );
+        r.stdout
+    }
+
+    // `RttiTypeField` (`I129`) reads the fields of a type entry by its number, and `RttiName`
+    // (`I131`) the names they point to (bytecode.md 2.24).
+    #[test]
+    fn rtti_type_fields_read_the_entries() {
+        let out = rtti_out(
+            "program T;
+             uses RttiStd;
+             type TColor = (Red, Green, Blue); TSmall = TColor.Green..TColor.Blue;
+             var P: PTypeInfo;
+             begin
+               P := TypeInfo(TColor);
+               WriteLn(TypeField(P, 0, 0), ' ', NameAt(TypeField(P, 2, 0)), ' ',
+                 NameAt(TypeField(P, 3, 0)));
+               WriteLn(TypeField(P, 9, 0), ' ', NameAt(TypeField(P, 11, 2)), '=',
+                 TypeField(P, 10, 2));
+               P := TypeInfo(TSmall);
+               WriteLn(TypeField(P, 6, 0), '..', TypeField(P, 7, 0), ' ',
+                 TypeField(P, 8, 0) = TypeField(TypeInfo(TColor), 9999, 0) + 2);
+               WriteLn(TypeField(TypeInfo(Int64), 0, 0), ' ', TypeField(nil, 0, 0));
+             end.",
+        );
+        assert_eq!(out, "3 TColor T.TColor\n3 Blue=2\n1..2 TRUE\n16 0\n");
+    }
+
+    // `RttiFindType` (`I132`) finds a type by its fully qualified name, ignoring the case of ASCII
+    // letters, and gives `nil` for a name no entry has; the count is the number of entries.
+    #[test]
+    fn rtti_find_type_ignores_case() {
+        let out = rtti_out(
+            "program T;
+             uses RttiStd;
+             type TPoint = record X, Y: Integer; end;
+             begin
+               WriteLn(Find('t.tpoint') = TypeInfo(TPoint), ' ', Find('System.integer') = TypeInfo(Integer),
+                 ' ', Find('T.TNothing') = nil);
+               WriteLn(Numbered(Count) <> nil, ' ', TypeField(Numbered(Count + 1), 0, 0));
+             end.",
+        );
+        assert_eq!(out, "TRUE TRUE TRUE\nTRUE 0\n");
+    }
+
+    // `RttiMemberField` (`I130`) reads the member tables: a function using it gives the records,
+    // classes and interfaces their public members (rtti.md 1.3).
+    #[test]
+    fn rtti_member_fields_read_the_tables() {
+        let out = rtti_out(
+            "program T;
+             uses RttiStd;
+             type
+               TPoint = record
+               private
+                 FHidden: Integer;
+               public
+                 X, Y: Integer;
+                 procedure Move(DX: Integer; var DY: Integer);
+               end;
+             procedure TPoint.Move(DX: Integer; var DY: Integer); begin end;
+             var P: PTypeInfo; F, M, Q: Int64;
+             begin
+               P := TypeInfo(TPoint);
+               WriteLn(TypeField(P, 1, 0), ' ', TypeField(P, 22, 0), ' ', TypeField(P, 26, 0));
+               F := TypeField(P, 21, 0);
+               WriteLn(NameAt(MemberField(0, F, 0)), ' @', MemberField(0, F, 4), ' ',
+                 NameAt(MemberField(0, F + 1, 0)), ' @', MemberField(0, F + 1, 4));
+               M := TypeField(P, 25, 0);
+               Q := MemberField(2, M, 4);
+               WriteLn(NameAt(MemberField(2, M, 0)), ' ', MemberField(2, M, 1), ' ',
+                 MemberField(2, M, 5), ' ', NameAt(MemberField(3, Q + 1, 0)), ' ',
+                 MemberField(3, Q + 1, 2));
+             end.",
+        );
+        assert_eq!(out, "1 2 1\nX @1 Y @2\nMove 0 2 DY 1\n");
+    }
+
+    // `TRttiMethod.Invoke` calls the method through a bridge function, an ordinary Pascal call
+    // (rtti.md 5.7, requirements 4.3): 20000 invocations nested in one another run on a thread
+    // whose Rust stack is 256 KiB (on the test's own thread where there are no threads, as on
+    // WASI), and the run is sliced by the budget inside them (a nested run loop would neither fit
+    // nor stop).
+    #[test]
+    fn invoke_does_not_recurse_on_the_rust_stack() {
+        let src = "program T;
+             uses System.Rtti;
+             type
+               TDeep = class
+               public
+                 function Down(N: Integer): Integer;
+               end;
+             var
+               M: TRttiMethod;
+             function TDeep.Down(N: Integer): Integer;
+             begin
+               if N = 0 then
+                 Exit(0);
+               Result := M.Invoke(Self, [N - 1]).AsInteger + 1;
+             end;
+             var
+               Ctx: TRttiContext;
+               D: TDeep;
+             begin
+               Ctx := TRttiContext.Create;
+               M := Ctx.GetType(TDeep).GetMethod('Down');
+               D := TDeep.Create;
+               WriteLn(M.Invoke(D, [20000]).AsInteger);
+               D.Free;
+             end.";
+        let mut provider = MemorySourceProvider::new();
+        let out = crate::driver::compile(
+            "t.pas",
+            src.as_bytes().to_vec(),
+            &mut provider,
+            &crate::driver::test_options(),
+        );
+        assert!(
+            !out.diagnostics.iter().any(|d| d.is_error()),
+            "{:#?}",
+            out.diagnostics
+        );
+        let bytes = out.module.expect("module");
+        let run_it = move || {
+            let module = Arc::new(Module::decode(&bytes, crate::VERSION).unwrap());
+            let stdout = Rc::new(RefCell::new(Vec::new()));
+            let host = HostSet {
+                console: Some(Box::new(CaptureConsole {
+                    stdout: stdout.clone(),
+                    stderr: Rc::new(RefCell::new(Vec::new())),
+                    stdin: Rc::new(RefCell::new(Vec::new())),
+                })),
+                ..HostSet::empty()
+            };
+            let config = IsolateConfig {
+                hash_seed: HashSeed::Fixed(0),
+                extensions: crate::driver::test_options().extensions,
+                ..Default::default()
+            };
+            let mut iso = Isolate::new(module, host, config).unwrap();
+            iso.start_main(vec!["t.pas".into()]).unwrap();
+            let mut slices = 0;
+            loop {
+                match iso.run(1000) {
+                    RunOutcome::Finished(_) => break,
+                    RunOutcome::BudgetExhausted => slices += 1,
+                    RunOutcome::Waiting => panic!("waiting"),
+                    RunOutcome::Fatal(e) => panic!("fatal: {}", e.message),
+                }
+            }
+            let s = String::from_utf8(stdout.borrow().clone()).unwrap();
+            (s, slices)
+        };
+        #[cfg(not(target_family = "wasm"))]
+        let run = std::thread::Builder::new()
+            .stack_size(256 * 1024)
+            .spawn(run_it)
+            .expect("a thread")
+            .join()
+            .expect("the run fits in the thread's stack");
+        #[cfg(target_family = "wasm")]
+        let run = run_it();
+        assert_eq!(run.0, "20000\n");
+        assert!(run.1 > 10, "{} slices", run.1);
     }
 
     // `HashLookupInt` / `HashLookupStr` check their instance and destroy none, so the second
@@ -6336,7 +7398,7 @@ end.
                 "t.pas",
                 src.into_bytes(),
                 &mut provider,
-                &CompileOptions::default(),
+                &crate::driver::test_options(),
                 &[TEST_STDLIB],
             );
             let module = out.stages.module.as_ref().expect("module");
@@ -6415,7 +7477,9 @@ end.
     fn is_overridden_wants_one_virtual_method_of_self() {
         const BAD_STD: puy_stdlib::Unit = puy_stdlib::Unit {
             name: "BadStd",
-            source: "unit BadStd;
+            files: &[puy_stdlib::File {
+                path: "BadStd.pas",
+                text: "unit BadStd;
 interface
 type
   TBad = class
@@ -6466,13 +7530,19 @@ begin
 end;
 end.
 ",
+            }],
+            pieces: &[],
+            parts: &[],
         };
         let mut provider = MemorySourceProvider::new();
         let out = crate::driver::compile_with_stdlib(
             "t.pas",
-            b"program T;\nuses BadStd;\nbegin\nend.\n".to_vec(),
+            // The bodies of a standard library type's methods are analyzed when used (units.md 6.1)
+            b"program T;\nuses BadStd;\nvar B: TBad;\nbegin\n  B := TBad.Create;\n  \
+              B.Expr; B.NotVirtual; B.Overloaded; TBad.InClass; B.Fine;\nend.\n"
+                .to_vec(),
             &mut provider,
-            &CompileOptions::default(),
+            &crate::driver::test_options(),
             &[BAD_STD],
         );
         let errors: Vec<(Option<String>, String)> = out
@@ -6644,6 +7714,7 @@ end.
         let module = Module {
             types,
             intf_calls,
+            rtti: None,
             consts,
             funcs: vec![Function {
                 name: "Test.<main>".into(),
@@ -6669,7 +7740,12 @@ end.
                 first_global: 0,
                 global_count: 0,
             }],
+            included: Vec::new(),
             hosts: Vec::new(),
+            exts: Vec::new(),
+            ext_units: Vec::new(),
+            tests: Vec::new(),
+            debug: None,
         };
         let module = Module::decode(&module.encode(crate::VERSION), crate::VERSION).unwrap();
         module.verify().expect("valid module");
@@ -7735,7 +8811,7 @@ end.
             "t.pas",
             b"while True do ;".to_vec(),
             &mut provider,
-            &CompileOptions::default(),
+            &crate::driver::test_options(),
         );
         let module = Arc::new(Module::decode(&out.module.unwrap(), crate::VERSION).unwrap());
         let mut iso = Isolate::new(
@@ -7771,7 +8847,7 @@ end.
             "t.pas",
             b"WriteLn('x'); var S := ''; ReadLn(S);".to_vec(),
             &mut provider,
-            &CompileOptions::default(),
+            &crate::driver::test_options(),
         );
         let module = Arc::new(Module::decode(&out.module.unwrap(), crate::VERSION).unwrap());
         let mut iso = Isolate::new(
@@ -7811,7 +8887,7 @@ end.
             "t.pas",
             src.as_bytes().to_vec(),
             &mut provider,
-            &CompileOptions::default(),
+            &crate::driver::test_options(),
         );
         let bytes = out
             .module
@@ -7831,6 +8907,281 @@ end.
         prepare(&mut iso);
         iso.finish();
         iso.run(1000)
+    }
+
+    /// A test run by [`run_tests`].
+    struct TestRun {
+        name: String,
+        stdout: String,
+        /// How the test's routine ended.
+        ended: ExitKind,
+        /// The routine ended with `Halt`.
+        halted: bool,
+        /// The blocks left after the finishing stage.
+        leaks: Vec<(String, u64)>,
+    }
+
+    /// Compiles the test unit `src` and runs each test's routine of the test table
+    /// (`docs/spec/attributes.md` 5.2) in an isolate of its own, as the entry, to the finishing
+    /// stage with leak checking.
+    fn run_tests(src: &str) -> Vec<TestRun> {
+        let mut provider = MemorySourceProvider::new();
+        let out = compile(
+            "t_test.pas",
+            src.as_bytes().to_vec(),
+            &mut provider,
+            &crate::driver::test_options(),
+        );
+        let bytes = out
+            .module
+            .unwrap_or_else(|| panic!("{src}\n{:#?}", out.diagnostics));
+        let module = Module::decode(&bytes, crate::VERSION).unwrap();
+        let verified = VerifiedModule::new(Arc::new(module.clone())).unwrap();
+        let mut results = Vec::new();
+        for (i, t) in module.tests.iter().enumerate() {
+            let stdout = Rc::new(RefCell::new(Vec::new()));
+            let host = HostSet {
+                console: Some(Box::new(CaptureConsole {
+                    stdout: stdout.clone(),
+                    stderr: Rc::new(RefCell::new(Vec::new())),
+                    stdin: Rc::new(RefCell::new(Vec::new())),
+                })),
+                ..HostSet::empty()
+            };
+            let config = IsolateConfig {
+                hash_seed: HashSeed::Fixed(0),
+                leak_check: true,
+                extensions: crate::driver::test_options().extensions,
+                ..Default::default()
+            };
+            let mut iso = Isolate::from_verified(&verified, host, config).unwrap();
+            iso.start_test(i, vec!["t_test.pas".into()]).unwrap();
+            let mut ended: Option<ExitStatus> = None;
+            let leaks = loop {
+                match iso.run(1000) {
+                    RunOutcome::Finished(st) if ended.is_none() => {
+                        ended = Some(st);
+                        iso.finish();
+                    }
+                    RunOutcome::Finished(st) => break st.leaks,
+                    RunOutcome::BudgetExhausted => continue,
+                    other => panic!("{}: {other:?}", t.name),
+                }
+            };
+            let text = String::from_utf8(stdout.borrow().clone()).unwrap();
+            let ended = ended.expect("the routine ended first");
+            results.push(TestRun {
+                name: t.name.clone(),
+                stdout: text,
+                halted: ended.halted,
+                ended: ended.kind,
+                leaks,
+            });
+        }
+        results
+    }
+
+    // The routine of a test of a class (`docs/spec/attributes.md` 5.2) creates the class, calls
+    // `[Setup]`, the test and `[TearDown]`, and frees the instance; `[TearDown]` runs when the
+    // test raises, its exception going to the test's `Suppressed`, and does not run when
+    // `[Setup]` raises. Nothing is left on the heap.
+    #[test]
+    fn test_routines_run_setup_test_and_teardown() {
+        let src = "unit T_test;
+interface
+implementation
+uses System.SysUtils;
+type
+  TFoo = class
+    FStage: string;
+    destructor Destroy; override;
+    [Setup] procedure Prepare;
+    [TearDown] procedure Done;
+    [Test] procedure Passes;
+    [Test] procedure Fails;
+  end;
+  TBadSetup = class
+    destructor Destroy; override;
+    [Setup] procedure Prepare;
+    [TearDown] procedure Done;
+    [Test] procedure Never;
+  end;
+  TCounted = class(TInterfacedObject)
+    destructor Destroy; override;
+    [Test] procedure Runs;
+  end;
+destructor TFoo.Destroy;
+begin
+  WriteLn('free');
+  inherited;
+end;
+procedure TFoo.Prepare;
+begin
+  WriteLn('setup');
+  if FStage = 'setup' then raise Exception.Create('in setup');
+end;
+procedure TFoo.Done;
+begin
+  WriteLn('teardown');
+  if FStage = 'teardown' then raise EInvalidOperation.Create('in teardown');
+end;
+procedure TFoo.Passes;
+begin
+  WriteLn('test');
+end;
+procedure TFoo.Fails;
+begin
+  WriteLn('test');
+  FStage := 'teardown';
+  raise EArgumentException.Create('in test');
+end;
+destructor TBadSetup.Destroy;
+begin
+  WriteLn('free');
+  inherited;
+end;
+procedure TBadSetup.Prepare;
+begin
+  WriteLn('setup');
+  raise Exception.Create('in setup');
+end;
+procedure TBadSetup.Done;
+begin
+  WriteLn('teardown');
+end;
+procedure TBadSetup.Never;
+begin
+  WriteLn('test');
+end;
+destructor TCounted.Destroy;
+begin
+  WriteLn('released');
+  inherited;
+end;
+procedure TCounted.Runs;
+begin
+  WriteLn('runs');
+end;
+[Test]
+procedure Alone;
+begin
+  WriteLn('alone');
+end;
+[TestCase('a', 1)] [TestCase('b', 2)]
+procedure Echo(const S: string; N: Integer);
+begin
+  WriteLn(S, N);
+end;
+end.";
+        let got: Vec<String> = run_tests(src)
+            .into_iter()
+            .map(|r| {
+                let end = match &r.ended {
+                    ExitKind::Code(c) => format!("code {c}"),
+                    ExitKind::UncaughtException(r) => {
+                        let sup: Vec<&str> =
+                            r.suppressed.iter().map(|x| x.class.as_str()).collect();
+                        format!("{}: {} [{}]", r.class, r.message, sup.join(", "))
+                    }
+                };
+                let out = r.stdout.replace('\n', " ");
+                format!("{} | {out}| {end} | leaks {:?}", r.name, r.leaks)
+            })
+            .collect();
+        assert_eq!(
+            got,
+            [
+                "T_test.TFoo.Passes | setup test teardown free | code 0 | leaks []",
+                "T_test.TFoo.Fails | setup test teardown free | \
+                 EArgumentException: in test [EInvalidOperation] | leaks []",
+                "T_test.TBadSetup.Never | setup free | Exception: in setup [] | leaks []",
+                "T_test.TCounted.Runs | runs released | code 0 | leaks []",
+                "T_test.Alone | alone | code 0 | leaks []",
+                "T_test.Echo('a', 1) | a1 | code 0 | leaks []",
+                "T_test.Echo('b', 2) | b2 | code 0 | leaks []",
+            ]
+        );
+    }
+
+    // `start_test` runs the units' `<init>` and then the test's routine in place of `<main>`;
+    // the status tells a routine that called `Halt` from one that returned, and gives the type
+    // indices of an uncaught exception's class and its ancestors, which `puy test` judges by
+    // (`docs/spec/test.md` 3, 4).
+    #[test]
+    fn start_test_reports_halt_and_exception_ancestry() {
+        let src = "unit T_test;
+interface
+implementation
+uses System.SysUtils;
+type
+  EMine = class(EAssertionFailed);
+[Test]
+procedure Returns;
+begin
+  WriteLn('returns');
+end;
+[Test]
+procedure Halts;
+begin
+  WriteLn('halts');
+  Halt(0);
+end;
+[Test]
+procedure Raises;
+begin
+  raise EMine.Create('mine');
+end;
+end.";
+        let got: Vec<String> = run_tests(src)
+            .into_iter()
+            .map(|r| {
+                let end = match &r.ended {
+                    ExitKind::Code(c) => format!("code {c}"),
+                    ExitKind::UncaughtException(x) => {
+                        let ancestry: Vec<u32> = x.class_types[1..].to_vec();
+                        format!("{} {ancestry:?}", x.class)
+                    }
+                };
+                format!(
+                    "{} | {}| {end} | halted {}",
+                    r.name,
+                    r.stdout.replace('\n', " "),
+                    r.halted
+                )
+            })
+            .collect();
+        assert_eq!(
+            got,
+            [
+                "T_test.Returns | returns | code 0 | halted false",
+                "T_test.Halts | halts | code 0 | halted true",
+                // EMine's parents: EAssertionFailed (7) and Exception (0); the built-in classes
+                // above `Exception` come after it in the type table and are not counted
+                "T_test.Raises | | EMine [7, 0] | halted false",
+            ]
+        );
+    }
+
+    // `start_test` refuses an index past the test table.
+    #[test]
+    fn start_test_refuses_a_missing_test() {
+        let mut provider = MemorySourceProvider::new();
+        let out = compile(
+            "t.pas",
+            b"program T;\nbegin end.".to_vec(),
+            &mut provider,
+            &crate::driver::test_options(),
+        );
+        let module = Module::decode(&out.module.expect("module"), crate::VERSION).unwrap();
+        let config = IsolateConfig {
+            hash_seed: HashSeed::Fixed(0),
+            ..Default::default()
+        };
+        let mut iso = Isolate::new(Arc::new(module), HostSet::empty(), config).unwrap();
+        assert_eq!(
+            iso.start_test(0, Vec::new()),
+            Err(IsolateError::NoSuchTest(0))
+        );
     }
 
     fn final_status(outcome: RunOutcome) -> ExitStatus {
@@ -7863,7 +9214,7 @@ end.
             "t.pas",
             b"program T;\nbegin end.".to_vec(),
             &mut provider,
-            &CompileOptions::default(),
+            &crate::driver::test_options(),
         );
         let bytes = out.module.expect("module");
         let mut module = Module::decode(&bytes, crate::VERSION).unwrap();
@@ -7943,7 +9294,9 @@ end.
             "Hello.TNode",
             "UTF8String",
         ];
-        let leaks = count_leaks(names.into_iter().map(std::borrow::Cow::Borrowed));
+        let leaks = leak_counts(count_live_types(
+            names.into_iter().map(|name| (Cow::Borrowed(name), 0)),
+        ));
         assert_eq!(
             render_leaks(&leaks),
             "warning: 6 heap blocks were not freed\n  Hello.TNode: 2\n  TArray<Exception>: 1\n  UTF8String: 1\n  array of Hello.TNode: 1\n  string: 1\n"
@@ -7964,7 +9317,7 @@ end.
             "t.pas",
             src.as_bytes().to_vec(),
             &mut provider,
-            &CompileOptions::default(),
+            &crate::driver::test_options(),
         );
         let bytes = out.module.expect("module");
         let mut module = Module::decode(&bytes, crate::VERSION).unwrap();
@@ -8003,7 +9356,7 @@ end.
             "t.pas",
             src.as_bytes().to_vec(),
             &mut provider,
-            &CompileOptions::default(),
+            &crate::driver::test_options(),
         );
         let bytes = out.module.expect("module");
         let mut module = Module::decode(&bytes, crate::VERSION).unwrap();
@@ -8081,10 +9434,10 @@ end.
         stdout: Rc<RefCell<Vec<u8>>>,
     }
 
-    struct PendingOnce(Option<Option<String>>, bool);
+    struct PendingOnce(Option<Vec<u8>>, bool);
 
     impl std::future::Future for PendingOnce {
-        type Output = Result<Option<String>, HostError>;
+        type Output = Result<Vec<u8>, HostError>;
         fn poll(mut self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Self::Output> {
             if !self.1 {
                 self.1 = true;
@@ -8099,9 +9452,13 @@ end.
             self.stdout.borrow_mut().extend_from_slice(bytes);
             puy_host::ready(Ok(()))
         }
-        fn read_line(&mut self) -> HostFuture<Option<String>> {
-            let line = (!self.lines.is_empty()).then(|| self.lines.remove(0));
-            Box::pin(PendingOnce(Some(line), false))
+        fn read(&mut self, _: usize) -> HostFuture<Vec<u8>> {
+            // A line with its line break at a time; nothing at the end of input
+            let line = (!self.lines.is_empty()).then(|| self.lines.remove(0) + "\n");
+            Box::pin(PendingOnce(
+                Some(line.unwrap_or_default().into_bytes()),
+                false,
+            ))
         }
     }
 
@@ -8115,7 +9472,7 @@ end.
             "t.pas",
             src.as_bytes().to_vec(),
             &mut provider,
-            &CompileOptions::default(),
+            &crate::driver::test_options(),
         );
         let module =
             Arc::new(Module::decode(&out.module.expect("module"), crate::VERSION).unwrap());
@@ -8149,6 +9506,196 @@ end.
         );
         // One wait per line, and one for the end of input read ahead by the last `Eof`
         assert_eq!(waits, 5);
+    }
+
+    /// A console whose writes and reads are each not ready on the first poll, logging what it is
+    /// given (stream, text) when it is given it; a write of `fail` fails once polled again.
+    struct WaitingConsole {
+        lines: Vec<String>,
+        log: Rc<RefCell<Vec<(OutStream, String)>>>,
+        fail: Option<&'static str>,
+    }
+
+    /// Not ready on the first poll; ready with the result it holds on the next.
+    struct ReadyAfterOne<T>(Option<Result<T, HostError>>, bool);
+
+    impl<T: Unpin> std::future::Future for ReadyAfterOne<T> {
+        type Output = Result<T, HostError>;
+        fn poll(mut self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Self::Output> {
+            if !self.1 {
+                self.1 = true;
+                return Poll::Pending;
+            }
+            Poll::Ready(self.0.take().expect("polled after completion"))
+        }
+    }
+
+    impl puy_host::Console for WaitingConsole {
+        fn write(&mut self, stream: OutStream, bytes: &[u8]) -> HostFuture<()> {
+            let text = String::from_utf8(bytes.to_vec()).unwrap();
+            let result = if self.fail == Some(text.as_str()) {
+                Err(HostError::other("disk full"))
+            } else {
+                Ok(())
+            };
+            self.log.borrow_mut().push((stream, text));
+            Box::pin(ReadyAfterOne(Some(result), false))
+        }
+        fn read(&mut self, _: usize) -> HostFuture<Vec<u8>> {
+            // A line with its line break at a time; nothing at the end of input
+            let line = (!self.lines.is_empty()).then(|| self.lines.remove(0) + "\n");
+            Box::pin(ReadyAfterOne(
+                Some(Ok(line.unwrap_or_default().into_bytes())),
+                false,
+            ))
+        }
+    }
+
+    /// Runs `src` with a [`WaitingConsole`] and `buffering`, counting the waits.
+    fn run_waiting(
+        src: &str,
+        lines: &[&str],
+        fail: Option<&'static str>,
+        buffering: StdoutBuffering,
+    ) -> (ExitStatus, Vec<(OutStream, String)>, usize) {
+        let mut provider = MemorySourceProvider::new();
+        let out = compile(
+            "t.pas",
+            src.as_bytes().to_vec(),
+            &mut provider,
+            &crate::driver::test_options(),
+        );
+        let module =
+            Arc::new(Module::decode(&out.module.expect("module"), crate::VERSION).unwrap());
+        let log = Rc::new(RefCell::new(Vec::new()));
+        let host = HostSet {
+            console: Some(Box::new(WaitingConsole {
+                lines: lines.iter().map(|l| l.to_string()).collect(),
+                log: log.clone(),
+                fail,
+            })),
+            ..HostSet::empty()
+        };
+        // The runtime's extensions, which the module was compiled with
+        let config = IsolateConfig {
+            hash_seed: HashSeed::Fixed(0),
+            stdout_buffering: buffering,
+            extensions: crate::driver::test_options().extensions,
+            ..IsolateConfig::default()
+        };
+        let mut iso = Isolate::new(module, host, config).unwrap();
+        iso.start_main(vec!["t.pas".into()]).unwrap();
+        let mut waits = 0;
+        let status = loop {
+            match iso.run(1000) {
+                RunOutcome::Finished(st) => break st,
+                RunOutcome::BudgetExhausted => continue,
+                RunOutcome::Waiting => waits += 1,
+                RunOutcome::Fatal(e) => panic!("fatal: {}", e.message),
+            }
+        };
+        let log = log.borrow().clone();
+        (status, log, waits)
+    }
+
+    #[test]
+    fn writes_wait_on_the_host_call_path() {
+        // Writing out standard output, `WriteLn(ErrOutput, …)` and the write before a read each
+        // wait for the host (`host.rs`) instead of polling until done, and keep their order.
+        let src = "var S: string;\nWriteLn('a');\nWriteLn(ErrOutput, 'b');\nWrite('c');\nReadLn(S);\nWriteLn(S);";
+        let (status, log, waits) = run_waiting(src, &["x"], None, StdoutBuffering::Line);
+        assert_eq!(status.kind, ExitKind::Code(0));
+        let expected = [
+            (OutStream::Stdout, "a\n"),
+            (OutStream::Stderr, "b\n"),
+            (OutStream::Stdout, "c"),
+            (OutStream::Stdout, "x\n"),
+        ];
+        let expected: Vec<_> = expected.iter().map(|(s, t)| (*s, t.to_string())).collect();
+        assert_eq!(log, expected);
+        // One wait per write and one for the line
+        assert_eq!(waits, 5);
+    }
+
+    #[test]
+    fn console_input_read_gives_the_bytes_that_came() {
+        // `TConsole.Input.Read` asks the host once when the buffer is empty and gives what came,
+        // fewer bytes than asked (a terminal gives a line at a time), instead of waiting for all
+        // of them (`docs/spec/stdlib/Puy.Console/README.md` 3).
+        let src = "uses System.SysUtils, System.Classes, Puy.Console;\nvar B: TBytes;\nSetLength(B, 100);\nvar N := TConsole.Input.Read(B, 0, 100);\nvar M := TConsole.Input.Read(B, N, 100 - N);\nWriteLn(N, ' ', M, ' ', B[0], ' ', B[N]);";
+        let (status, log, waits) = run_waiting(src, &["ab", "c"], None, StdoutBuffering::Line);
+        assert_eq!(status.kind, ExitKind::Code(0));
+        let texts: Vec<_> = log.iter().map(|(_, t)| t.as_str()).collect();
+        assert_eq!(texts, ["3 2 97 99\n"]);
+        // One wait for each read and one for the write
+        assert_eq!(waits, 3);
+    }
+
+    #[test]
+    fn console_output_streams_share_the_stdout_rules() {
+        // The output stream appends to the standard output buffer and writes it out by the line
+        // rule; the error stream writes it out first, then writes at once (`host.rs`).
+        let src = "uses System.SysUtils, System.Classes, Puy.Console;\nWrite('a');\nTConsole.Output.WriteText('b');\nTConsole.Error.WriteText('e');\nTConsole.Output.WriteText('c'#10'd');\nWriteLn;";
+        let (status, log, _) = run_waiting(src, &[], None, StdoutBuffering::Line);
+        assert_eq!(status.kind, ExitKind::Code(0));
+        let expected = [
+            (OutStream::Stdout, "ab"),
+            (OutStream::Stderr, "e"),
+            // A write with a line break writes out the whole buffer, as `Write` does
+            (OutStream::Stdout, "c\nd"),
+            (OutStream::Stdout, "\n"),
+        ];
+        let expected: Vec<_> = expected.iter().map(|(s, t)| (*s, t.to_string())).collect();
+        assert_eq!(log, expected);
+    }
+
+    #[test]
+    fn flush_waits_on_the_host_call_path() {
+        // `Flush(Output)` under full buffering writes out through the host call path: it waits
+        // once, then goes on with the next statement.
+        let src = "Write('a');\nFlush(Output);\nWrite('b');";
+        let (status, log, waits) = run_waiting(src, &[], None, StdoutBuffering::Full);
+        assert_eq!(status.kind, ExitKind::Code(0));
+        let texts: Vec<_> = log.iter().map(|(_, t)| t.as_str()).collect();
+        // The last write is the end of the run's, which does not wait
+        assert_eq!(texts, ["a", "b"]);
+        assert_eq!(waits, 1);
+    }
+
+    #[test]
+    fn failed_waiting_write_is_caught_by_the_handler() {
+        // A write that fails after waiting raises `EInOutError`, which a handler catches; the
+        // program goes on after it.
+        let src = "try\n  WriteLn('a');\n  WriteLn('bad');\nexcept\n  on E: EInOutError do WriteLn(ErrOutput, E.Message);\nend;\nWriteLn('c');";
+        let (status, log, _) = run_waiting(src, &[], Some("bad\n"), StdoutBuffering::Line);
+        assert_eq!(status.kind, ExitKind::Code(0));
+        let texts: Vec<_> = log.iter().map(|(_, t)| t.as_str()).collect();
+        assert_eq!(texts, ["a\n", "bad\n", "disk full\n", "c\n"]);
+    }
+
+    #[test]
+    fn failed_waiting_write_reports_the_call_line() {
+        // The exception of a write that fails after waiting is reported at the line of the
+        // `WriteLn` that wrote it out, as `pc` is not advanced on failure.
+        let src = "WriteLn('a');\nWriteLn('bad');";
+        let (status, _, _) = run_waiting(src, &[], Some("bad\n"), StdoutBuffering::Line);
+        let ExitKind::UncaughtException(report) = status.kind else {
+            panic!("{:?}", status.kind);
+        };
+        assert_eq!(report.class, "EInOutError");
+        assert_eq!(report.stack[0].line, 2);
+    }
+
+    #[test]
+    fn failed_waiting_flush_reports_the_flush_line() {
+        // A failed write out by `Flush(Output)` is reported at the `Flush` line.
+        let src = "Write('bad');\nFlush(Output);";
+        let (status, _, _) = run_waiting(src, &[], Some("bad"), StdoutBuffering::Full);
+        let ExitKind::UncaughtException(report) = status.kind else {
+            panic!("{:?}", status.kind);
+        };
+        assert_eq!(report.class, "EInOutError");
+        assert_eq!(report.stack[0].line, 2);
     }
 
     // ---- Complexity guarantees (`docs/spec/types.md` 9.1) ----
@@ -8319,16 +9866,21 @@ end.
         let open = puy_stdlib::Unit {
             name: unit.name,
             // Line by line, so that a checkout with CRLF line ends reads the same
-            source: Box::leak(
-                unit.source
-                    .split_inclusive('\n')
-                    .map(|line| match line.trim() {
-                        "private" => line.replacen("private", "public", 1),
-                        _ => line.to_string(),
-                    })
-                    .collect::<String>()
-                    .into_boxed_str(),
-            ),
+            files: Box::leak(Box::new([puy_stdlib::File {
+                path: unit.files[0].path,
+                text: Box::leak(
+                    unit.source()
+                        .split_inclusive('\n')
+                        .map(|line| match line.trim() {
+                            "private" => line.replacen("private", "public", 1),
+                            _ => line.to_string(),
+                        })
+                        .collect::<String>()
+                        .into_boxed_str(),
+                ),
+            }])),
+            pieces: &[],
+            parts: &[],
         };
         let cases = [
             ("TList<Integer>", "TEnumerator", "C.Add(1)", "C.FVersion"),
@@ -8543,6 +10095,73 @@ end.
             );
             let ratio = reserved_ratio(&src, 2000, |m| format!("{m}\n"));
             assert!(ratio < 6.0, "{idx} {place}: {ratio}");
+        }
+    }
+
+    // Growing a dynamic array of bytes (one byte per element; types.md 9) one element at a time
+    // with SetLength is amortized O(1) too, in place and through a `var` parameter (types.md 9.1)
+    #[test]
+    fn byte_array_growth_is_amortized_constant() {
+        for (idx, place) in ["A", "V"].iter().enumerate() {
+            let src = format!(
+                "program T;
+                 procedure P(var V: TArray<Byte>);
+                 var A: array of Byte = nil; I: Integer;
+                 begin
+                   for I := 1 to {{N}} do
+                   begin
+                     SetLength({place}, Length({place}) + 1);
+                     {place}[I - 1] := I mod 256;
+                   end;
+                   WriteLn(Length({place}), ' ', {place}[{{N}} - 1]);
+                 end;
+                 var T: TArray<Byte>;
+                 begin T := nil; P(T); end."
+            );
+            let ratio = reserved_ratio(&src, 2000, |m| format!("{m} {}\n", m % 256));
+            assert!(ratio < 6.0, "{idx} {place}: {ratio}");
+        }
+    }
+
+    // A dynamic array of bytes takes one byte of the usage per element (requirements §5.5;
+    // types.md 9): 4,000,000 of them, made at once and grown to that length one element at a
+    // time, fit in a limit of 4.5MB, where as many `Word`s (a slot of 8 bytes each) do not.
+    #[test]
+    fn byte_array_takes_a_byte_per_element() {
+        let cases = [
+            ("Byte", "SetLength(A, 4000000)", "4000000 7\n"),
+            ("Word", "SetLength(A, 4000000)", "out of memory\n"),
+            (
+                "Byte",
+                "while Length(A) < 4000000 do SetLength(A, Length(A) + 1)",
+                "4000000 7\n",
+            ),
+        ];
+        for (idx, (ty, fill, expected)) in cases.iter().enumerate() {
+            let src = format!(
+                "program T;
+                 var A: array of {ty};
+                 begin
+                   try
+                     {fill};
+                     A[3999999] := 7;
+                     WriteLn(Length(A), ' ', A[3999999]);
+                   except
+                     on E: EOutOfMemory do WriteLn(E.Message);
+                   end;
+                 end."
+            );
+            let r = run_with(
+                &src,
+                "",
+                &[],
+                IsolateConfig {
+                    hash_seed: HashSeed::Fixed(0),
+                    memory_limit: Some(4_500_000),
+                    ..Default::default()
+                },
+            );
+            assert_eq!(r.stdout, *expected, "{idx} {ty}");
         }
     }
 
@@ -9104,6 +10723,7 @@ end.
         let module = Module {
             types,
             intf_calls: Vec::new(),
+            rtti: None,
             consts,
             funcs,
             globals: vec![GlobalEntry {
@@ -9119,7 +10739,12 @@ end.
                 first_global: 0,
                 global_count: 1,
             }],
+            included: Vec::new(),
             hosts: Vec::new(),
+            exts: Vec::new(),
+            ext_units: Vec::new(),
+            tests: Vec::new(),
+            debug: None,
         };
         let module = Module::decode(&module.encode(crate::VERSION), crate::VERSION).unwrap();
         module.verify().expect("valid module");

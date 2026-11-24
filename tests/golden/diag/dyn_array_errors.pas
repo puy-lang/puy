@@ -28,10 +28,6 @@ procedure Bad(out A: array of Integer); // E3200: out open array
 begin
 end;
 
-procedure Args(const A: array of const); // E3200: array of const (M5)
-begin
-end;
-
 var
   A, B: TInts;
   S: TStrs;

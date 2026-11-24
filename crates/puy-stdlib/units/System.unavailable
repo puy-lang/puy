@@ -1,0 +1,5 @@
+// The memory API for new code is TMemory in Puy.Runtime.
+AllocMemCount: `TMemory` in `Puy.Runtime`
+AllocMemSize: `TMemory` in `Puy.Runtime`
+GetHeapStatus: `TMemory` in `Puy.Runtime`
+THeapStatus: `TMemory` in `Puy.Runtime`

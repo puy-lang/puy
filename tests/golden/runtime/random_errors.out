@@ -1,0 +1,9 @@
+Next(0): EArgumentException: MaxValue must be positive, found 0
+Next(-1): EArgumentException: MaxValue must be positive, found -1
+Next(5, 5): EArgumentException: MaxValue must be greater than MinValue, found 5 and 5
+Next(6, 5): EArgumentException: MaxValue must be greater than MinValue, found 6 and 5
+NextInt64(0): EArgumentException: MaxValue must be positive, found 0
+NextInt64(High, Low): EArgumentException: MaxValue must be greater than MinValue, found 9223372036854775807 and -9223372036854775808
+NextBytes(-1): EArgumentException: Count must not be negative, found -1
+Choice([]): EArgumentException: Values must not be empty
+TRUE

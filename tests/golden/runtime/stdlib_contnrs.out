@@ -1,0 +1,13 @@
+FindInstanceOf(TObject) = 0
+FindInstanceOf(TObject, True, 1) = 1
+FindInstanceOf(TObject, True, 2) = -1
+ERangeError: list index -1 is out of range 0..2
+ERangeError: list index 3 is out of range 0..2
+FindInstanceOf(TObject, False, 2) = -1
+EInvalidOperation: cannot own a reference counted object of class `TCounted`
+count=3
+as TObjectList<TObject>: count=3 owns=TRUE
+not owning: count=1
+stack: EListError
+queue: EListError
+my own TList

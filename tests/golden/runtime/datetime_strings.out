@@ -1,0 +1,31 @@
+2026-03-07 | 14:05:09 | 2026-03-07 14:05:09
+2026-03-07 | 00:00:00
+2026-03-07 14:05:09 | 2026-03-07 | Saturday, March 7, 2026
+Sat Saturday Mar March
+14:05 | 14:05:09 | 2026-03-07 14:05
+0001-01-01 | 0999-12-31
+2026-03-07 45|045|45 | 14:05 pm
+0001-01-01 | 0001-01-01 12:00:00
+1899-12-29 06:00:00 | 1899-12-30 12:00:00 | 1899-12-30 12:00:00
+[2026-03-07] date 2026-03-07 datetime 2026-03-07 00:00:00.000
+[ 2026-3-7 ] date 2026-03-07 datetime 2026-03-07 00:00:00.000
+[14:05] time 14:05:00.000
+[14:05:09] time 14:05:09.000
+[14:05:09.4] time 14:05:09.400
+[2026-03-07 14:05:09.045] datetime 2026-03-07 14:05:09.045
+[2026-03-07  4:05] datetime 2026-03-07 04:05:00.000
+[2026-02-29]
+[2026-03-07T14:05:09]
+[24:00]
+[2026/03/07]
+[]
+StrToDate: EConvertError: '2026-02-30' is not a valid date
+StrToTime: EConvertError: '25:00' is not a valid time
+StrToDateTime: EConvertError: 'tomorrow' is not a valid date and time
+EncodeDate: EConvertError: '2026-2-29' is not a valid date
+EncodeTime: EConvertError: '24:0:0.0' is not a valid time
+DecodeDate: ERangeError: TDateTime value 3000000 is out of range (the years 1 to 9999)
+FormatDateTime: ERangeError: TDateTime value -700000 is out of range (the years 1 to 9999)
+year 0: ERangeError: TDateTime value -693594 is out of range (the years 1 to 9999)
+year 0 noon: ERangeError: TDateTime value -693594.5 is out of range (the years 1 to 9999)
+IncMonth: ERangeError: IncMonth goes out of the years 1 to 9999

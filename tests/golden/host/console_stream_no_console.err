@@ -1,0 +1,3 @@
+error: uncaught exception ENotSupportedException: not supported on this target: Console.Read
+  at Puy.Console.TConsoleStream.Read (<stdlib>/Puy.Console.pas:156)
+  at ConsoleStreamNoConsole.<main> (console_stream_no_console.pas:17)

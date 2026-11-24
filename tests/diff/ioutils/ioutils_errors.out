@@ -1,0 +1,36 @@
+ReadAllText missing: EFileNotFoundException
+ReadAllBytes missing: EFileNotFoundException
+ReadAllLines missing: EFileNotFoundException
+ReadAllText empty: EArgumentException
+Delete missing: EInOutError
+Copy missing: EFileNotFoundException
+Move missing: EFileNotFoundException
+TDirectory.Delete missing: EDirectoryNotFoundException
+GetFiles missing: EDirectoryNotFoundException
+WriteAllText no directory: EDirectoryNotFoundException
+FALSE FALSE
+WriteAllText: 3
+WriteAllText UTF8: 6
+ReadAllText UTF8 BOM: abc 3
+AppendAllText: abcde new
+Copy over existing: EInOutError
+Copy overwrite: abcde
+Move over existing: EInOutError
+Move: FALSE abcde
+ReadAllLines: 4 [one] [two] [three] [four]
+TRUE FALSE
+FALSE TRUE
+GetFiles: a.txt b.txt c.dat
+GetFiles *.txt: a.txt b.txt
+GetFiles all: a.txt b.txt d.txt
+GetDirectories: sub
+IsEmpty: FALSE FALSE
+TDirectory.Delete not empty: EInOutError
+TRUE
+FALSE
+.gz [] [.] .bashrc
+a.tar  plain
+a.pas a.pas b.x [a.]
+TRUE TRUE FALSE
+[b] [a]
+FALSE [] []

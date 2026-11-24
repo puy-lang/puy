@@ -1,7 +1,12 @@
 ; puy ir 1
 .global
   g0 O: TNode
-.func f0 DumpLendObject.<main> params=0
+.func f0 System.SysUtils.<fini> params=0
+bb0:
+  .line 50
+  RetVoid
+.finally
+.func f1 DumpLendObject.<main> params=0
   .reg t0: TNode temp
   .reg t1: Integer lent
   .reg t2: Int64 temp
@@ -40,7 +45,7 @@ bb0:
   Move         t3, t5
   Lend         t1, t3, 1, t2
   MakeRef      t4, t1
-  Call         -, f1(t4)
+  Call         -, f2(t4)
   Unlend
   .line 33
   LoadGlobal   t10, g0
@@ -48,7 +53,7 @@ bb0:
   LoadInt      t7, 2
   Lend         t6, t8, 1, t7
   MakeRef      t9, t6
-  Call         -, f1(t9)
+  Call         -, f2(t9)
   Unlend
   .line 34
   LoadGlobal   t13, g0
@@ -83,7 +88,7 @@ bb0:
   .line 38
   RetVoid
 .finally t11, t14, t15, t18
-.func f1 DumpLendObject.Bump params=1
+.func f2 DumpLendObject.Bump params=1
   .reg v0 N: Integer var param
   .reg t0: Integer temp
   .reg t1: Integer temp

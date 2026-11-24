@@ -1,0 +1,37 @@
+// Names not provided by this unit (docs/spec/stdlib/System.TypInfo/README.md).
+// Each line gives the name and the alternative shown by E3022.
+GetEnumName: `System.Rtti.TRttiEnumerationType.GetName<T>`
+GetEnumValue: `System.Rtti.TRttiEnumerationType.GetValue<T>`
+GetTypeData: `System.Rtti.TRttiContext.GetType` and the members of the returned `TRttiType`
+PTypeInfo: `System.PTypeInfo`
+PTypeData: `System.Rtti.TRttiType` and its subclasses
+TTypeData: `System.Rtti.TRttiType` and its subclasses
+GetPropInfo: `System.Rtti.TRttiType.GetProperty`
+GetPropList: `System.Rtti.TRttiType.GetProperties`
+PPropInfo: `System.Rtti.TRttiProperty`
+TPropInfo: `System.Rtti.TRttiProperty`
+GetPropValue: `System.Rtti.TRttiProperty.GetValue`
+SetPropValue: `System.Rtti.TRttiProperty.SetValue`
+TTypeKind: `System.TTypeKind` or `System.Rtti.TRttiType.TypeKind`
+tkUnknown: `System.TTypeKind.tkUnknown`
+tkInteger: `System.TTypeKind.tkInteger`
+tkChar: `System.TTypeKind.tkChar`
+tkEnumeration: `System.TTypeKind.tkEnumeration`
+tkFloat: `System.TTypeKind.tkFloat`
+tkString: `System.TTypeKind.tkString`
+tkSet: `System.TTypeKind.tkSet`
+tkClass: `System.TTypeKind.tkClass`
+tkMethod: `System.TTypeKind.tkMethod`
+tkWChar: `System.TTypeKind.tkWChar`
+tkLString: `System.TTypeKind.tkLString`
+tkWString: `System.TTypeKind.tkWString`
+tkVariant: `System.TTypeKind.tkVariant`
+tkArray: `System.TTypeKind.tkArray`
+tkRecord: `System.TTypeKind.tkRecord`
+tkInterface: `System.TTypeKind.tkInterface`
+tkInt64: `System.TTypeKind.tkInt64`
+tkDynArray: `System.TTypeKind.tkDynArray`
+tkUString: `System.TTypeKind.tkUString`
+tkClassRef: `System.TTypeKind.tkClassRef`
+tkPointer: `System.TTypeKind.tkPointer`
+tkProcedure: `System.TTypeKind.tkProcedure`

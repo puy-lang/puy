@@ -1,0 +1,26 @@
+program Main;
+2
+3
+héllo
+Exists: TRUE TRUE FALSE FALSE
+IsFile: FALSE TRUE
+IsDirectory: TRUE FALSE
+Entries: proj/README.md proj/data.bin proj/src
+Entries *.md: proj/README.md
+Files: proj/README.md proj/data.bin
+Files all *.pas: proj/src/main.pas proj/src/lib/a.pas
+Files all: proj/README.md proj/data.bin proj/src/main.pas proj/src/lib/a.pas
+Directories: proj/src
+Directories all: proj/src proj/src/lib
+Directories s*: proj/src
+Entries all: proj/README.md proj/data.bin proj/src proj/src/lib proj/src/main.pas proj/src/lib/a.pas
+Entries all *.pas: proj/src/main.pas proj/src/lib/a.pas
+Resolve: /work/proj/data.bin
+Resolve .: /work
+Resolve missing: EFileNotFoundException: cannot resolve path 'missing/x': file not found (ekNotFound)
+Resolve empty: EArgumentException: the path is empty
+ReadAllText missing: EFileNotFoundException: cannot read file 'missing.txt': file not found (ekNotFound)
+proj/data.bin TRUE proj 4
+=: TRUE FALSE TRUE TRUE
+4 3 TRUE FALSE
+2 TRUE

@@ -13,6 +13,8 @@
 //! owns its old value or is a zeroed call argument, and every instruction that writes a managed
 //! value there releases the old one (`docs/design/lifetime.md` 3.1, 3.5).
 
+mod tvalue;
+
 use super::*;
 use crate::bytecode::{self, op};
 use crate::directives::DirectiveOutput;
@@ -20,27 +22,36 @@ use crate::sema::hir::*;
 use crate::sema::types::{
     Const, EXCEPTION, KeyKind, OrderKind, TypeId, TypeTable, bound_text, setbits,
 };
-use crate::source::SourceFile;
+use crate::source::{FileId, SourceMap, Span};
 use crate::syntax::ast::ParamMode;
 
 /// The most operands one `ConcatStrN` joins (`FuncLower::concat_n`): `C` stays a narrow operand.
 const CONCAT_N_MAX: usize = 255;
 
 /// Lowers the program. Expects a program without errors. `files` are the directives and the
-/// source of each unit of `p.units` (same order), `paths` the source paths of the unit section
-/// (`docs/spec/units.md` 6.3).
-pub fn lower(p: &Program, files: &[(&DirectiveOutput, &SourceFile)], paths: &[String]) -> Module {
+/// source file of each unit of `p.units` (same order), `paths` the source paths of the unit
+/// section (`docs/spec/units.md` 6.3). The positions of a unit joined from several files are
+/// mapped back to those files through `sources` (`docs/spec/collections.md` 1.2).
+pub fn lower(
+    p: &Program,
+    files: &[(&DirectiveOutput, FileId)],
+    sources: &SourceMap,
+    paths: &[String],
+) -> Module {
     // Function table order (`docs/spec/units.md` 6.1): unit by unit in initialization order,
     // `<main>` (the program), `<init>`, `<fini>`, then the routines in declaration order
     let mut order: Vec<(&Routine, Option<RoutineId>)> = Vec::new();
     let mut units: Vec<UnitEntry> = Vec::new();
     let mut entry = 0;
-    let mut func_index = vec![0u32; p.routines.len()];
+    // A routine without a function (abstract, generic, `native`) keeps `DROPPED`
+    let mut func_index = vec![super::reach::DROPPED; p.routines.len()];
     // The routines the analysis made after every unit's: the instantiations' and the generated
     // ones (`docs/spec/generics.md` 7, `docs/spec/equality.md` 8.3)
     let late: std::collections::HashSet<RoutineId> = p.instance_order.iter().copied().collect();
+    // The module of a test unit has an empty `<main>` (`docs/spec/attributes.md` 5.2)
+    let test_root = p.tests.as_ref().map(|_| p.units.len().saturating_sub(1));
     for (k, u) in p.units.iter().enumerate() {
-        if u.is_program {
+        if u.is_program || test_root == Some(k) {
             entry = order.len() as u32;
             order.push((&p.main, None));
         }
@@ -59,10 +70,13 @@ pub fn lower(p: &Program, files: &[(&DirectiveOutput, &SourceFile)], paths: &[St
         });
         for (i, r) in p.routines.iter().enumerate() {
             // An abstract method has no function (`docs/spec/objects.md` 14.1), nor has a
-            // generic body (`docs/spec/generics.md` 7)
+            // generic body (`docs/spec/generics.md` 7) or a `native` routine
+            // (`docs/spec/extensions.md` 4)
             if r.unit as usize == k
                 && !r.is_abstract
+                && !r.native
                 && !r.generic
+                && !r.unreached
                 && r.instance.is_none()
                 && !late.contains(&RoutineId(i as u32))
             {
@@ -83,7 +97,7 @@ pub fn lower(p: &Program, files: &[(&DirectiveOutput, &SourceFile)], paths: &[St
     // (`docs/spec/generics.md` 7)
     for id in &p.instance_order {
         let r = &p.routines[id.0 as usize];
-        if r.is_abstract || r.generic {
+        if r.is_abstract || r.generic || r.unreached {
             continue;
         }
         func_index[id.0 as usize] = order.len() as u32;
@@ -116,10 +130,25 @@ pub fn lower(p: &Program, files: &[(&DirectiveOutput, &SourceFile)], paths: &[St
             }
         })
         .collect();
+    // The included files of the units, in unit order and in the order of their `{$I}` lines, so
+    // that the index of a file does not depend on which functions the program uses
+    // (`docs/spec/bytecode.md` 3.2)
+    let included: Vec<String> = files
+        .iter()
+        .zip(paths)
+        .flat_map(|((_, f), path)| sources.joined_files(*f, path))
+        .map(|f| sources.get(f).path.clone())
+        .collect();
+    let (ext_units, ext_unit_of) = ext_units(p);
     let mut ml = ModuleLower {
         files,
+        sources,
+        paths,
+        included,
         unit: 0,
         hosts: Vec::new(),
+        exts: Vec::new(),
+        ext_unit_of,
         unit_names: p.units.iter().map(|u| u.name.clone()).collect(),
         func_index,
         func_names,
@@ -147,7 +176,24 @@ pub fn lower(p: &Program, files: &[(&DirectiveOutput, &SourceFile)], paths: &[St
             FuncLower::new(&mut ml, r, id, p, first).lower()
         })
         .collect();
-    Module {
+    // The test table, with the file and the line of each test's name
+    let tests = p
+        .tests
+        .iter()
+        .flatten()
+        .map(|t| {
+            ml.unit = t.unit as usize;
+            crate::bytecode::TestEntry {
+                name: t.name.clone(),
+                file: ml.file_of(t.span),
+                line: ml.line_of(t.span),
+                func: ml.func_index[t.thunk.0 as usize],
+                case: t.case,
+                skip: t.skip.clone(),
+            }
+        })
+        .collect();
+    let mut m = Module {
         program: p.name.clone(),
         types: p.types.clone(),
         globals: p
@@ -164,22 +210,87 @@ pub fn lower(p: &Program, files: &[(&DirectiveOutput, &SourceFile)], paths: &[St
                 },
                 ty: g.ty,
                 exit_code: p.exit_code.is_some_and(|e| e.0 as usize == i),
+                class_var: g.class_var,
             })
             .collect(),
         hosts: ml.hosts,
+        exts: ml.exts,
+        ext_units,
         funcs,
         units,
+        included: ml.included,
         entry,
         func_index: ml.func_index,
+        rtti: Vec::new(),
+        tests,
+    };
+    // Only the functions an entry reaches go in the module (`docs/spec/units.md` 8.3), and the
+    // types they ask type information for (`docs/spec/rtti.md` 1.5)
+    super::reach::drop_unreachable(&mut m, p);
+    m
+}
+
+/// The extension units of the program (`docs/spec/extensions.md` 4), and the index among them of
+/// each unit of the program that is one.
+fn ext_units(p: &Program) -> (Vec<super::ExtUnit>, Vec<Option<u32>>) {
+    let mut units = Vec::new();
+    let mut of = vec![None; p.units.len()];
+    for (k, u) in p.units.iter().enumerate() {
+        let Some(fingerprint) = u.extension else {
+            continue;
+        };
+        let mut classes = Vec::new();
+        let mut exceptions = Vec::new();
+        for t in 0..p.types.defs.len() as u32 {
+            let id = crate::sema::types::TypeId(t);
+            let crate::sema::types::TypeKind::Class {
+                unit: Some(unit),
+                methods,
+                ..
+            } = &p.types.get(id).kind
+            else {
+                continue;
+            };
+            if *unit as usize != k {
+                continue;
+            }
+            let native = methods
+                .iter()
+                .filter_map(|m| m.routine)
+                .any(|r| p.routines[r.0 as usize].native);
+            if native {
+                let name = p.types.get(id).name.clone().unwrap_or_default();
+                classes.push((name, Ty::Class(id)));
+            } else if p.types.is_exception_class(id) {
+                exceptions.push(Ty::Class(id));
+            }
+        }
+        of[k] = Some(units.len() as u32);
+        units.push(super::ExtUnit {
+            name: u.name.clone(),
+            fingerprint,
+            classes,
+            exceptions,
+        });
     }
+    (units, of)
 }
 
 struct ModuleLower<'a> {
-    /// Directives and source of each unit.
-    files: &'a [(&'a DirectiveOutput, &'a SourceFile)],
+    /// Directives and source file of each unit.
+    files: &'a [(&'a DirectiveOutput, FileId)],
+    sources: &'a SourceMap,
+    /// The source path of each unit.
+    paths: &'a [String],
+    /// The paths of the included files of the units (`Module::included`).
+    included: Vec<String>,
     /// The unit of the function being lowered.
     unit: usize,
     hosts: Vec<HostEntry>,
+    /// The extension functions called, in order of first use.
+    exts: Vec<super::ExtFn>,
+    /// The index of each unit among the extension units, if it is one.
+    ext_unit_of: Vec<Option<u32>>,
     unit_names: Vec<String>,
     /// The function index of each routine.
     func_index: Vec<u32>,
@@ -190,6 +301,68 @@ struct ModuleLower<'a> {
 }
 
 impl ModuleLower<'_> {
+    /// The index of the extension function of the `native` routine `routine`, whose arguments
+    /// are its variables from `first` (`Self` of a class method and of a constructor is not
+    /// passed) and whose result is `ret` (`docs/spec/extensions.md` 4).
+    fn ext(&mut self, p: &Program, routine: RoutineId, first: usize, ret: Option<Ty>) -> u32 {
+        let r = &p.routines[routine.0 as usize];
+        let unit = self.ext_unit_of[r.unit as usize].expect("a `native` routine is an extension's");
+        if let Some(i) = self
+            .exts
+            .iter()
+            .position(|e| e.unit == unit && e.name == r.name)
+        {
+            return i as u32;
+        }
+        let kind = |t: Ty| {
+            crate::sema::native::native_kind(&p.types, t)
+                .expect("the analysis checks the types of a `native` routine")
+        };
+        let vars = &r.vars[first..r.param_count as usize];
+        let params = vars.iter().map(|v| kind(v.ty)).collect();
+        let sigs = vars
+            .iter()
+            .filter(|v| kind(v.ty) == bytecode::ext_kind::CALLABLE)
+            .map(|v| {
+                crate::sema::native::callback_sig(&p.types, v.ty)
+                    .expect("the analysis checks the callable parameters")
+            })
+            .collect();
+        let ret_kind = ret.map_or(bytecode::ext_kind::NONE, kind);
+        // The class of an object result (to check what Rust gives back, and to wrap a new value
+        // of an extension class), the array type of a `TBytes` one
+        let ret_type = ret.filter(|_| {
+            matches!(
+                ret_kind,
+                bytecode::ext_kind::BYTES | bytecode::ext_kind::OBJECT
+            )
+        });
+        let ret_range = ret.map_or(bytecode::FULL_RANGE, |t| {
+            crate::sema::native::native_range(&p.types, t)
+        });
+        let shapes = vars
+            .iter()
+            .map(|v| v.ty)
+            .chain(ret)
+            .filter(|t| bytecode::ext_kind::has_shape(kind(*t)))
+            .map(|t| {
+                crate::sema::native::native_shape(&p.types, t)
+                    .expect("the analysis checks the records and arrays of a `native` routine")
+            })
+            .collect();
+        self.exts.push(super::ExtFn {
+            name: r.name.clone(),
+            unit,
+            params,
+            ret: ret_kind,
+            ret_type,
+            ret_range,
+            sigs,
+            shapes,
+        });
+        self.exts.len() as u32 - 1
+    }
+
     fn host(&mut self, name: &str, params: u16, ret: bool) -> u32 {
         if let Some(i) = self.hosts.iter().position(|h| h.name == name) {
             return i as u32;
@@ -202,8 +375,25 @@ impl ModuleLower<'_> {
         self.hosts.len() as u32 - 1
     }
 
+    /// The span in the file it came from (a unit joined from several files).
+    fn resolve(&self, span: TextRange) -> Span {
+        self.sources
+            .resolve(Span::new(self.files[self.unit].1, span))
+    }
+
     fn line_of(&self, span: TextRange) -> u32 {
-        self.files[self.unit].1.line_col(span.start()).line
+        let s = self.resolve(span);
+        self.sources.get(s.file).line_col(s.range.start()).line
+    }
+
+    /// The source file of a function whose name is at `span` (`Function::file`): the unit's,
+    /// or for a unit joined from several files, the file the name came from.
+    fn file_of(&self, span: TextRange) -> u32 {
+        let path = &self.sources.get(self.resolve(span).file).path;
+        match self.included.iter().position(|p| p == path) {
+            Some(k) => (self.paths.len() + k) as u32,
+            None => self.unit as u32,
+        }
     }
 
     fn dir(&self) -> &DirectiveOutput {
@@ -266,6 +456,12 @@ struct FuncLower<'m, 'a> {
     /// it is a local record expanded into registers (`docs/design/records.md` 3.9; empty when
     /// none is).
     expand: Vec<Option<u32>>,
+    /// The `Assert` being lowered under `{$C+}` (`docs/spec/semantics.md` 5.4): the variables
+    /// its condition writes, the register holding the value of each of its probes, and the
+    /// register of each mark.
+    probe_written: Vec<VarId>,
+    probe_regs: Vec<Reg>,
+    probe_marks: Vec<Reg>,
 }
 
 impl<'m, 'a> FuncLower<'m, 'a> {
@@ -303,6 +499,9 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             current_overflow: false,
             cells: cell_vars(program, r),
             expand,
+            probe_written: Vec::new(),
+            probe_regs: Vec::new(),
+            probe_marks: Vec::new(),
         }
     }
 
@@ -363,7 +562,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 Some(full) => full.clone(),
                 None => format!("{}.{}", self.ml.unit_names[self.ml.unit], self.r.name),
             },
-            file: self.ml.unit as u32,
+            file: self.ml.file_of(self.r.name_span),
             origin: self
                 .id
                 .and_then(|id| self.program.origins.get(&id).cloned()),
@@ -1238,7 +1437,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
     fn load_int(&mut self, dst: Reg, v: i64) {
         if v == 0 {
             self.op1(op::LOAD_ZERO, dst);
-        } else if (i16::MIN as i64..=i16::MAX as i64).contains(&v) {
+        } else if super::fits_load_int(v) {
             self.plain(op::LOAD_INT, vec![Operand::Reg(dst), Operand::Imm(v)]);
         } else {
             self.op_table(op::LOAD_CONST, dst, Operand::Int(v));
@@ -1251,7 +1450,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
     /// (`docs/spec/generics.md` 7).
     fn load_func(&mut self, dst: Reg, func: u32, add: i64) {
         let value = Operand::FuncValue { func, add };
-        if (i16::MIN as i64..=i16::MAX as i64).contains(&(i64::from(func) + add)) {
+        if super::fits_load_int(i64::from(func) + add) {
             self.plain(op::LOAD_INT, vec![Operand::Reg(dst), value]);
         } else {
             self.op_table(op::LOAD_CONST, dst, value);
@@ -1599,6 +1798,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             ),
             StmtKind::Read { targets, newline } => self.read(targets, *newline),
             StmtKind::Flush => self.intrinsic(op::intr::FLUSH_OUT, &[]),
+            StmtKind::RequestLeakReport => self.intrinsic(op::intr::REQUEST_LEAK_REPORT, &[]),
             StmtKind::Write { args, newline, err } => self.write(args, *newline, *err),
             StmtKind::SetLength { target, lens } => self.set_length(target, lens),
             StmtKind::Insert {
@@ -1651,11 +1851,23 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 cond,
                 message,
                 text,
+                probes,
+                marks,
             } => {
                 let skip = self.new_block();
                 let m = self.mark();
+                // `docs/spec/semantics.md` 5.4: a register for each probe and mark, kept to the
+                // failure (the marks start cleared)
+                self.probe_written = probe_vars(cond)
+                    .into_iter()
+                    .filter(|v| expr_writes_var(cond, *v))
+                    .collect();
+                self.probe_regs = probes.iter().map(|p| self.alloc(p.ty)).collect();
+                self.probe_marks = (0..*marks).map(|_| self.alloc(Ty::Boolean)).collect();
+                for k in 0..self.probe_marks.len() {
+                    self.op1(op::LOAD_ZERO, self.probe_marks[k]);
+                }
                 self.cond(cond, skip, true);
-                self.release(m);
                 let msg = self.alloc(Ty::String);
                 self.load_text(msg, &format!("assertion failed: {text}"));
                 if let Some(me) = message {
@@ -1673,8 +1885,10 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 let x = self.alloc(class);
                 self.new_into(x, class);
                 self.obj_set(x, bytecode::EXC_SLOT_MESSAGE, msg, Ty::String, true);
+                self.record_probes(x, probes);
                 self.terminate(Term::Raise(x));
                 self.bind(skip);
+                self.release(m);
             }
             StmtKind::Raise(Some(x)) => {
                 // `Raise` takes the reference the temporary holds
@@ -1955,6 +2169,13 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         dispatch: Dispatch,
         dst: Reg,
     ) {
+        if let Some(r) = ctor
+            && self.program.routines[r.0 as usize].native
+        {
+            // `CallExt` makes the instance (`docs/spec/extensions.md` 4)
+            self.call_native(r, args, Some(class), Some(dst));
+            return;
+        }
         // A built-in constructor with an argument is `Exception.Create(Msg)` / `CreateFmt`
         let msg = match (ctor, args) {
             (None, [CallArg::Value(m)]) => Some(m),
@@ -3166,7 +3387,11 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 let Some(Idx::Reg(i)) = h.elem else {
                     unreachable!("an element of a dynamic array has its index in a register")
                 };
-                self.get_slot(dst, c, &At::Dyn(i), ty, counted);
+                if self.program.types.is_bytes_array(h.ty) {
+                    self.op3(op::BYTES_GET, dst, c, i);
+                } else {
+                    self.get_slot(dst, c, &At::Dyn(i), ty, counted);
+                }
             }
             HopKind::Ref => {
                 let At::Field(s) = self.hop_slot(h) else {
@@ -3203,7 +3428,11 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 let Some(Idx::Reg(i)) = h.elem else {
                     unreachable!("an element of a dynamic array has its index in a register")
                 };
-                self.set_slot(c, &At::Dyn(i), src, ty, counted);
+                if self.program.types.is_bytes_array(h.ty) {
+                    self.op3(op::BYTES_SET, c, i, src);
+                } else {
+                    self.set_slot(c, &At::Dyn(i), src, ty, counted);
+                }
             }
             HopKind::Ref => {
                 let At::Field(s) = self.hop_slot(h) else {
@@ -3798,6 +4027,8 @@ impl<'m, 'a> FuncLower<'m, 'a> {
     fn borrowed_value(&mut self, e: &Expr) -> Reg {
         if e.value.is_none() {
             match &e.kind {
+                // `docs/spec/semantics.md` 5.4: the register keeping the probe's value is read
+                ExprKind::Probe { .. } => return self.expr_any(e),
                 ExprKind::Var(v) => {
                     return self.root_borrowed(&Place::Var(*v, e.span));
                 }
@@ -5458,6 +5689,11 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 // `docs/spec/objects.md` 14.1: the type index + 1
                 self.op_table(op::LOAD_INT, dst, Operand::ClassRef(Ty::Class(*class)));
             }
+            ExprKind::TypeInfo(t) => {
+                // `docs/spec/rtti.md` 2.2: the type information number (codegen numbers the
+                // entries; a number past the `LoadInt` immediate is E3400, as a type index)
+                self.op_table(op::LOAD_INT, dst, Operand::TypeInfo(*t));
+            }
             ExprKind::ClassInfo { op: info, args } => {
                 // `docs/spec/objects.md` 14.3: the intrinsics check their operands
                 let id = match info {
@@ -5515,6 +5751,7 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 let n = match member {
                     ExcMember::StackTrace => bytecode::EXC_INFO_STACK_TRACE,
                     ExcMember::Suppressed => bytecode::EXC_INFO_SUPPRESSED,
+                    ExcMember::Values => bytecode::EXC_INFO_VALUES,
                 };
                 self.plain(
                     op::EXC_INFO,
@@ -5532,7 +5769,19 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 self.op2(op::MOVE, r, v);
                 self.store_place(target, r);
             }
-            ExprKind::Error => self.op1(op::LOAD_ZERO, dst),
+            ExprKind::Probe { operand, probe } => match probe {
+                Probe::Value(k) => {
+                    let r = self.probe_value(*k, operand);
+                    if r != dst {
+                        self.copy_value(e.ty, dst, r);
+                    }
+                }
+                Probe::Reached(m) => {
+                    self.probe_reached(*m);
+                    pending = self.expr_lazy(operand, dst);
+                }
+            },
+            ExprKind::Error | ExprKind::TypeName => self.op1(op::LOAD_ZERO, dst),
         }
         self.release(mark);
         self.line = old;
@@ -5543,6 +5792,20 @@ impl<'m, 'a> FuncLower<'m, 'a> {
     /// A counted copy of a variable holding no object is let go of when the statement ends
     /// ([`FuncLower::let_go_at_statement_end`]).
     fn expr_any(&mut self, e: &Expr) -> Reg {
+        match &e.kind {
+            ExprKind::Probe {
+                operand,
+                probe: Probe::Value(k),
+            } => return self.probe_value(*k, operand),
+            ExprKind::Probe {
+                operand,
+                probe: Probe::Reached(m),
+            } => {
+                self.probe_reached(*m);
+                return self.expr_any(operand);
+            }
+            _ => {}
+        }
         if e.value.is_none()
             && let ExprKind::Var(v) = &e.kind
             && !self.is_ref_param(*v)
@@ -6050,6 +6313,13 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 operand,
                 calc: Calc::Bool,
             } => self.cond(operand, target, !jump_if),
+            ExprKind::Probe {
+                operand,
+                probe: Probe::Reached(m),
+            } => {
+                self.probe_reached(*m);
+                self.cond(operand, target, jump_if);
+            }
             ExprKind::Binary { first, steps }
                 if steps.last().is_some_and(|s| {
                     s.op.is_comparison()
@@ -6250,6 +6520,10 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         dst: Option<Reg>,
         new: Option<NewIn>,
     ) -> (Option<FinallyScope>, Vec<Reg>) {
+        if self.program.routines[routine.0 as usize].native {
+            self.call_native(routine, args, None, dst);
+            return (None, Vec::new());
+        }
         let callee = &self.program.routines[routine.0 as usize];
         let modes: Vec<Option<ParamMode>> = (0..args.len())
             .map(|i| match callee.vars.get(i).map(|v| v.kind) {
@@ -6371,6 +6645,57 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             self.plain(op::UNLEND, Vec::new());
         }
         (scope, temps)
+    }
+
+    /// The call of the `native` routine `routine` (`CallExt`; `docs/spec/extensions.md` 4): its
+    /// arguments are laid out as a call's, but `Self` of a class method is not passed. With
+    /// `ctor` (the class), the call of a constructor in `TFoo.Create(…)`, whose `args` have no
+    /// `Self` and whose result is the new instance.
+    fn call_native(
+        &mut self,
+        routine: RoutineId,
+        args: &[CallArg],
+        ctor: Option<Ty>,
+        dst: Option<Reg>,
+    ) {
+        let callee = &self.program.routines[routine.0 as usize];
+        let self_var = callee
+            .vars
+            .first()
+            .filter(|v| v.kind == VarKind::SelfParam && callee.param_count > 0);
+        let class_method = self_var.is_some_and(|v| matches!(v.ty, Ty::ClassRef(_)));
+        let (args, first) = if ctor.is_some() {
+            (args, 1)
+        } else if class_method {
+            (&args[1..], 1)
+        } else {
+            (args, 0)
+        };
+        let self_first = first == 0 && self_var.is_some();
+        let modes: Vec<Option<ParamMode>> = (0..args.len())
+            .map(|i| match callee.vars.get(first + i).map(|v| v.kind) {
+                Some(VarKind::Param(m)) => Some(m),
+                _ => None,
+            })
+            .collect();
+        let param_tys: Vec<Ty> = (0..args.len())
+            .map(|i| callee.vars.get(first + i).map_or(Ty::Error, |v| v.ty))
+            .collect();
+        let ret = ctor.or(callee.ret);
+        let laid = self.eval_args(args, &modes, &param_tys, false, self_first, ret, false);
+        let mut slots = laid.slots;
+        let frame = *slots.first().expect("a call has a frame");
+        slots.truncate(args.len());
+        let x = self.ml.ext(self.program, routine, first, ret);
+        match (dst, ret) {
+            // The result comes back in the frame; move its reference to the destination
+            (Some(d), Some(rt)) if self.managed(rt) => {
+                self.call(op::CALL_EXT, Some(frame), Operand::Ext(x), slots, frame);
+                self.move_value(rt, d, frame);
+            }
+            _ => self.call(op::CALL_EXT, dst, Operand::Ext(x), slots, frame),
+        }
+        debug_assert!(!laid.lent, "a `native` routine has no `var` parameters");
     }
 
     /// Evaluates the arguments of a call into consecutive call-argument temporaries
@@ -7069,6 +7394,72 @@ impl<'m, 'a> FuncLower<'m, 'a> {
         }
     }
 
+    // ---- The values a failed `Assert` records (`docs/spec/semantics.md` 5.4) ----
+
+    /// The register holding the value of the probe `k` once its operand is evaluated: a local
+    /// variable's own register when nothing in the condition writes the variable, otherwise the
+    /// probe's register, into which the operand goes.
+    fn probe_value(&mut self, k: u32, operand: &Expr) -> Reg {
+        if operand.value.is_none()
+            && let ExprKind::Var(v) = &operand.kind
+            && !self.is_ref_param(*v)
+            && self.expanded_first(*v).is_none()
+            && !self.probe_written.contains(v)
+        {
+            let r = self.reg_of(*v);
+            self.probe_regs[k as usize] = r;
+            return r;
+        }
+        let r = self.probe_regs[k as usize];
+        self.expr(operand, r);
+        r
+    }
+
+    /// Sets the mark `m` (the right side of an `and` / `or` is evaluated).
+    fn probe_reached(&mut self, m: u32) {
+        let r = self.probe_marks[m as usize];
+        self.load_int(r, 1);
+    }
+
+    /// On the failure path: records each probe's text and value on the new `EAssertionFailed`
+    /// `x` (`AssertValue`; the debug type 0 for one under a mark not set, whose value is not
+    /// read).
+    fn record_probes(&mut self, x: Reg, probes: &[AssertProbe]) {
+        for (k, p) in probes.iter().enumerate() {
+            let m = self.mark();
+            // The text in a register owning it, lent to the call like the value
+            let owned = self.alloc(Ty::String);
+            self.load_text(owned, &p.text);
+            let text = self.alloc_arg(Some(Ty::String));
+            let value = self.alloc_arg(Some(p.ty));
+            let ty = self.alloc_arg(Some(Ty::Integer));
+            self.op2(op::MOVE, text, owned);
+            let not_set = p.mark.map(|mark| {
+                let not_set = self.new_block();
+                self.branch(
+                    op::JMP_IF_FALSE,
+                    self.probe_marks[mark as usize],
+                    None,
+                    not_set,
+                );
+                not_set
+            });
+            self.op2(op::MOVE, value, self.probe_regs[k]);
+            self.op_table(op::LOAD_INT, ty, Operand::DebugType(p.ty));
+            self.intrinsic(op::intr::ASSERT_VALUE, &[x, text, value, ty]);
+            if let Some(not_set) = not_set {
+                let done = self.new_block();
+                self.jump(done);
+                self.bind(not_set);
+                self.op1(op::LOAD_ZERO, value);
+                self.op1(op::LOAD_ZERO, ty);
+                self.intrinsic(op::intr::ASSERT_VALUE, &[x, text, value, ty]);
+                self.bind(done);
+            }
+            self.release(m);
+        }
+    }
+
     /// `CheckClassType(X, What)` (`docs/spec/collections.md` 9.3, 12.1): nothing once the type
     /// of `X` is a class; any other type raises `EInvalidOperation` with `What` and its name.
     fn check_class_type(&mut self, value: &Expr, what: &Expr) {
@@ -7522,6 +7913,50 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 self.expr(&args[0], dst);
                 self.op2(op::SQRT_F64, dst, dst);
             }
+            Builtin::Sin
+            | Builtin::Cos
+            | Builtin::ArcTan
+            | Builtin::Ln
+            | Builtin::Exp
+            | Builtin::Int
+            | Builtin::Frac => {
+                let kind = match func {
+                    Builtin::Sin => bytecode::MATH_SIN,
+                    Builtin::Cos => bytecode::MATH_COS,
+                    Builtin::ArcTan => bytecode::MATH_ARC_TAN,
+                    Builtin::Ln => bytecode::MATH_LN,
+                    Builtin::Exp => bytecode::MATH_EXP,
+                    Builtin::Int => bytecode::MATH_INT,
+                    _ => bytecode::MATH_FRAC,
+                };
+                let x = self.expr_any(&args[0]);
+                // `B` and `B+1` are consecutive call-argument temporaries
+                let b = self.alloc_arg(Some(Ty::Double));
+                let k = self.alloc_arg(Some(Ty::Int64));
+                self.op2(op::MOVE, b, x);
+                self.load_int(k, kind);
+                self.intrinsic(op::intr::MATH_F64, &[dst, b, k]);
+            }
+            Builtin::MathFunc1 | Builtin::MathFunc2 => {
+                // The arguments in the order written (`Kind` first), then `X` (and `Y`) and
+                // `Kind` in consecutive call-argument temporaries
+                let vals: Vec<Reg> = args.iter().map(|a| self.expr_any(a)).collect();
+                let mut regs = vec![dst];
+                for (&v, a) in vals[1..].iter().zip(&args[1..]) {
+                    let r = self.alloc_arg(Some(a.ty));
+                    self.op2(op::MOVE, r, v);
+                    regs.push(r);
+                }
+                let k = self.alloc_arg(Some(Ty::Int64));
+                self.op2(op::MOVE, k, vals[0]);
+                regs.push(k);
+                let id = if func == Builtin::MathFunc1 {
+                    op::intr::MATH_F64
+                } else {
+                    op::intr::MATH_F64X2
+                };
+                self.intrinsic(id, &regs);
+            }
             Builtin::HashCombine => {
                 let h = self.expr_any(&args[0]);
                 let x = self.expr_any(&args[1]);
@@ -7631,6 +8066,186 @@ impl<'m, 'a> FuncLower<'m, 'a> {
             Builtin::Default => self.clear_value(ty, dst),
             Builtin::Low | Builtin::SizeOf => unreachable!("sema folds `Low` and `SizeOf`"),
             Builtin::Concat => unreachable!("sema lowers `Concat` to `+`"),
+            // The slots of the two types hold the same bits (`docs/design/vm.md` 3.2)
+            Builtin::SingleToBits
+            | Builtin::BitsToSingle
+            | Builtin::DoubleToBits
+            | Builtin::BitsToDouble => {
+                let x = self.expr_any(&args[0]);
+                self.op2(op::MOVE, dst, x);
+            }
+            Builtin::CharClass
+            | Builtin::UnicodeCategory
+            | Builtin::CodePointClass
+            | Builtin::NumericValue => {
+                let x = self.expr_any(&args[0]);
+                let id = match func {
+                    Builtin::CharClass => op::intr::CHAR_CLASS,
+                    Builtin::UnicodeCategory => op::intr::UNICODE_CATEGORY,
+                    Builtin::CodePointClass => op::intr::CODE_POINT_CLASS,
+                    _ => op::intr::NUMERIC_VALUE,
+                };
+                self.intrinsic(id, &[dst, x]);
+            }
+            Builtin::ClockNow => self.intrinsic(op::intr::CLOCK_NOW, &[dst]),
+            Builtin::ClockMono => self.intrinsic(op::intr::CLOCK_MONO, &[dst]),
+            Builtin::ClockControl => {
+                let kind = self.expr_any(&args[0]);
+                let value = self.expr_any(&args[1]);
+                self.intrinsic_pair(
+                    op::intr::CLOCK_CONTROL,
+                    dst,
+                    [(kind, args[0].ty), (value, args[1].ty)],
+                );
+            }
+            Builtin::ClockSleep => {
+                let x = self.expr_any(&args[0]);
+                self.intrinsic(op::intr::CLOCK_SLEEP, &[dst, x]);
+            }
+            // No value: `dst` is left as it is
+            Builtin::AddSuppressed => {
+                let e = self.expr_any(&args[0]);
+                let x = self.expr_any(&args[1]);
+                self.intrinsic(op::intr::ADD_SUPPRESSED, &[e, x]);
+            }
+            Builtin::LocalOffset => {
+                let x = self.expr_any(&args[0]);
+                self.intrinsic(op::intr::LOCAL_OFFSET, &[dst, x]);
+            }
+            Builtin::RaiseConvertError => {
+                let s = self.expr_any(&args[0]);
+                let what = self.expr_any(&args[1]);
+                self.intrinsic_pair(
+                    op::intr::CONVERT_ERROR,
+                    dst,
+                    [(s, args[0].ty), (what, args[1].ty)],
+                );
+            }
+            Builtin::BytesCopy | Builtin::BytesFill => {
+                // `docs/spec/bytecode.md` 2.22: the destination array in `A` and the other
+                // arguments in the consecutive registers from `B` (the arrays read without
+                // counting; the destination is written in place, as `DynSet` writes)
+                let regs: Vec<Reg> = args.iter().map(|e| self.alloc_arg(Some(e.ty))).collect();
+                for (e, r) in args.iter().zip(&regs) {
+                    self.borrowed_into(e, *r);
+                }
+                let id = if func == Builtin::BytesCopy {
+                    op::intr::BYTES_COPY
+                } else {
+                    op::intr::BYTES_FILL
+                };
+                self.intrinsic(id, &regs);
+                // The value is the count
+                let count = if func == Builtin::BytesCopy {
+                    regs[4]
+                } else {
+                    regs[2]
+                };
+                self.op2(op::MOVE, dst, count);
+            }
+            Builtin::TypeInfo => unreachable!("sema makes `TypeInfo` an expression of its own"),
+            // The same slot (`docs/spec/bytecode.md` 2.24)
+            Builtin::TypeInfoNumber | Builtin::TypeInfoOfNumber => {
+                let x = self.expr_any(&args[0]);
+                self.op2(op::MOVE, dst, x);
+            }
+            Builtin::RttiTypeField | Builtin::RttiMemberField | Builtin::RttiFindType => {
+                // `docs/spec/bytecode.md` 2.24: the arguments in the consecutive registers from
+                // `B` (`RttiFindType` with the mode 0 after the name)
+                let mut regs: Vec<Reg> = args.iter().map(|e| self.alloc_arg(Some(e.ty))).collect();
+                for (e, r) in args.iter().zip(&regs) {
+                    self.borrowed_into(e, *r);
+                }
+                let id = match func {
+                    Builtin::RttiTypeField => op::intr::RTTI_TYPE_FIELD,
+                    Builtin::RttiMemberField => op::intr::RTTI_MEMBER_FIELD,
+                    _ => {
+                        let mode = self.alloc_arg(Some(Ty::Integer));
+                        self.load_int(mode, 0);
+                        regs.push(mode);
+                        op::intr::RTTI_FIND_TYPE
+                    }
+                };
+                regs.insert(0, dst);
+                self.intrinsic(id, &regs);
+            }
+            Builtin::RttiTypeCount => {
+                // `RttiFindType` with the mode 1: the name is not read
+                let name = self.alloc_arg(Some(Ty::String));
+                let mode = self.alloc_arg(Some(Ty::Integer));
+                self.op1(op::LOAD_ZERO, name);
+                self.load_int(mode, 1);
+                self.intrinsic(op::intr::RTTI_FIND_TYPE, &[dst, name, mode]);
+            }
+            Builtin::RttiName => {
+                let x = self.expr_any(&args[0]);
+                self.intrinsic(op::intr::RTTI_NAME, &[dst, x]);
+            }
+            Builtin::RttiFieldGet | Builtin::RttiFieldSet => {
+                // `docs/spec/bytecode.md` 2.24: the table, the index and the `TValue` blocks (read
+                // without counting) in the consecutive registers from `B`; the instance's
+                // `TValue` (after the write) in `A`
+                let regs: Vec<Reg> = args.iter().map(|e| self.alloc_arg(Some(e.ty))).collect();
+                for (e, r) in args.iter().zip(&regs) {
+                    self.borrowed_into(e, *r);
+                }
+                let id = if func == Builtin::RttiFieldGet {
+                    op::intr::RTTI_FIELD_GET
+                } else {
+                    op::intr::RTTI_FIELD_SET
+                };
+                let mut ops = vec![dst];
+                ops.extend(regs);
+                self.intrinsic(id, &ops);
+            }
+            Builtin::RttiMethodRef
+            | Builtin::RttiPropRef
+            | Builtin::RttiBridge
+            | Builtin::RttiAttrFunc
+            | Builtin::RttiArgSet => {
+                // `docs/spec/bytecode.md` 2.24: the arguments (the `TValue` and array blocks read
+                // without counting) in the consecutive registers from `B`, the value in `A`
+                let regs: Vec<Reg> = args.iter().map(|e| self.alloc_arg(Some(e.ty))).collect();
+                for (e, r) in args.iter().zip(&regs) {
+                    self.borrowed_into(e, *r);
+                }
+                let id = match func {
+                    Builtin::RttiMethodRef => op::intr::RTTI_METHOD_REF,
+                    Builtin::RttiPropRef => op::intr::RTTI_PROP_REF,
+                    Builtin::RttiBridge => op::intr::RTTI_BRIDGE,
+                    Builtin::RttiAttrFunc => op::intr::RTTI_ATTR_FUNC,
+                    _ => op::intr::RTTI_ARG_SET,
+                };
+                let mut ops = vec![dst];
+                ops.extend(regs);
+                self.intrinsic(id, &ops);
+            }
+            Builtin::RttiClassType | Builtin::RttiClassOf => {
+                // `RttiClassType` with the mode 0 (class reference to type information) or 1
+                // (type information to class reference) after the value
+                let regs = [
+                    self.alloc_arg(Some(args[0].ty)),
+                    self.alloc_arg(Some(Ty::Integer)),
+                ];
+                self.borrowed_into(&args[0], regs[0]);
+                self.load_int(regs[1], i64::from(func == Builtin::RttiClassOf));
+                self.intrinsic(op::intr::RTTI_CLASS_TYPE, &[dst, regs[0], regs[1]]);
+            }
+            Builtin::ConsoleRead | Builtin::ConsoleWrite | Builtin::ConsoleWriteError => {
+                // `docs/spec/bytecode.md` 2.22: the array (read without counting; `ConsoleRead`
+                // writes it in place), the offset and the count in the consecutive registers from
+                // `B`; the value in `A`
+                let regs: Vec<Reg> = args.iter().map(|e| self.alloc_arg(Some(e.ty))).collect();
+                for (e, r) in args.iter().zip(&regs) {
+                    self.borrowed_into(e, *r);
+                }
+                let id = match func {
+                    Builtin::ConsoleRead => op::intr::CONSOLE_READ,
+                    Builtin::ConsoleWrite => op::intr::CONSOLE_WRITE,
+                    _ => op::intr::CONSOLE_WRITE_ERROR,
+                };
+                self.intrinsic(id, &[dst, regs[0], regs[1], regs[2]]);
+            }
             Builtin::Odd => {
                 // The lowest bit is the `Boolean` (two's complement keeps it for negatives)
                 let x = self.expr_any(&args[0]);
@@ -7643,6 +8258,25 @@ impl<'m, 'a> FuncLower<'m, 'a> {
                 self.op2(op::UP_CASE_CHAR, dst, x);
             }
             Builtin::Format => self.format(args, dst),
+            Builtin::ValueWrap
+            | Builtin::ValueIs
+            | Builtin::ValueMatch
+            | Builtin::ValueCast
+            | Builtin::ValueToString
+            | Builtin::ValueRead
+            | Builtin::ValueReadDouble
+            | Builtin::ValueReadCurrency
+            | Builtin::ValueReadString
+            | Builtin::TypeKindOf
+            | Builtin::ValueArrayLength
+            | Builtin::ValueArrayType
+            | Builtin::ValueArrayBits
+            | Builtin::ValueArrayRef
+            | Builtin::ValueArrayElemType
+            | Builtin::ValueArraySet
+            | Builtin::ValueArrayValue
+            | Builtin::ValueArraySetValue
+            | Builtin::FormatValues => self.value_builtin(func, args, ty, dst),
             Builtin::TryStrToInt | Builtin::Supports => {
                 unreachable!("sema makes `TryStrToInt` and `Supports` expressions of their own")
             }
@@ -8248,11 +8882,33 @@ struct FinallyScope {
     body_first: BlockId,
 }
 
+/// The local variables an `Assert` condition's probes read whole (`docs/spec/semantics.md` 5.4).
+fn probe_vars(e: &Expr) -> Vec<VarId> {
+    struct Find(Vec<VarId>);
+    impl crate::sema::hirwalk::HirVisit for Find {
+        fn ty(&mut self, _t: &mut Ty) {}
+        fn expr(&mut self, e: &mut Expr) {
+            if let ExprKind::Probe { operand, .. } = &e.kind
+                && let ExprKind::Var(v) = operand.kind
+            {
+                self.0.push(v);
+            }
+        }
+    }
+    let mut f = Find(Vec::new());
+    crate::sema::hirwalk::walk_expr(&mut e.clone(), &mut f);
+    f.0
+}
+
 /// Whether evaluating the expression can write the local variable `v` (it is passed to a `var` /
 /// `out` parameter somewhere inside).
 fn expr_writes_var(e: &Expr, v: VarId) -> bool {
     match &e.kind {
-        ExprKind::Var(_) | ExprKind::Const { .. } | ExprKind::Global(_) | ExprKind::Error => false,
+        ExprKind::Var(_)
+        | ExprKind::Const { .. }
+        | ExprKind::Global(_)
+        | ExprKind::Error
+        | ExprKind::TypeName => false,
         ExprKind::Binary { first, steps } => {
             expr_writes_var(first, v) || steps.iter().any(|s| expr_writes_var(&s.rhs, v))
         }
@@ -8262,9 +8918,11 @@ fn expr_writes_var(e: &Expr, v: VarId) -> bool {
         | ExprKind::ObjField { base: operand, .. }
         | ExprKind::ClassName { base: operand }
         | ExprKind::ClassCheck { operand, .. }
+        | ExprKind::Probe { operand, .. }
         | ExprKind::Weak(operand) => expr_writes_var(operand, v),
         ExprKind::ClassInfo { args, .. } => args.iter().any(|a| expr_writes_var(a, v)),
         ExprKind::ClassRefValue(_)
+        | ExprKind::TypeInfo(_)
         | ExprKind::RoutineRef(_)
         | ExprKind::Anon { .. }
         | ExprKind::NestedRef { .. } => false,
@@ -8326,7 +8984,9 @@ struct NewIn {
 fn expr_reads_reg(e: &Expr, reg: Reg) -> bool {
     match &e.kind {
         ExprKind::Var(v) => Reg::Var(v.0) == reg,
-        ExprKind::Const { .. } | ExprKind::Global(_) | ExprKind::Error => false,
+        ExprKind::Const { .. } | ExprKind::Global(_) | ExprKind::Error | ExprKind::TypeName => {
+            false
+        }
         ExprKind::Binary { first, steps } => {
             expr_reads_reg(first, reg) || steps.iter().any(|s| expr_reads_reg(&s.rhs, reg))
         }
@@ -8336,9 +8996,10 @@ fn expr_reads_reg(e: &Expr, reg: Reg) -> bool {
         | ExprKind::ObjField { base: operand, .. }
         | ExprKind::ClassName { base: operand }
         | ExprKind::ClassCheck { operand, .. }
+        | ExprKind::Probe { operand, .. }
         | ExprKind::Weak(operand) => expr_reads_reg(operand, reg),
         ExprKind::ClassInfo { args, .. } => args.iter().any(|a| expr_reads_reg(a, reg)),
-        ExprKind::ClassRefValue(_) | ExprKind::RoutineRef(_) => false,
+        ExprKind::ClassRefValue(_) | ExprKind::TypeInfo(_) | ExprKind::RoutineRef(_) => false,
         ExprKind::Anon { captures, .. } => captures.iter().any(|c| Reg::Var(c.0) == reg),
         ExprKind::NestedRef { block, .. } => block.is_some_and(|b| Reg::Var(b.0) == reg),
         ExprKind::MethodRef { base, .. } | ExprKind::ToClosure(base) => expr_reads_reg(base, reg),
@@ -8416,7 +9077,11 @@ fn expr_has_call(e: &Expr) -> bool {
         ExprKind::Builtin { func, args } => {
             *func == Builtin::GetEnvironmentVariable || args.iter().any(expr_has_call)
         }
-        ExprKind::Var(_) | ExprKind::Const { .. } | ExprKind::Global(_) | ExprKind::Error => false,
+        ExprKind::Var(_)
+        | ExprKind::Const { .. }
+        | ExprKind::Global(_)
+        | ExprKind::Error
+        | ExprKind::TypeName => false,
         ExprKind::Binary { first, steps } => {
             expr_has_call(first) || steps.iter().any(|s| expr_has_call(&s.rhs))
         }
@@ -8426,9 +9091,11 @@ fn expr_has_call(e: &Expr) -> bool {
         | ExprKind::ObjField { base: operand, .. }
         | ExprKind::ClassName { base: operand }
         | ExprKind::ClassCheck { operand, .. }
+        | ExprKind::Probe { operand, .. }
         | ExprKind::Weak(operand) => expr_has_call(operand),
         ExprKind::ClassInfo { args, .. } => args.iter().any(expr_has_call),
         ExprKind::ClassRefValue(_)
+        | ExprKind::TypeInfo(_)
         | ExprKind::RoutineRef(_)
         | ExprKind::Anon { .. }
         | ExprKind::NestedRef { .. } => false,

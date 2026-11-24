@@ -1,0 +1,20 @@
+Sort: Apple banana cherry fig pear
+CustomSort: fig pear Apple banana cherry
+Sorted: Apple banana cherry fig pear
+3 1 6
+dupIgnore: Apple banana cherry date fig pear
+2 -1
+TRUE 3
+FALSE 4
+FALSE 6
+4 7
+dupAccept: Apple banana cherry date fig fig pear
+EStringListError
+7
+Insert: EStringListError
+Strings[]: EStringListError
+Delete: banana cherry date fig fig pear
+unsorted: banana cherry date fig fig pear aaa
+sorted again: aaa banana cherry date fig fig pear
+3 TRUE -1
+0

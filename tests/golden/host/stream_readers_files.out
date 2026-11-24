@@ -1,0 +1,14 @@
+FALSE TRUE
+(0)
+6F 6E 65 0A 74 77 C3 B6 (8)
+EF BB BF 66 69 72 73 74 0A 73 65 63 6F 6E 64 0A (16)
+FF FE 68 00 69 00 (6)
+hi UTF-16LE TRUE
+[one]
+[twö]
+7
+02 01 00 00 02 6F 6B 09 (8)
+258 ok 9
+EFOpenError: cannot open file 'missing.txt': file not found
+EFOpenError: cannot open file 'missing.bin': file not found
+EFCreateError: cannot create file 'no/dir/x.txt': file not found

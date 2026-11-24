@@ -1,0 +1,9 @@
+TRUE TRUE
+(TNode)
+thing
+TRUE end of Hold
+destroy a
+destroy b
+destroy thing
+after Hold
+TRUE 3

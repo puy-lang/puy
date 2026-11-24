@@ -1,0 +1,9 @@
+100000 0
+2 65534
+0 9 266
+100000 100000 100000
+TRUE
+EReadError: the stream ended before 10 bytes were read
+EStreamError: the size of a TCounting cannot be set
+EWriteError: the stream took fewer than 1 bytes
+EStreamError: cannot copy -1 bytes

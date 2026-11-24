@@ -6,12 +6,13 @@ begin
 end;
 
 var
-  Z, I: Integer;
+  Z: Integer;
+  C: Currency;
   S: string;
 begin
   Z := Low(Integer) + SizeOf(1);
   for var E in S do WriteLn(E);
-  Z := I.ToHexString;
+  Z := C.ToHexString;
   WriteLn(Z);
   raise;
 end.

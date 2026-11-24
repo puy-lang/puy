@@ -268,6 +268,7 @@ fn operand_use(inst: &Inst) -> Option<Use> {
     match inst.op {
         op::DYN_GET
         | op::DYN_GET_REF
+        | op::BYTES_GET
         | op::VAL_GET
         | op::VAL_GET_REF
         | op::FIELD_GET
@@ -295,6 +296,7 @@ fn operand_use(inst: &Inst) -> Option<Use> {
         }
         op::DYN_SET
         | op::DYN_SET_REF
+        | op::BYTES_SET
         | op::VAL_SET
         | op::VAL_SET_REF
         | op::FIELD_SET

@@ -7,6 +7,7 @@
 mod args;
 mod metadata;
 mod output;
+mod test;
 
 use std::io::Write;
 use std::process::ExitCode;
@@ -117,6 +118,7 @@ fn dispatch(parsed: args::Parsed) -> u8 {
         Command::Check { source, dump } => check(source, dump, &opts),
         Command::Fix { file } => fix(&file, &opts),
         Command::Explain { code } => explain(&code),
+        Command::Test(args) => test::test(&args, &opts),
         Command::Unavailable(name) => {
             eprintln!("puy: `{name}` is not available in this release");
             2
@@ -192,12 +194,35 @@ fn compile_options(
         extra_files: Vec::new(),
         package: metadata::find_package_root(path),
         run: false,
+        extensions: runtime::extensions(),
     };
     // The driver checks inline metadata (E2507)
     let (diags, files) = metadata::check(path, bytes);
     co.extra_diagnostics = diags;
     co.extra_files = files;
     co
+}
+
+/// The options of a compilation of the test units of a package (`puy test`; `docs/spec/test.md`
+/// 2): no inline metadata, and `Assert` always on (`docs/spec/directives.md` 2.5).
+fn compile_options_for_package(
+    package: Option<puy_core::driver::PackageRoot>,
+    opts: &Options,
+) -> CompileOptions {
+    CompileOptions {
+        build: puy_core::directives::BuildConfig {
+            release: false,
+            test: true,
+            defines: opts.defines.clone(),
+            ..Default::default()
+        },
+        extra_diagnostics: Vec::new(),
+        script_name: None,
+        extra_files: Vec::new(),
+        package,
+        run: false,
+        extensions: runtime::extensions(),
+    }
 }
 
 fn run(source: Source, prog_args: Vec<String>, opts: &Options) -> u8 {
@@ -274,6 +299,7 @@ fn run(source: Source, prog_args: Vec<String>, opts: &Options) -> u8 {
     let config = IsolateConfig {
         stdout_buffering: buffering,
         hash_seed,
+        extensions: runtime::extensions(),
         ..Default::default()
     };
     let mut argv = vec![match &source {
@@ -284,7 +310,7 @@ fn run(source: Source, prog_args: Vec<String>, opts: &Options) -> u8 {
     match runtime::run_module(module, runtime::host_set(), config, argv) {
         Ok(runtime::RunResult::Exit { program, last }) => {
             // Order of `docs/spec/units.md` 5.4: the program's uncaught exception, the exceptions
-            // dropped during `Halt`, those of `<fini>`, then the flush failure.
+            // dropped during `Halt`, those of `<fini>`, the leak report, then the flush failure.
             if let ExitKind::UncaughtException(report) = &program.kind {
                 output::emit_exception(report, opts);
             }
@@ -296,6 +322,9 @@ fn run(source: Source, prog_args: Vec<String>, opts: &Options) -> u8 {
             }
             for report in &last.halt_exceptions {
                 output::emit_halt_exception(report, opts);
+            }
+            if !last.leaks.is_empty() {
+                output::emit_leaks(&last.leaks, opts);
             }
             if let Some(e) = program.stdout_error.as_ref().or(last.stdout_error.as_ref()) {
                 output::emit_stdout_error(e, opts);
@@ -310,6 +339,7 @@ fn run(source: Source, prog_args: Vec<String>, opts: &Options) -> u8 {
             let code = match e {
                 puy_core::vm::IsolateError::HostFunction(_) => "F0005",
                 puy_core::vm::IsolateError::InvalidModule(_) => "F0004",
+                puy_core::vm::IsolateError::Extension(_) => "F0007",
                 _ => "F0001",
             };
             output::emit_fatal(code, &e.to_string(), opts);
@@ -347,8 +377,9 @@ fn check(source: Source, dump: Option<args::Dump>, opts: &Options) -> u8 {
     let mut provider = runtime::FileSourceProvider;
     let out = compile(&path, bytes, &mut provider, &co);
     let has_errors = out.diagnostics.iter().any(|d| d.is_error());
-    // A unit has no entry, so no module to dump (`docs/spec/units.md` 8.3)
-    if out.is_unit && matches!(dump, Some(args::Dump::Ir | args::Dump::Bytecode)) {
+    // A unit has no entry, so no module to dump (`docs/spec/units.md` 8.3); a test unit has one
+    // (`docs/spec/attributes.md` 5.2)
+    if out.is_unit && !out.is_test && matches!(dump, Some(args::Dump::Ir | args::Dump::Bytecode)) {
         eprintln!("error: `--dump ir` and `--dump bytecode` need a program; `{path}` is a unit");
         return 2;
     }

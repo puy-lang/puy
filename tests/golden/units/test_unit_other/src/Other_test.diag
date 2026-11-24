@@ -1,0 +1,16 @@
+error[E0743]: `FCount` is private to `TCounter`
+   --> src/Other_test.pas:18:12
+    |
+ 18 |   Assert(C.FCount = 0);
+    |            ^^^^^^
+   ::: src/Calc.pas:8:5
+  8 |     FCount: Integer;
+    |     ------ declared here
+
+error[E0700]: undeclared identifier `Offset`
+   --> src/Other_test.pas:20:10
+    |
+ 20 |   Assert(Offset = 10);
+    |          ^^^^^^
+
+error: aborting due to 2 errors

@@ -103,12 +103,6 @@ error[E0762]: cannot convert a value of type parameter `T`
      |
      = note: a type parameter can only be used in ways that its constraints allow
 
-error[E3200]: `TypeInfo` is not supported yet (planned for M5)
-    --> generic_rule_errors.pas:105:11
-     |
- 105 |   WriteLn(TypeInfo(T) = nil);
-     |           ^^^^^^^^
-
 error[E0705]: wrong number of arguments: expected 0, found 1
     --> generic_rule_errors.pas:110:3
      |
@@ -201,4 +195,4 @@ error[E0702]: type mismatch: expected `TProc<Integer, string>`, found `reference
  131 |     end;
      | ^^^^^^^
 
-error: aborting due to 26 errors
+error: aborting due to 25 errors

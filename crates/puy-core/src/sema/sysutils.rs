@@ -47,6 +47,46 @@ impl Sema<'_, '_> {
             return None;
         }
         let fmt = args[0].value().map(|v| self.lower_expr(&v));
+        // An `array of const` variable or parameter: an array of `TValue`
+        // (`docs/spec/rtti.md` 4.2)
+        let values = args[1]
+            .value()
+            .filter(|v| ctor_of(v).is_none())
+            .map(|v| self.lower_expr(&v));
+        if let Some(values) = values {
+            let fmt = fmt?;
+            if fmt.ty.is_error() || values.ty.is_error() {
+                return None;
+            }
+            let fmt = self.coerce(fmt, Ty::String, false, Some((1, "Fmt")));
+            let of_values = self
+                .types
+                .elem_of(values.ty)
+                .is_some_and(|e| values.ty.is_dyn_indexed() && self.types.is_tvalue(e));
+            if !of_values {
+                let found = self.tn(values.ty);
+                self.error(
+                    Code::E(702),
+                    format!(
+                        "type mismatch: expected `array of const`, found `{found}` (argument 2, parameter `Args`)"
+                    ),
+                    values.span,
+                );
+                return None;
+            }
+            if fmt.ty.is_error() {
+                return None;
+            }
+            return Some(Expr {
+                kind: ExprKind::Builtin {
+                    func: Builtin::FormatValues,
+                    args: vec![fmt, values],
+                },
+                ty: Ty::String,
+                value: None,
+                span,
+            });
+        }
         let elems = args[1]
             .value()
             .and_then(|v| self.const_array(&v, (2, "Args")));

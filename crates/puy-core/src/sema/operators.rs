@@ -360,6 +360,7 @@ impl<'a, 's> Sema<'a, 's> {
             method_of: Some(id),
             self_kind: SelfKind::Instance,
             is_abstract: false,
+            native: false,
             body_span: None,
             closure: false,
             type_params: Vec::new(),
@@ -813,8 +814,10 @@ impl<'a, 's> Sema<'a, 's> {
     }
 
     /// The `Implicit` / `Explicit` operator (`names`) converting the value `e` to `target`
-    /// (`docs/spec/objects.md` 11.4): one taking the value's type, or an integer constant's
-    /// value through the built-in conversion to an integer parameter.
+    /// (`docs/spec/objects.md` 11.4): one taking the value's type, or else one taking the value
+    /// through a single built-in conversion (a `Char` to a `string` parameter, an integer
+    /// constant's value to an integer parameter, an instance to a parameter of an ancestor
+    /// class).
     pub(super) fn conversion_for(&self, e: &Expr, target: Ty, names: &[&str]) -> ConvPick {
         if e.ty.is_error() || target.is_error() {
             return ConvPick::None;
@@ -830,6 +833,17 @@ impl<'a, 's> Sema<'a, 's> {
             }
             if exact {
                 return p.ty == e.ty;
+            }
+            // A `Char` (a one-character literal, a constant or a variable) through the built-in
+            // conversion to `string`
+            if p.ty == Ty::String && self.types.base(e.ty) == Ty::Char {
+                return true;
+            }
+            // An instance of a class through the built-in conversion to an ancestor class
+            if let (Ty::Class(a), Ty::Class(b)) = (e.ty, p.ty)
+                && self.types.is_descendant(a, b)
+            {
+                return true;
             }
             match &e.value {
                 Some(super::types::Const::Int(v)) => {

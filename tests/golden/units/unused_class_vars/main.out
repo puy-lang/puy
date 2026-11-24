@@ -1,0 +1,7 @@
+init Hidden
+init Kept
+main 1
+free main
+fini Kept
+free kept
+fini Hidden

@@ -10,4 +10,5 @@ license.workspace = true
 [dependencies]
 puy-core.workspace = true
 puy-host.workspace = true
+puy-stdlib-ext.workspace = true
 getrandom.workspace = true

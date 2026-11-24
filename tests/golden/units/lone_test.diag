@@ -1,0 +1,19 @@
+warning[W0020]: use `initialization` instead of `begin` (legacy-unit-init)
+   --> lone_test.pas:16:1
+    |
+ 16 | begin
+    | ^^^^^
+    |
+    = note: disable with `{$WARN legacy-unit-init OFF}`
+    = fix: replace `begin` with `initialization`
+
+error[E0780]: a test unit cannot have an `initialization` section
+   --> lone_test.pas:16:1
+    |
+ 16 | begin
+    | ^^^^^
+    |
+    = note: every unit is initialized again for each test
+    = note: prepare in the test, or in a `[Setup]` method of a test class
+
+error: aborting due to 1 error; 1 warning emitted

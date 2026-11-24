@@ -1,0 +1,80 @@
+; puyc format 0
+.const
+  0: str "last"
+  1: str "int"
+  2: str " "
+  3: str "\n"
+.type
+  64: class DumpUnusedClassVars.TBox<Integer> slots=0 parent=ty19 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+.global
+  0: int TUsed.Count
+  1: ref TUsed.Last
+  2: int Unread
+  3: int B
+  4: int S
+  5: exitcode ExitCode
+  6: int TBox<Integer>.Made
+  7: ref TBox<Integer>.Tag
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpUnusedClassVars file="dump_unused_class_vars.pas" init=- fini=- entry=0
+.func 0 DumpUnusedClassVars.<main> params=0 regs=16
+  .try 0006..0009 finally 0009..000b r1
+  .line 45
+  0000  LoadInt      r12, 2
+  0001  StoreGlobal  r12, g0
+  .line 46
+  0002  LoadConst    r0, k0
+  0003  StoreGlobalRef r0, g1
+  .line 47
+  0004  LoadZero     r13
+  0005  New          r13, ty64
+  0006  Move         r14, r13
+  0007  CallMethod   r14, f1
+  0008  LoadZero     r1
+  0009  JmpIfNeIntI  r1, 1, -> 000b
+  000a  DestroyFailed r13
+  000b  EndFinally   r1, 0
+  000c  StoreGlobal  r13, g3
+  .line 48
+  000d  LoadConst    r3, k1
+  000e  StoreGlobalRef r3, g7
+  .line 49
+  000f  LoadGlobal   r12, g0
+  0010  IntToStr     r4, r12
+  0011  LoadConst    r5, k2
+  0012  ConcatStr    r4, r4, r5
+  0013  LoadGlobalRef r6, g1
+  0014  ConcatStr    r4, r4, r6
+  0015  LoadConst    r7, k2
+  0016  ConcatStr    r4, r4, r7
+  0017  LoadGlobal   r13, g6
+  0018  IntToStr     r8, r13
+  0019  ConcatStr    r4, r4, r8
+  001a  LoadConst    r9, k2
+  001b  ConcatStr    r4, r4, r9
+  001c  LoadGlobalRef r10, g7
+  001d  ConcatStr    r4, r4, r10
+  001e  LoadConst    r11, k3
+  001f  ConcatStr    r4, r4, r11
+  0020  CallHost     r4, h0
+  0021  Release      r10
+  0022  Release      r6
+  .line 50
+  0023  LoadGlobal   r12, g3
+  0024  Free         r12
+  .line 51
+  0025  LoadZero     r12
+  0026  StoreGlobal  r12, g5
+  .line 52
+  0027  RetVoid
+.finally r0, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11
+.func 1 DumpUnusedClassVars.TBox<Integer>.Create params=1 regs=2
+  .local r0 Self
+  .line 36
+  0000  LoadGlobal   r1, g6
+  0001  AddIntI      r1, r1, 1
+  0002  NarrowOvf    r1, r1, 4
+  0003  StoreGlobal  r1, g6
+  .line 37
+  0004  RetVoid

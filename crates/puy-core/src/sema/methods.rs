@@ -22,6 +22,7 @@ struct Directives {
     abstract_: Option<TextRange>,
     final_: Option<TextRange>,
     static_: Option<TextRange>,
+    native: Option<TextRange>,
     overload: bool,
 }
 
@@ -197,6 +198,10 @@ impl<'a, 's> Sema<'a, 's> {
             } else {
                 self.define_methods(id, decls);
                 self.define_properties(id, props);
+                if self.input.extension.is_some() {
+                    let at = self.types.get(id).span;
+                    self.check_extension_class(id, at);
+                }
             }
             if self.types.is_helper(id) {
                 self.check_helper_members(id);
@@ -408,7 +413,7 @@ impl<'a, 's> Sema<'a, 's> {
                 };
             }
             // Reported but still declared, so the body finds its declaration
-            self.check_reserved_name(&name.to_ascii_lowercase(), name_range);
+            self.check_reserved_member_name(&name.to_ascii_lowercase(), name_range);
             let sig = signature(&params);
             // The same name in the class: only overloads with different parameters
             // (`docs/spec/semantics.md` 4.7), and not a field's name
@@ -545,17 +550,33 @@ impl<'a, 's> Sema<'a, 's> {
                     is_abstract = true;
                 }
             }
+            // A `native` method (`docs/spec/extensions.md` 2.2): not virtual, and of a class
+            let native = match dirs.native {
+                Some(at)
+                    if is_virtual
+                        || is_record
+                        || is_helper
+                        || is_operator
+                        || kind == MethodKind::Destructor =>
+                {
+                    self.error(Code::E(773), "this method cannot be `native`", at)
+                        .notes
+                        .push("a `native` method is a static or class method, or a constructor, of a class".into());
+                    false
+                }
+                Some(at) => self.native_allowed(at, false),
+                None => false,
+            };
             // A declaration with an error does not also need a body (E0723)
             let failed = self.sink.iter().skip(first_diag).any(|d| d.is_error());
             self.declare_hints(decl.syntax(), name_range, format!("{class_name}.{name}"));
-            let routine = RoutineId(self.routines.len() as u32);
-            self.routines.push(RoutineInfo {
+            let info = RoutineInfo {
                 name: format!("{class_name}.{name}"),
                 params: params.clone(),
                 ret,
                 has_body: false,
                 forward_span: None,
-                implicit_forward: failed,
+                implicit_forward: failed || native,
                 name_span: name_range,
                 hir: None,
                 overload: dirs.overload,
@@ -569,11 +590,18 @@ impl<'a, 's> Sema<'a, 's> {
                 method_of: Some(id),
                 self_kind,
                 is_abstract,
+                native,
                 body_span: None,
                 closure: false,
                 type_params: own,
                 closure_info: super::ClosureInfo::default(),
-            });
+            };
+            // A method of a local type declared again by a trial check keeps its routine
+            let routine = self.routine_at(name_range, |_, _| (0, info)).1;
+            if native {
+                let ctor = (kind == MethodKind::Constructor).then_some(id);
+                self.check_native_signature(routine, ctor, name_range);
+            }
             let entry = if is_abstract {
                 VmtEntry::Abstract
             } else {
@@ -659,6 +687,10 @@ impl<'a, 's> Sema<'a, 's> {
                 *e = entry;
             }
             decl_ranges.push((name_range, crate::syntax::ast::trimmed_range(decl.syntax())));
+            self.types.decl_params.insert(
+                routine,
+                params.iter().map(|p| (p.name.clone(), p.span)).collect(),
+            );
             methods.push(ClassMethod {
                 name,
                 routine: Some(routine),
@@ -828,6 +860,9 @@ impl<'a, 's> Sema<'a, 's> {
                     dirs.static_.get_or_insert(range);
                 }
                 SyntaxKind::OVERLOAD_KW => dirs.overload = true,
+                SyntaxKind::NATIVE_KW => {
+                    dirs.native.get_or_insert(range);
+                }
                 SyntaxKind::MESSAGE_KW => self.message_unsupported("message", range),
                 // `dispid` (COM)
                 SyntaxKind::IDENT => {
@@ -914,7 +949,7 @@ impl<'a, 's> Sema<'a, 's> {
             self.push(d);
             return None;
         }
-        if vis < m.vis {
+        if vis.access_rank() < m.vis.access_rank() {
             let mut d = Diagnostic::error(
                 Code::E(744),
                 format!(
@@ -1061,13 +1096,13 @@ impl<'a, 's> Sema<'a, 's> {
         {
             // A helper uses only the public members of its type, even in the unit declaring the
             // type (`docs/spec/objects.md` 10.8)
-            return vis == Visibility::Public;
+            return vis.is_public();
         }
         let in_descendant = here.is_some_and(|c| self.types.is_descendant(c, owner));
         match vis {
-            Visibility::Public => true,
-            Visibility::Private => unit.is_none_or(|u| u == self.unit_index),
-            Visibility::Protected => unit.is_none_or(|u| u == self.unit_index) || in_descendant,
+            Visibility::Public | Visibility::Published => true,
+            Visibility::Private => unit.is_none_or(|u| self.is_own_unit(u)),
+            Visibility::Protected => unit.is_none_or(|u| self.is_own_unit(u)) || in_descendant,
             Visibility::StrictPrivate => here == Some(owner),
             Visibility::StrictProtected => in_descendant,
         }
@@ -1274,6 +1309,10 @@ impl<'a, 's> Sema<'a, 's> {
         }
         if let Some(m) = ExcMember::from_name(&name.to_ascii_lowercase())
             && self.types.is_exception_class(class)
+            && (m != ExcMember::Values
+                || self
+                    .types
+                    .is_descendant(class, TypeId(crate::bytecode::exc::ASSERTION_FAILED)))
         {
             return Ok(Member::ExcInfo(m));
         }
@@ -1598,6 +1637,7 @@ impl<'a, 's> Sema<'a, 's> {
                     // A helper in a generic type is reported with E0757 alone
                     && r.method_of.is_some_and(|c| !self.generic_helpers.contains(&c))
                     && !r.is_abstract
+                    && !r.native
                     && !r.has_body
                     && !r.implicit_forward
             })
@@ -1752,6 +1792,7 @@ impl<'a, 's> Sema<'a, 's> {
             method_of: Some(object),
             self_kind: SelfKind::Instance,
             is_abstract: true,
+            native: false,
             body_span: None,
             closure: false,
             type_params: Vec::new(),
@@ -1802,6 +1843,7 @@ impl<'a, 's> Sema<'a, 's> {
             method_of: Some(exception),
             self_kind: SelfKind::Instance,
             is_abstract: true,
+            native: false,
             body_span: None,
             closure: false,
             type_params: Vec::new(),
@@ -2673,9 +2715,11 @@ impl<'a, 's> Sema<'a, 's> {
         }
     }
 
-    /// Whether a receiver has no instance: a class reference, or a record type's name.
+    /// Whether a receiver has no instance: a class reference, a record type's name, or the name of
+    /// a type of the language.
     pub(super) fn no_instance(recv: &Expr) -> bool {
         matches!(recv.ty, Ty::ClassRef(_))
+            || matches!(recv.kind, ExprKind::TypeName)
             || (matches!(recv.kind, ExprKind::Error) && matches!(recv.ty, Ty::Record(_)))
     }
 

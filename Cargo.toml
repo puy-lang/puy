@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/*"]
 
 [workspace.package]
-version = "0.0.5"
+version = "0.0.6"
 edition = "2024"
 rust-version = "1.99"
 repository = "https://github.com/puy-lang/puy"
@@ -13,18 +13,33 @@ license = "MIT"
 # crates.io needs a version on each path dependency; keep it equal to `workspace.package.version`.
 # puy-testsuite is not published and only used as a dev-dependency, so it has no version
 # (`cargo publish` drops such dev-dependencies).
-puy-core = { path = "crates/puy-core", version = "0.0.5" }
-puy-host = { path = "crates/puy-host", version = "0.0.5" }
-puy-stdlib = { path = "crates/puy-stdlib", version = "0.0.5" }
-puy-fmt = { path = "crates/puy-fmt", version = "0.0.5" }
-puy-runtime-native = { path = "crates/puy-runtime-native", version = "0.0.5" }
-puy-runtime-wasi = { path = "crates/puy-runtime-wasi", version = "0.0.5" }
+puy-core = { path = "crates/puy-core", version = "0.0.6" }
+puy-host = { path = "crates/puy-host", version = "0.0.6" }
+puy-ext = { path = "crates/puy-ext", version = "0.0.6" }
+puy-ext-macros = { path = "crates/puy-ext-macros", version = "0.0.6" }
+puy-stdlib = { path = "crates/puy-stdlib", version = "0.0.6" }
+puy-stdlib-ext = { path = "crates/puy-stdlib-ext", version = "0.0.6" }
+puy-fmt = { path = "crates/puy-fmt", version = "0.0.6" }
+puy-runtime-native = { path = "crates/puy-runtime-native", version = "0.0.6" }
+puy-runtime-wasi = { path = "crates/puy-runtime-wasi", version = "0.0.6" }
 puy-testsuite = { path = "crates/puy-testsuite" }
 
 # The CST of puy-core (docs/design/compiler-pipeline.md 3.1). MIT / Apache-2.0. Works on WASM
 rowan = "0.16.1"
 # The source of randomness for the runtimes (docs/design/platform-notes.md chapter 3). MIT / Apache-2.0
 getrandom = "0.4.3"
+# The proc macros of puy-ext-macros (build time only; requirements §4.6). MIT / Apache-2.0
+proc-macro2 = "1.0.107"
+quote = "1.0.47"
+syn = { version = "3.0.10", default-features = false, features = ["full", "parsing", "printing", "proc-macro", "derive", "clone-impls", "extra-traits"] }
+# The regular expression engine of System.RegularExpressions (requirements §4.6,
+# docs/design/stdlib.md 3.11): `std`, `unicode` and the `perf-*` features but `perf-literal`.
+# MIT / Apache-2.0. Works on WASM
+regex = { version = "1.13.2", default-features = false, features = ["std", "unicode", "perf-cache", "perf-dfa", "perf-onepass", "perf-backtrack", "perf-inline"] }
+# The floating-point functions of the VM (Sin, Ln, Power, ...; requirements §4.6, §5.11): pure Rust,
+# so every target computes the same bits (the platform's libm does not). MIT / Apache-2.0. Works on
+# WASM; no dependencies
+libm = "0.2.16"
 # Lets the test runner compare `.json` expectations as parsed values (dev-dependency)
 serde_json = "1.0.154"
 

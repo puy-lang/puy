@@ -1,0 +1,31 @@
+new: Size=0 Position=0
+Write 300
+Write 300
+Write 300
+Write 100
+written: Size=1000 Position=1000
+same bytes: TRUE
+Seek 200
+Read 500
+read the same: TRUE 0 0
+after read: Size=1000 Position=700
+Read at end 10, again 0
+Seek soCurrent 0
+past the end: Size=1012 Position=1012
+212 219 0 0 0 0 0 0 0 0 0 0 3 10 
+shrunk: Size=260 Position=260
+52 59 0 0
+saved: Size=520 Position=7
+copy: Size=520 Position=520
+loaded: Size=520 Position=0
+loaded the same: TRUE
+CopyFrom 10 266
+CopyFrom all 520 530
+EReadError: the stream ended before 10 bytes were read
+EStreamError: cannot seek to -1, before the start of the stream
+EStreamError: cannot set the size to -1
+ERangeError: bytes 590..609 are out of a buffer of 600 bytes
+EReadError: the stream ended before 600 bytes were read
+cleared: Size=0 Position=0
+EStreamError: the stream is closed
+TRUE TRUE

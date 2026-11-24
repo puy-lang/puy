@@ -1,0 +1,12 @@
+[package]
+name = "puy-stdlib-ext"
+description = "The Rust parts of the Puy standard library, written as extensions (no I/O, WASM-compatible)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+puy-ext.workspace = true
+regex.workspace = true

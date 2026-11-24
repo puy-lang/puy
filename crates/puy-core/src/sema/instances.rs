@@ -55,8 +55,19 @@ pub(super) struct InstanceRoutines {
     pub generated: Vec<super::hir::GeneratedInfo>,
     /// The bodies whose key equalities and hashes are yet to be filled in.
     pub key_pending: Vec<RoutineId>,
+    /// Where E0778 was reported (`docs/spec/rtti.md` 3.8; once each).
+    pub tvalue_keys: Vec<Span>,
     /// The file of each unit (a record's generated functions are placed at its declaration).
     pub unit_files: Vec<crate::source::FileId>,
+    /// The built-ins of `System.Rtti` the analyzed bodies use (`docs/spec/rtti.md` 1.5): the
+    /// bridges and attribute functions `sema::finish` makes.
+    pub rtti_wants: super::invoke::RttiWants,
+    /// The bridges made, by name (`docs/spec/rtti.md` 7.3).
+    pub bridges: HashMap<String, RoutineId>,
+    /// The bridge of each method (by the type declaring it and its index among its methods).
+    pub method_bridges: HashMap<(TypeId, u32), RoutineId>,
+    /// The function made for each attribute of the program, by its index (7.4).
+    pub attr_funcs: HashMap<usize, RoutineId>,
     /// The instantiations of generic routines and methods (`docs/spec/generics.md` 4.1): by
     /// (the generic routine, the type arguments), and back. The generic routine of a method of
     /// an instantiated type is that type's routine of the method (`stubs`).
@@ -908,6 +919,7 @@ impl Inst<'_> {
             ty,
             span: src.span,
             unit: src.unit,
+            class_var: true,
         };
         self.globals.push(global);
         let unit = self.types.instance_of(id).map_or(self.unit, |i| i.unit);
@@ -1003,6 +1015,7 @@ impl Inst<'_> {
             method_of: Some(inst),
             self_kind: src.self_kind,
             is_abstract: src.is_abstract,
+            native: false,
             body_span: src.body_span,
             closure: false,
             type_params: src.type_params.clone(),
@@ -1188,6 +1201,15 @@ impl Inst<'_> {
     /// method table and of its interface table (`docs/design/generics.md` 3.1).
     fn always_used(&self, id: TypeId) -> Vec<RoutineId> {
         let mut out = Vec::new();
+        // The methods the type information calls by name (`docs/spec/rtti.md` 1.5)
+        for (_, _, m) in super::invoke::invoked_methods(self.types, id, self.inst.rtti_wants) {
+            if let Some(r) = m.routine
+                && self.inst.stubs.get(&r).is_some_and(|(_, o)| *o == id)
+                && !out.contains(&r)
+            {
+                out.push(r);
+            }
+        }
         if let TypeKind::Class { vmt, intfs, .. } = &self.types.get(id).kind {
             for e in vmt {
                 if let VmtEntry::Func(r) = e
@@ -1444,8 +1466,10 @@ impl Inst<'_> {
                 parent: None,
                 link: false,
                 is_abstract: false,
+                native: false,
                 builtin: false,
                 generic: false,
+                unreached: false,
                 dtor_of: None,
                 helper: false,
                 operator: false,
@@ -1697,7 +1721,10 @@ impl HirVisit for Subst<'_, '_> {
     }
 
     fn type_id(&mut self, id: &mut TypeId) {
-        let ty = if self.inst.types.is_interface(*id) {
+        // A type parameter (the class of `X is T`, `T.ClassName`; `docs/spec/generics.md` 3.3)
+        let ty = if self.inst.types.is_param(*id) {
+            Ty::Param(*id)
+        } else if self.inst.types.is_interface(*id) {
             Ty::Intf(*id)
         } else if self.inst.types.is_record(*id) {
             Ty::Record(*id)

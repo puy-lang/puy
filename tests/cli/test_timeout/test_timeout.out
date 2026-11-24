@@ -1,0 +1,11 @@
+running 2 tests (seed 1)
+ERROR Loop_test.Forever (Nms)
+ok    Loop_test.Next (Nms)
+
+---- Loop_test.Forever ----
+error: the test did not finish within 1 second
+
+test result: FAILED. 1 ok; 0 failed; 1 errors; 0 skipped; 0 filtered out
+
+to run a failed test again:
+  puy test --seed 1 --filter 'Loop_test.Forever' --exact

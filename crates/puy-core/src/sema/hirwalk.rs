@@ -25,6 +25,12 @@ pub(crate) trait HirVisit {
         _span: crate::source::TextRange,
     ) {
     }
+    /// The type of `TypeInfo(T)` (`docs/spec/rtti.md` 2.2): a type like the others, except to
+    /// the erasure of the distinct types, which keeps it (a distinct type has an entry of its
+    /// own).
+    fn type_info(&mut self, t: &mut Ty) {
+        self.ty(t);
+    }
     /// An expression, before its parts are walked.
     fn expr(&mut self, _e: &mut Expr) {}
     /// A statement, before its parts are walked.
@@ -180,11 +186,19 @@ fn walk_stmt(s: &mut Stmt, v: &mut impl HirVisit) {
                 }
             }
         }
-        StmtKind::Flush | StmtKind::Nop => {}
-        StmtKind::Assert { cond, message, .. } => {
+        StmtKind::Flush | StmtKind::Nop | StmtKind::RequestLeakReport => {}
+        StmtKind::Assert {
+            cond,
+            message,
+            probes,
+            ..
+        } => {
             walk_expr(cond, v);
             if let Some(m) = message {
                 walk_expr(m, v);
+            }
+            for p in probes {
+                v.ty(&mut p.ty);
             }
         }
         StmtKind::SetLength { target, lens } => {
@@ -358,7 +372,7 @@ pub(crate) fn walk_expr(e: &mut Expr, v: &mut impl HirVisit) {
     v.expr(e);
     v.ty(&mut e.ty);
     match &mut e.kind {
-        ExprKind::Const { .. } | ExprKind::Var(_) | ExprKind::Error => {}
+        ExprKind::Const { .. } | ExprKind::Var(_) | ExprKind::Error | ExprKind::TypeName => {}
         ExprKind::Global(g) => v.global(g),
         ExprKind::Binary { first, steps } => {
             walk_expr(first, v);
@@ -381,6 +395,7 @@ pub(crate) fn walk_expr(e: &mut Expr, v: &mut impl HirVisit) {
         | ExprKind::ExcMember { base, .. }
         | ExprKind::ObjField { base, .. }
         | ExprKind::Weak(base)
+        | ExprKind::Probe { operand: base, .. }
         | ExprKind::ToClosure(base) => walk_expr(base, v),
         ExprKind::Slice { base, low, high } => {
             walk_expr(base, v);
@@ -466,6 +481,7 @@ pub(crate) fn walk_expr(e: &mut Expr, v: &mut impl HirVisit) {
             }
         }
         ExprKind::ClassRefValue(id) => v.type_id(id),
+        ExprKind::TypeInfo(t) => v.type_info(t),
         ExprKind::ClassCheck { operand, class, .. } => {
             walk_expr(operand, v);
             v.type_id(class);

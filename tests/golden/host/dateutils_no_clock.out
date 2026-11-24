@@ -1,0 +1,6 @@
+2026-01-02T00:00:00.000Z 1767312000 2026-01-02T03:04:05.000Z
+DateToISO8601: ENotSupportedException: the clock is not permitted by the host
+DateTimeToUnix: ENotSupportedException: the clock is not permitted by the host
+UnixToDateTime: ENotSupportedException: the clock is not permitted by the host
+ISO8601ToDate: ENotSupportedException: the clock is not permitted by the host
+Today: ENotSupportedException: the clock is not permitted by the host

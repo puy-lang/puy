@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="5" failures="2" errors="1" skipped="1" time="0.000">
+  <testsuite name="A.First_test" tests="3" failures="1" errors="0" skipped="1" time="0.000">
+    <testcase classname="A.First_test" name="Echo(&apos;a&amp;&lt;&quot;&apos;&apos;&gt;&apos;)" file="tests/A/First_test.pas" line="9" time="0.000">
+      <system-out>a&amp;&lt;"'&gt;�終
+</system-out>
+      <system-err>err &lt;&gt;&amp;&#xD;	</system-err>
+    </testcase>
+    <testcase classname="A.First_test" name="Assertion" file="tests/A/First_test.pas" line="16" time="0.000">
+      <failure message="error: uncaught exception EAssertionFailed: a &lt; b &amp; c">error: uncaught exception EAssertionFailed: a &lt; b &amp; c
+  at A.First_test.Assertion (tests/A/First_test.pas:18)
+  at A.First_test.&lt;test:Assertion&gt; (tests/A/First_test.pas:16)
+</failure>
+    </testcase>
+    <testcase classname="A.First_test" name="Skipped" file="tests/A/First_test.pas" line="22" time="0.000">
+      <skipped message="later &quot;&amp;&quot;"/>
+    </testcase>
+  </testsuite>
+  <testsuite name="Second_test" tests="2" failures="1" errors="1" skipped="0" time="0.000">
+    <testcase classname="Second_test" name="Stops" file="tests/Second_test.pas" line="14" time="0.000">
+      <error message="error: the test called `Halt` (exit code 3)">error: the test called `Halt` (exit code 3)
+</error>
+    </testcase>
+    <testcase classname="Second_test" name="Leaks" file="tests/Second_test.pas" line="20" time="0.000">
+      <failure message="warning: 1 heap block was not freed">warning: 1 heap block was not freed
+  Second_test.TNode: 1
+</failure>
+    </testcase>
+  </testsuite>
+</testsuites>

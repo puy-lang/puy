@@ -29,22 +29,22 @@ error[E0700]: undeclared identifier `Foo`
     |        ^^^
 
 error[E0743]: `Create` is private to `TDictionary<string, Integer>.TKeyCollection`
-    --> nil_arg_of_unresolved_call.pas:19:3
-     |
-  19 |   TDictionary<string, Integer>.TKeyCollection.Create(nil);
-     |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    ::: <stdlib>/System.Generics.Collections.pas:339:21
- 339 |         constructor Create(ADict: TDictionary<K, V>);
-     |                     ------ declared here
+   --> nil_arg_of_unresolved_call.pas:19:3
+    |
+ 19 |   TDictionary<string, Integer>.TKeyCollection.Create(nil);
+    |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   ::: <stdlib>/System.Generics.Collections/Dictionary.Interface.inc:59:21
+ 59 |         constructor Create(ADict: TDictionary<K, V>);
+    |                     ------ declared here
 
 error[E0743]: `Create` is private to `TDictionary<string, Integer>.TKeyCollection`
-    --> nil_arg_of_unresolved_call.pas:20:8
-     |
-  20 |   O := TDictionary<string, Integer>.TKeyCollection.Create(nil);
-     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    ::: <stdlib>/System.Generics.Collections.pas:339:21
- 339 |         constructor Create(ADict: TDictionary<K, V>);
-     |                     ------ declared here
+   --> nil_arg_of_unresolved_call.pas:20:8
+    |
+ 20 |   O := TDictionary<string, Integer>.TKeyCollection.Create(nil);
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   ::: <stdlib>/System.Generics.Collections/Dictionary.Interface.inc:59:21
+ 59 |         constructor Create(ADict: TDictionary<K, V>);
+    |                     ------ declared here
 
 error[E0705]: wrong number of arguments: expected 0, found 1
    --> nil_arg_of_unresolved_call.pas:21:3

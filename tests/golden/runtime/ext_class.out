@@ -1,0 +1,10 @@
+live 0
+value 12 live 1
+same 13 TRUE live 1
+TCounter live 2
+after Use, live 0
+42 -1
+TRUE live 1
+after Maybe, live 0
+kept 3 live 1
+EAccessViolation: access to a nil reference

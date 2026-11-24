@@ -1,0 +1,23 @@
+error[E3022]: `System.IOUtils.TDirectory.GetLastWriteTime` is not supported in Puy
+   --> unavailable_record_members.pas:11:22
+    |
+ 11 |   WriteLn(TDirectory.GetLastWriteTime('a'));
+    |                      ^^^^^^^^^^^^^^^^
+    |
+    = note: use `TFile.GetLastWriteTime` instead
+
+error[E3022]: `System.IOUtils.TDirectory.SetCreationTimeUtc` is not supported in Puy
+   --> unavailable_record_members.pas:12:14
+    |
+ 12 |   TDirectory.SetCreationTimeUtc('a', 0);
+    |              ^^^^^^^^^^^^^^^^^^
+    |
+    = note: use `TFile.SetCreationTimeUtc` instead
+
+error[E0700]: `TDirectory` has no member `NoSuchMember`
+   --> unavailable_record_members.pas:13:14
+    |
+ 13 |   TDirectory.NoSuchMember;
+    |              ^^^^^^^^^^^^
+
+error: aborting due to 3 errors

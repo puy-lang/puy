@@ -1,0 +1,214 @@
+; puyc format 0
+.const
+  0: str "\n"
+  1: str " "
+.type
+  64: class DumpRtti.TBox<Integer> slots=0 parent=ty19 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+  65: class DumpRtti.TBox<string> slots=0 parent=ty19 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+  66: class DumpRtti.TShape slots=1 refs=0 parent=ty19 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+  67: class DumpRtti.TCircle slots=1 refs=0 parent=ty66 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+  68: record DumpRtti.TPoint slots=2
+.rtti
+  1: interface DumpRtti.IThing name=IThing parent=ti22 guid={12345678-1234-1234-1234-123456789ABC}
+  2: class DumpRtti.TCircle name=TCircle ty=ty67 parent=ti14
+  3: enumeration DumpRtti.TColor name=TColor shape=9 min=0 max=2 (Red=0, Green=1, Blue=2)
+  4: set DumpRtti.TColors name=TColors base=ti3 bits=3
+  5: integer DumpRtti.TCount name=TCount shape=1 min=0 max=255 base=ti18
+  6: integer DumpRtti.TDigit name=TDigit shape=4 min=0 max=9 base=ti23
+  7: method DumpRtti.TEvent name=TEvent (Sender: ti27): -
+  8: procedure DumpRtti.TFn name=TFn (A: ti23, var B: ti26): ti17
+  9: array DumpRtti.TGrid name=TGrid elem=ti21 width=1 count=3 index=ti23
+  10: ustring DumpRtti.TName name=TName
+  11: record DumpRtti.TPoint name=TPoint ty=ty68
+  12: array DumpRtti.TPoints name=TPoints elem=ti11 width=2 count=3 index=ti3
+  13: procedure DumpRtti.TRef name=TRef (): ti23
+  14: class DumpRtti.TShape name=TShape ty=ty66 parent=ti27
+  15: classref DumpRtti.TShapeClass name=TShapeClass class=ti14
+  16: enumeration DumpRtti.TSmall name=TSmall shape=9 min=1 max=2 base=ti3
+  17: enumeration System.Boolean name=Boolean shape=9 min=0 max=1 (False=0, True=1)
+  18: integer System.Byte name=Byte shape=1 min=0 max=255
+  19: wchar System.Char name=Char shape=8 min=0 max=65535
+  20: float System.Currency name=Currency float=4
+  21: float System.Double name=Double float=1
+  22: interface System.IInterface name=IInterface ty=ty24
+  23: integer System.Integer name=Integer shape=4 min=-2147483648 max=2147483647
+  24: pointer System.PTypeInfo name=PTypeInfo
+  25: float System.Single name=Single float=0
+  26: ustring System.string name=string
+  27: class System.TObject name=TObject ty=ty19
+  28: int64 System.UInt64 name=UInt64 shape=7 min=0 max=18446744073709551615
+  29: lstring System.UTF8String name=UTF8String
+  30: dynarray TArray<System.string> elem=ti26
+.global
+  0: int BI
+  1: int BS
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpRtti file="dump_rtti.pas" init=- fini=- entry=0
+.func 0 DumpRtti.<main> params=0 regs=13
+  .line 59
+  0000  LoadInt      r5, 16
+  0001  Call         r5, f1
+  .line 60
+  0002  LoadInt      r5, 6
+  0003  Call         r5, f1
+  .line 61
+  0004  LoadInt      r5, 10
+  0005  Call         r5, f1
+  .line 62
+  0006  LoadInt      r5, 5
+  0007  Call         r5, f1
+  .line 63
+  0008  LoadInt      r5, 4
+  0009  Call         r5, f1
+  .line 64
+  000a  LoadInt      r5, 9
+  000b  Call         r5, f1
+  .line 65
+  000c  LoadInt      r5, 12
+  000d  Call         r5, f1
+  .line 66
+  000e  LoadInt      r5, 2
+  000f  Call         r5, f1
+  .line 67
+  0010  LoadInt      r5, 15
+  0011  Call         r5, f1
+  .line 68
+  0012  LoadInt      r5, 1
+  0013  Call         r5, f1
+  .line 69
+  0014  LoadInt      r5, 8
+  0015  Call         r5, f1
+  .line 70
+  0016  LoadInt      r5, 7
+  0017  Call         r5, f1
+  .line 71
+  0018  LoadInt      r5, 13
+  0019  Call         r5, f1
+  .line 72
+  001a  LoadInt      r5, 30
+  001b  Call         r5, f1
+  .line 73
+  001c  LoadInt      r5, 29
+  001d  Call         r5, f1
+  .line 74
+  001e  LoadInt      r5, 20
+  001f  Call         r5, f1
+  .line 75
+  0020  LoadInt      r5, 25
+  0021  Call         r5, f1
+  .line 76
+  0022  LoadInt      r5, 19
+  0023  Call         r5, f1
+  .line 77
+  0024  LoadInt      r5, 28
+  0025  Call         r5, f1
+  .line 78
+  0026  LoadInt      r5, 24
+  0027  Call         r5, f1
+  .line 79
+  0028  LoadConst    r0, k0
+  0029  CallHost     r0, h0
+  .line 80
+  002a  LoadZero     r5
+  002b  New          r5, ty64
+  002c  StoreGlobal  r5, g0
+  .line 81
+  002d  LoadZero     r5
+  002e  New          r5, ty65
+  002f  StoreGlobal  r5, g1
+  .line 82
+  0030  LoadGlobal   r7, g0
+  0031  ClassType    r9, r7
+  .inline f2 DumpRtti.TBox<Integer>.Info line=82
+  .line 42
+  0032  LoadInt      r8, 23
+  .line 43
+  0033  Move         r6, r8
+  .endinline
+  .line 82
+  0034  LoadGlobal   r8, g1
+  0035  ClassType    r10, r8
+  .inline f3 DumpRtti.TBox<string>.Info line=82
+  .line 42
+  0036  LoadInt      r9, 26
+  .endinline
+  .line 82
+  0037  EqInt        r5, r6, r9
+  0038  NotBool      r5, r5
+  0039  BoolToStr    r1, r5
+  003a  LoadConst    r2, k1
+  003b  ConcatStr    r1, r1, r2
+  003c  LoadGlobal   r7, g0
+  003d  LoadInt      r8, 2
+  003e  ClassType    r11, r7
+  .inline f4 DumpRtti.TBox<T>.Twice line=82
+  .line 47
+  003f  MulIntI      r9, r8, 2
+  0040  NarrowOvf    r9, r9, 4
+  .line 48
+  0041  Move         r6, r9
+  .endinline
+  .line 82
+  0042  LoadGlobal   r8, g1
+  0043  LoadInt      r9, 3
+  0044  ClassType    r12, r8
+  .inline f4 DumpRtti.TBox<T>.Twice line=82
+  .line 47
+  0045  MulIntI      r10, r9, 2
+  0046  NarrowOvf    r10, r10, 4
+  .endinline
+  .line 82
+  0047  AddInt       r6, r6, r10
+  0048  NarrowOvf    r6, r6, 4
+  0049  IntToStr     r3, r6
+  004a  ConcatStr    r1, r1, r3
+  004b  LoadConst    r4, k0
+  004c  ConcatStr    r1, r1, r4
+  004d  CallHost     r1, h0
+  .line 83
+  004e  LoadGlobal   r5, g0
+  004f  Free         r5
+  .line 84
+  0050  LoadGlobal   r5, g1
+  0051  Free         r5
+  .line 85
+  0052  RetVoid
+.finally r0, r1, r2, r3, r4
+.func 1 DumpRtti.Show params=1 regs=5
+  .local r0 P
+  .line 52
+  0000  LoadZero     r4
+  0001  EqInt        r3, r0, r4
+  0002  NotBool      r3, r3
+  0003  BoolToStr    r1, r3
+  0004  LoadConst    r2, k1
+  0005  ConcatStr    r1, r1, r2
+  0006  CallHost     r1, h0
+  .line 53
+  0007  RetVoid
+.finally r1, r2
+.func 2 DumpRtti.TBox<Integer>.Info params=1 regs=2
+  .local r0 Self
+  .local r1 Result
+  .line 42
+  0000  LoadInt      r1, 23
+  .line 43
+  0001  Ret          r1
+.func 3 DumpRtti.TBox<string>.Info params=1 regs=2
+  .local r0 Self
+  .local r1 Result
+  .line 42
+  0000  LoadInt      r1, 26
+  .line 43
+  0001  Ret          r1
+.func 4 DumpRtti.TBox<T>.Twice params=2 regs=4
+; shared by DumpRtti.TBox<Integer>, DumpRtti.TBox<string>
+  .local r0 Self
+  .local r1 N
+  .local r2 Result
+  .line 47
+  0000  MulIntI      r2, r1, 2
+  0001  NarrowOvf    r2, r2, 4
+  .line 48
+  0002  Ret          r2

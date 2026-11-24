@@ -1,0 +1,12 @@
+mA mC
+rfReplaceAll rfIgnoreCase
+cmSimple cmFull
+cfLower cfUpper
+ekNone ekOther
+0 8
+TRUE TRUE
+cmSimple ekOther
+ekNone rfReplaceAll
+0 1 2 3 4 5 6 7 8 
+rfReplaceAll rfIgnoreCase 
+sX sZ

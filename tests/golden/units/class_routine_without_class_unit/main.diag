@@ -1,0 +1,13 @@
+error[E0747]: a class procedure must be declared in a class
+  --> src/Helpers.pas:9:17
+   |
+ 9 | class procedure Bar;
+   |                 ^^^
+
+error[E0747]: a class function must be declared in a class
+   --> src/Helpers.pas:13:16
+    |
+ 13 | class function Answer: Integer;
+    |                ^^^^^^
+
+error: aborting due to 2 errors

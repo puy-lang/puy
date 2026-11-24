@@ -983,6 +983,19 @@ impl<'a, 's> Sema<'a, 's> {
         }
     }
 
+    /// W0019 of a handler (its type at `range`) that a handler before it (at `prev`) catches.
+    fn unreachable_handler(&mut self, range: TextRange, prev: TextRange) {
+        let name = self.src(range);
+        let d = Diagnostic::warning(
+            Code::W(19),
+            format!("handler for `{name}` is unreachable"),
+            Stage::Sema,
+        )
+        .with_primary(self.span(range), "")
+        .with_secondary(self.span(prev), "caught here");
+        self.push(d);
+    }
+
     /// `try..except` / `try..finally` (`docs/spec/exceptions.md` 5.2, 5.3).
     fn lower_try(&mut self, t: &ast::TryStmt) -> StmtKind {
         let body = self.lower_stmt_list(t.body());
@@ -1018,17 +1031,27 @@ impl<'a, 's> Sema<'a, 's> {
                                 .iter()
                                 .find(|(c, _)| self.types.is_descendant(id, *c))
                             {
-                                let name = self.src(range);
-                                let d = Diagnostic::warning(
-                                    Code::W(19),
-                                    format!("handler for `{name}` is unreachable"),
-                                    Stage::Sema,
-                                )
-                                .with_primary(self.span(range), "")
-                                .with_secondary(self.span(*prev), "caught here");
-                                self.push(d);
+                                self.unreachable_handler(range, *prev);
                             }
                             caught.push((id, range));
+                            ty
+                        }
+                        // A type parameter whose class constraint is an exception class: the
+                        // instantiation catches its type argument (`docs/spec/generics.md` 3.3).
+                        // It is unreachable after a handler of an ancestor of the constraint;
+                        // it does not make a later handler unreachable, since the argument may
+                        // be a descendant of the constraint
+                        ty @ Ty::Param(p)
+                            if self
+                                .param_class(p)
+                                .is_some_and(|c| self.types.is_exception_class(c)) =>
+                        {
+                            let c = self.param_class(p).expect("checked above");
+                            if let Some((_, prev)) =
+                                caught.iter().find(|(k, _)| self.types.is_descendant(c, *k))
+                            {
+                                self.unreachable_handler(range, *prev);
+                            }
                             ty
                         }
                         Ty::Error => Ty::Error,
@@ -1043,6 +1066,10 @@ impl<'a, 's> Sema<'a, 's> {
                                 // Only exceptions are raised (`docs/spec/objects.md` 8.3)
                                 d.notes
                                     .push("every exception derives from `Exception`".into());
+                            } else if matches!(other, Ty::Param(_)) {
+                                d.notes.push(format!(
+                                    "add a class constraint that derives from `Exception`, as in `<{t}: Exception>`"
+                                ));
                             }
                             Ty::Error
                         }
@@ -1586,6 +1613,20 @@ impl<'a, 's> Sema<'a, 's> {
                 self.lower_read(p == BuiltinProc::ReadLn, args, span)
             }
             BuiltinProc::Flush => self.lower_flush(args, span),
+            BuiltinProc::RequestLeakReport => {
+                if !args.is_empty() {
+                    self.error(
+                        Code::E(705),
+                        format!(
+                            "wrong number of arguments: expected 0, found {}",
+                            args.len()
+                        ),
+                        span,
+                    );
+                    return None;
+                }
+                Some(StmtKind::RequestLeakReport)
+            }
             BuiltinProc::Inc | BuiltinProc::Dec => {
                 self.check_no_width_pub(args);
                 if args.is_empty() || args.len() > 2 {
@@ -1755,10 +1796,21 @@ impl<'a, 's> Sema<'a, 's> {
                     return Some(StmtKind::Nop);
                 }
                 let text = ast::source_text_normalized(c.syntax());
+                // `docs/spec/semantics.md` 5.4: the subexpressions a failure records
+                let mut cond = cond;
+                let (probes, marks) = super::probes::rewrite(
+                    &mut cond,
+                    &AssertSource {
+                        sema: self,
+                        node: c.syntax(),
+                    },
+                );
                 Some(StmtKind::Assert {
                     cond: Box::new(cond),
                     message: message.map(Box::new),
                     text,
+                    probes,
+                    marks,
                 })
             }
             BuiltinProc::Halt => {
@@ -2663,6 +2715,29 @@ impl CaseKey {
             (CaseKey::Ord(a, b), CaseKey::Ord(c, d)) => a <= d && c <= b,
             (CaseKey::Str(a), CaseKey::Str(b)) => a == b,
             _ => false,
+        }
+    }
+}
+
+/// The source of the subexpressions of an `Assert` condition (`docs/spec/semantics.md` 5.4).
+struct AssertSource<'a, 'b, 's> {
+    sema: &'a Sema<'b, 's>,
+    node: &'a crate::syntax::SyntaxNode,
+}
+
+impl super::probes::ProbeSource for AssertSource<'_, '_, '_> {
+    fn text(&self, range: TextRange) -> String {
+        if range.is_empty() {
+            return String::new();
+        }
+        ast::source_text_in(self.node, range)
+    }
+
+    fn var_written(&self, v: VarId, text: &str) -> bool {
+        let var = self.sema.var_decl(v);
+        match var.kind {
+            VarKind::SelfParam | VarKind::RecordSelf => text.eq_ignore_ascii_case("self"),
+            _ => !var.name.is_empty(),
         }
     }
 }

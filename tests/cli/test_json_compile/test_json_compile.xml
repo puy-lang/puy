@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="1" failures="0" errors="1" skipped="0" time="0.000">
+  <testsuite name="puy compile" tests="1" failures="0" errors="1" skipped="0" time="0.000">
+    <testcase classname="puy compile" name="compile" time="0.000">
+      <error message="compilation failed">error[E0700]: undeclared identifier `Unknown`
+   --&gt; Broken_test.pas:11:11
+    |
+ 11 |   WriteLn(Unknown);
+    |           ^^^^^^^
+
+error: aborting due to 1 error
+</error>
+    </testcase>
+  </testsuite>
+</testsuites>

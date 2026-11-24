@@ -1,0 +1,24 @@
+Strings[3]: ERangeError: list index 3 is out of range 0..2
+Strings[-1] :=: ERangeError: list index -1 is out of range 0..2
+Objects[3]: ERangeError: list index 3 is out of range 0..2
+Delete(3): ERangeError: list index 3 is out of range 0..2
+Insert(4): ERangeError: list index 4 is out of range 0..3
+Exchange(0, 3): ERangeError: list index 3 is out of range 0..2
+Move(5, 0): ERangeError: list index 5 is out of range 0..2
+Names[3]: ERangeError: list index 3 is out of range 0..2
+Insert: EStringListError: cannot insert into a sorted list
+InsertObject: EStringListError: cannot insert into a sorted list
+Strings[0] :=: EStringListError: cannot change a string of a sorted list
+Exchange: EStringListError: cannot reorder a sorted list
+Move: EStringListError: cannot reorder a sorted list
+Exchange(0, 3) sorted: ERangeError: list index 3 is out of range 0..2
+dupError: EStringListError: the sorted list already has `B`
+a,b,c
+OwnsObjects := True: EInvalidOperation: cannot own a reference counted object of class `TCounted`
+FALSE
+AddObject: EInvalidOperation: cannot own a reference counted object of class `TCounted`
+InsertObject: EInvalidOperation: cannot own a reference counted object of class `TCounted`
+Objects[1] :=: EInvalidOperation: cannot own a reference counted object of class `TCounted`
+3
+free old
+free new

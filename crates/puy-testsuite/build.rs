@@ -13,8 +13,8 @@ fn main() {
     let tests_dir = tests_dir.canonicalize().unwrap_or(tests_dir);
     println!("cargo:rerun-if-changed={}", tests_dir.display());
     let mut cases: Vec<(String, String, Vec<PathBuf>)> = Vec::new(); // (group, name, files)
-    // (group, name, directory, files)
-    let mut package_cases: Vec<(String, String, PathBuf, Vec<PathBuf>)> = Vec::new();
+    // (group, name, directory, stem, files)
+    let mut package_cases: Vec<(String, String, PathBuf, String, Vec<PathBuf>)> = Vec::new();
     // `examples/` (the sample programs next to `tests/`) is a group of its own: each program, and
     // each package directory with `puy.toml` (its program is `main.pas`), runs with leak checking
     // and must finish cleanly, with no expectation files (`docs/design/testing.md` 3.11)
@@ -49,7 +49,8 @@ fn main() {
                 .filter(|f| f.starts_with(pkg))
                 .cloned()
                 .collect();
-            package_cases.push((group.to_string(), name, pkg.clone(), mine));
+            let stem = package_stem(pkg, &mine);
+            package_cases.push((group.to_string(), name, pkg.clone(), stem, mine));
         }
         let files: Vec<PathBuf> = files
             .into_iter()
@@ -122,9 +123,9 @@ fn main() {
         }
         cases_rs.push_str("    ] },\n");
     }
-    for (group, name, dir, files) in &package_cases {
+    for (group, name, dir, stem, files) in &package_cases {
         cases_rs.push_str(&format!(
-            "    Case {{ group: {group:?}, name: {name:?}, stem: \"main\", package: true, files: &[\n"
+            "    Case {{ group: {group:?}, name: {name:?}, stem: {stem:?}, package: true, files: &[\n"
         ));
         for f in files {
             let rel: Vec<String> = f
@@ -164,6 +165,33 @@ fn case_name(group: &str, name: &str) -> String {
         format!("example_{name}")
     } else {
         name.to_string()
+    }
+}
+
+/// The file a package case passes to the compiler, without `.pas`: `main`, or for a package
+/// without `main.pas` its one test unit under `src/` (`src/Calc_test`; `docs/design/testing.md`
+/// 3.6), so that a case can check a test unit with its paired unit.
+fn package_stem(pkg: &Path, files: &[PathBuf]) -> String {
+    if pkg.join("main.pas").is_file() {
+        return "main".to_string();
+    }
+    let tests: Vec<String> = files
+        .iter()
+        .filter_map(|f| f.strip_prefix(pkg).ok())
+        .map(|f| {
+            f.components()
+                .map(|c| c.as_os_str().to_string_lossy().into_owned())
+                .collect::<Vec<_>>()
+                .join("/")
+        })
+        .filter(|f| f.starts_with("src/") && f.to_ascii_lowercase().ends_with("_test.pas"))
+        .collect();
+    match tests.as_slice() {
+        [one] => one.strip_suffix(".pas").unwrap().to_string(),
+        _ => panic!(
+            "package case {} needs `main.pas` or exactly one `src/**/*_test.pas`",
+            pkg.display()
+        ),
     }
 }
 

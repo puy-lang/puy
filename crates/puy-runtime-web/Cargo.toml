@@ -7,9 +7,14 @@ rust-version.workspace = true
 repository.workspace = true
 license.workspace = true
 
+[features]
+default = ["counting-allocator"]
+counting-allocator = []
+
 [dependencies]
 puy-core.workspace = true
 puy-host.workspace = true
+puy-stdlib-ext.workspace = true
 # TODO: add wasm-bindgen (watch the binary size; requirements §4.4)
 
 [lib]

@@ -1,0 +1,11 @@
+P string x
+P TFn a7
+Q TIntFn 20
+Q TStrFn 3
+R reference
+called
+Z TF0 anon
+P TFn e7
+Q TIntFn 3
+Z TF0 g
+Y TP0 gets

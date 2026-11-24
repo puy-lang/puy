@@ -1,0 +1,9 @@
+installed data: 99
+host info: 2 2
+host canonical: /work/delegated/data
+host entry: data fkFile
+host entry: sub fkDirectory
+host copy: 22 33
+host attributes: 42 TRUE
+host removed: TRUE TRUE
+default handle: TRUE

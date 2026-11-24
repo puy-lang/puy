@@ -1,0 +1,87 @@
+error[E0700]: `string` has no member `Foo`
+   --> string_helper_errors.pas:23:13
+    |
+ 23 |   WriteLn(S.Foo);                    // E0700
+    |             ^^^
+
+error[E0700]: `string` has no member `Foo`
+   --> string_helper_errors.pas:24:5
+    |
+ 24 |   S.Foo := 'x';                      // E0700
+    |     ^^^
+
+error[E0700]: `TStringHelper` has no member `Foo`
+   --> string_helper_errors.pas:25:25
+    |
+ 25 |   WriteLn(TStringHelper.Foo(S));     // E0700
+    |                         ^^^
+
+error[E0707]: cannot assign to `S.Chars[0]`
+   --> string_helper_errors.pas:26:3
+    |
+ 26 |   S.Chars[0] := 'x';                 // E0707
+    |   ^^^^^^^^^^ a read-only property
+   ::: <stdlib>/System/TStringHelper.Interface.inc:58:14
+ 58 |     property Chars[Index: Integer]: Char read GetChars;
+    |              ----- declared here
+
+error[E0707]: cannot assign to `S.IndexOf`
+   --> string_helper_errors.pas:27:3
+    |
+ 27 |   S.IndexOf := 1;                    // E0707
+    |   ^^^^^^^^^ not a variable
+
+error[E0743]: `GetChars` is private to `TStringHelper`
+   --> string_helper_errors.pas:28:13
+    |
+ 28 |   WriteLn(S.GetChars(0));            // E0743
+    |             ^^^^^^^^
+   ::: <stdlib>/System/TStringHelper.Interface.inc:7:14
+  7 |     function GetChars(Index: Integer): Char;
+    |              -------- declared here
+
+error[E0735]: no overload of `TStringHelper.IndexOf` matches these arguments
+   --> string_helper_errors.pas:29:11
+    |
+ 29 |   WriteLn(S.IndexOf(1));             // E0735
+    |           ^^^^^^^^^^^^
+   ::: <stdlib>/System/TStringHelper.Interface.inc:20:14
+ 20 |     function IndexOf(const Value: string): Integer; overload;
+    |              ------- candidate
+ 21 |     function IndexOf(const Value: string; StartIndex: Integer): Integer; overload;
+    |              ------- candidate
+ 22 |     function IndexOf(const Value: string; StartIndex, Count: Integer): Integer; overload;
+    |              ------- candidate
+    |
+    = note: the arguments have types `Integer`
+
+error[E0735]: no overload of `TStringHelper.Substring` matches these arguments
+   --> string_helper_errors.pas:30:11
+    |
+ 30 |   WriteLn(S.Substring(1, 2, 3));     // E0735
+    |           ^^^^^^^^^^^^^^^^^^^^
+   ::: <stdlib>/System/TStringHelper.Interface.inc:43:14
+ 43 |     function Substring(StartIndex: Integer): string; overload;
+    |              --------- candidate
+ 44 |     function Substring(StartIndex, Length: Integer): string; overload;
+    |              --------- candidate
+    |
+    = note: the arguments have types `Integer`, `Integer`, `Integer`
+
+error[E0754]: `Trim` is ambiguous: it is declared in helpers `TStringHelper` and `TMyText`
+   --> string_helper_errors.pas:31:13
+    |
+ 11 |     function Trim: string;
+    |              ---- candidate
+...
+ 31 |   WriteLn(S.Trim);                   // E0754
+    |             ^^^^
+   ::: <stdlib>/System/TStringHelper.Interface.inc:51:14
+ 51 |     function Trim: string; overload;
+    |              ---- candidate
+    |
+    = note: name the helper to call, as in `TStringHelper.Trim(X)`
+    = suggestion: call `TStringHelper.Trim`
+    = suggestion: call `TMyText.Trim`
+
+error: aborting due to 9 errors

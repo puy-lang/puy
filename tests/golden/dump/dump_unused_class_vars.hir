@@ -1,0 +1,74 @@
+program DumpUnusedClassVars
+.type TUnused = class(TObject)
+  .classvar g0 Hidden: Integer
+  .classvar g1 Name: string
+.type TUsed = class(TObject)
+  .classvar g2 Spare: string
+  .classvar g3 Count: Integer
+  .classvar g4 Dead: Integer
+  .classvar g5 Last: string
+.type TBox<T> = class(TObject)
+  .classvar g14 Made: Integer
+  .classvar g15 Tag: string
+  .method - Create constructor
+.global g0 TUnused.Hidden: Integer
+.global g1 TUnused.Name: string
+.global g2 TUsed.Spare: string
+.global g3 TUsed.Count: Integer
+.global g4 TUsed.Dead: Integer
+.global g5 TUsed.Last: string
+.global g6 Unread: Integer
+.global g7 B: TBox<Integer>
+.global g8 S: TBox<string>
+.global g9 ExitCode: Integer
+.global g10 TBox<Integer>.Made: Integer
+.global g11 TBox<Integer>.Tag: string
+.global g12 TBox<string>.Made: Integer
+.global g13 TBox<string>.Tag: string
+.routine - TBox<T>.Create()
+  .var v0 Self: TBox<T> self
+  inc @36 calc=Integer Q+R+
+    global g14 TBox<T>.Made
+.routine f0 Unreachable()
+  assign @41 R+
+    global g4 TUsed.Dead
+    const Integer 1
+.instance TBox<Integer>
+.routine f1 TBox<Integer>.Create()
+  .var v0 Self: TBox<Integer> self
+  inc @36 calc=Integer Q+R+
+    global g10 TBox<Integer>.Made
+.instance TBox<string>
+.routine <main>
+  assign @45 R+
+    global g3 TUsed.Count
+    const Integer 2
+  assign @46 R+
+    global g5 TUsed.Last
+    const string "last"
+  assign @47 R+
+    global g7 B
+    create TBox<Integer> f1
+  assign @48 R+
+    global g11 TBox<Integer>.Tag
+    const string "int"
+  writeln @49
+    arg
+      global g3 TUsed.Count: Integer
+    arg
+      const Char #32
+    arg
+      global g5 TUsed.Last: string
+    arg
+      const Char #32
+    arg
+      global g10 TBox<Integer>.Made: Integer
+    arg
+      const Char #32
+    arg
+      global g11 TBox<Integer>.Tag: string
+  free @50
+    global g7 B: TBox<Integer>
+  assign @51 R+
+    global g9 ExitCode
+    const Integer 0

@@ -7,12 +7,17 @@ use super::hir::{AttrUse, CallArg, Expr, ExprKind, RoutineId};
 use super::types::{MethodKind, TCUSTOMATTRIBUTE, TOBJECT, Ty, TypeId, TypeKind, TypeTable};
 use crate::diagnostics::{Code, Diagnostic, Fix, Stage, TextEdit};
 use crate::source::{Span, TextRange};
+use crate::syntax::TokenName;
 use crate::syntax::ast::{self, AstNode};
 use crate::syntax::{SyntaxElement, SyntaxKind, SyntaxNode};
 
-/// The attributes of the testing framework (requirements §11), E3200 until M5 unless an attribute
-/// class of the name is found (`docs/spec/attributes.md` 5).
-const TEST_ATTRIBUTES: [&str; 6] = ["test", "testcase", "setup", "teardown", "skip", "benchmark"];
+/// The attributes of the testing framework (requirements §11): language attributes of the test
+/// units unless an attribute class of the name is found (`docs/spec/attributes.md` 5).
+const TEST_ATTRIBUTES: [&str; 5] = ["test", "testcase", "setup", "teardown", "skip"];
+
+/// The attribute of `puy bench` (requirements §9.6), E3200 until it comes in M5g unless an
+/// attribute class of the name is found (`docs/spec/attributes.md` 5).
+const BENCHMARK_ATTRIBUTE: &str = "benchmark";
 
 /// An attribute naming an attribute class (or nothing found), read where it is written and
 /// checked once the classes and their constructors are known ([`Sema::flush_attribute_checks`]).
@@ -21,12 +26,51 @@ pub(super) struct UserAttr {
     attr: ast::Attribute,
     /// The names of the declaration it is written on.
     names: Vec<TextRange>,
+    /// The declaration it is written on.
+    decl: SyntaxNode,
     /// The classes whose bodies enclose the declaration (their nested types and constants are
     /// seen by the arguments).
     classes: Vec<TypeId>,
     /// The name with `Attribute` added, and the name as written (`docs/spec/attributes.md` 2).
     suffixed: Option<Found>,
     plain: Option<Found>,
+}
+
+/// An attribute of the testing framework written in a test unit (`docs/spec/attributes.md` 5).
+#[derive(Debug)]
+pub(super) struct TestAttr {
+    pub kind: TestAttrKind,
+    pub attr: ast::Attribute,
+    /// The names of the declaration it is written on.
+    pub names: Vec<TextRange>,
+    /// The declaration it is written on.
+    pub decl: SyntaxNode,
+    /// The classes whose bodies enclose the declaration (their nested types and constants are
+    /// seen by the arguments).
+    pub classes: Vec<TypeId>,
+}
+
+/// Which attribute of the testing framework (`docs/spec/attributes.md` 5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum TestAttrKind {
+    Test,
+    TestCase,
+    Setup,
+    TearDown,
+    Skip,
+}
+
+impl TestAttrKind {
+    /// The attribute of a lowercase name of [`TEST_ATTRIBUTES`].
+    fn of(lower: &str) -> Self {
+        match lower {
+            "test" => Self::Test,
+            "testcase" => Self::TestCase,
+            "setup" => Self::Setup,
+            "teardown" => Self::TearDown,
+            _ => Self::Skip,
+        }
+    }
 }
 
 /// What an attribute's name was found to be.
@@ -77,7 +121,7 @@ pub(super) fn attributes_key(decl: &SyntaxNode) -> Option<String> {
         for t in n.descendants_with_tokens().filter_map(|e| e.into_token()) {
             match t.kind() {
                 k if k.is_trivia() => {}
-                SyntaxKind::IDENT => out.push_str(&t.text().to_ascii_lowercase()),
+                SyntaxKind::IDENT => out.push_str(&t.name().to_ascii_lowercase()),
                 _ => out.push_str(t.text()),
             }
             out.push(' ');
@@ -193,7 +237,7 @@ fn language_attribute(a: &ast::Attribute) -> Option<Lang> {
         // A qualified name is never a language attribute (2)
         return None;
     }
-    match first.text().to_ascii_lowercase().as_str() {
+    match first.name().to_ascii_lowercase().as_str() {
         "weak" => Some(Lang::Weak),
         "unsafe" => Some(Lang::Unsafe),
         "ref" | "volatile" => Some(Lang::Ignored),
@@ -408,11 +452,13 @@ impl Sema<'_, '_> {
         self.push(d);
     }
 
-    /// E0705 when a language attribute is given arguments (`[weak()]` has none).
-    fn language_attribute_args(&mut self, a: &ast::Attribute) {
-        if let Some(args) = a.args()
-            && !args.has_error()
-        {
+    /// E0705 when a language attribute is given arguments (`[weak()]` has none); whether it
+    /// has none.
+    pub(super) fn language_attribute_args(&mut self, a: &ast::Attribute) -> bool {
+        if let Some(args) = a.args() {
+            if args.has_error() {
+                return false;
+            }
             let n = args.args().count();
             if n > 0 {
                 let r = args.syntax().text_range();
@@ -421,8 +467,10 @@ impl Sema<'_, '_> {
                     format!("wrong number of arguments: expected 0, found {n}"),
                     r,
                 );
+                return false;
             }
         }
+        true
     }
 
     /// `[Ref]` / `[Volatile]` (`docs/spec/attributes.md` 3): W0010, with the attribute removed.
@@ -456,6 +504,7 @@ impl Sema<'_, '_> {
         self.user_attrs.push(UserAttr {
             attr,
             names: decl_names(decl),
+            decl: decl.clone(),
             classes,
             suffixed,
             plain,
@@ -465,10 +514,7 @@ impl Sema<'_, '_> {
     /// What the name of an attribute (with `Attribute` added to its last part when `suffix`)
     /// denotes, without reporting anything; `None` when nothing is declared with the name.
     fn find_attribute_name(&mut self, q: &ast::QualifiedName, suffix: bool) -> Option<Found> {
-        let mut chain: Vec<(String, TextRange)> = q
-            .idents()
-            .map(|t| (t.text().to_string(), t.text_range()))
-            .collect();
+        let mut chain: Vec<(String, TextRange)> = q.idents().map(|t| t.name_and_range()).collect();
         if suffix {
             chain.last_mut()?.0.push_str("Attribute");
         }
@@ -548,6 +594,30 @@ impl Sema<'_, '_> {
         let Some(class) = class else {
             let lower = text.to_ascii_lowercase();
             if TEST_ATTRIBUTES.contains(&lower.as_str()) {
+                // A test unit's tests are collected with `puy test`; elsewhere the test would
+                // never run (`docs/spec/attributes.md` 5)
+                if self.input.test.is_none() {
+                    let d = Diagnostic::error(
+                        Code::E(781),
+                        format!("`[{text}]` can only be used in a test unit"),
+                        Stage::Sema,
+                    )
+                    .with_primary(self.span(name_range), "")
+                    .with_note("a test unit is a unit in a file named `*_test.pas`");
+                    self.push(d);
+                } else {
+                    // Checked and collected once the unit is analyzed (`testunit.rs`)
+                    self.test_attrs.push(TestAttr {
+                        kind: TestAttrKind::of(&lower),
+                        attr: u.attr,
+                        names: u.names,
+                        decl: u.decl,
+                        classes: u.classes,
+                    });
+                }
+                return;
+            }
+            if lower == BENCHMARK_ATTRIBUTE {
                 self.error(
                     Code::E(3200),
                     format!("`[{text}]` is not supported yet (planned for M5)"),

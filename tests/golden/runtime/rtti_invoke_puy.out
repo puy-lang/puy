@@ -1,0 +1,35 @@
+made before: 0
+type: shape TOtherAttribute made 1
+same: TRUE made 1
+field: name
+method: run TOtherAttribute
+parameter: times
+property: size
+none: 0
+get: name TRUE TRUE FALSE
+flaky: EConvertError: first try
+flaky again:  TFlakyAttribute 2
+sum: 13
+moved copy: 1
+static: 4
+record constructor: 8
+made: TPlain
+count: EArgumentException: `Run` expects 2 arguments, but 1 were given
+type: EInvalidCast: invalid type cast: `TValue` of `string` to `Integer`
+abstract: EAbstractError: abstract method `TShape.Abstr` called
+on instance: EInvalidOperation: constructor `Create` is invoked on an instance; pass a class reference
+nil: EAccessViolation: access to a nil reference
+other class: EInvalidCast: invalid type cast: `TValue` of `TPlain` to `TShape`
+record type: EInvalidCast: invalid type cast: `TValue` of `TShape` to `TPoint`
+empty record: EAccessViolation: access to a nil reference
+interface: EInvalidOperation: method `Greet` cannot be invoked
+reference counted: EInvalidOperation: cannot free a reference counted object of class `TRc`; assign `nil` instead
+destroy other class: EInvalidCast: invalid type cast: `TValue` of `TPlain` to `TShape`
+destroy nil: EAccessViolation: access to a nil reference
+freed: EAccessViolation: access to a freed object
+class method: counter
+class method on instance: EInvalidCast: invalid type cast: `TValue` of `TCounter` to `class of TCounter`
+written back: 6 3
+generic: 7
+list: 1 5
+standard library: 1

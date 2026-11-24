@@ -6,8 +6,8 @@ error[E2502]: `EListError` is declared in several units; qualify it
    ::: src/Errors.pas:6:3
   6 |   EListError = class(Exception);
     |   ---------- declared here
-   ::: <stdlib>/System.SysUtils.pas:12:3
- 12 |   EListError = class(Exception);
+   ::: <stdlib>/System.SysUtils.pas:15:3
+ 15 |   EListError = class(Exception);
     |   ---------- declared here
     |
     = note: Puy does not let a later unit in `uses` hide an earlier one

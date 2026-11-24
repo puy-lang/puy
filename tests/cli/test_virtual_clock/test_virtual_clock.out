@@ -1,0 +1,12 @@
+running 3 tests (seed 1)
+ok    Clock_test.SleepsAnHour (Nms)
+ok    Clock_test.StartsOnTheRealClock (Nms)
+ERROR Clock_test.FrozenForever (Nms)
+
+---- Clock_test.FrozenForever ----
+error: the test did not finish within 1 second
+
+test result: FAILED. 2 ok; 0 failed; 1 errors; 0 skipped; 0 filtered out
+
+to run a failed test again:
+  puy test --seed 1 --filter 'Clock_test.FrozenForever' --exact

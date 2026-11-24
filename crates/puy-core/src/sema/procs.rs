@@ -509,6 +509,9 @@ impl<'a, 's> Sema<'a, 's> {
         family: ProcFamily,
         span: TextRange,
     ) -> Expr {
+        if self.native_as_value(routine, span) {
+            return err_expr(span);
+        }
         let x = Expr {
             kind: ExprKind::RoutineRef(routine),
             ty: expected,
@@ -627,6 +630,9 @@ impl<'a, 's> Sema<'a, 's> {
             _ if m.self_kind == SelfKind::Class => MethodRefHow::Class,
             _ => MethodRefHow::Method,
         };
+        if self.native_as_value(id, span) {
+            return err_expr(span);
+        }
         if m.self_kind == SelfKind::Instance {
             self.temporary_receiver(&recv, class);
         }

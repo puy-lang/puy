@@ -11,6 +11,8 @@ mod expand;
 pub mod inline;
 pub mod lower;
 pub mod opt;
+pub mod reach;
+pub mod rtti;
 
 pub use dump::dump_ir;
 
@@ -18,6 +20,12 @@ use crate::bytecode::HostEntry;
 use crate::sema::hir::VarKind;
 use crate::sema::types::{Const, Ty, TypeTable};
 use crate::source::TextRange;
+
+/// Whether a value fits the immediate of `LoadInt` (`docs/spec/bytecode.md` 1.2): otherwise it is
+/// loaded from the constant pool with `LoadConst`.
+pub fn fits_load_int(v: i64) -> bool {
+    (i64::from(i16::MIN)..=i64::from(i16::MAX)).contains(&v)
+}
 
 /// A virtual register.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -128,6 +136,8 @@ pub enum Operand {
         add: i64,
     },
     Host(u32),
+    /// An extension function (`CallExt`; an index of `Module::exts`).
+    Ext(u32),
     /// The entry `index` of the receiver's class's virtual method table (`CallVirtual`); `name`
     /// is the full name of the method the static type names (for the dump).
     Virtual {
@@ -147,6 +157,12 @@ pub enum Operand {
     /// A class as the value of a class reference (`LoadInt`; `docs/spec/objects.md` 14.1): its
     /// type index + 1.
     ClassRef(Ty),
+    /// The type information number of a type (`LoadInt`, `TypeInfo(T)`; `docs/spec/rtti.md`
+    /// 2.2, 7.1): codegen numbers the entries of the type information section.
+    TypeInfo(Ty),
+    /// The debug type number of a type (`LoadInt` before `AssertValue`;
+    /// `docs/spec/semantics.md` 5.4): codegen puts its entry in the debug information section.
+    DebugType(Ty),
     /// A record or static array constant (codegen puts it and its elements in the constant pool).
     Agg(Ty, Const),
 }
@@ -380,7 +396,8 @@ pub struct Block {
 pub struct Function {
     /// Fully qualified name (`Hello.Greet`).
     pub name: String,
-    /// The unit it belongs to (index into `Module::units`).
+    /// The source file: the index of a unit in `Module::units`, or past them, of a path in
+    /// `Module::included` (`bytecode.md` 3.2).
     pub file: u32,
     /// For a routine of an instantiation, where it comes from: codegen shares the functions of
     /// the same generic routine that come out the same (`docs/spec/generics.md` 7).
@@ -445,12 +462,43 @@ impl Function {
     }
 }
 
+/// An extension function (`docs/spec/bytecode.md` 3.2, section 10): codegen gives the class its
+/// type index.
+#[derive(Debug, Clone)]
+pub struct ExtFn {
+    pub name: String,
+    pub unit: u32,
+    pub params: Vec<u8>,
+    pub ret: u8,
+    /// The extension class of an object result, the dynamic array type of a `TBytes` one.
+    pub ret_type: Option<Ty>,
+    pub ret_range: (i64, i64),
+    pub sigs: Vec<crate::bytecode::ExtSig>,
+    /// The shapes of the record and dynamic array arguments, then of the result
+    /// ([`crate::bytecode::ExtEntry::shapes`]).
+    pub shapes: Vec<crate::sema::native::NativeShape>,
+}
+
+/// An extension unit (`docs/spec/bytecode.md` 3.2, section 11).
+#[derive(Debug, Clone)]
+pub struct ExtUnit {
+    pub name: String,
+    pub fingerprint: u64,
+    /// The extension classes: (the declared name, the class).
+    pub classes: Vec<(String, Ty)>,
+    /// The exception classes the unit declares: put in the type section, so that the VM finds
+    /// the class an extension raises by name.
+    pub exceptions: Vec<Ty>,
+}
+
 #[derive(Debug, Clone)]
 pub struct Global {
     pub name: String,
     pub ty: Ty,
     /// `System.ExitCode` (`bytecode::GLOBAL_EXIT_CODE`).
     pub exit_code: bool,
+    /// A `class var`: dropped when no kept function uses it (`reach::drop_unreachable`).
+    pub class_var: bool,
 }
 
 /// The IR of a module.
@@ -462,15 +510,113 @@ pub struct Module {
     pub types: TypeTable,
     pub globals: Vec<Global>,
     pub hosts: Vec<HostEntry>,
+    /// The extension functions the module calls (`CallExt`; `docs/spec/extensions.md` 4).
+    pub exts: Vec<ExtFn>,
+    /// The extension units of the program.
+    pub ext_units: Vec<ExtUnit>,
     /// In function table order (`bytecode.md` 3.2, `units.md` 6.1).
     pub funcs: Vec<Function>,
     /// The units in initialization order, the program last (`units.md` 6.3).
     pub units: Vec<UnitEntry>,
+    /// The paths of the source files after the units' (`bytecode.md` 3.2): the files of a unit
+    /// of the standard library joined from several files (`collections.md` 1.2).
+    pub included: Vec<String>,
     /// Index of `<main>` in `funcs`.
     pub entry: u32,
     /// The function index of each HIR routine (the entries of the virtual method tables;
     /// `docs/spec/objects.md` 14.1). An abstract method has none (its entry is unused).
     pub func_index: Vec<u32>,
+    /// The test table of a test unit's module (`docs/spec/bytecode.md` 3.2, section 13): empty
+    /// for any other module.
+    pub tests: Vec<crate::bytecode::TestEntry>,
+    /// The types with type information (`docs/spec/rtti.md` chapter 1), in the order they were
+    /// found; empty when the module has no type information section (1.6). Set by
+    /// `reach::drop_unreachable`.
+    pub rtti: Vec<RttiType>,
+}
+
+/// A type of the type information section (`docs/spec/rtti.md` 1.1, 7.2) and, at the member
+/// stage, its members.
+#[derive(Debug, Clone)]
+pub struct RttiType {
+    pub ty: Ty,
+    /// The member stage (the lists below are empty otherwise).
+    pub members: bool,
+    pub fields: Vec<RttiField>,
+    pub props: Vec<RttiProp>,
+    pub methods: Vec<RttiMethod>,
+    /// The attributes written on the type.
+    pub attrs: Vec<RttiAttr>,
+}
+
+/// An attribute: its class, and the function making its instance (`docs/spec/rtti.md` 7.4;
+/// `None` when no API returning the attributes is reached).
+#[derive(Debug, Clone)]
+pub struct RttiAttr {
+    pub class: Ty,
+    pub make: Option<u32>,
+}
+
+/// A field of a type of the type information section: its first slot and width in the record or
+/// instance (`docs/design/records.md`).
+#[derive(Debug, Clone)]
+pub struct RttiField {
+    pub name: String,
+    pub ty: Ty,
+    pub vis: u8,
+    pub pos: u32,
+    pub width: u32,
+    pub attrs: Vec<RttiAttr>,
+}
+
+/// What a property's accessor or a method's entry calls or reads (`docs/spec/bytecode.md` 3.2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RttiCall {
+    /// Nothing reached calls it (`docs/spec/rtti.md` 1.5), or there is nothing to call.
+    None,
+    /// A field: its first slot and width.
+    Field(u32, u32),
+    /// A function (its index in `Module::funcs`).
+    Func(u32),
+    /// The entry of the virtual method table of the instance's or class reference's class.
+    Virtual(u32),
+}
+
+/// A property: the flags of its declared accessors, and what each reads or writes with the
+/// bridge calling a method (`docs/spec/rtti.md` 7.3).
+#[derive(Debug, Clone)]
+pub struct RttiProp {
+    pub name: String,
+    pub ty: Ty,
+    pub vis: u8,
+    pub flags: u8,
+    pub read: (RttiCall, Option<u32>),
+    pub write: (RttiCall, Option<u32>),
+    pub attrs: Vec<RttiAttr>,
+}
+
+/// A method: its `TMethodKind`, flags (static, virtual), parameters and result, what `Invoke`
+/// calls and its bridge.
+#[derive(Debug, Clone)]
+pub struct RttiMethod {
+    pub name: String,
+    pub kind: u8,
+    pub vis: u8,
+    pub flags: u8,
+    pub params: Vec<RttiParam>,
+    pub ret: Option<Ty>,
+    pub call: RttiCall,
+    pub bridge: Option<u32>,
+    pub attrs: Vec<RttiAttr>,
+}
+
+/// A parameter of a method or of a procedural type: its `TParamFlags`.
+#[derive(Debug, Clone)]
+pub struct RttiParam {
+    pub name: String,
+    pub ty: Ty,
+    pub flags: u8,
+    pub attrs: Vec<RttiAttr>,
 }
 
 /// A unit of the module.

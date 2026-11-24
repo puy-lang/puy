@@ -1,0 +1,19 @@
+error[E3003]: `AnsiString` is not supported in Puy
+  --> e3003_unclosed_unicode_guard.pas:6:12
+   |
+ 6 |   TAlias = AnsiString;
+   |            ^^^^^^^^^^
+   |
+   = note: use `string`; for bytes use `TBytes`, and for UTF-8 data use `UTF8String`
+   = note: Puy always defines `UNICODE`; to exclude this branch in Puy, use `{$IF Defined(UNICODE) and not Defined(PUY)}`
+
+error[E0203]: unterminated conditional directive
+  --> e3003_unclosed_unicode_guard.pas:9:1
+   |
+ 5 |   {$IFDEF UNICODE}
+   |   ---------------- starts here
+...
+ 9 |
+   | ^
+
+error: aborting due to 2 errors

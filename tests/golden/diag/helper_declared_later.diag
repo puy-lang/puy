@@ -1,7 +1,7 @@
-error[E3200]: type helpers for built-in types are not supported yet (planned for M5)
-   --> helper_declared_later.pas:11:11
+error[E0700]: `string` has no member `Shout`
+   --> helper_declared_later.pas:11:13
     |
- 11 |   WriteLn(S.Shout);                                // E3200: no helper here yet
-    |           ^^^^^^^
+ 11 |   WriteLn(S.Shout);                                // E0700: no helper here yet
+    |             ^^^^^
 
 error: aborting due to 1 error

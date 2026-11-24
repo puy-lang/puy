@@ -1,0 +1,53 @@
+error[E0702]: type mismatch: expected a class or an interface, found `T`
+   --> generic_class_param_check_errors.pas:21:11
+    |
+ 21 |   if O is T then
+    |           ^
+    |
+    = note: add a class constraint to the type parameter, as in `<T: class>`
+
+error[E0762]: type parameter `T` has no member `ClassName`
+   --> generic_class_param_check_errors.pas:22:13
+    |
+ 19 | procedure Unconstrained<T>(O: TObject);
+    |                         - type parameter declared here
+...
+ 22 |     WriteLn(T.ClassName);
+    |             ^^^^^^^^^^^
+    |
+    = note: add a class constraint to the type parameter, as in `<T: class>`
+
+error[E0733]: `T` is not an exception class
+   --> generic_class_param_check_errors.pas:25:11
+    |
+ 25 |     on X: T do
+    |           ^
+    |
+    = note: add a class constraint that derives from `Exception`, as in `<T: Exception>`
+
+error[E0733]: `T` is not an exception class
+   --> generic_class_param_check_errors.pas:34:11
+    |
+ 34 |     on X: T do
+    |           ^
+    |
+    = note: add a class constraint that derives from `Exception`, as in `<T: Exception>`
+
+error[E0702]: `TStone` can never be `TAnimal`
+   --> generic_class_param_check_errors.pas:41:6
+    |
+ 41 |   if S is T then
+    |      ^^^^^^
+
+warning[W0019]: handler for `E` is unreachable (unreachable-handler)
+   --> generic_class_param_check_errors.pas:58:11
+    |
+ 56 |     on X: Exception do
+    |           --------- caught here
+ 57 |       begin end;
+ 58 |     on X: E do
+    |           ^
+    |
+    = note: disable with `{$WARN unreachable-handler OFF}`
+
+error: aborting due to 5 errors; 1 warning emitted

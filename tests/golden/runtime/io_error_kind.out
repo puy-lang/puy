@@ -1,0 +1,5 @@
+0 ekNone
+cannot open 13 ekPermissionDenied
+ENotSupportedException ekUnsupported
+ekNone ekNotFound ekPermissionDenied ekIsDirectory ekAlreadyExists ekUnsupported ekNoPermission ekInterrupted ekOther 
+invalid integer input: '' 0 ekNone

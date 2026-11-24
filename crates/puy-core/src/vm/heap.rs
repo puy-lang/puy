@@ -6,7 +6,10 @@ use crate::bytecode::{
     SLOT_OBJ, SLOT_PLAIN, SLOT_REF, TYPE_ARRAY, TYPE_DYNARRAY, TYPE_SET, TypeEntry,
 };
 use crate::sema::types::MAX_STRING_LEN;
+use std::any::Any;
+use std::borrow::Cow;
 use std::collections::VecDeque;
+use std::rc::Rc;
 
 /// String storage. One byte per character if every character is below U+0080, otherwise UTF-16 (§5.5).
 ///
@@ -56,6 +59,35 @@ impl ShortStr {
         let n = self.len();
         self.bytes[n..n + b.len()].copy_from_slice(b);
         self.len = u8::try_from(n + b.len()).expect("SHORT_LEN fits in a u8");
+    }
+}
+
+/// The elements of a dynamic array of one-slot elements or of bytes, borrowed as they are held.
+#[derive(Clone, Copy)]
+pub enum Elems<'a> {
+    Slots(&'a [i64]),
+    Bytes(&'a [u8]),
+}
+
+impl Elems<'_> {
+    pub fn len(&self) -> usize {
+        match self {
+            Elems::Slots(s) => s.len(),
+            Elems::Bytes(b) => b.len(),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Element `i` (`None` outside the array).
+    pub fn get(&self, i: i64) -> Option<i64> {
+        let i = usize::try_from(i).ok()?;
+        match self {
+            Elems::Slots(s) => s.get(i).copied(),
+            Elems::Bytes(b) => b.get(i).map(|v| i64::from(*v)),
+        }
     }
 }
 
@@ -155,6 +187,30 @@ fn grow_within<T>(v: &mut Vec<T>, n: usize, room: usize) -> Result<(), OutOfMemo
     }
     let want = need.max(v.capacity().saturating_mul(2)).min(afford);
     try_reserve(v, want - v.len())
+}
+
+/// Element `i` of a dynamic array of bytes (the block `r`) := the low 8 bits of `v` (the
+/// compiler wrote a `Byte`); returns the old value, zero-extended as a read gives it.
+fn replace_byte(bytes: &mut [u8], r: StrRef, i: usize, v: i64) -> Result<i64, BadRef> {
+    let b = bytes.get_mut(i).ok_or_else(|| slot_out_of_range(r, i))?;
+    Ok(i64::from(std::mem::replace(b, v as u8)))
+}
+
+/// The error of slot `i` outside the block `r`.
+fn slot_out_of_range(r: StrRef, i: impl std::fmt::Display) -> BadRef {
+    BadRef {
+        message: format!("slot {i} out of range in heap block {r}"),
+    }
+}
+
+/// A new buffer of exactly `n` bytes: a copy of `prefix` (at most `n` long) padded with 0
+/// (reserved through [`try_reserve`]).
+fn padded_bytes(prefix: &[u8], n: usize) -> Result<Vec<u8>, OutOfMemory> {
+    let mut bytes = Vec::new();
+    try_reserve(&mut bytes, n)?;
+    bytes.extend_from_slice(prefix);
+    bytes.resize(n, 0);
+    Ok(bytes)
 }
 
 /// Appends the buffer's own elements to it (a string appended to itself), growing it within
@@ -301,6 +357,17 @@ impl PStr {
             try_reserve(&mut v, s.encode_utf16().count())?;
             v.extend(s.encode_utf16());
             Ok(PStr::Utf16(v))
+        }
+    }
+
+    /// The string as an extension borrows it (`docs/design/extensions.md` 3.5).
+    pub fn ext_view(&self) -> puy_ext::PasStr<'_> {
+        match self.view() {
+            // One byte per character means every character is below U+0080
+            View::Ascii(a) => {
+                puy_ext::PasStr::Ascii(std::str::from_utf8(a).expect("a one-byte string is ASCII"))
+            }
+            View::Utf16(u) => puy_ext::PasStr::Utf16(u),
         }
     }
 
@@ -686,6 +753,13 @@ enum Body {
         ty: u32,
         slots: Vec<i64>,
     },
+    /// A dynamic array of bytes (`docs/spec/bytecode.md` 2.9; requirements §5.5): the type index
+    /// (an entry with [`crate::bytecode::DYN_BYTES`]) and one byte per element (capacity to
+    /// spare after `SetLen`, as an `Agg`'s slots).
+    Bytes {
+        ty: u32,
+        bytes: Vec<u8>,
+    },
     /// An instance of a class (`docs/spec/objects.md` 14.1): the class's type index and the
     /// fields. The handle's generation is in the block's tag. `dying` is the mark of an instance
     /// being destroyed (3.3), and `dtor` its destruction state: the most distant ancestor whose
@@ -796,12 +870,45 @@ pub struct Callable {
 #[derive(Debug)]
 pub struct Remains(Body);
 
-/// What an exception object holds once raised: its stack trace and the exceptions in
-/// `Suppressed` (each holding a reference).
-#[derive(Debug, Default)]
+/// What an instance holds besides its slots: an exception object once raised, its stack trace
+/// and the exceptions in `Suppressed` (each holding a reference); an instance of an extension
+/// class, the Rust value (`docs/design/extensions.md` 3.4), dropped with the body.
+#[derive(Default)]
 struct ExcExtra {
     trace: Option<Trace>,
     suppressed: Vec<i64>,
+    /// The subexpressions and values a failed `Assert` recorded (`EAssertionFailed.Values`;
+    /// `docs/spec/semantics.md` 5.4).
+    values: Vec<(String, String)>,
+    ext: Option<Rc<dyn Any>>,
+}
+
+impl ExcExtra {
+    /// Bytes counted toward usage: kept out of line, as only exception objects and instances of
+    /// extension classes have it, and inlined it slows down the release of every block.
+    #[cold]
+    #[inline(never)]
+    fn size(&self) -> usize {
+        self.suppressed.len() * 8
+            + self.trace.as_ref().map_or(0, |t| t.frames.len() * 8)
+            + values_size(&self.values)
+    }
+}
+
+impl std::fmt::Debug for ExcExtra {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ExcExtra")
+            .field("trace", &self.trace)
+            .field("suppressed", &self.suppressed)
+            .field("values", &self.values)
+            .field("ext", &self.ext.is_some())
+            .finish()
+    }
+}
+
+/// The bytes the values recorded on an exception object count toward usage.
+fn values_size(values: &[(String, String)]) -> usize {
+    values.iter().map(|(e, v)| e.len() + v.len() + 48).sum()
 }
 
 impl Body {
@@ -811,11 +918,10 @@ impl Body {
             Body::Str(s) => s.heap_size() + std::mem::size_of::<PStr>(),
             Body::U8(b) => b.capacity() + std::mem::size_of::<Vec<u8>>(),
             Body::Agg { slots, .. } => slots.capacity() * 8 + std::mem::size_of::<Body>(),
+            Body::Bytes { bytes, .. } => bytes.capacity() + std::mem::size_of::<Body>(),
             Body::Obj { slots, extra, .. } => {
                 slots.len() * 8
-                    + extra.as_ref().map_or(0, |x| {
-                        x.suppressed.len() * 8 + x.trace.as_ref().map_or(0, |t| t.frames.len() * 8)
-                    })
+                    + extra.as_ref().map_or(0, |x| x.size())
                     + std::mem::size_of::<Body>()
             }
             Body::Callable(_) | Body::Cell { .. } => std::mem::size_of::<Body>(),
@@ -1034,6 +1140,7 @@ pub struct Heap {
     /// The bytes counted against the limit: the blocks, and the capacity of the release work
     /// lists and of the job stack (`Heap::count_capacity`).
     used: usize,
+    peak: usize,
     limit: Option<usize>,
     empty: PStr,
     /// The work list of `release`'s cascades, kept empty between calls and reused (its capacity
@@ -1190,6 +1297,7 @@ impl Heap {
             free: Vec::new(),
             reuse,
             used: 0,
+            peak: 0,
             limit,
             empty: PStr::Ascii(Vec::new()),
             release_work: Vec::new(),
@@ -1203,6 +1311,24 @@ impl Heap {
 
     pub fn used(&self) -> usize {
         self.used
+    }
+
+    pub fn peak(&self) -> usize {
+        self.peak
+    }
+
+    pub fn limit(&self) -> Option<usize> {
+        self.limit
+    }
+
+    pub fn reset_peak(&mut self) {
+        self.peak = self.used;
+    }
+
+    /// Replaces `before` already counted bytes with `after` bytes and records a new peak.
+    fn change_used(&mut self, before: usize, after: usize) {
+        self.used = self.used - before + after;
+        self.peak = self.peak.max(self.used);
     }
 
     /// The bytes left under the usage limit (no limit: unbounded).
@@ -1272,7 +1398,7 @@ impl Heap {
     /// Puts a block of kind `kind` in the slab (without checking the usage limit) and returns its
     /// index. A reused index keeps its generation.
     fn place_tagged(&mut self, body: Body, kind: u32) -> usize {
-        self.used += body.size();
+        self.change_used(0, body.size());
         // An instance's handle has a generation of 1 or more, so that it never reads as the
         // reference of a record or array block (a cursor's container may be either; `docs/spec/
         // bytecode.md` 1.5): a stale handle then fails the generation check
@@ -1515,6 +1641,25 @@ impl Heap {
             }),
             _ => Err(Self::bad("write", r)),
         }
+    }
+
+    /// Attaches the Rust value of an extension class to a new instance
+    /// (`docs/design/extensions.md` 3.4).
+    pub fn set_obj_ext(&mut self, h: i64, value: Rc<dyn Any>) -> Result<(), BadHandle> {
+        let index = self.obj_index(h)?;
+        if let Some(Body::Obj { extra, .. }) = &mut self.blocks[index].body {
+            extra.get_or_insert_with(Box::default).ext = Some(value);
+        }
+        Ok(())
+    }
+
+    /// The Rust value an instance of an extension class holds (`None` for any other instance).
+    pub fn obj_ext(&self, h: i64) -> Result<Option<Rc<dyn Any>>, BadHandle> {
+        let index = self.obj_index(h)?;
+        Ok(match &self.blocks[index].body {
+            Some(Body::Obj { extra, .. }) => extra.as_ref().and_then(|x| x.ext.clone()),
+            _ => None,
+        })
     }
 
     /// Starts the destruction of the instance a handle refers to (`docs/spec/objects.md` 3.3, step
@@ -1864,15 +2009,98 @@ impl Heap {
         }
     }
 
-    /// The type of a record or static array block.
+    /// The type of a record, static array or dynamic array block (a dynamic array of bytes
+    /// included).
     pub fn agg_type(&self, r: StrRef) -> Result<u32, BadRef> {
-        self.agg(r, "read").map(|(t, _)| t)
+        match &self.block(r, "read")?.body {
+            Some(Body::Agg { ty, .. } | Body::Bytes { ty, .. }) => Ok(*ty),
+            _ => Err(Self::bad("read", r)),
+        }
     }
 
-    /// Slot `i` of a record or static array (`None` if `i` is outside the block).
+    /// Slot `i` of a record, static array or dynamic array (`None` if `i` is outside the block);
+    /// an element of a dynamic array of bytes reads as its value.
     pub fn slot(&self, r: StrRef, i: i64) -> Result<Option<i64>, BadRef> {
-        let (_, slots) = self.agg(r, "read")?;
-        Ok(usize::try_from(i).ok().and_then(|i| slots.get(i)).copied())
+        let i = usize::try_from(i).ok();
+        match &self.block(r, "read")?.body {
+            Some(Body::Agg { slots, .. }) => Ok(i.and_then(|i| slots.get(i)).copied()),
+            Some(Body::Bytes { bytes, .. }) => {
+                Ok(i.and_then(|i| bytes.get(i)).map(|b| i64::from(*b)))
+            }
+            _ => Err(Self::bad("read", r)),
+        }
+    }
+
+    /// The bytes of a dynamic array of bytes (0 is empty), as an extension borrows them
+    /// (`docs/design/extensions.md` 3.5).
+    pub fn bytes_of(&self, r: StrRef) -> Result<&[u8], BadRef> {
+        if r == 0 {
+            return Ok(&[]);
+        }
+        match &self.block(r, "read")?.body {
+            Some(Body::Bytes { bytes, .. }) => Ok(bytes),
+            _ => Err(Self::bad("read", r)),
+        }
+    }
+
+    /// The bytes of the dynamic array of bytes `r` (0 is empty) to write in place (`BytesCopy` /
+    /// `BytesFill`; written while shared, as [`Heap::slot_mut`]). An error for any other block.
+    pub fn bytes_of_mut(&mut self, r: StrRef) -> Result<&mut [u8], BadRef> {
+        if r == 0 {
+            return Ok(&mut []);
+        }
+        match &mut self.block_mut(r, "write")?.body {
+            Some(Body::Bytes { bytes, .. }) => Ok(bytes),
+            _ => Err(Self::bad("write", r)),
+        }
+    }
+
+    /// Copies the bytes `from..from + count` of the dynamic array of bytes `src` to `to` in `dst`
+    /// (`BytesCopy`; the two may be the same block, the ranges may overlap). The ranges are in
+    /// the arrays (the caller checked them).
+    pub fn copy_bytes(
+        &mut self,
+        dst: StrRef,
+        to: usize,
+        src: StrRef,
+        from: usize,
+        count: usize,
+    ) -> Result<(), BadRef> {
+        if count == 0 {
+            return Ok(());
+        }
+        if dst == src {
+            self.bytes_of_mut(dst)?.copy_within(from..from + count, to);
+            return Ok(());
+        }
+        // Two distinct live blocks: take the source's buffer out while the destination is written
+        let taken = match &mut self.block_mut(src, "read")?.body {
+            Some(Body::Bytes { bytes, .. }) => std::mem::take(bytes),
+            _ => return Err(Self::bad("read", src)),
+        };
+        let written = self
+            .bytes_of_mut(dst)
+            .map(|d| d[to..to + count].copy_from_slice(&taken[from..from + count]));
+        if let Some(Body::Bytes { bytes, .. }) = &mut self.block_mut(src, "read")?.body {
+            *bytes = taken;
+        }
+        written
+    }
+
+    /// A dynamic array of bytes of type `ty` that takes `bytes` as its buffer, without copying
+    /// (what an extension gives back; 0 when empty).
+    pub fn alloc_bytes_owned(&mut self, ty: u32, bytes: Vec<u8>) -> Result<StrRef, OutOfMemory> {
+        if bytes.is_empty() {
+            return Ok(0);
+        }
+        if bytes.len() > MAX_STRING_LEN {
+            return Err(OutOfMemory);
+        }
+        let body = Body::Bytes { ty, bytes };
+        if !self.fits(body.size()) {
+            return Err(OutOfMemory);
+        }
+        Ok(self.place(body))
     }
 
     /// The slots of an array block (0 is an empty dynamic array): [`Heap::len`] and
@@ -1905,6 +2133,42 @@ impl Heap {
             }
         }
         Ok(out)
+    }
+
+    /// Element `i` of the dynamic or open array `r` (0 is empty) whose elements take one slot
+    /// each (`DynGet`, `BytesGet`), or, out of range, `Err` with the number of elements. One look
+    /// at the block.
+    pub fn elem(&self, r: StrRef, i: i64) -> Result<Result<i64, usize>, BadRef> {
+        if r == 0 {
+            return Ok(Err(0));
+        }
+        let at = usize::try_from(i).ok();
+        Ok(match &self.block(r, "read")?.body {
+            Some(Body::Agg { slots, .. }) => {
+                at.and_then(|i| slots.get(i)).copied().ok_or(slots.len())
+            }
+            Some(Body::Bytes { bytes, .. }) => at
+                .and_then(|i| bytes.get(i))
+                .map(|b| i64::from(*b))
+                .ok_or(bytes.len()),
+            _ => return Err(Self::bad("read", r)),
+        })
+    }
+
+    /// The keys of a hash table (`HashLookupInt`, `HashLookupStr`; `docs/spec/bytecode.md` 2.23):
+    /// the elements of the dynamic array `r` of one-slot elements or of bytes (0 is empty);
+    /// anything else is an error.
+    pub fn hash_keys(&self, r: StrRef) -> Result<Elems<'_>, BadRef> {
+        if r == 0 {
+            return Ok(Elems::Slots(&[]));
+        }
+        if let Some(slots) = self.hash_slots(r) {
+            return Ok(Elems::Slots(slots));
+        }
+        match self.block(r, "read").map(|b| &b.body) {
+            Ok(Some(Body::Bytes { bytes, .. })) => Ok(Elems::Bytes(bytes)),
+            _ => Err(self.hash_array_error(r, "the keys")),
+        }
     }
 
     /// The slots of the block `r` (not 0) if it is a dynamic array of one-slot elements.
@@ -2062,6 +2326,9 @@ impl Heap {
     ) -> Result<Result<u64, OutOfMemory>, BadRef> {
         use crate::bytecode::{SORT_DOUBLE, SORT_INT, SORT_SINGLE, SORT_STR, SORT_UINT, SORT_UTF8};
         let index = slab_index(r).expect("the caller checked the array");
+        if let Some(Body::Bytes { bytes, .. }) = self.blocks[index].body.as_mut() {
+            return Self::sort_bytes(bytes, r, lo, hi, kind).map(Ok);
+        }
         let elems = match &self.blocks[index].body {
             Some(Body::Agg { slots, .. }) => slots.get(lo..hi),
             _ => None,
@@ -2104,7 +2371,7 @@ impl Heap {
             unreachable!("checked above");
         };
         let mut slots = std::mem::take(slots);
-        self.used += size;
+        self.change_used(0, size);
         let v = &mut slots[lo..hi];
         let count = match kind {
             SORT_INT => sort::merge_sort(v, &mut work, |a, b| a.cmp(&b)),
@@ -2131,6 +2398,38 @@ impl Heap {
             *back = slots;
         }
         Ok(Ok(count))
+    }
+
+    /// [`Heap::sort_slots`] of a dynamic array of bytes: the bytes compare as integers whether
+    /// signed or not (`SORT_INT`, `SORT_UINT`; another kind is an internal error), and equal ones
+    /// cannot be told apart, so a counting sort is stable. Returns the number of elements as the
+    /// number of comparisons (the work is linear).
+    fn sort_bytes(
+        bytes: &mut [u8],
+        r: StrRef,
+        lo: usize,
+        hi: usize,
+        kind: i64,
+    ) -> Result<u64, BadRef> {
+        use crate::bytecode::{SORT_INT, SORT_UINT};
+        if kind != SORT_INT && kind != SORT_UINT {
+            return Err(BadRef {
+                message: format!("`ArraySortRange` of the bytes of heap block {r} by kind {kind}"),
+            });
+        }
+        let range = bytes.get_mut(lo..hi).ok_or_else(|| BadRef {
+            message: format!("`ArraySortRange` of the slots {lo}..{hi} of heap block {r}"),
+        })?;
+        let mut counts = [0usize; 256];
+        for b in range.iter() {
+            counts[*b as usize] += 1;
+        }
+        let mut at = 0;
+        for (b, c) in counts.iter().enumerate() {
+            range[at..at + c].fill(b as u8);
+            at += c;
+        }
+        Ok((hi - lo) as u64)
     }
 
     /// The slots of the live record or array block `r` for the fast paths of the slot reads and
@@ -2162,6 +2461,42 @@ impl Heap {
             Body::Agg { slots, .. } => Some(slots),
             _ => None,
         }
+    }
+
+    /// The bytes of the live dynamic array of bytes `r` for the fast paths of `BytesGet` /
+    /// `BytesSet` (written while shared, as a dynamic array is), or `None` when `r` is not one or
+    /// one of its elements is lent (the body reports why, and reads any other array).
+    #[inline(always)]
+    fn bytes_fast(&mut self, r: StrRef) -> Option<&mut Vec<u8>> {
+        // An instance's handle has its generation above
+        if (r as u64) >> 32 != 0 {
+            return None;
+        }
+        let block = self.blocks.get_mut(slab_index(r)?)?;
+        if block.lent != 0 {
+            return None;
+        }
+        match block.body.as_mut()? {
+            Body::Bytes { bytes, .. } => Some(bytes),
+            _ => None,
+        }
+    }
+
+    /// Element `i` of the dynamic array of bytes `r` (`BytesGet`), or `None` as
+    /// [`Heap::bytes_fast`] says or when `i` is out of range.
+    #[inline(always)]
+    pub fn bytes_get_fast(&mut self, r: StrRef, i: i64) -> Option<i64> {
+        self.bytes_fast(r)?
+            .get(usize::try_from(i).ok()?)
+            .map(|b| i64::from(*b))
+    }
+
+    /// Writes the low 8 bits of `v` to element `i` of the dynamic array of bytes `r`
+    /// (`BytesSet`), or `None` with nothing written as [`Heap::bytes_get_fast`] says.
+    #[inline(always)]
+    pub fn bytes_set_fast(&mut self, r: StrRef, i: i64, v: i64) -> Option<()> {
+        *self.bytes_fast(r)?.get_mut(usize::try_from(i).ok()?)? = v as u8;
+        Some(())
     }
 
     /// `ElemAt` on the fast path: the first slot of element `i` of the array block `r`, or `None`
@@ -2227,9 +2562,20 @@ impl Heap {
         self.plain_index(r).is_some_and(|i| self.blocks[i].rc == 1)
     }
 
-    /// The number of slots of a record or static array.
+    /// The number of slots of a record or array (the elements of a dynamic array of bytes).
     pub fn slot_count(&self, r: StrRef) -> Result<usize, BadRef> {
-        self.agg(r, "read").map(|(_, s)| s.len())
+        match &self.block(r, "read")?.body {
+            Some(Body::Agg { slots, .. }) => Ok(slots.len()),
+            Some(Body::Bytes { bytes, .. }) => Ok(bytes.len()),
+            _ => Err(Self::bad("read", r)),
+        }
+    }
+
+    /// Whether a type is a dynamic array of bytes ([`TypeEntry::is_dyn_bytes`]).
+    pub fn is_bytes_type(&self, ty: u32) -> bool {
+        self.types
+            .get(ty as usize)
+            .is_some_and(TypeEntry::is_dyn_bytes)
     }
 
     /// Whether a type is a dynamic array.
@@ -2262,6 +2608,17 @@ impl Heap {
         }
     }
 
+    /// Writes `v` into slot `i` of a record, static array or dynamic array as
+    /// [`Heap::slot_mut`] allows it, and returns the old value. An element of a dynamic array of
+    /// bytes keeps the low 8 bits of `v` (the compiler wrote a `Byte`).
+    pub fn slot_replace(&mut self, r: StrRef, i: i64, v: i64) -> Result<i64, BadRef> {
+        if let Some(Body::Bytes { bytes, .. }) = &mut self.block_mut(r, "write")?.body {
+            let at = usize::try_from(i).map_err(|_| slot_out_of_range(r, i))?;
+            return replace_byte(bytes, r, at, v);
+        }
+        Ok(std::mem::replace(self.slot_mut(r, i)?, v))
+    }
+
     /// Rotates the slots `lo..hi` of the dynamic array `r` (written while shared, as
     /// [`Heap::slot_mut`]) by `by` places to the left (`left`) or to the right (`ArrayMoveRange`;
     /// `docs/spec/bytecode.md` 2.22). The values only change places, so no count changes. The
@@ -2274,22 +2631,31 @@ impl Heap {
         by: usize,
         left: bool,
     ) -> Result<(), BadRef> {
-        let ty = self.agg(r, "write")?.0;
+        let ty = self.agg_type(r)?;
         if !self.is_dyn_type(ty) {
             return Err(Self::bad("rotate", r));
         }
-        match &mut self.block_mut(r, "write")?.body {
-            Some(Body::Agg { slots, .. }) => {
-                let range = slots.get_mut(lo..hi).ok_or_else(|| BadRef {
-                    message: format!("slots {lo}..{hi} out of range in heap block {r}"),
-                })?;
-                if left {
-                    range.rotate_left(by);
-                } else {
-                    range.rotate_right(by);
-                }
-                Ok(())
+        fn rotate<T>(
+            range: Option<&mut [T]>,
+            r: StrRef,
+            lo: usize,
+            hi: usize,
+            by: usize,
+            left: bool,
+        ) -> Result<(), BadRef> {
+            let range = range.ok_or_else(|| BadRef {
+                message: format!("slots {lo}..{hi} out of range in heap block {r}"),
+            })?;
+            if left {
+                range.rotate_left(by);
+            } else {
+                range.rotate_right(by);
             }
+            Ok(())
+        }
+        match &mut self.block_mut(r, "write")?.body {
+            Some(Body::Agg { slots, .. }) => rotate(slots.get_mut(lo..hi), r, lo, hi, by, left),
+            Some(Body::Bytes { bytes, .. }) => rotate(bytes.get_mut(lo..hi), r, lo, hi, by, left),
             _ => Err(Self::bad("rotate", r)),
         }
     }
@@ -2306,11 +2672,33 @@ impl Heap {
         }
     }
 
-    /// Slot `i` of the live record, array or instance block `r`.
+    /// The type and number of slots of the live record, array or instance block `r` (the
+    /// elements of a dynamic array of bytes).
+    pub fn any_shape(&self, r: StrRef) -> Result<(u32, usize), BadRef> {
+        match &self.block(r, "read")?.body {
+            Some(Body::Bytes { ty, bytes }) => Ok((*ty, bytes.len())),
+            _ => self.any_slots(r).map(|(t, s)| (t, s.len())),
+        }
+    }
+
+    /// Slot `i` of the live record, array or instance block `r` (an element of a dynamic array
+    /// of bytes reads as its value).
     pub fn any_slot(&self, r: StrRef, i: usize) -> Result<i64, BadRef> {
-        self.any_slots(r)?.1.get(i).copied().ok_or_else(|| BadRef {
-            message: format!("slot {i} out of range in heap block {r}"),
-        })
+        let v = match &self.block(r, "read")?.body {
+            Some(Body::Bytes { bytes, .. }) => bytes.get(i).map(|b| i64::from(*b)),
+            _ => self.any_slots(r)?.1.get(i).copied(),
+        };
+        v.ok_or_else(|| slot_out_of_range(r, i))
+    }
+
+    /// Writes `v` into slot `i` of the live record, array or instance block `r` as
+    /// [`Heap::any_slots_mut`] allows it, and returns the old value (an element of a dynamic
+    /// array of bytes keeps the low 8 bits of `v`, as [`Heap::slot_replace`]).
+    pub fn any_replace(&mut self, r: StrRef, i: usize, v: i64) -> Result<i64, BadRef> {
+        if let Some(Body::Bytes { bytes, .. }) = &mut self.block_mut(r, "write")?.body {
+            return replace_byte(bytes, r, i, v);
+        }
+        Ok(std::mem::replace(self.any_slot_mut(r, i)?, v))
     }
 
     /// The slots of the live record, array or instance block `r` for writing: a record or static
@@ -2414,6 +2802,15 @@ impl Heap {
         if rc == 1 {
             return Ok(Ok(r));
         }
+        if let Some(Body::Bytes { ty, bytes }) = &self.block(r, "copy")?.body {
+            // A value open array parameter of bytes: the copy holds no references
+            let copy = match self.new_bytes(*ty, bytes, bytes.len()) {
+                Ok(body) => self.place(body),
+                Err(e) => return Ok(Err(e)),
+            };
+            self.release(r)?;
+            return Ok(Ok(copy));
+        }
         let (bty, slots) = self.agg(r, "copy")?;
         let slots = slots.to_vec();
         if !self.fits(slots.len() * 8) {
@@ -2441,7 +2838,7 @@ impl Heap {
         if r == 0 {
             return Ok(Ok(0));
         }
-        let ty = self.agg(r, "write")?.0;
+        let ty = self.agg_type(r)?;
         if self.is_dyn_type(ty) {
             return Ok(Ok(r));
         }
@@ -2454,8 +2851,11 @@ impl Heap {
         if r == 0 {
             return Ok(0);
         }
-        let (ty, slots) = self.agg(r, "read")?;
-        Ok(slots.len() / self.width_of(ty))
+        match &self.block(r, "read")?.body {
+            Some(Body::Agg { ty, slots }) => Ok(slots.len() / self.width_of(*ty)),
+            Some(Body::Bytes { bytes, .. }) => Ok(bytes.len()),
+            _ => Err(Self::bad("read", r)),
+        }
     }
 
     /// The number of slots an element of an array of type `ty` takes (1 for any other type).
@@ -2473,7 +2873,30 @@ impl Heap {
         if n > MAX_STRING_LEN {
             return Err(OutOfMemory);
         }
+        if self.is_bytes_type(ty) {
+            return self.alloc_bytes(ty, &[], n);
+        }
         self.alloc_slots(ty, &[], n * self.width_of(ty))
+    }
+
+    /// A dynamic array of bytes of type `ty` with a copy of `prefix`, padded with 0 to `n`
+    /// elements. Checks the usage limit before allocating.
+    fn alloc_bytes(&mut self, ty: u32, prefix: &[u8], n: usize) -> Result<StrRef, OutOfMemory> {
+        let body = self.new_bytes(ty, prefix, n)?;
+        Ok(self.place(body))
+    }
+
+    /// The body of a dynamic array of bytes of type `ty`: a copy of `prefix` (which may be the
+    /// bytes of a block of this heap) padded with 0 to `n` elements, made only when it fits in the
+    /// usage limit. The caller places it ([`Heap::place`]).
+    fn new_bytes(&self, ty: u32, prefix: &[u8], n: usize) -> Result<Body, OutOfMemory> {
+        if !self.fits(n + std::mem::size_of::<Body>()) {
+            return Err(OutOfMemory);
+        }
+        Ok(Body::Bytes {
+            ty,
+            bytes: padded_bytes(prefix, n)?,
+        })
     }
 
     /// A block of type `ty` with copies of the given slots, padded with defaults to `n` (each
@@ -2509,6 +2932,9 @@ impl Heap {
             self.release(r)?;
             return Ok(Ok(0));
         }
+        if matches!(self.block(r, "resize")?.body, Some(Body::Bytes { .. })) {
+            return self.set_bytes_len(r, n);
+        }
         let (bty, old) = {
             let (t, s) = self.agg(r, "resize")?;
             (t, s.len())
@@ -2542,7 +2968,7 @@ impl Heap {
             let Ok((mut dropped, before, after)) = resized else {
                 return Ok(Err(OutOfMemory));
             };
-            self.used = self.used - before * 8 + after * 8;
+            self.change_used(before * 8, after * 8);
             // A lent element dropped here is lent no more: an element grown back in its place
             // is a new one (`docs/spec/types.md` chapter 3). A lent flat place moves out first
             if n < old && self.block(r, "resize")?.lent != 0 {
@@ -2565,6 +2991,60 @@ impl Heap {
         for (i, v) in kept.into_iter().enumerate() {
             self.add_ref_kind(v, self.slot_kind(bty, i))?;
         }
+        self.release(r)?;
+        Ok(Ok(copy))
+    }
+
+    /// [`Heap::set_len`] of the dynamic array of bytes `r` (not 0) to `n` (not 0) elements, in
+    /// place with capacity to spare when `r` holds its only reference, otherwise in a copy.
+    fn set_bytes_len(
+        &mut self,
+        r: StrRef,
+        n: usize,
+    ) -> Result<Result<StrRef, OutOfMemory>, BadRef> {
+        let block = self.block(r, "resize")?;
+        let Some(Body::Bytes { ty, bytes }) = &block.body else {
+            return Err(Self::bad("resize", r));
+        };
+        let (bty, old) = (*ty, bytes.len());
+        if block.rc == 1 {
+            let room = self.room();
+            let resized: Result<(usize, usize), OutOfMemory> = {
+                let Some(Body::Bytes { bytes, .. }) = &mut self.block_mut(r, "resize")?.body else {
+                    unreachable!("checked above");
+                };
+                let before = bytes.capacity();
+                if n > old {
+                    grow_within(bytes, n - old, room).map(|()| {
+                        bytes.resize(n, 0);
+                        (before, bytes.capacity())
+                    })
+                } else {
+                    bytes.truncate(n);
+                    if n < bytes.capacity() / 4 {
+                        bytes.shrink_to_fit();
+                    }
+                    Ok((before, bytes.capacity()))
+                }
+            };
+            let Ok((before, after)) = resized else {
+                return Ok(Err(OutOfMemory));
+            };
+            self.change_used(before, after);
+            // A lent element dropped here is lent no more (as in `set_len`)
+            if n < old && self.block(r, "resize")?.lent != 0 {
+                self.forget_lent_slots(r, n, &mut []);
+            }
+            return Ok(Ok(r));
+        }
+        let copy = match &self.block(r, "copy")?.body {
+            Some(Body::Bytes { bytes, .. }) => self.new_bytes(bty, &bytes[..old.min(n)], n),
+            _ => unreachable!("checked above"),
+        };
+        let copy = match copy {
+            Ok(body) => self.place(body),
+            Err(e) => return Ok(Err(e)),
+        };
         self.release(r)?;
         Ok(Ok(copy))
     }
@@ -2614,6 +3094,9 @@ impl Heap {
         if n == 0 {
             return Ok(Ok(0));
         }
+        if self.is_bytes_type(ty) {
+            return self.build_bytes(ty, pieces, n);
+        }
         let mut items: Vec<i64> = Vec::new();
         if try_reserve(&mut items, n * w).is_err() {
             return Ok(Err(OutOfMemory));
@@ -2621,6 +3104,16 @@ impl Heap {
         for p in pieces {
             match *p {
                 Piece::Range(r, start, end) if end > start => {
+                    if let Some(Body::Bytes { bytes, .. }) = &self.block(r, "copy")?.body {
+                        // Bytes into an array of one-slot elements
+                        if w != 1 {
+                            return Err(BadRef {
+                                message: format!("elements of heap block {r} have another width"),
+                            });
+                        }
+                        items.extend(bytes[start..end].iter().map(|b| i64::from(*b)));
+                        continue;
+                    }
                     let (rty, slots) = self.agg(r, "copy")?;
                     if self.width_of(rty) != w {
                         return Err(BadRef {
@@ -2653,6 +3146,44 @@ impl Heap {
             for (i, v) in slots.iter().enumerate() {
                 self.add_ref_kind(*v, self.slot_kind(ty, i))?;
             }
+        }
+        Ok(Ok(self.place(body)))
+    }
+
+    /// [`Heap::build_dyn`] of the dynamic array of bytes of type `ty` from pieces of `n` (1 to
+    /// 2^31 - 1) elements in all: a range of an array of bytes, or of an array of one-slot
+    /// elements (an open array parameter given a static array of `Byte`), and elements, whose low
+    /// 8 bits are taken (the compiler gave `Byte`s).
+    fn build_bytes(
+        &mut self,
+        ty: u32,
+        pieces: &[Piece],
+        n: usize,
+    ) -> Result<Result<StrRef, OutOfMemory>, BadRef> {
+        let mut bytes: Vec<u8> = Vec::new();
+        if try_reserve(&mut bytes, n).is_err() {
+            return Ok(Err(OutOfMemory));
+        }
+        for p in pieces {
+            match *p {
+                Piece::Range(r, start, end) if end > start => match &self.block(r, "copy")?.body {
+                    Some(Body::Bytes { bytes: b, .. }) => bytes.extend_from_slice(&b[start..end]),
+                    Some(Body::Agg { ty: rty, slots }) if self.width_of(*rty) == 1 => {
+                        bytes.extend(slots[start..end].iter().map(|v| *v as u8));
+                    }
+                    _ => {
+                        return Err(BadRef {
+                            message: format!("heap block {r} is not an array of bytes"),
+                        });
+                    }
+                },
+                Piece::Range(..) => {}
+                Piece::Elem(v) => bytes.push(v as u8),
+            }
+        }
+        let body = Body::Bytes { ty, bytes };
+        if !self.fits(body.size()) {
+            return Ok(Err(OutOfMemory));
         }
         Ok(Ok(self.place(body)))
     }
@@ -2693,7 +3224,7 @@ impl Heap {
         };
         let after = s.heap_size();
         self.put_body(r, body);
-        self.used = self.used - before + after;
+        self.change_used(before, after);
         done
     }
 
@@ -2723,7 +3254,7 @@ impl Heap {
         });
         let after = s.heap_size();
         self.put_body(r, body);
-        self.used = self.used - before + after;
+        self.change_used(before, after);
         done
     }
 
@@ -2745,7 +3276,7 @@ impl Heap {
         };
         let after = b.capacity();
         self.put_body(r, body);
-        self.used = self.used - before + after;
+        self.change_used(before, after);
         done
     }
 
@@ -3202,6 +3733,15 @@ impl Heap {
         }
     }
 
+    /// [`Heap::check_slot`] for each slot `lo..hi` of the block `r` (nothing to look at when no
+    /// element is lent).
+    pub fn check_slots(&self, r: StrRef, lo: i64, hi: i64) -> Result<(), Aliased> {
+        if self.loans.is_empty() {
+            return Ok(());
+        }
+        (lo..hi).try_for_each(|i| self.check_slot(r, i))
+    }
+
     /// The refusal for slot `i` of the block `r` (an element of a dynamic or static array, or a
     /// field).
     pub fn aliased_slot(&self, r: StrRef, i: i64, twice: bool) -> Aliased {
@@ -3212,10 +3752,7 @@ impl Heap {
         {
             return Aliased::ObjField { twice };
         }
-        let entry = self
-            .agg(r, "read")
-            .ok()
-            .and_then(|(ty, _)| self.type_entry(ty));
+        let entry = self.agg_type(r).ok().and_then(|ty| self.type_entry(ty));
         match entry.map(|t| t.kind) {
             // The element holding the slot (an element of a flat record takes several)
             Some(TYPE_DYNARRAY) => Aliased::Elem {
@@ -3251,7 +3788,7 @@ impl Heap {
             return Ok(());
         }
         let Ok(Block {
-            body: Some(Body::Agg { ty, .. }),
+            body: Some(Body::Agg { ty, .. } | Body::Bytes { ty, .. }),
             ..
         }) = self.block(r, "copy")
         else {
@@ -3301,7 +3838,7 @@ impl Heap {
         if self.loans.is_empty() || r == 0 {
             return Ok(());
         }
-        let ty = self.agg(r, "copy").map(|(t, _)| t).unwrap_or(0);
+        let ty = self.agg_type(r).unwrap_or(0);
         if self.is_dyn_type(ty) {
             let n = self.len(r).unwrap_or(0);
             self.check_copy(r, 0, n)
@@ -3534,6 +4071,7 @@ impl Heap {
             Dec::Freed(
                 Body::Str(_)
                 | Body::U8(_)
+                | Body::Bytes { .. }
                 | Body::Callable(_)
                 | Body::Cell {
                     kind: SLOT_PLAIN, ..
@@ -3604,7 +4142,7 @@ impl Heap {
     /// that changes a capacity counts its own change, so the total is never recomputed.
     fn count_capacity<T>(&mut self, before: usize, after: usize) {
         let size = std::mem::size_of::<T>();
-        self.used = self.used + after * size - before * size;
+        self.change_used(before * size, after * size);
     }
 
     /// Opens a job with the given work (`docs/design/objects.md` 3.8).
@@ -3712,6 +4250,7 @@ impl Heap {
                 | Dec::Freed(
                     Body::Str(_)
                     | Body::U8(_)
+                    | Body::Bytes { .. }
                     | Body::Callable(_)
                     | Body::Cell {
                         kind: SLOT_PLAIN, ..
@@ -4063,39 +4602,61 @@ impl Heap {
         }
     }
 
-    /// Type names of the blocks still on the heap (the leak check; `docs/spec/diagnostics.md` 8.1).
-    /// A callable value block is named after its function (`func_name`; `docs/spec/objects.md`
-    /// 14.9).
+    /// One reported type name per live heap block, in slab order (`docs/spec/diagnostics.md` 8.1).
+    /// Uses `func_name` for callable blocks and `cell_name` for captured variables' cells.
     pub fn live_type_names<'h>(
         &'h self,
         func_name: impl Fn(u32) -> String + 'h,
         cell_name: impl Fn(u32, u16) -> String + 'h,
-    ) -> impl Iterator<Item = std::borrow::Cow<'h, str>> + 'h {
-        use std::borrow::Cow;
-        self.blocks
-            .iter()
-            .filter_map(move |b| match b.body.as_ref()? {
-                Body::Str(_) => Some(Cow::Borrowed("string")),
-                Body::U8(_) => Some(Cow::Borrowed("UTF8String")),
-                Body::Agg { ty, .. } | Body::Obj { ty, .. } => Some(Cow::Borrowed(
-                    self.types
-                        .get(*ty as usize)
-                        .map_or("<unknown>", |t| t.name.as_str()),
-                )),
-                Body::Callable(c) => Some(Cow::Owned(match c.kind {
+    ) -> impl Iterator<Item = Cow<'h, str>> + 'h {
+        self.live_blocks(func_name, cell_name).map(|(name, _)| name)
+    }
+
+    /// The bodies of the live blocks, in slab order.
+    fn live_bodies(&self) -> impl Iterator<Item = &Body> {
+        self.blocks.iter().filter_map(|block| block.body.as_ref())
+    }
+
+    pub(super) fn live_block_count(&self) -> usize {
+        self.live_bodies().count()
+    }
+
+    pub(super) fn live_block_bytes(&self) -> usize {
+        self.live_bodies().map(Body::size).sum()
+    }
+
+    /// Names and accounted sizes of the blocks still on the heap. The leak report and memory
+    /// snapshot share these names (`docs/spec/diagnostics.md` 8.1).
+    pub(super) fn live_blocks<'h>(
+        &'h self,
+        func_name: impl Fn(u32) -> String + 'h,
+        cell_name: impl Fn(u32, u16) -> String + 'h,
+    ) -> impl Iterator<Item = (Cow<'h, str>, usize)> + 'h {
+        self.live_bodies().map(move |body| {
+            let name = match body {
+                Body::Str(_) => Cow::Borrowed("string"),
+                Body::U8(_) => Cow::Borrowed("UTF8String"),
+                Body::Agg { ty, .. } | Body::Bytes { ty, .. } | Body::Obj { ty, .. } => {
+                    Cow::Borrowed(
+                        self.types
+                            .get(*ty as usize)
+                            .map_or("<unknown>", |t| &t.name),
+                    )
+                }
+                Body::Callable(c) => Cow::Owned(match c.kind {
                     CallableKind::Routine => format!("<closure {}>", func_name(c.func)),
                     CallableKind::Method | CallableKind::ClassMethod => {
                         format!("<method-ref {}>", func_name(c.func))
                     }
                     CallableKind::Closure => unreachable!("a closure has a block of its own"),
-                })),
-                Body::Closure { func, .. } => {
-                    Some(Cow::Owned(format!("<closure {}>", func_name(*func))))
-                }
+                }),
+                Body::Closure { func, .. } => Cow::Owned(format!("<closure {}>", func_name(*func))),
                 Body::Cell { func, reg, .. } => {
-                    Some(Cow::Owned(format!("<cell {}>", cell_name(*func, *reg))))
+                    Cow::Owned(format!("<cell {}>", cell_name(*func, *reg)))
                 }
-            })
+            };
+            (name, body.size())
+        })
     }
 
     /// A new closure (`docs/spec/objects.md` 14.9) of the function `func` (or [`NO_FUNC`])
@@ -4308,9 +4869,27 @@ impl Heap {
     /// Records the stack trace of an exception object (counted toward usage without the limit,
     /// like the objects of VM exceptions).
     pub fn set_exc_trace(&mut self, h: i64, t: Trace) -> Result<(), BadRef> {
-        self.used += t.frames.len() * 8;
+        self.change_used(0, t.frames.len() * 8);
         match self.exc_mut(h)? {
             Body::Obj { extra, .. } => extra.get_or_insert_with(Box::default).trace = Some(t),
+            _ => unreachable!("exc_mut returns instances"),
+        }
+        Ok(())
+    }
+
+    /// The subexpressions and values a failed `Assert` recorded on an exception object
+    /// (`EAssertionFailed.Values`).
+    pub fn exc_values(&self, h: i64) -> Result<&[(String, String)], BadRef> {
+        Ok(self.exc(h)?.2.map_or(&[][..], |x| &x.values))
+    }
+
+    /// Appends a subexpression and its value to `EAssertionFailed.Values` of an exception object
+    /// (counted toward usage without the limit, like its stack trace).
+    pub fn exc_push_value(&mut self, h: i64, expr: String, value: String) -> Result<(), BadRef> {
+        let item = (expr, value);
+        self.change_used(0, values_size(std::slice::from_ref(&item)));
+        match self.exc_mut(h)? {
+            Body::Obj { extra, .. } => extra.get_or_insert_with(Box::default).values.push(item),
             _ => unreachable!("exc_mut returns instances"),
         }
         Ok(())
@@ -4324,7 +4903,7 @@ impl Heap {
     /// Appends `v` (whose reference the object takes) to `Suppressed` of an exception object
     /// (counted toward usage without the limit).
     pub fn exc_push_suppressed(&mut self, h: i64, v: i64) -> Result<(), BadRef> {
-        self.used += 8;
+        self.change_used(0, 8);
         match self.exc_mut(h)? {
             Body::Obj { extra, .. } => extra.get_or_insert_with(Box::default).suppressed.push(v),
             _ => unreachable!("exc_mut returns instances"),
@@ -4369,6 +4948,14 @@ impl Heap {
         false
     }
 
+    /// A class and its ancestors, the class first (by type index); empty for a type that is not
+    /// a class.
+    pub fn class_chain(&self, ty: u32) -> Vec<u32> {
+        self.ancestors
+            .get(ty as usize)
+            .map_or_else(Vec::new, |l| l.iter().rev().copied().collect())
+    }
+
     /// The name of a type (the class name of an exception, by its type entry).
     pub fn type_name(&self, ty: u32) -> &str {
         self.types
@@ -4381,7 +4968,7 @@ impl Heap {
         if !self.fits(bytes) {
             return Err(OutOfMemory);
         }
-        self.used += bytes;
+        self.change_used(0, bytes);
         Ok(())
     }
 

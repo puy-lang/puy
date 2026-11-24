@@ -1,0 +1,55 @@
+Create ticks 00:20:34.5678901 ticks 12345678901 parts 0 0 20 34 567
+Create hms 01:02:03 ticks 37230000000 parts 0 1 2 3 0
+Create dhms 2.03:04:05 ticks 1838450000000 parts 2 3 4 5 0
+Create dhmsm 1.02:03:04.0050000 ticks 937840050000 parts 1 2 3 4 5
+Create carry 1.02:02:02.0010000 ticks 937220010000 parts 1 2 2 2 1
+Create negative -00:30:00 ticks -18000000000 parts 0 0 -30 0 0
+FromDays 1.12:00:00 ticks 1296000000000 parts 1 12 0 0 0
+FromHours -02:15:00 ticks -81000000000 parts 0 -2 -15 0 0
+FromMinutes 01:30:30 ticks 54300000000 parts 0 1 30 30 0
+FromSeconds 00:00:00.0000001 ticks 1 parts 0 0 0 0 0
+FromSeconds half tick 00:00:00.0000002 ticks 2 parts 0 0 0 0 0
+FromMilliseconds 00:00:00.0012346 ticks 12346 parts 0 0 0 0 1
+FromTicks -00:00:00.0000001 ticks -1 parts 0 0 0 0 0
+Zero 00:00:00 ticks 0 parts 0 0 0 0 0
+MinValue -10675199.02:48:05.4775808 ticks -9223372036854775808 parts -10675199 -2 -48 -5 -477
+MaxValue 10675199.02:48:05.4775807 ticks 9223372036854775807 parts 10675199 2 48 5 477
+10000 10000000 600000000 36000000000 864000000000
+1.5000 36.0000 2160.0 129600.0 129600000.0 -1.5000
+A + B 1.10:30:00 ticks 1242000000000 parts 1 10 30 0 0
+A - B 1.13:30:00 ticks 1350000000000 parts 1 13 30 0 0
+-A -1.12:00:00 ticks -1296000000000 parts -1 -12 0 0 0
++B -01:30:00 ticks -54000000000 parts 0 -1 -30 0 0
+Add 1.10:30:00 ticks 1242000000000 parts 1 10 30 0 0
+Subtract 1.13:30:00 ticks 1350000000000 parts 1 13 30 0 0
+Duration 01:30:00 ticks 54000000000 parts 0 1 30 0 0
+Negate 01:30:00 ticks 54000000000 parts 0 1 30 0 0
+FALSE TRUE FALSE TRUE TRUE FALSE 1 -1 0
+TRUE TRUE TRUE
+1.12:00:00 TRUE
+'1:02' 01:02:00
+'01:02:03' 01:02:03
+'1.02:03:04.5' 1.02:03:04.5000000
+'-0:00:00.0000001' -00:00:00.0000001
+'  7  ' 7.00:00:00
+'-3' -3.00:00:00
+'10675199.02:48:05.4775807' 10675199.02:48:05.4775807
+'-10675199.02:48:05.4775808' -10675199.02:48:05.4775808
+'10675199.02:48:05.4775808' fails
+'24:00' fails
+'1:60' fails
+'1:2' fails
+'123:00' fails
+'1:00:00.12345678' fails
+'1.:00' fails
+'' fails
+'+1:00' fails
+TRUE
+Parse: EConvertError: 'x' is not a valid time span
+Create: ERangeError: TTimeSpan value out of range
+FromDays: ERangeError: TTimeSpan value out of range
+FromSeconds NaN: ERangeError: TTimeSpan value out of range
+Add: ERangeError: TTimeSpan value out of range
+Subtract: ERangeError: TTimeSpan value out of range
+Negate: ERangeError: TTimeSpan value out of range
+Duration: ERangeError: TTimeSpan value out of range

@@ -36,11 +36,13 @@ error[E0705]: wrong number of arguments: expected 0, found 1
  21 |     [weak(1)] Parent: TNode;
     |          ^^^
 
-error[E3200]: `[Test]` is not supported yet (planned for M5)
+error[E0781]: `[Test]` can only be used in a test unit
    --> weak_errors.pas:23:6
     |
  23 |     [Test] Count: Integer;
     |      ^^^^
+    |
+    = note: a test unit is a unit in a file named `*_test.pas`
 
 warning[W0025]: unknown attribute `System.Weak` (unknown-attribute)
    --> weak_errors.pas:24:6

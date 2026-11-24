@@ -1,0 +1,18 @@
+running 5 tests (seed 1)
+ok    Upd_test.Same (Nms)
+ok    Upd_test.Changed (Nms)
+ok    Upd_test.Added (Nms)
+FAIL  Upd_test.Twice (Nms)
+ok    Upd_test.Extra_test.Nothing (Nms)
+
+---- Upd_test.Twice ----
+error: uncaught exception EAssertionFailed: snapshot `Upd_test.Twice.2` is used twice in the test (one file `tests/snapshots/Upd_test.Twice.2.snap` holds one snapshot)
+  at Puy.Testing.AssertSnapshot (<stdlib>/Puy.Testing/Snapshot.Implementation.inc:12)
+  at Upd_test.Twice (tests/Upd_test.pas:44)
+  at Upd_test.<test:Twice> (tests/Upd_test.pas:39)
+
+test result: FAILED. 4 ok; 1 failed; 0 errors; 0 skipped; 0 filtered out
+snapshots: 4 written; 2 unused (kept)
+
+to run a failed test again:
+  puy test --seed 1 --filter 'Upd_test.Twice' --exact

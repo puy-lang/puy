@@ -1,25 +1,25 @@
 error[E0760]: `TRefFoo` is a reference counted class and cannot be used for `K` of `TObjectDictionary<K, V>`
-    --> stdlib_owning_dictionary_errors.pas:30:24
-     |
-  30 |   C: TObjectDictionary<TRefFoo, TRefFoo>;
-     |                        ^^^^^^^
-    ::: <stdlib>/System.Generics.Collections.pas:612:21
- 612 |   TObjectDictionary<K: NotRefCounted; V: NotRefCounted> = class(TDictionary<K, V>)
-     |                     - type parameter declared here
-     |
-     = note: reference counted objects are freed when the last reference goes away, so they do not need an owning container
-     = suggestion: use `TDictionary`
+   --> stdlib_owning_dictionary_errors.pas:30:24
+    |
+ 30 |   C: TObjectDictionary<TRefFoo, TRefFoo>;
+    |                        ^^^^^^^
+   ::: <stdlib>/System.Generics.Collections/Owning.Interface.inc:82:21
+ 82 |   TObjectDictionary<K: NotRefCounted; V: NotRefCounted> = class(TDictionary<K, V>)
+    |                     - type parameter declared here
+    |
+    = note: reference counted objects are freed when the last reference goes away, so they do not need an owning container
+    = suggestion: use `TDictionary`
 
 error[E0760]: `TRefFoo` is a reference counted class and cannot be used for `V` of `TObjectDictionary<K, V>`
-    --> stdlib_owning_dictionary_errors.pas:30:33
-     |
-  30 |   C: TObjectDictionary<TRefFoo, TRefFoo>;
-     |                                 ^^^^^^^
-    ::: <stdlib>/System.Generics.Collections.pas:612:39
- 612 |   TObjectDictionary<K: NotRefCounted; V: NotRefCounted> = class(TDictionary<K, V>)
-     |                                       - type parameter declared here
-     |
-     = note: reference counted objects are freed when the last reference goes away, so they do not need an owning container
+   --> stdlib_owning_dictionary_errors.pas:30:33
+    |
+ 30 |   C: TObjectDictionary<TRefFoo, TRefFoo>;
+    |                                 ^^^^^^^
+   ::: <stdlib>/System.Generics.Collections/Owning.Interface.inc:82:39
+ 82 |   TObjectDictionary<K: NotRefCounted; V: NotRefCounted> = class(TDictionary<K, V>)
+    |                                       - type parameter declared here
+    |
+    = note: reference counted objects are freed when the last reference goes away, so they do not need an owning container
 
 error[E0768]: `doOwnsKeys` needs a class type for the keys of `TObjectDictionary<string, TFoo>`, but `string` is not a class
    --> stdlib_owning_dictionary_errors.pas:38:47

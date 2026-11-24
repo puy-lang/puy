@@ -9,6 +9,7 @@ use super::{
 };
 use crate::diagnostics::{Code, Diagnostic, Stage};
 use crate::source::TextRange;
+use crate::syntax::TokenName;
 use crate::syntax::ast::{self, AstNode, ParamMode};
 
 /// The note of E0729 for an anonymous method (`docs/spec/objects.md` 16.2).
@@ -91,49 +92,24 @@ impl<'a, 's> Sema<'a, 's> {
         at: TextRange,
     ) -> Option<(RoutineId, Vec<VarId>)> {
         let body = a.body()?;
-        let (n, parent, outer_name) = {
-            let c = self.cur.as_mut()?;
-            c.anon_count += 1;
-            (c.anon_count, c.routine, c.qual_name.clone())
+        let (parent, outer_name) = {
+            let c = self.cur.as_ref()?;
+            (c.routine, c.qual_name.clone())
         };
+        // A trial check analyzes the same anonymous method again: it keeps its number (9.6)
+        let (n, id) = self.routine_at(a.syntax().text_range(), |s, known| {
+            let c = s.cur_mut();
+            let n = known.unwrap_or(c.anon_count + 1);
+            c.anon_count = c.anon_count.max(n);
+            (
+                n,
+                s.anon_info(n, parent, &outer_name, params.clone(), ret, at),
+            )
+        });
         let short = format!("<anon{n}>");
-        // Its name is that of the routine it is written in with `<anonN>` added (9.6)
-        let name = match parent {
-            Some(_) => short.clone(),
-            None => format!("{outer_name}.{short}"),
-        };
-        let id = RoutineId(self.routines.len() as u32);
-        if parent.is_none() {
+        if parent.is_none() && !self.cur_mut().top_anons.contains(&id) {
             self.cur_mut().top_anons.push(id);
         }
-        self.routines.push(RoutineInfo {
-            name: name.clone(),
-            params: params.clone(),
-            ret,
-            has_body: true,
-            forward_span: None,
-            implicit_forward: false,
-            name_span: at,
-            hir: None,
-            overload: false,
-            overload_fix_at: None,
-            unit: self.unit_index,
-            file: self.input.file,
-            interface: false,
-            parent,
-            scope: None,
-            calls: Vec::new(),
-            method_of: None,
-            self_kind: types::SelfKind::Instance,
-            is_abstract: false,
-            body_span: None,
-            closure: true,
-            type_params: Vec::new(),
-            closure_info: super::ClosureInfo {
-                anon: true,
-                ..Default::default()
-            },
-        });
         let syntax_errors = has_syntax_error(a.syntax(), self.sink, self.input.file);
         let end_span = body
             .block()
@@ -196,10 +172,58 @@ impl<'a, 's> Sema<'a, 's> {
         let info = &mut self.routines[id.0 as usize];
         info.hir = Some(Box::new(routine));
         info.calls = calls;
-        if let Some(s) = self_at {
-            self.anon_self.insert(id, s);
-        }
+        match self_at {
+            Some(s) => self.anon_self.insert(id, s),
+            None => self.anon_self.remove(&id),
+        };
         Some((id, srcs))
+    }
+
+    /// The routine of the anonymous method numbered `n` in the routine `parent` (`None` for
+    /// `<main>`, `<init>`, `<fini>`, named `outer_name`): its name is that of the routine it is
+    /// written in with `<anonN>` added (`docs/spec/objects.md` 9.6).
+    fn anon_info(
+        &self,
+        n: u32,
+        parent: Option<RoutineId>,
+        outer_name: &str,
+        params: Vec<ParamInfo>,
+        ret: Option<Ty>,
+        at: TextRange,
+    ) -> RoutineInfo {
+        let short = format!("<anon{n}>");
+        RoutineInfo {
+            name: match parent {
+                Some(_) => short,
+                None => format!("{outer_name}.{short}"),
+            },
+            params,
+            ret,
+            has_body: true,
+            forward_span: None,
+            implicit_forward: false,
+            name_span: at,
+            hir: None,
+            overload: false,
+            overload_fix_at: None,
+            unit: self.unit_index,
+            file: self.input.file,
+            interface: false,
+            parent,
+            scope: None,
+            calls: Vec::new(),
+            method_of: None,
+            self_kind: types::SelfKind::Instance,
+            is_abstract: false,
+            native: false,
+            body_span: None,
+            closure: true,
+            type_params: Vec::new(),
+            closure_info: super::ClosureInfo {
+                anon: true,
+                ..Default::default()
+            },
+        }
     }
 
     /// W0024 (`docs/spec/objects.md` 9.8): in a method of a reference counted class, an anonymous
@@ -252,7 +276,7 @@ impl<'a, 's> Sema<'a, 's> {
         }
         let ast::Expr::NameRef(n) = &root else { return };
         let Some(tok) = n.token() else { return };
-        let name = tok.text().to_string();
+        let name = tok.name().to_string();
         let range = tok.text_range();
         let from_self = name.eq_ignore_ascii_case("self")
             || matches!(

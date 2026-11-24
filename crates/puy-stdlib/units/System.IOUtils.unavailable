@@ -1,0 +1,15 @@
+// Names of System.IOUtils in Delphi that Puy does not provide; using one is E3022
+// (docs/spec/stdlib/System.IOUtils/README.md, which has the same table). One per line: the name
+// (or `<type>.<member>`), `:`, and what to use instead (the note of E3022 is `use … instead`).
+TDirectory.GetCreationTime: `TFile.GetCreationTime`
+TDirectory.GetCreationTimeUtc: `TFile.GetCreationTimeUtc`
+TDirectory.GetLastAccessTime: `TFile.GetLastAccessTime`
+TDirectory.GetLastAccessTimeUtc: `TFile.GetLastAccessTimeUtc`
+TDirectory.GetLastWriteTime: `TFile.GetLastWriteTime`
+TDirectory.GetLastWriteTimeUtc: `TFile.GetLastWriteTimeUtc`
+TDirectory.SetCreationTime: `TFile.SetCreationTime`
+TDirectory.SetCreationTimeUtc: `TFile.SetCreationTimeUtc`
+TDirectory.SetLastAccessTime: `TFile.SetLastAccessTime`
+TDirectory.SetLastAccessTimeUtc: `TFile.SetLastAccessTimeUtc`
+TDirectory.SetLastWriteTime: `TFile.SetLastWriteTime`
+TDirectory.SetLastWriteTimeUtc: `TFile.SetLastWriteTimeUtc`

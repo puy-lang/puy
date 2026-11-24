@@ -1,0 +1,13 @@
+made before reading: FALSE, calls: 0
+text 1
+text 1
+made after reading: TRUE, calls: 1
+copy: text 1, calls: 1
+made after Reset: FALSE
+text 2
+text 3, calls: 3
+making the array
+array: 3 3
+making the point
+point: 4 5
+from a value: TRUE 42

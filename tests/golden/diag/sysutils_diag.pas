@@ -2,8 +2,8 @@ program SysUtilsDiag;
 
 // Diagnostics of the System.SysUtils built-ins (semantics.md 5.3): an `array of const` element of
 // a type it cannot take (E0702), an argument that is not a constructor, a range, the argument
-// counts, the `out` argument of TryStrToInt, a non-integer IntToHex, the flags of StringReplace,
-// and an `array of const` parameter a program declares (E3200 until M3).
+// counts, the `out` argument of TryStrToInt, a non-integer IntToHex and the flags of
+// StringReplace.
 
 uses System.SysUtils;
 
@@ -12,10 +12,6 @@ type
   TPoint = record
     X: Integer;
   end;
-
-procedure Log(const Args: array of const);
-begin
-end;
 
 var
   C: TColor;

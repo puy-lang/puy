@@ -1,0 +1,18 @@
+running 3 tests (seed 7)
+ok    Shapes_test.Square (Nms)
+ok    Shapes_test.SquareRoot (Nms)
+ok    Shapes_test.Circle (Nms)
+
+---- Shapes_test.Square ----
+stdout:
+square
+
+---- Shapes_test.SquareRoot ----
+stdout:
+root
+
+---- Shapes_test.Circle ----
+stdout:
+circle
+
+test result: ok. 3 ok; 0 failed; 0 errors; 0 skipped; 0 filtered out

@@ -3,8 +3,8 @@
 //!
 //! - Both `puy-core` (no I/O) and `puy-runtime-*` (touches the OS) depend on this crate.
 //! - `HostSet` bundles the per-capability traits (`Console`, `Env`, `Clock`, `Random`,
-//!   `MemoryStats`) as `Option<Box<dyn Xxx>>`. `None` means "no permission / not available on
-//!   this target".
+//!   `MemoryStats`, `Fs`, `Os`) as `Option<Box<dyn Xxx>>`. `None` means "no permission / not
+//!   available on this target"; which of the two, `HostSet::absent` records per capability.
 //! - Host functions are split into synchronous ones (plain methods) and suspendable ones (returning
 //!   `HostFuture`) (§4.3).
 //! - `Send` is not required. An isolate runs on the thread that created it.
@@ -15,6 +15,12 @@ use std::fmt;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
+
+mod fs;
+mod os;
+
+pub use fs::{DirEntry, DirReader, File, FileTimes, FileType, Fs, Metadata, OpenOptions, SeekFrom};
+pub use os::{Os, OsVersion};
 
 /// Kinds of host errors (`docs/design/host-interface.md` 3.3).
 ///
@@ -143,6 +149,22 @@ impl<T> Future for Ready<T> {
 
 impl<T> Unpin for Ready<T> {}
 
+/// What a deadline or a cancellation does to a suspendable call that has not completed
+/// (`docs/design/extensions.md` 3.7; requirements §7.1). Recorded with each suspendable function;
+/// the scheduler reads it once deadlines and cancellation exist (M5c).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum CancelMode {
+    /// The `Future` is dropped and the exception raised at once (sockets, pipes, timers).
+    #[default]
+    Drop,
+    /// The exception is raised at once; the `Future` runs to completion behind and its result is
+    /// dropped (operations without side effects, such as name resolution).
+    Detach,
+    /// The exception is raised once the `Future` completes (regular files), unless the scope
+    /// allows abandoning blocking operations.
+    Complete,
+}
+
 /// Standard output or standard error.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum OutStream {
@@ -154,30 +176,57 @@ pub enum OutStream {
 ///
 /// - `write` does not buffer; it writes out the given bytes immediately (the VM owns the stdout
 ///   buffer; `docs/spec/semantics.md` 6.1). `bytes` has already been converted to UTF-8 by the VM.
-/// - `read_line` reads stdin as UTF-8 (invalid sequences become U+FFFD) and returns the line with
-///   the trailing newline (`LF` and a preceding `CR`) removed. An empty line is `Some("")`; end of
-///   input is `None`. The last line is returned even without a newline.
+/// - `read` reads up to `max` bytes of stdin as they come (fewer than `max` is fine, such as one
+///   line typed at a terminal) and returns them as is; an empty result is the end of input. The
+///   VM owns the input buffer: it cuts lines and decodes UTF-8 (`docs/spec/semantics.md` 6.2,
+///   `docs/design/stdlib.md` 3.7). `max` is at least 1.
 pub trait Console {
     fn write(&mut self, stream: OutStream, bytes: &[u8]) -> HostFuture<()>;
-    fn read_line(&mut self) -> HostFuture<Option<String>>;
+    fn read(&mut self, max: usize) -> HostFuture<Vec<u8>>;
 }
 
-/// Reading environment variables (synchronous).
+/// Reading environment variables (synchronous). Writing is not the host's: an isolate keeps its
+/// own table of changes and leaves the process's variables alone (`docs/design/stdlib.md` 3.4.3).
 ///
-/// Returns `Ok(None)` if unset. If the value is not a valid OS string, invalid parts become U+FFFD
-/// as with `to_string_lossy`.
-/// If the name is empty or contains `=` / `#0`, the VM does not call the host
-/// (`docs/spec/bytecode.md` 2.6).
+/// If a name or a value is not a valid OS string, invalid parts become U+FFFD as with
+/// `to_string_lossy`.
 pub trait Env {
+    /// The value of `name`; `Ok(None)` if unset. If the name is empty or contains `=` / `#0`, the
+    /// VM does not call the host (`docs/spec/bytecode.md` 2.6).
     fn get(&mut self, name: &str) -> Result<Option<String>, HostError>;
+    /// Every variable as `(name, value)`, in the OS's order.
+    fn vars(&mut self) -> Result<Vec<(String, String)>, HostError>;
+    /// Whether names that differ only in case name the same variable (Windows). The isolate's
+    /// own changes follow the same rule.
+    fn ignores_case(&self) -> bool {
+        false
+    }
 }
 
-/// Clock (synchronous). In M1 it is used only inside the VM.
+/// Clock (synchronous; requirements §8.8).
 pub trait Clock {
     /// Wall clock. Nanoseconds since the UNIX epoch.
     fn wall_nanos(&mut self) -> Result<i64, HostError>;
     /// Monotonic clock. Nanoseconds since an arbitrary origin.
     fn monotonic_nanos(&mut self) -> Result<u64, HostError>;
+    /// The offset of the local time from UTC, in seconds (east positive), at the instant
+    /// `utc_nanos` (nanoseconds since the UNIX epoch): asked for each instant, since daylight
+    /// saving time changes it. The current time zone is `TZ` if it is set, else the OS's
+    /// setting. `None` when the target cannot tell (WASI, an embedding that gives no time zone):
+    /// the local time is then UTC (`docs/spec/stdlib/System.SysUtils/DateTime.md`).
+    fn local_offset(&mut self, utc_nanos: i64) -> Result<Option<i32>, HostError> {
+        let _ = utc_nanos;
+        Ok(None)
+    }
+    /// Waits `nanos` nanoseconds of the monotonic clock (`Sleep`; requirements §7.1, §8.8). A
+    /// clock that cannot wait (the default) answers `Unsupported`. The isolate's virtual clock
+    /// does not call this (`docs/spec/stdlib/Puy.Testing/README.md` chapter 6).
+    fn sleep(&mut self, nanos: u64) -> HostFuture<()> {
+        let _ = nanos;
+        ready(Err(HostError::unsupported(
+            "sleeping is not available on this target",
+        )))
+    }
 }
 
 /// Source of randomness (synchronous; §8.9). Failure is a `HostError`, which the VM treats as a
@@ -207,6 +256,10 @@ pub trait MemoryStats {
     fn current(&self) -> Option<usize>;
     fn peak(&self) -> Option<usize>;
     fn limit(&self) -> Option<usize>;
+    /// Bytes kept below the process limit for runtime allocations. `None` means unspecified.
+    fn reserve(&self) -> Option<usize> {
+        None
+    }
 }
 
 /// The mark of an allocation whose failure the caller handles (`docs/design/host-interface.md`
@@ -216,7 +269,50 @@ pub trait MemoryStats {
 /// as the fatal failure of an allocation inside Rust (F0003). An embedder's allocator may ignore
 /// the mark.
 pub mod alloc {
+    use std::alloc::{GlobalAlloc, Layout, System};
     use std::cell::Cell;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static ALLOCATED: AtomicUsize = AtomicUsize::new(0);
+    static PEAK: AtomicUsize = AtomicUsize::new(0);
+
+    /// Shared allocator accounting for the runtimes. An executable installs this as its global
+    /// allocator or delegates to it from a wrapper that handles allocation failures.
+    pub struct CountingAlloc;
+
+    // SAFETY: delegates to System; the accounting only records successful allocations.
+    unsafe impl GlobalAlloc for CountingAlloc {
+        unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+            let ptr = unsafe { System.alloc(layout) };
+            if !ptr.is_null() {
+                let now = ALLOCATED.fetch_add(layout.size(), Ordering::Relaxed) + layout.size();
+                PEAK.fetch_max(now, Ordering::Relaxed);
+            }
+            ptr
+        }
+
+        unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+            ALLOCATED.fetch_sub(layout.size(), Ordering::Relaxed);
+            unsafe { System.dealloc(ptr, layout) }
+        }
+    }
+
+    /// Process-wide usage of an executable using [`CountingAlloc`] as its global allocator.
+    pub struct ProcessMemory;
+
+    impl super::MemoryStats for ProcessMemory {
+        fn current(&self) -> Option<usize> {
+            Some(ALLOCATED.load(Ordering::Relaxed))
+        }
+
+        fn peak(&self) -> Option<usize> {
+            Some(PEAK.load(Ordering::Relaxed))
+        }
+
+        fn limit(&self) -> Option<usize> {
+            None
+        }
+    }
 
     thread_local! {
         // A const initializer with no destructor: reading it from inside the global allocator
@@ -238,8 +334,113 @@ pub mod alloc {
     }
 }
 
+/// Why a capability of a `HostSet` is `None` (`docs/design/stdlib.md` 3.4.2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum Absent {
+    /// The target does not have it (the file system in the browser).
+    Unsupported,
+    /// The embedder did not grant it (§6.1). The default: a capability nobody passed is one not
+    /// granted.
+    #[default]
+    NoPermission,
+}
+
+impl Absent {
+    /// The error an operation of the missing capability fails with.
+    pub fn error(self, what: &str) -> HostError {
+        match self {
+            Absent::Unsupported => {
+                HostError::unsupported(format!("{what} is not available on this target"))
+            }
+            Absent::NoPermission => HostError::new(
+                HostErrorKind::NoPermission,
+                format!("{what} is not permitted by the host"),
+            ),
+        }
+    }
+}
+
+/// A capability of a `HostSet` (one per field).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Capability {
+    Console,
+    Env,
+    Clock,
+    Random,
+    Memory,
+    Fs,
+    Os,
+}
+
+impl Capability {
+    /// Every capability, in the order of the fields of `HostSet`.
+    pub const ALL: [Capability; 7] = [
+        Capability::Console,
+        Capability::Env,
+        Capability::Clock,
+        Capability::Random,
+        Capability::Memory,
+        Capability::Fs,
+        Capability::Os,
+    ];
+
+    /// The name of the field (`fs`), also used in error messages.
+    pub fn name(self) -> &'static str {
+        match self {
+            Capability::Console => "console",
+            Capability::Env => "env",
+            Capability::Clock => "clock",
+            Capability::Random => "random",
+            Capability::Memory => "memory",
+            Capability::Fs => "fs",
+            Capability::Os => "os",
+        }
+    }
+}
+
+/// Why each capability would be missing (read only for those that are `None`). The runtime that
+/// builds a `HostSet` marks what its target lacks as `Unsupported`; the rest stay `NoPermission`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub struct AbsentSet {
+    pub console: Absent,
+    pub env: Absent,
+    pub clock: Absent,
+    pub random: Absent,
+    pub memory: Absent,
+    pub fs: Absent,
+    pub os: Absent,
+}
+
+impl AbsentSet {
+    /// Every capability `Unsupported` (a runtime then lists what it has).
+    pub fn unsupported() -> Self {
+        let u = Absent::Unsupported;
+        AbsentSet {
+            console: u,
+            env: u,
+            clock: u,
+            random: u,
+            memory: u,
+            fs: u,
+            os: u,
+        }
+    }
+
+    pub fn get(&self, cap: Capability) -> Absent {
+        match cap {
+            Capability::Console => self.console,
+            Capability::Env => self.env,
+            Capability::Clock => self.clock,
+            Capability::Random => self.random,
+            Capability::Memory => self.memory,
+            Capability::Fs => self.fs,
+            Capability::Os => self.os,
+        }
+    }
+}
+
 /// Bundle of host capabilities (`docs/design/host-interface.md` 3.1). `None` means "no permission /
-/// not available on this target".
+/// not available on this target"; `absent` says which.
 #[derive(Default)]
 pub struct HostSet {
     pub console: Option<Box<dyn Console>>,
@@ -247,24 +448,88 @@ pub struct HostSet {
     pub clock: Option<Box<dyn Clock>>,
     pub random: Option<Box<dyn Random>>,
     pub memory: Option<Box<dyn MemoryStats>>,
+    pub fs: Option<Box<dyn Fs>>,
+    pub os: Option<Box<dyn Os>>,
+    pub absent: AbsentSet,
+    /// The test runner's side of the isolate of a test (`puy test`); `None` elsewhere. Not a
+    /// capability the embedder grants: what `Puy.Testing` asks the runner.
+    pub test: Option<Box<dyn TestRunner>>,
+}
+
+/// What `puy test` does for the isolate of a test (`docs/spec/test.md` 12): the snapshots of
+/// `Puy.Testing.AssertSnapshot`, whose files only the runner reads and writes.
+pub trait TestRunner {
+    /// Compares `actual` with the stored snapshot of the running test named by `name` (`None`:
+    /// the next of the unnamed ones), made by the call at `file`:`line`. `Ok(None)` when they are
+    /// equal or the snapshot was written (`--update`), `Ok(Some(message))` when the test fails
+    /// with `message` (a different or missing snapshot), `Err` when its file cannot be read or
+    /// written.
+    fn snapshot(
+        &mut self,
+        name: Option<&str>,
+        actual: &str,
+        file: &str,
+        line: u32,
+    ) -> Result<Option<String>, HostError>;
 }
 
 impl HostSet {
-    /// A `HostSet` that can do nothing (the embedding default; §6.1).
+    /// A `HostSet` that can do nothing (the embedding default; §6.1): every capability is missing
+    /// as not granted.
     pub fn empty() -> Self {
         Self::default()
+    }
+
+    /// Whether `cap` is there.
+    pub fn has(&self, cap: Capability) -> bool {
+        match cap {
+            Capability::Console => self.console.is_some(),
+            Capability::Env => self.env.is_some(),
+            Capability::Clock => self.clock.is_some(),
+            Capability::Random => self.random.is_some(),
+            Capability::Memory => self.memory.is_some(),
+            Capability::Fs => self.fs.is_some(),
+            Capability::Os => self.os.is_some(),
+        }
+    }
+
+    /// Why `cap` is missing; `None` when it is there.
+    pub fn absent(&self, cap: Capability) -> Option<Absent> {
+        (!self.has(cap)).then(|| self.absent.get(cap))
+    }
+
+    /// The file system, or the error of its absence.
+    pub fn fs(&mut self) -> Result<&mut dyn Fs, HostError> {
+        let absent = self.absent.fs;
+        match self.fs.as_deref_mut() {
+            Some(fs) => Ok(fs),
+            None => Err(absent.error("the file system")),
+        }
+    }
+
+    /// The OS information, or the error of its absence.
+    pub fn os(&mut self) -> Result<&mut dyn Os, HostError> {
+        let absent = self.absent.os;
+        match self.os.as_deref_mut() {
+            Some(os) => Ok(os),
+            None => Err(absent.error("the OS information")),
+        }
     }
 }
 
 impl fmt::Debug for HostSet {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("HostSet")
-            .field("console", &self.console.is_some())
-            .field("env", &self.env.is_some())
-            .field("clock", &self.clock.is_some())
-            .field("random", &self.random.is_some())
-            .field("memory", &self.memory.is_some())
-            .finish()
+        let mut d = f.debug_struct("HostSet");
+        for cap in Capability::ALL {
+            match self.absent(cap) {
+                None => d.field(cap.name(), &"present"),
+                Some(a) => d.field(cap.name(), &a),
+            };
+        }
+        if self.test.is_some() {
+            d.field("test", &"present");
+        }
+        d.finish()
     }
 }
 
@@ -330,6 +595,47 @@ mod tests {
         });
         assert_eq!(inner, (true, true));
         assert!(!alloc::in_fallible());
+    }
+
+    // A `None` capability fails with the kind its `absent` says; `empty()` marks every one as
+    // not granted.
+    #[test]
+    fn absent_capability_errors_by_reason() {
+        let mut host = HostSet::empty();
+        for cap in Capability::ALL {
+            assert_eq!(host.absent(cap), Some(Absent::NoPermission), "{cap:?}");
+        }
+        assert_eq!(
+            host.fs().err().map(|e| e.kind),
+            Some(HostErrorKind::NoPermission)
+        );
+        host.absent = AbsentSet::unsupported();
+        assert_eq!(
+            host.fs().err().map(|e| e.kind),
+            Some(HostErrorKind::Unsupported)
+        );
+        assert_eq!(
+            host.os().err().map(|e| e.kind),
+            Some(HostErrorKind::Unsupported)
+        );
+        assert_eq!(
+            format!("{host:?}"),
+            "HostSet { console: Unsupported, env: Unsupported, clock: Unsupported, \
+             random: Unsupported, memory: Unsupported, fs: Unsupported, os: Unsupported }"
+        );
+    }
+
+    // A capability that is there has no `absent`, whatever the mark says.
+    #[test]
+    fn present_capability_has_no_absent() {
+        let host = HostSet {
+            random: Some(Box::new(Counter(0))),
+            absent: AbsentSet::unsupported(),
+            ..HostSet::empty()
+        };
+        assert_eq!(host.absent(Capability::Random), None);
+        assert_eq!(host.absent(Capability::Clock), Some(Absent::Unsupported));
+        assert!(format!("{host:?}").contains("random: \"present\""));
     }
 
     #[test]

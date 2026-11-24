@@ -1,0 +1,17 @@
+error[E0700]: undeclared identifier `TReplaceFlag`
+  --> sysutils_enum_low_high_no_uses.pas:4:13
+   |
+ 4 | WriteLn(Low(TReplaceFlag));
+   |             ^^^^^^^^^^^^
+   |
+   = fix: add `uses System.SysUtils`
+
+error[E0700]: undeclared identifier `TIOErrorKind`
+  --> sysutils_enum_low_high_no_uses.pas:5:14
+   |
+ 5 | WriteLn(High(TIOErrorKind));
+   |              ^^^^^^^^^^^^
+   |
+   = fix: add `uses System.SysUtils`
+
+error: aborting due to 2 errors

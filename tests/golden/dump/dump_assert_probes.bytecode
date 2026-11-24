@@ -1,0 +1,127 @@
+; puyc format 0
+.const
+  0: str "assertion failed: (N + 1 - P.X = 3) or (Same(P) and (P.C = TColor.Green))"
+  1: str "N + 1 - P.X"
+  2: str "N + 1"
+  3: str "N"
+  4: str "P.X"
+  5: str "Same(P)"
+  6: str "P"
+  7: str "P.C"
+.type
+  64: record DumpAssertProbes.TPoint slots=2
+.debug
+  dt1: int
+  dt2: bool
+  dt3: record flat=2 X:dt1@0 C:dt4@1
+  dt4: enum Red=0 Green=1
+.global
+  0: ref P
+  1: int N
+.host
+.unit DumpAssertProbes file="dump_assert_probes.pas" init=- fini=- entry=0
+.func 0 DumpAssertProbes.<main> params=0 regs=22
+  .line 23
+  0000  LoadInt      r11, 1
+  0001  StoreGlobal  r11, g1
+  .line 24
+  0002  LoadInt      r11, 2
+  0003  LoadGlobal   r12, g0
+  0004  Unique       r12, ty64
+  0005  StoreGlobal  r12, g0
+  0006  FieldSet     r12, 0, r11
+  .line 25
+  0007  LoadZero     r17
+  0008  LoadZero     r18
+  0009  LoadGlobal   r13, g1
+  000a  AddIntI      r12, r13, 1
+  000b  NarrowOvf    r12, r12, 4
+  000c  LoadGlobal   r20, g0
+  000d  FieldGet     r14, r20, 0
+  000e  SubInt       r11, r12, r14
+  000f  NarrowOvf    r11, r11, 4
+  0010  JmpIfEqIntI  r11, 3, -> 0054
+  0011  LoadInt      r17, 1
+  0012  LoadGlobalRef r0, g0
+  0013  AssignRef    r1, r0
+  0014  Move         r19, r1
+  .inline f1 DumpAssertProbes.Same line=25
+  .line 16
+  0015  FieldGet     r20, r19, 0
+  0016  LoadInt      r21, 2
+  0017  EqInt        r20, r20, r21
+  .line 17
+  0018  Move         r15, r20
+  0019  JmpIfFalse   r15, -> 001e
+  .endinline
+  .line 25
+  001a  LoadInt      r18, 1
+  001b  LoadGlobal   r19, g0
+  001c  FieldGet     r16, r19, 1
+  001d  JmpIfEqIntI  r16, 1, -> 0054
+  001e  LoadConst    r2, k0
+  001f  New          r3, ty7
+  0020  ObjSetRef    r3, 0, r2
+  0021  LoadConst    r4, k1
+  0022  Move         r19, r4
+  0023  Move         r20, r11
+  0024  LoadInt      r21, 1
+  0025  AssertValue  r3, r19
+  0026  LoadConst    r5, k2
+  0027  Move         r19, r5
+  0028  Move         r20, r12
+  0029  LoadInt      r21, 1
+  002a  AssertValue  r3, r19
+  002b  LoadConst    r6, k3
+  002c  Move         r19, r6
+  002d  Move         r20, r13
+  002e  LoadInt      r21, 1
+  002f  AssertValue  r3, r19
+  0030  LoadConst    r7, k4
+  0031  Move         r19, r7
+  0032  Move         r20, r14
+  0033  LoadInt      r21, 1
+  0034  AssertValue  r3, r19
+  0035  LoadConst    r8, k5
+  0036  Move         r19, r8
+  0037  JmpIfFalse   r17, -> 003c
+  0038  Move         r20, r15
+  0039  LoadInt      r21, 2
+  003a  AssertValue  r3, r19
+  003b  Jmp          -> 003f
+  003c  LoadZero     r20
+  003d  LoadZero     r21
+  003e  AssertValue  r3, r19
+  003f  LoadConst    r9, k6
+  0040  Move         r19, r9
+  0041  JmpIfFalse   r17, -> 0046
+  0042  Move         r20, r0
+  0043  LoadInt      r21, 3
+  0044  AssertValue  r3, r19
+  0045  Jmp          -> 0049
+  0046  LoadZero     r20
+  0047  LoadZero     r21
+  0048  AssertValue  r3, r19
+  0049  LoadConst    r10, k7
+  004a  Move         r19, r10
+  004b  JmpIfFalse   r18, -> 0050
+  004c  Move         r20, r16
+  004d  LoadInt      r21, 4
+  004e  AssertValue  r3, r19
+  004f  Jmp          -> 0053
+  0050  LoadZero     r20
+  0051  LoadZero     r21
+  0052  AssertValue  r3, r19
+  0053  Raise        r3
+  .line 26
+  0054  RetVoid
+.finally r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10
+.func 1 DumpAssertProbes.Same params=1 regs=3
+  .local r0 Q
+  .local r1 Result
+  .line 16
+  0000  FieldGet     r1, r0, 0
+  0001  LoadInt      r2, 2
+  0002  EqInt        r1, r1, r2
+  .line 17
+  0003  Ret          r1

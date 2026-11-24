@@ -1,0 +1,29 @@
+error: `--filter` is only available with `test`
+
+Usage: puy <command> [options] [args]
+       puy [options] <file> [args...]        (same as `puy run`)
+       puy [options] -e '<statements>' [args...]
+
+Commands:
+  run <file|-> [args...]   Compile and run a program (`-` reads the source from stdin)
+  check <file|->           Type-check only (`--dump tokens|cst|hir|ir|bytecode` prints a stage)
+  fix <file>               Apply safe fixes to the file
+  test [paths...]          Run the tests of the package (or the test files given)
+  explain <code>           Explain an error code
+
+Options:
+  --format text|json       Output format for diagnostics and test reports (default: text)
+  --color auto|always|never
+  --define NAME            Define a conditional symbol (repeatable)
+  --stdout-buffering auto|line|full|none
+  --keep-line-endings      `fix`: keep the file's line endings
+  --filter TEXT            `test`: run the tests whose names contain TEXT (repeatable)
+  --exact                  `test`: `--filter` matches whole names
+  --seed N                 `test`: the seed of the run (an Int64)
+  --timeout SECONDS        `test`: time limit of each test (default 60; 0 for none)
+  --show-output            `test`: print the output of every test
+  --junit FILE             `test`: write a JUnit XML report to FILE
+  --update                 `test`: write the snapshots that differ or are missing
+  -V, --version            Print the version
+  -h, --help               Print this help
+

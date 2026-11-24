@@ -1,13 +1,13 @@
 error[E3200]: type helpers for built-in types are not supported yet (planned for M5)
-   --> unsupported_m2.pas:14:8
+   --> unsupported_m2.pas:15:8
     |
- 14 |   Z := I.ToHexString;
+ 15 |   Z := C.ToHexString;
     |        ^^^^^^^^^^^^^
 
 error[E0732]: `raise` without an exception is only allowed in an `except` block
-   --> unsupported_m2.pas:16:3
+   --> unsupported_m2.pas:17:3
     |
- 16 |   raise;
+ 17 |   raise;
     |   ^^^^^
 
 error: aborting due to 2 errors

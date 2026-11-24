@@ -1,0 +1,18 @@
+TRUE FALSE TRUE TRUE FALSE
+TRUE FALSE TRUE FALSE
+TRUE FALSE TRUE FALSE FALSE
+TRUE TRUE TRUE TRUE TRUE TRUE
+3 5 0 6 0
+0 0 0 0
+1 -1 1 -1 1
+FALSE TRUE TRUE
+2 2 FALSE TRUE
+[xAx] [xxx] [abc] [aa] [bbbb] [--]
+[he] [hello] [] []
+[lo] [hello] [] []
+[ell] [he] [hel] [lo] [] []
+[a] [c] [b]
+[ababab] [ab] [] [] [] [3000]
+[cba] [] [a] [ba]
+[aXYef] [abcX] []
+[yes] [no] []

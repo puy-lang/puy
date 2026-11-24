@@ -1,0 +1,24 @@
+default: 61 0A C3 A9 0A
+UTF8: EF BB BF 61 0A C3 A9 0A
+Unicode: FF FE 61 00 0A 00 E9 00 0A 00
+BigEndianUnicode: FE FF 00 61 00 0A 00 E9 00 0A
+CR LF: 61 0D 0A C3 A9 0D 0A
+UTF-16LE (2): [a] [é]
+UTF-16LE
+saved again: FF FE 61 00 0A 00 E9 00 0A 00
+UTF-8 BOM (2): [x] [y]
+TRUE
+given UTF8 (1): [��x]
+invalid (1): [x�]
+TRUE
+from the position (2): [b] [c]
+empty (0):
+file (2): [a] [é]
+UTF-16BE TRUE
+UTF-16BE FALSE
+UTF-16BE FALSE
+own copy: FE FF 00 61 00 0A 00 E9 00 0A
+file given (2): [a] [é]
+14
+EFOpenError TRUE
+kept (3): [a] [é] [c]

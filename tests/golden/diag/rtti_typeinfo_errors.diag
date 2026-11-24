@@ -1,0 +1,57 @@
+error[E0776]: `TypeInfo` expects a type
+   --> rtti_typeinfo_errors.pas:21:17
+    |
+ 21 |   P := TypeInfo(X);
+    |                 ^
+
+error[E0776]: `TypeInfo` expects a type
+   --> rtti_typeinfo_errors.pas:22:17
+    |
+ 22 |   P := TypeInfo(1 + 2);
+    |                 ^^^^^
+
+error[E0753]: a helper cannot be used as a type
+   --> rtti_typeinfo_errors.pas:24:17
+    |
+ 24 |   P := TypeInfo(TIntHelper);
+    |                 ^^^^^^^^^^
+
+error[E0702]: type mismatch: expected an ordinal type, found `PTypeInfo` (argument 1, parameter `X`)
+   --> rtti_typeinfo_errors.pas:25:12
+    |
+ 25 |   I := Ord(P);
+    |            ^
+
+error[E0703]: operator `<` cannot be applied to `PTypeInfo` and `PTypeInfo`
+   --> rtti_typeinfo_errors.pas:26:13
+    |
+ 26 |   WriteLn(P < P);
+    |             ^
+
+error[E0718]: cannot write a value of type `PTypeInfo`
+   --> rtti_typeinfo_errors.pas:27:11
+    |
+ 27 |   WriteLn(P);
+    |           ^
+
+error[E0724]: a value of type `PTypeInfo` cannot be converted to `Integer`
+   --> rtti_typeinfo_errors.pas:28:8
+    |
+ 28 |   I := Integer(P);
+    |        ^^^^^^^^^^
+
+error[E0703]: operator `+` cannot be applied to `PTypeInfo` and `Integer`
+   --> rtti_typeinfo_errors.pas:29:10
+    |
+ 29 |   P := P + 1;
+    |          ^
+
+error[E3004]: `^` is not supported in Puy
+   --> rtti_typeinfo_errors.pas:30:12
+    |
+ 30 |   WriteLn(P^);
+    |            ^
+    |
+    = note: use a class, a dynamic array or a `var` parameter instead
+
+error: aborting due to 9 errors

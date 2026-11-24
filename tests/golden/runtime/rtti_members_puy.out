@@ -1,0 +1,37 @@
+fields: Inner Tags Val Node Peer
+properties: Count Computed
+methods: Create Destroy Make Create Destroy
+TObject: 2 Create
+same objects: TRUE TRUE Node
+no member: TRUE TRUE TRUE TRUE
+Area()
+Scale(Factor: Integer [ ] Xs: array of System.Integer [ 1 2 ] )
+record method: Len
+TList<System.Integer> | System.Generics.Collections.TList<System.Integer> | System.Generics.Collections.TList | 1 System.Integer
+TRUE TRUE
+not generic: "" 0
+TSmall TKind 0..1 1
+names: kA kB
+kB 2
+UInt64 5 0 -1
+4 string
+TProcT 2 S TRUE
+TFuncT Boolean 21
+TObject TBox
+TPoint TRUE TRUE TRUE TRUE
+2 2 40 1
+1 40 41
+2b
+inner inner TRUE
+node node
+weak after: (gone)
+21 21 TRUE FALSE
+read only: EInvalidOperation: property `Computed` is not writable
+by a method: 42
+wrong value: EInvalidCast: invalid type cast: `TValue` of `Integer` to `TArray<System.string>`
+wrong instance: EInvalidCast: invalid type cast: `TValue` of `TBox` to `TPoint`
+nil: EAccessViolation: access to a nil reference
+empty: EAccessViolation: access to a nil reference
+as record: EInvalidCast: `TBox` is not a record type
+no value: EArgumentException: `kZ` is not a value of `TKind`
+freed: EAccessViolation: access to a freed object

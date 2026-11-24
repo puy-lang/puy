@@ -13,6 +13,7 @@ program DumpValueEquality
   .field 3 Owner: TObject
   .method f0 Equals override 4
   .method f1 GetHashCode override 5
+.global g0 S: TShape
 .routine f0 TShape.Equals(Obj: TObject): Boolean
   .var v0 Self: TShape self
   .var v1 Obj: TObject param
@@ -306,3 +307,13 @@ program DumpValueEquality
         field Single F #1
           var v0 X: TInner
 .routine <main>
+  if @34
+    cond
+      binary Boolean
+        builtin ParamCount Integer
+        > Boolean int:Integer
+          const Integer 100
+    then
+      assign @35 R+
+        global g0 S
+        create TShape builtin

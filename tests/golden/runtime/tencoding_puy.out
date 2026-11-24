@@ -1,0 +1,36 @@
+UTF8 lone (8): 61 EF BF BD 62 EF BF BD
+Unicode lone (8): 61 00 00 D8 62 00 00 DE
+Unicode lone back: 0061 D800 0062 DE00
+UTF8 invalid: 0061 FFFD FFFD 0062 FFFD
+UTF16 odd: 0061 FFFD
+UTF16BE odd: 0061 FFFD
+ASCII (5): 61 3F 3F 3F 7A
+ASCII back: 0061 003F 003F 007F
+strict (7): 61 C3 A9 F0 9F 98 80
+strict preamble (3): EF BB BF
+EEncodingError: the unpaired surrogate $DC00 at position 3 cannot be encoded as UTF-8
+EEncodingError: invalid UTF-8 at byte 2
+EEncodingError: invalid UTF-8 at byte 4
+clone: the unpaired surrogate $D800 at position 1 cannot be encoded as UTF-8
+Default (2): C3 A9
+Default preamble (0):
+65001 FALSE TRUE TRUE
+UTF-8 65001 TUTF8Encoding FALSE
+UTF-8 65001 TUTF8Encoding FALSE
+UTF-8 65001 TUTF8Encoding FALSE
+UTF-16LE 1200 TUnicodeEncoding FALSE
+UTF-16BE 1201 TBigEndianUnicodeEncoding FALSE
+US-ASCII 20127 TASCIIEncoding TRUE
+0 US-ASCII
+0 UTF-8
+0,3: [abc]
+3,0: []
+-1,1: byte index -1 and count 1 are out of the bounds of 3 bytes
+0,-1: byte index 0 and count -1 are out of the bounds of 3 bytes
+2,2: byte index 2 and count 2 are out of the bounds of 3 bytes
+4,0: byte index 4 and count 0 are out of the bounds of 3 bytes
+65001 TUTF8Encoding FALSE
+1200 TUnicodeEncoding FALSE
+1201 TBigEndianUnicodeEncoding FALSE
+20127 TASCIIEncoding FALSE
+ENotSupportedException: code page 932 is not supported

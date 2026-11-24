@@ -160,6 +160,8 @@ pub struct DirectiveOutput {
     pub placements: Vec<(TextSize, Placement)>,
     /// Ranges of conditional compilation blocks (from the opening directive to the end of the matching `{$ENDIF}`; to the end of the file if unclosed).
     pub blocks: Vec<TextRange>,
+    /// Bodies of active first branches opened by `{$IFDEF UNICODE}` or `{$IF Defined(UNICODE)}`.
+    pub unicode_guard_ranges: Vec<TextRange>,
     /// When `INACTIVE` runs to the end of the file because of E0203, its start position (syntax errors after it are suppressed).
     pub suppress_after: Option<TextSize>,
     /// Included files and the position of `{$I}` in the file passed to `puy` (same as in `ProcessContext`).
@@ -177,6 +179,10 @@ impl DirectiveOutput {
     /// Whether the position is inside a conditional compilation block.
     pub fn in_conditional_block(&self, pos: TextSize) -> bool {
         self.blocks.iter().any(|b| b.contains(pos))
+    }
+
+    pub(crate) fn in_unicode_guard(&self, pos: TextSize) -> bool {
+        self.unicode_guard_ranges.iter().any(|r| r.contains(pos))
     }
 }
 
@@ -222,11 +228,13 @@ pub fn process(file: FileId, tokens: Vec<Token>, cx: &mut ProcessContext<'_>) ->
         vec![root_path],
     );
     let (tokens, placements, blocks, suppress_after) = fp.run();
+    let unicode_guard_ranges = std::mem::take(&mut fp.unicode_guard_ranges);
     DirectiveOutput {
         tokens,
         switches: table,
         placements,
         blocks,
+        unicode_guard_ranges,
         suppress_after,
         include_positions: std::mem::take(&mut cx.include_positions),
     }
@@ -248,6 +256,16 @@ struct CondFrame {
     taken: bool,
     active: bool,
     seen_else: bool,
+    /// End of the opening directive, until the first branch closes.
+    unicode_guard_start: Option<TextSize>,
+}
+
+impl CondFrame {
+    fn close_unicode_guard(&mut self, end: TextSize) -> Option<TextRange> {
+        self.unicode_guard_start
+            .take()
+            .map(|start| TextRange::new(start, end))
+    }
 }
 
 struct FileProcessor<'c, 'a> {
@@ -267,6 +285,7 @@ struct FileProcessor<'c, 'a> {
     inactive_start: Option<u32>,
     placements: Vec<(TextSize, Placement)>,
     blocks: Vec<TextRange>,
+    unicode_guard_ranges: Vec<TextRange>,
     /// Number of evaluated (active-range) uses of compiler-identification symbols (for the `notes` of W0007).
     compiler_symbol_uses: usize,
     /// W0007 for the first use (issued at the end of the file, with a note on the remaining count).
@@ -305,6 +324,7 @@ impl<'c, 'a> FileProcessor<'c, 'a> {
             inactive_start: None,
             placements: Vec::new(),
             blocks: Vec::new(),
+            unicode_guard_ranges: Vec::new(),
             compiler_symbol_uses: 0,
             pending_w7: None,
             changed: false,
@@ -413,7 +433,9 @@ impl<'c, 'a> FileProcessor<'c, 'a> {
             .with_secondary(self.span_of(start), "starts here");
             self.cx.sink.push(d);
         }
-        for f in self.stack.drain(..) {
+        for mut f in self.stack.drain(..) {
+            self.unicode_guard_ranges
+                .extend(f.close_unicode_guard(eof.range.start()));
             if f.kept {
                 self.blocks
                     .push(TextRange::new(f.start.start(), eof_pos.into()));
@@ -465,6 +487,7 @@ impl<'c, 'a> FileProcessor<'c, 'a> {
                         taken: true,
                         active: false,
                         seen_else: false,
+                        unicode_guard_start: None,
                     });
                     return;
                 }
@@ -475,11 +498,17 @@ impl<'c, 'a> FileProcessor<'c, 'a> {
                         block_start: tok.range.start(),
                     },
                 ));
-                let cond = if upper == "IF" {
+                let expr::Evaluation {
+                    value: cond,
+                    is_unicode_guard,
+                } = if upper == "IF" {
                     self.eval_if(tok, &args, args_start)
                 } else {
                     let defined = self.eval_ifdef(tok, &args, args_start);
-                    if upper == "IFDEF" { defined } else { !defined }
+                    expr::Evaluation {
+                        value: if upper == "IFDEF" { defined } else { !defined },
+                        is_unicode_guard: upper == "IFDEF" && args.eq_ignore_ascii_case("UNICODE"),
+                    }
                 };
                 self.stack.push(CondFrame {
                     start: tok.range,
@@ -488,6 +517,7 @@ impl<'c, 'a> FileProcessor<'c, 'a> {
                     taken: cond,
                     active: cond,
                     seen_else: false,
+                    unicode_guard_start: (cond && is_unicode_guard).then_some(tok.range.end()),
                 });
                 if !cond {
                     self.begin_inactive(tok.end());
@@ -507,6 +537,8 @@ impl<'c, 'a> FileProcessor<'c, 'a> {
                 self.placements
                     .push((tok.range.start(), Placement::Conditional { block_start }));
                 let frame = self.stack.last_mut().unwrap();
+                self.unicode_guard_ranges
+                    .extend(frame.close_unicode_guard(tok.range.start()));
                 if frame.seen_else {
                     frame.active = false;
                     frame.taken = true;
@@ -533,7 +565,7 @@ impl<'c, 'a> FileProcessor<'c, 'a> {
                     let active = if taken {
                         false
                     } else {
-                        self.eval_if(tok, &args, args_start)
+                        self.eval_if(tok, &args, args_start).value
                     };
                     let frame = self.stack.last_mut().unwrap();
                     frame.active = active;
@@ -555,7 +587,9 @@ impl<'c, 'a> FileProcessor<'c, 'a> {
                 }
                 self.flush_inactive(tok.start());
                 self.out.push(tok);
-                let frame = self.stack.pop().unwrap();
+                let mut frame = self.stack.pop().unwrap();
+                self.unicode_guard_ranges
+                    .extend(frame.close_unicode_guard(tok.range.start()));
                 self.placements.push((
                     tok.range.start(),
                     Placement::Conditional {
@@ -1139,6 +1173,7 @@ impl<'c, 'a> FileProcessor<'c, 'a> {
             taken: cond,
             active: cond,
             seen_else: false,
+            unicode_guard_start: None,
         });
         if !cond {
             self.begin_inactive(tok.end());
@@ -1205,7 +1240,7 @@ impl<'c, 'a> FileProcessor<'c, 'a> {
     }
 
     /// The expression of `{$IF}` / `{$ELSEIF}`.
-    fn eval_if(&mut self, tok: Token, args: &str, args_start: u32) -> bool {
+    fn eval_if(&mut self, tok: Token, args: &str, args_start: u32) -> expr::Evaluation {
         struct Cx<'x, 'c, 'a> {
             fp: &'x mut FileProcessor<'c, 'a>,
             base: u32,
@@ -1232,7 +1267,7 @@ impl<'c, 'a> FileProcessor<'c, 'a> {
         };
         let result = expr::evaluate(args, &mut cx);
         match result {
-            Ok(v) => {
+            Ok(evaluated) => {
                 // An OS, CPU, or compiler symbol written in `Defined()` is always false, so
                 // instead of using the result evaluated as defined, re-evaluate with the real definitions
                 struct Real<'x, 'c, 'a> {
@@ -1248,11 +1283,14 @@ impl<'c, 'a> FileProcessor<'c, 'a> {
                     }
                 }
                 let mut real = Real { fp: self };
-                expr::evaluate(args, &mut real).unwrap_or(v)
+                expr::evaluate(args, &mut real).unwrap_or(evaluated)
             }
             Err(e) => {
                 self.if_error(tok, args, args_start, e);
-                false
+                expr::Evaluation {
+                    value: false,
+                    is_unicode_guard: false,
+                }
             }
         }
     }

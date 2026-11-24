@@ -1,0 +1,13 @@
+error[E0707]: cannot assign to `E.Values`
+   --> assert_values_errors.pas:14:7
+    |
+ 14 |       E.Values := V;
+    |       ^^^^^^^^ not a variable
+
+error[E0700]: `Exception` has no member `Values`
+   --> assert_values_errors.pas:17:14
+    |
+ 17 |       V := E.Values;
+    |              ^^^^^^
+
+error: aborting due to 2 errors

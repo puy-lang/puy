@@ -1,0 +1,15 @@
+running 1 test (seed 1)
+ERROR Closer_test.SkipsThenFinalizationFails (Nms)
+
+---- Closer_test.SkipsThenFinalizationFails ----
+error: uncaught exception ESkipTest: not ready
+  at Puy.Testing.Skip (<stdlib>/Puy.Testing.pas:40)
+  at Closer_test.SkipsThenFinalizationFails (tests/Closer_test.pas:16)
+  at Closer_test.<test:SkipsThenFinalizationFails> (tests/Closer_test.pas:13)
+error: uncaught exception EInvalidOperation: closing failed
+  at Closer.<fini> (tests/Closer.pas:18)
+
+test result: FAILED. 0 ok; 0 failed; 1 errors; 0 skipped; 0 filtered out
+
+to run a failed test again:
+  puy test --seed 1 --filter 'Closer_test.SkipsThenFinalizationFails' --exact

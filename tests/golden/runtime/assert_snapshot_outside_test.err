@@ -1,0 +1,3 @@
+error: uncaught exception ENotSupportedException: AssertSnapshot is available only in a test that `puy test` runs
+  at Puy.Testing.AssertSnapshot#2 (<stdlib>/Puy.Testing/Snapshot.Implementation.inc:19)
+  at AssertSnapshotOutsideTest.<main> (assert_snapshot_outside_test.pas:15)

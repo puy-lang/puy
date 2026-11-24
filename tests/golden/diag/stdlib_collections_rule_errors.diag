@@ -7,24 +7,24 @@ error[E0707]: cannot assign to `P[0].X`
     = note: read the property into a variable, change it, and assign it back
 
 error[E0707]: cannot assign to `L[0..1]`
-    --> stdlib_collections_rule_errors.pas:32:3
-     |
-  32 |   L[0..1] := [1, 2];
-     |   ^^^^^^^ a read-only property
-    ::: <stdlib>/System.Generics.Collections.pas:147:14
- 147 |     property Items[const Range: TIndexRange]: TArray<T> read GetRange; default;
-     |              ----- declared here
+   --> stdlib_collections_rule_errors.pas:32:3
+    |
+ 32 |   L[0..1] := [1, 2];
+    |   ^^^^^^^ a read-only property
+   ::: <stdlib>/System.Generics.Collections/List.Interface.inc:98:14
+ 98 |     property Items[const Range: TIndexRange]: TArray<T> read GetRange; default;
+    |              ----- declared here
 
 error[E0734]: ambiguous call to overloaded `TObjectDictionary<TFoo, TFoo>.Create`
     --> stdlib_collections_rule_errors.pas:33:8
      |
   33 |   D := TObjectDictionary<TFoo, TFoo>.Create([]);
      |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    ::: <stdlib>/System.Generics.Collections.pas:467:17
- 467 |     constructor Create(const Values: array of TPair<K, V>); overload;
+    ::: <stdlib>/System.Generics.Collections/Owning.Interface.inc:90:17
+  90 |     constructor Create(Ownerships: TDictionaryOwnerships); overload;
      |                 ------ candidate
-...
- 620 |     constructor Create(Ownerships: TDictionaryOwnerships); overload;
+    ::: <stdlib>/System.Generics.Collections/Dictionary.Interface.inc:187:17
+ 187 |     constructor Create(const Values: array of TPair<K, V>); overload;
      |                 ------ candidate
 
 error[E0768]: `doOwnsKeys` needs a class type for the keys of `TObjectDictionary<string, TFoo>`, but `string` is not a class

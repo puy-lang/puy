@@ -1,0 +1,113 @@
+error[E0785]: `[Test]` can only be written on a procedure or a method
+   --> test_attr_place_test.pas:11:4
+    |
+ 11 |   [Test]
+    |    ^^^^
+
+error[E0785]: `[Test]` can only be written on a procedure or a method
+   --> test_attr_place_test.pas:13:6
+    |
+ 13 |     [Test]
+    |      ^^^^
+
+error[E0785]: `[Test]` can only be written on an instance method of a class
+   --> test_attr_place_test.pas:15:6
+    |
+ 15 |     [Test]
+    |      ^^^^
+
+error[E0785]: `[Test]` can only be written on an instance method of a class
+   --> test_attr_place_test.pas:17:6
+    |
+ 17 |     [Test]
+    |      ^^^^
+
+error[E0785]: `[TestCase]` cannot be written on a function
+   --> test_attr_place_test.pas:19:6
+    |
+ 19 |     [TestCase(1)]
+    |      ^^^^^^^^
+
+error[E0785]: `[Setup]` can only be written on an instance method of a class
+   --> test_attr_place_test.pas:21:6
+    |
+ 21 |     [Setup]
+    |      ^^^^^
+
+error[E0785]: `[Skip]` can only be written on a test
+   --> test_attr_place_test.pas:23:6
+    |
+ 23 |     [Skip]
+    |      ^^^^
+    |
+    = note: `[Skip]` goes with `[Test]` or `[TestCase]`
+
+error[E0785]: `[Setup]` cannot be written on a test
+   --> test_attr_place_test.pas:25:6
+    |
+ 25 |     [Setup]
+    |      ^^^^^
+
+error[E0785]: `[Test]` can only be written on a procedure or a method
+   --> test_attr_place_test.pas:28:6
+    |
+ 28 |     [Test]
+    |      ^^^^
+
+error[E0785]: `[Test]` can only be written on an instance method of a class
+   --> test_attr_place_test.pas:33:6
+    |
+ 33 |     [Test]
+    |      ^^^^
+
+error[E0785]: `[Test]` can only be written on an instance method of a class
+   --> test_attr_place_test.pas:38:6
+    |
+ 38 |     [Test]
+    |      ^^^^
+
+error[E0785]: `[Test]` cannot be written on a generic routine or a method of a generic type
+   --> test_attr_place_test.pas:43:6
+    |
+ 43 |     [Test]
+    |      ^^^^
+
+error[E0785]: `[Test]` cannot be written on an abstract method
+   --> test_attr_place_test.pas:48:6
+    |
+ 48 |     [Test]
+    |      ^^^^
+
+error[E0785]: `[Test]` cannot be written on a function
+   --> test_attr_place_test.pas:85:2
+    |
+ 85 | [Test]
+    |  ^^^^
+
+error[E0785]: `[Setup]` can only be written on a method of a class
+   --> test_attr_place_test.pas:91:2
+    |
+ 91 | [Setup]
+    |  ^^^^^
+
+error[E0785]: `[Test]` cannot be written on a generic routine or a method of a generic type
+   --> test_attr_place_test.pas:96:2
+    |
+ 96 | [Test]
+    |  ^^^^
+
+error[E0785]: `[Skip]` can only be written on a test
+    --> test_attr_place_test.pas:101:2
+     |
+ 101 | [Skip('why')]
+     |  ^^^^
+     |
+     = note: `[Skip]` goes with `[Test]` or `[TestCase]`
+
+error[E0785]: `[Test]` cannot be written on a method of a local type
+    --> test_attr_place_test.pas:120:6
+     |
+ 120 |     [Test]
+     |      ^^^^
+
+error: aborting due to 18 errors

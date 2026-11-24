@@ -1,6 +1,8 @@
 //! Bytecode (`docs/spec/bytecode.md`): instruction format, reading, writing and verifying modules (`.puyc`), and disassembly.
 
+pub mod debug;
 pub mod op;
+pub mod rtti;
 
 use std::fmt;
 
@@ -241,6 +243,9 @@ pub const CLASS_REF_COUNTED: u32 = 1;
 pub const CLASS_ABSTRACT: u32 = 2;
 /// `TypeEntry::flags` of a `sealed` class.
 pub const CLASS_SEALED: u32 = 4;
+/// `TypeEntry::flags` of a dynamic array whose elements are `Byte`s held one byte each
+/// (`docs/spec/bytecode.md` 2.9, 3.2; requirements §5.5).
+pub const DYN_BYTES: u32 = 1;
 
 /// The first reserved virtual method table entry: `VMT_BUILTIN + k` is the built-in body `k`
 /// (`docs/spec/objects.md` 14.1).
@@ -313,8 +318,8 @@ pub struct TypeEntry {
     /// The values of an enumeration in declaration order: (ordinal, name as declared). Empty for
     /// the other kinds.
     pub values: Vec<(i64, String)>,
-    /// The flags of a class ([`CLASS_REF_COUNTED`], [`CLASS_ABSTRACT`], [`CLASS_SEALED`]; 0 for
-    /// the other kinds).
+    /// The flags of a class ([`CLASS_REF_COUNTED`], [`CLASS_ABSTRACT`], [`CLASS_SEALED`]) or of a
+    /// dynamic array ([`DYN_BYTES`]); 0 for the other kinds.
     pub flags: u32,
     /// The virtual method table of a class (`docs/spec/objects.md` 14.1): function indexes or the
     /// reserved values ([`VMT_BUILTIN`] + k, [`VMT_ABSTRACT`]), the parent's entries first. Empty
@@ -371,6 +376,12 @@ impl TypeEntry {
         }
     }
 
+    /// Whether this is a dynamic array whose elements are `Byte`s held one byte each
+    /// ([`DYN_BYTES`]).
+    pub fn is_dyn_bytes(&self) -> bool {
+        self.kind == TYPE_DYNARRAY && self.flags & DYN_BYTES != 0
+    }
+
     /// The number of slots of an element of an array (its width; 1 for the other kinds, whose
     /// slots are the elements themselves).
     pub fn elem_width(&self) -> usize {
@@ -393,32 +404,37 @@ impl TypeEntry {
 }
 
 /// Built-in exception classes (`docs/spec/exceptions.md` chapter 2): the type index, the name,
-/// the parent and whether the class adds a slot (a string or not). Index 12 is
-/// `TArray<Exception>` ([`EXCEPTION_ARRAY_TYPE`]), so the M2b classes start at 13. They are
-/// reference counted classes; the parent of `Exception` is `TRefObject` (`docs/spec/objects.md`
-/// 8.1).
-pub const BUILTIN_EXCEPTIONS: &[(u32, &str, Option<u32>, Option<bool>)] = &[
-    (0, "Exception", Some(TREFOBJECT_TYPE), None),
-    (1, "EIntError", Some(0), None),
-    (2, "EDivByZero", Some(1), None),
-    (3, "ERangeError", Some(1), None),
-    (4, "EIntOverflow", Some(1), None),
-    (5, "EConvertError", Some(0), Some(true)),
-    (6, "EInOutError", Some(0), Some(false)),
-    (7, "EAssertionFailed", Some(0), None),
-    (8, "EStackOverflow", Some(0), None),
-    (9, "EOutOfMemory", Some(0), None),
-    (10, "ENotSupportedException", Some(0), None),
-    (11, "EAccessViolation", Some(0), None),
-    (13, "EMathError", Some(0), None),
-    (14, "EOverflow", Some(13), None),
-    (15, "EInvalidOp", Some(13), None),
-    (16, "EEncodingError", Some(0), None),
-    (17, "EZeroDivide", Some(13), None),
-    (18, "EAliasError", Some(0), None),
-    (21, "EInvalidCast", Some(0), None),
-    (22, "EAbstractError", Some(0), None),
-    (23, "EInvalidOperation", Some(0), None),
+/// the parent and the slots the class adds (`true` for a string, `false` for an integer).
+/// Index 12 is `TArray<Exception>` ([`EXCEPTION_ARRAY_TYPE`]), so the M2b classes start at 13;
+/// 19, 20 and 24–26 are other built-in types, so `EArgumentException` (M5-28) is 27.
+/// They are reference counted classes; the parent of `Exception` is `TRefObject`
+/// (`docs/spec/objects.md` 8.1).
+pub const BUILTIN_EXCEPTIONS: &[(u32, &str, Option<u32>, &[bool])] = &[
+    (0, "Exception", Some(TREFOBJECT_TYPE), &[]),
+    (1, "EIntError", Some(0), &[]),
+    (2, "EDivByZero", Some(1), &[]),
+    (3, "ERangeError", Some(1), &[]),
+    (4, "EIntOverflow", Some(1), &[]),
+    // `Value`
+    (5, "EConvertError", Some(0), &[true]),
+    // `ErrorCode`, `ErrorKind`
+    (6, "EInOutError", Some(0), &[false, false]),
+    (7, "EAssertionFailed", Some(0), &[]),
+    (8, "EStackOverflow", Some(0), &[]),
+    (9, "EOutOfMemory", Some(0), &[]),
+    // `ErrorKind`
+    (10, "ENotSupportedException", Some(0), &[false]),
+    (11, "EAccessViolation", Some(0), &[]),
+    (13, "EMathError", Some(0), &[]),
+    (14, "EOverflow", Some(13), &[]),
+    (15, "EInvalidOp", Some(13), &[]),
+    (16, "EEncodingError", Some(0), &[]),
+    (17, "EZeroDivide", Some(13), &[]),
+    (18, "EAliasError", Some(0), &[]),
+    (21, "EInvalidCast", Some(0), &[]),
+    (22, "EAbstractError", Some(0), &[]),
+    (23, "EInvalidOperation", Some(0), &[]),
+    (27, "EArgumentException", Some(0), &[]),
 ];
 
 /// The type index of the root class `TObject` (`docs/spec/objects.md` 14.1).
@@ -438,8 +454,14 @@ pub const TCUSTOMATTRIBUTE_TYPE: u32 = 25;
 /// `Last`, `HasFirst` and `HasLast`.
 pub const TINDEXRANGE_TYPE: u32 = 26;
 
+/// The type index of `TAssertionValue`, the record of an element of `EAssertionFailed.Values`
+/// (`docs/spec/exceptions.md` 2.1): the slots `Expr` and `Value` (strings).
+pub const TASSERTIONVALUE_TYPE: u32 = 28;
+/// The type index of `TArray<TAssertionValue>`, the array `EAssertionFailed.Values` returns.
+pub const ASSERTION_VALUES_TYPE: u32 = 29;
+
 /// One more than the largest type index of a built-in type.
-pub const BUILTIN_TYPE_END: u32 = 27;
+pub const BUILTIN_TYPE_END: u32 = 30;
 
 /// Type indexes of the built-in exception classes the VM raises.
 pub mod exc {
@@ -470,12 +492,15 @@ pub const EXCEPTION_ARRAY_TYPE: u32 = 12;
 /// Slot numbers of an exception object (`docs/spec/exceptions.md` 6.1).
 pub const EXC_SLOT_MESSAGE: u32 = 0;
 pub const EXC_SLOT_INNER: u32 = 1;
-/// The first slot a class adds (`EConvertError.Value`, `EInOutError.ErrorCode`).
+/// The first slot a class adds (`EConvertError.Value`, `EInOutError.ErrorCode` (then
+/// `ErrorKind`), `ENotSupportedException.ErrorKind`).
 pub const EXC_SLOT_EXTRA: u32 = 2;
 
 /// Information `ExcInfo` reads (`docs/spec/exceptions.md` 6.2).
 pub const EXC_INFO_STACK_TRACE: u32 = 0;
 pub const EXC_INFO_SUPPRESSED: u32 = 1;
+/// `EAssertionFailed.Values` (`docs/spec/exceptions.md` 2.1, 6.2).
+pub const EXC_INFO_VALUES: u32 = 2;
 
 /// How `ArraySortRange` (`I96`) compares the elements (its `r(B+2)`; `docs/spec/bytecode.md`
 /// 2.22): the slots as signed or unsigned 64-bit integers, as `Single` (the low 32 bits) or
@@ -487,6 +512,51 @@ pub const SORT_SINGLE: i64 = 2;
 pub const SORT_DOUBLE: i64 = 3;
 pub const SORT_STR: i64 = 4;
 pub const SORT_UTF8: i64 = 5;
+
+/// What `ClockControl` (`I151`) does (its `rB`; `docs/spec/bytecode.md` 2.22): stop the clock at
+/// the real time, stop it with the wall clock at `r(B+1)`, move both clocks `r(B+1)` nanoseconds
+/// on, set the wall clock to `r(B+1)`. `Puy.Testing` (puy-stdlib, `TTestClock`) and
+/// `System.SysUtils` (`Sleep`, the status only) name the same numbers: keep the three in step.
+pub const CLOCK_FREEZE: i64 = 0;
+pub const CLOCK_FREEZE_AT: i64 = 1;
+pub const CLOCK_ADVANCE: i64 = 2;
+pub const CLOCK_SET_NOW: i64 = 3;
+/// The status `ClockControl` (`I151`) and `ClockSleep` (`I152`) write to `rA`: done, the clock is
+/// not frozen (nothing to move), a clock would go past its range (nothing moved).
+pub const CLOCK_OK: i64 = 0;
+pub const CLOCK_NOT_FROZEN: i64 = 1;
+pub const CLOCK_OUT_OF_RANGE: i64 = 2;
+
+/// The functions of one `Double` that `MathF64` (`I97`) computes (its `r(B+1)`;
+/// `docs/spec/bytecode.md` 2.22). Any other number gives NaN. `MATH_INT` truncates toward zero,
+/// `MATH_FRAC` is `X - Int(X)`, `MATH_LN_XP1` is `Ln(1 + X)`. `System.Math.pas` (puy-stdlib) names
+/// the same numbers for `MathFunc1` / `MathFunc2`: keep the two in step.
+pub const MATH_SIN: i64 = 0;
+pub const MATH_COS: i64 = 1;
+pub const MATH_TAN: i64 = 2;
+pub const MATH_ARC_SIN: i64 = 3;
+pub const MATH_ARC_COS: i64 = 4;
+pub const MATH_ARC_TAN: i64 = 5;
+pub const MATH_SINH: i64 = 6;
+pub const MATH_COSH: i64 = 7;
+pub const MATH_TANH: i64 = 8;
+pub const MATH_ARC_SINH: i64 = 9;
+pub const MATH_ARC_COSH: i64 = 10;
+pub const MATH_ARC_TANH: i64 = 11;
+pub const MATH_EXP: i64 = 12;
+pub const MATH_LN: i64 = 13;
+pub const MATH_LOG10: i64 = 14;
+pub const MATH_LOG2: i64 = 15;
+pub const MATH_LN_XP1: i64 = 16;
+pub const MATH_INT: i64 = 17;
+pub const MATH_FRAC: i64 = 18;
+
+/// The functions of two `Double`s that `MathF64x2` (`I98`) computes (its `r(B+2)`;
+/// `docs/spec/bytecode.md` 2.22). Any other number gives NaN. `MATH2_ARC_TAN2` takes `Y` in `rB`
+/// and `X` in `r(B+1)`.
+pub const MATH2_ARC_TAN2: i64 = 0;
+pub const MATH2_POWER: i64 = 1;
+pub const MATH2_HYPOT: i64 = 2;
 
 /// The kinds of the elements of `Format`'s `array of const` (`docs/spec/bytecode.md` 2.16).
 /// Integers are `0..=7`, their width code of the `Narrow` family (2.2).
@@ -533,9 +603,7 @@ pub fn builtin_types() -> &'static [TypeEntry] {
         let mut v: Vec<TypeEntry> = (0..BUILTIN_TYPE_END).map(|_| empty()).collect();
         for (index, name, parent, extra) in BUILTIN_EXCEPTIONS {
             let mut refs = vec![SLOT_REF, SLOT_REF];
-            if let Some(r) = extra {
-                refs.push(u8::from(*r));
-            }
+            refs.extend(extra.iter().map(|&r| u8::from(r)));
             v[*index as usize] = TypeEntry {
                 kind: TYPE_CLASS,
                 slots: refs.len() as u32,
@@ -600,6 +668,20 @@ pub fn builtin_types() -> &'static [TypeEntry] {
             slots: 4,
             refs: vec![SLOT_PLAIN; 4],
             name: "TIndexRange".into(),
+            ..TypeEntry::default()
+        };
+        v[TASSERTIONVALUE_TYPE as usize] = TypeEntry {
+            kind: TYPE_RECORD,
+            slots: 2,
+            refs: vec![SLOT_REF; 2],
+            name: "TAssertionValue".into(),
+            ..TypeEntry::default()
+        };
+        v[ASSERTION_VALUES_TYPE as usize] = TypeEntry {
+            kind: TYPE_DYNARRAY,
+            refs: vec![SLOT_REF; 2],
+            width: 2,
+            name: "TArray<TAssertionValue>".into(),
             ..TypeEntry::default()
         };
         while v.len() < FIRST_TYPE_INDEX as usize {
@@ -788,6 +870,213 @@ pub struct HostEntry {
     pub ret: bool,
 }
 
+/// The kinds of the arguments and the result of an extension function (3.2, the extension
+/// function section; `docs/spec/extensions.md` 4): how the VM reads a register for the Rust
+/// function and makes its result a Pascal value.
+pub mod ext_kind {
+    /// No value (the result of a procedure).
+    pub const NONE: u8 = 0;
+    /// An ordinal in the slot: an integer, `Boolean`, `Char`, an enumeration.
+    pub const INT: u8 = 1;
+    /// `Single` (the `f32` bits).
+    pub const SINGLE: u8 = 2;
+    /// `Double` (the `f64` bits).
+    pub const DOUBLE: u8 = 3;
+    pub const STRING: u8 = 4;
+    pub const UTF8: u8 = 5;
+    /// `TBytes` (`array of Byte`).
+    pub const BYTES: u8 = 6;
+    /// An instance of a reference counted class (its handle, counted).
+    pub const OBJECT: u8 = 7;
+    /// A value of an anonymous method or method reference type (a callable value block).
+    pub const CALLABLE: u8 = 8;
+    /// A record, copied field by field ([`super::ExtShape`]).
+    pub const RECORD: u8 = 9;
+    /// A dynamic array other than `TBytes`, copied element by element ([`super::ExtShape`]).
+    pub const ARRAY: u8 = 10;
+    /// The largest kind.
+    pub const LAST: u8 = ARRAY;
+
+    /// Whether a value of kind `k` is described by a shape ([`super::ExtShape`]).
+    pub fn has_shape(k: u8) -> bool {
+        matches!(k, RECORD | ARRAY)
+    }
+
+    /// The name of a kind in the `bytecode` dump (5.2).
+    pub fn name(k: u8) -> &'static str {
+        match k {
+            NONE => "none",
+            INT => "int",
+            SINGLE => "single",
+            DOUBLE => "double",
+            STRING => "str",
+            UTF8 => "utf8",
+            BYTES => "bytes",
+            OBJECT => "obj",
+            CALLABLE => "callable",
+            RECORD => "record",
+            ARRAY => "array",
+            _ => "?",
+        }
+    }
+}
+
+/// A kind in the `bytecode` dump (5.2), with the range of an ordinal that has one:
+/// `int[0..255]`.
+fn ext_kind_text(k: u8, range: (i64, i64)) -> String {
+    if k == ext_kind::INT && range != FULL_RANGE {
+        format!("int[{}..{}]", range.0, range.1)
+    } else {
+        ext_kind::name(k).to_string()
+    }
+}
+
+/// An extension function (3.2, section 10): a `native` routine of an extension's unit, bound by
+/// name when the isolate is made (`docs/spec/extensions.md` 4).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExtEntry {
+    /// The name the unit declares it by (`Add`, `TCounter.Increment`).
+    pub name: String,
+    /// The extension unit (an index of [`Module::ext_units`]).
+    pub unit: u32,
+    /// The kinds of the arguments ([`ext_kind`]), `Self` first for a method.
+    pub params: Vec<u8>,
+    /// The kind of the result ([`ext_kind::NONE`] for a procedure).
+    pub ret: u8,
+    /// The type of the result, or [`NONE_INDEX`]: an extension class (of a result of kind
+    /// [`ext_kind::OBJECT`]: a Rust value given back is wrapped in a new instance of it), or the
+    /// dynamic array type of a result of kind [`ext_kind::BYTES`].
+    pub ret_type: u32,
+    /// The range of a result of kind [`ext_kind::INT`] (the declared type's; [`FULL_RANGE`] for
+    /// any other kind): a value outside it is an error of the extension (F0001).
+    pub ret_range: (i64, i64),
+    /// The signatures of the arguments of kind [`ext_kind::CALLABLE`], in order: how the VM
+    /// passes values to a callback and reads its result.
+    pub sigs: Vec<ExtSig>,
+    /// The shapes of the arguments of kind [`ext_kind::RECORD`] and [`ext_kind::ARRAY`], in
+    /// order, then that of the result if it is of one of these kinds: how the VM copies them.
+    pub shapes: Vec<ExtShape>,
+}
+
+impl ExtEntry {
+    /// The shape of argument `i` (of kind [`ext_kind::RECORD`] or [`ext_kind::ARRAY`]).
+    pub fn param_shape(&self, i: usize) -> Option<&ExtShape> {
+        let k = self.params[..i]
+            .iter()
+            .filter(|k| ext_kind::has_shape(**k))
+            .count();
+        self.shapes.get(k)
+    }
+
+    /// The shape of the result (of kind [`ext_kind::RECORD`] or [`ext_kind::ARRAY`]).
+    pub fn ret_shape(&self) -> Option<&ExtShape> {
+        if ext_kind::has_shape(self.ret) {
+            self.shapes.last()
+        } else {
+            None
+        }
+    }
+}
+
+/// The shape of a record or dynamic array an extension function takes or gives (3.2,
+/// `docs/spec/extensions.md` 3): how its fields or elements are laid out in the slots and of
+/// which kinds they are. A field or element is itself a shape: a leaf of kind
+/// [`ext_kind::INT`], [`ext_kind::SINGLE`], [`ext_kind::DOUBLE`], [`ext_kind::STRING`],
+/// [`ext_kind::UTF8`] or [`ext_kind::BYTES`], or another record or dynamic array.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExtShape {
+    pub kind: u8,
+    /// The record type of [`ext_kind::RECORD`], the dynamic array type of [`ext_kind::ARRAY`] and
+    /// [`ext_kind::BYTES`]; [`NONE_INDEX`] for the other kinds.
+    pub ty: u32,
+    /// The range of an ordinal ([`FULL_RANGE`] for the other kinds), as
+    /// [`ExtEntry::ret_range`].
+    pub range: (i64, i64),
+    /// The fields of a record in the order they are declared, the element of a dynamic array.
+    pub items: Vec<ExtShape>,
+}
+
+/// The deepest nesting of shapes (a record in a record …; `docs/spec/extensions.md` 3).
+pub const MAX_EXT_SHAPE_DEPTH: usize = 32;
+
+/// The most fields and elements a shape of an argument or a result has in all, nested ones
+/// included (`docs/spec/extensions.md` 3).
+pub const MAX_EXT_SHAPE_NODES: usize = 4096;
+
+impl ExtShape {
+    /// A shape without items.
+    pub fn leaf(kind: u8, ty: u32, range: (i64, i64)) -> ExtShape {
+        ExtShape {
+            kind,
+            ty,
+            range,
+            items: Vec::new(),
+        }
+    }
+
+    /// The number of slots a value of this shape takes in a record or an element of an array:
+    /// the slots of a record laid out flat (1 to [`MAX_FLAT_WIDTH`]; `docs/spec/bytecode.md`
+    /// 1.5), 1 for any other value.
+    pub fn width(&self, types: &[TypeEntry]) -> usize {
+        self.flat_slots(types).unwrap_or(1)
+    }
+
+    /// The slots of a record laid out flat in its containers, `None` for a value kept in one slot.
+    pub fn flat_slots(&self, types: &[TypeEntry]) -> Option<usize> {
+        if self.kind != ext_kind::RECORD {
+            return None;
+        }
+        let slots = types
+            .get(self.ty.checked_sub(FIRST_TYPE_INDEX)? as usize)?
+            .slots;
+        (1..=MAX_FLAT_WIDTH)
+            .contains(&slots)
+            .then_some(slots as usize)
+    }
+
+    /// The text of the shape in the `bytecode` dump (5.2): `record(ty3:int,str)`,
+    /// `array(ty4:double)`.
+    fn text(&self) -> String {
+        let items = || {
+            self.items
+                .iter()
+                .map(ExtShape::text)
+                .collect::<Vec<_>>()
+                .join(",")
+        };
+        match self.kind {
+            ext_kind::RECORD | ext_kind::ARRAY => {
+                format!("{}(ty{}:{})", ext_kind::name(self.kind), self.ty, items())
+            }
+            k => ext_kind_text(k, self.range),
+        }
+    }
+}
+
+/// The signature of a callable argument of an extension function (3.2): the kinds of its
+/// arguments and result ([`ext_kind`]; neither [`ext_kind::BYTES`] nor
+/// [`ext_kind::CALLABLE`]).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ExtSig {
+    pub params: Vec<u8>,
+    pub ret: u8,
+    /// The range of each argument, as [`ExtEntry::ret_range`].
+    pub ranges: Vec<(i64, i64)>,
+}
+
+/// The range of a value that is not checked (`ExtEntry::ret_range`).
+pub const FULL_RANGE: (i64, i64) = (i64::MIN, i64::MAX);
+
+/// An extension unit the module uses (3.2, section 11).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExtUnitEntry {
+    pub name: String,
+    /// The fingerprint of the unit's source the module was compiled with.
+    pub fingerprint: u64,
+    /// The unit's extension classes: (the name the unit declares, type index).
+    pub classes: Vec<(String, u32)>,
+}
+
 /// A verified module.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Module {
@@ -798,14 +1087,59 @@ pub struct Module {
     pub globals: Vec<GlobalEntry>,
     pub entry: u32,
     pub units: Vec<UnitEntry>,
+    /// The paths of the source files after the units' (3.2): a function's `file` past the units
+    /// is `units.len()` plus an index here (the files of a unit of the standard library joined
+    /// from several files; `docs/spec/collections.md` 1.2).
+    pub included: Vec<String>,
     pub hosts: Vec<HostEntry>,
     /// The interface call targets (`docs/spec/objects.md` 14.7): (interface type index, method
     /// number), the `Bx` of `CallIntf`.
     pub intf_calls: Vec<(u32, u32)>,
+    /// The extension functions, the `Bx` of `CallExt` (`docs/spec/extensions.md` 4).
+    pub exts: Vec<ExtEntry>,
+    /// The extension units the module was compiled with.
+    pub ext_units: Vec<ExtUnitEntry>,
+    /// The type information section (`docs/spec/rtti.md` chapter 7), when some type has type
+    /// information.
+    pub rtti: Option<rtti::RttiSection>,
+    /// The test table of a test unit's module (3.2, section 13; `docs/spec/attributes.md`
+    /// 5.2), in the order the tests run.
+    pub tests: Vec<TestEntry>,
+    /// The debug information section (3.2, section 14): how the values `Assert` records are
+    /// shown, when some `Assert` records one.
+    pub debug: Option<debug::DebugSection>,
+}
+
+/// A test of the test table (3.2, section 13).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TestEntry {
+    /// The test's name (`MyApp.Calc_test.TCalcTests.Add`).
+    pub name: String,
+    /// The source file of its declaration (as a function's `file`) and the line of its name.
+    pub file: u32,
+    pub line: u32,
+    /// The function without parameters that runs it.
+    pub func: u32,
+    /// The position of its `[TestCase]` among those of its routine, from 0.
+    pub case: Option<u32>,
+    /// `[Skip]`, with the reason given (empty when none was).
+    pub skip: Option<String>,
 }
 
 /// The kind of the interface call target section (3.1; `docs/spec/objects.md` 14.7).
 const SECTION_INTF_CALLS: u32 = 9;
+/// The kinds of the extension function and extension unit sections (3.1;
+/// `docs/spec/extensions.md` 4).
+const SECTION_EXTS: u32 = 10;
+const SECTION_EXT_UNITS: u32 = 11;
+/// The kind of the type information section (3.1; `docs/spec/rtti.md` chapter 7).
+const SECTION_RTTI: u32 = 12;
+/// The kind of the test table (3.1; `docs/spec/attributes.md` 5.2).
+const SECTION_TESTS: u32 = 13;
+/// The kind of the debug information section (3.1; `docs/spec/semantics.md` 5.4).
+const SECTION_DEBUG: u32 = 14;
+/// One past the largest section kind.
+const SECTION_END: usize = 15;
 
 /// A load failure (F0004).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -827,7 +1161,7 @@ impl fmt::Display for LoadError {
     }
 }
 
-const NONE_INDEX: u32 = 0xFFFF_FFFF;
+pub const NONE_INDEX: u32 = 0xFFFF_FFFF;
 
 // ---- Writing ----
 
@@ -848,6 +1182,20 @@ impl Writer {
     fn i64(&mut self, v: i64) {
         self.buf.extend_from_slice(&v.to_le_bytes());
     }
+    /// A shape of an extension function (3.2): its kind, the number of its items, its type and
+    /// range, then its items.
+    fn ext_shape(&mut self, s: &ExtShape) {
+        self.u8(s.kind);
+        self.u8(0);
+        self.u16(s.items.len() as u16);
+        self.u32(s.ty);
+        self.i64(s.range.0);
+        self.i64(s.range.1);
+        for item in &s.items {
+            self.ext_shape(item);
+        }
+    }
+
     fn pad4(&mut self) {
         while !self.buf.len().is_multiple_of(4) {
             self.buf.push(0);
@@ -857,6 +1205,21 @@ impl Writer {
         self.u32(s.len() as u32);
         self.buf.extend_from_slice(s.as_bytes());
         self.pad4();
+    }
+}
+
+impl Module {
+    /// The path of a source file (a function's `file`; 3.2): a unit's, or past them, an
+    /// included file's.
+    pub fn file_path(&self, file: u32) -> Option<&str> {
+        let file = file as usize;
+        match self.units.get(file) {
+            Some(u) => Some(&u.path),
+            None => self
+                .included
+                .get(file - self.units.len())
+                .map(String::as_str),
+        }
     }
 }
 
@@ -884,6 +1247,79 @@ impl Module {
                 w.u32(*k);
             }
             sections.push((SECTION_INTF_CALLS, w.buf));
+        }
+        // And so are the extension sections (`docs/spec/extensions.md` 4)
+        if !self.exts.is_empty() {
+            let mut w = Writer { buf: Vec::new() };
+            w.u32(self.exts.len() as u32);
+            for e in &self.exts {
+                w.lp_utf8(&e.name);
+                w.u32(e.unit);
+                w.u8(e.ret);
+                w.u8(0);
+                w.u16(e.params.len() as u16);
+                w.u32(e.ret_type);
+                w.i64(e.ret_range.0);
+                w.i64(e.ret_range.1);
+                for k in &e.params {
+                    w.u8(*k);
+                }
+                w.pad4();
+                w.u32(e.sigs.len() as u32);
+                for sig in &e.sigs {
+                    w.u8(sig.ret);
+                    w.u8(0);
+                    w.u16(sig.params.len() as u16);
+                    for k in &sig.params {
+                        w.u8(*k);
+                    }
+                    w.pad4();
+                    for (lo, hi) in &sig.ranges {
+                        w.i64(*lo);
+                        w.i64(*hi);
+                    }
+                }
+                w.u32(e.shapes.len() as u32);
+                for shape in &e.shapes {
+                    w.ext_shape(shape);
+                }
+            }
+            sections.push((SECTION_EXTS, w.buf));
+        }
+        if !self.ext_units.is_empty() {
+            let mut w = Writer { buf: Vec::new() };
+            w.u32(self.ext_units.len() as u32);
+            for u in &self.ext_units {
+                w.lp_utf8(&u.name);
+                w.i64(u.fingerprint as i64);
+                w.u32(u.classes.len() as u32);
+                for (name, ty) in &u.classes {
+                    w.lp_utf8(name);
+                    w.u32(*ty);
+                }
+            }
+            sections.push((SECTION_EXT_UNITS, w.buf));
+        }
+        if let Some(r) = &self.rtti {
+            sections.push((SECTION_RTTI, r.encode()));
+        }
+        // And so is the test table (`docs/spec/attributes.md` 5.2)
+        if !self.tests.is_empty() {
+            let mut w = Writer { buf: Vec::new() };
+            w.u32(self.tests.len() as u32);
+            for t in &self.tests {
+                w.lp_utf8(&t.name);
+                w.u32(t.file);
+                w.u32(t.line);
+                w.u32(t.func);
+                w.u32(t.case.unwrap_or(NONE_INDEX));
+                w.u32(u32::from(t.skip.is_some()));
+                w.lp_utf8(t.skip.as_deref().unwrap_or_default());
+            }
+            sections.push((SECTION_TESTS, w.buf));
+        }
+        if let Some(d) = &self.debug {
+            sections.push((SECTION_DEBUG, d.encode()));
         }
         let mut w = Writer { buf: Vec::new() };
         w.buf.extend_from_slice(b"PUYC");
@@ -988,7 +1424,13 @@ impl Module {
         w.u32(self.types.len() as u32);
         for t in &self.types {
             w.u8(t.kind);
-            w.u8(0);
+            // The flags of a dynamic array (`DYN_BYTES`) in the first byte after the kind; the
+            // other kinds keep it 0 (a class's flags come later)
+            w.u8(if t.kind == TYPE_DYNARRAY {
+                u8::try_from(t.flags).expect("the flags of a dynamic array fit in a byte (3.2)")
+            } else {
+                0
+            });
             w.u8(0);
             w.u8(0);
             w.u32(t.slots);
@@ -1112,6 +1554,10 @@ impl Module {
             w.u32(u.first_global);
             w.u32(u.global_count);
         }
+        w.u32(self.included.len() as u32);
+        for p in &self.included {
+            w.lp_utf8(p);
+        }
         w.buf
     }
 
@@ -1166,6 +1612,30 @@ impl<'a> Reader<'a> {
         self.pos += 8;
         Ok(v)
     }
+    /// A shape of an extension function at nesting `depth` ([`Writer::ext_shape`]).
+    fn ext_shape(&mut self, depth: usize) -> Result<ExtShape, LoadError> {
+        if depth >= MAX_EXT_SHAPE_DEPTH {
+            return Err(LoadError::Invalid(
+                "extension shape nested too deep".to_string(),
+            ));
+        }
+        let kind = self.u8()?;
+        self.u8()?;
+        let n = self.u16()? as usize;
+        let ty = self.u32()?;
+        let range = (self.i64()?, self.i64()?);
+        let mut items = Vec::with_capacity(n.min(64));
+        for _ in 0..n {
+            items.push(self.ext_shape(depth + 1)?);
+        }
+        Ok(ExtShape {
+            kind,
+            ty,
+            range,
+            items,
+        })
+    }
+
     fn pad4(&mut self) -> Result<(), LoadError> {
         while !self.pos.is_multiple_of(4) {
             self.u8()?;
@@ -1243,7 +1713,7 @@ impl Module {
         for _ in 0..k {
             table.push((r.u32()?, r.u32()?, r.u32()?));
         }
-        let mut sections: [Option<&[u8]>; 10] = [None; 10];
+        let mut sections: [Option<&[u8]>; SECTION_END] = [None; SECTION_END];
         let mut last_end = 0u32;
         for (kind, off, len) in table {
             let end = off
@@ -1253,7 +1723,16 @@ impl Module {
                 return Err(LoadError::Invalid("section out of range".into()));
             }
             last_end = end;
-            if !matches!(kind, 1..=6 | SECTION_INTF_CALLS) {
+            if !matches!(
+                kind,
+                1..=6
+                    | SECTION_INTF_CALLS
+                    | SECTION_EXTS
+                    | SECTION_EXT_UNITS
+                    | SECTION_RTTI
+                    | SECTION_TESTS
+                    | SECTION_DEBUG
+            ) {
                 return Err(LoadError::Invalid(format!("unknown section {kind}")));
             }
             if sections[kind as usize].is_some() {
@@ -1267,7 +1746,7 @@ impl Module {
         let consts = Self::decode_consts(sections[1].unwrap())?;
         let funcs = Self::decode_funcs(sections[2].unwrap())?;
         let globals = Self::decode_globals(sections[3].unwrap())?;
-        let (entry, units) = Self::decode_units(sections[4].unwrap())?;
+        let (entry, units, included) = Self::decode_units(sections[4].unwrap())?;
         let hosts = Self::decode_hosts(sections[5].unwrap())?;
         let types = match sections[6] {
             Some(b) => Self::decode_types(b)?,
@@ -1285,6 +1764,26 @@ impl Module {
             }
             None => Vec::new(),
         };
+        let exts = match sections[SECTION_EXTS as usize] {
+            Some(b) => Self::decode_exts(b)?,
+            None => Vec::new(),
+        };
+        let ext_units = match sections[SECTION_EXT_UNITS as usize] {
+            Some(b) => Self::decode_ext_units(b)?,
+            None => Vec::new(),
+        };
+        let rtti = match sections[SECTION_RTTI as usize] {
+            Some(b) => Some(rtti::RttiSection::decode(b)?),
+            None => None,
+        };
+        let tests = match sections[SECTION_TESTS as usize] {
+            Some(b) => Self::decode_tests(b)?,
+            None => Vec::new(),
+        };
+        let debug = match sections[SECTION_DEBUG as usize] {
+            Some(b) => Some(debug::DebugSection::decode(b)?),
+            None => None,
+        };
         let m = Module {
             consts,
             types,
@@ -1292,11 +1791,47 @@ impl Module {
             globals,
             entry,
             units,
+            included,
             hosts,
             intf_calls,
+            exts,
+            ext_units,
+            rtti,
+            tests,
+            debug,
         };
         m.verify()?;
         Ok(m)
+    }
+
+    /// The test table (3.2, section 13).
+    fn decode_tests(buf: &[u8]) -> Result<Vec<TestEntry>, LoadError> {
+        let mut r = Reader { buf, pos: 0 };
+        let n = r.count("test")?;
+        let mut out = Vec::with_capacity(n);
+        for _ in 0..n {
+            let name = r.lp_utf8()?;
+            let file = r.u32()?;
+            let line = r.u32()?;
+            let func = r.u32()?;
+            let case = r.u32()?;
+            let skipped = r.u32()?;
+            let reason = r.lp_utf8()?;
+            let skip = match skipped {
+                0 if reason.is_empty() => None,
+                1 => Some(reason),
+                _ => return Err(LoadError::Invalid(format!("test `{name}`: bad skip"))),
+            };
+            out.push(TestEntry {
+                name,
+                file,
+                line,
+                func,
+                case: (case != NONE_INDEX).then_some(case),
+                skip,
+            });
+        }
+        Ok(out)
     }
 
     fn decode_consts(buf: &[u8]) -> Result<Vec<ConstEntry>, LoadError> {
@@ -1362,9 +1897,14 @@ impl Module {
         let mut out = Vec::with_capacity(n);
         for _ in 0..n {
             let kind = r.u8()?;
+            let array_flags = u32::from(r.u8()?);
             r.u8()?;
             r.u8()?;
-            r.u8()?;
+            if array_flags != 0 && (kind != TYPE_DYNARRAY || array_flags & !DYN_BYTES != 0) {
+                return Err(LoadError::Invalid(format!(
+                    "unknown type flags {array_flags} of a type of kind {kind}"
+                )));
+            }
             let slots = r.u32()?;
             let width = if matches!(kind, TYPE_ARRAY | TYPE_DYNARRAY) {
                 let w = r.u32()?;
@@ -1398,7 +1938,7 @@ impl Module {
             } else {
                 None
             };
-            let mut flags = 0;
+            let mut flags = array_flags;
             let mut vmt = Vec::new();
             let mut abstract_names = Vec::new();
             let mut intfs = Vec::new();
@@ -1455,6 +1995,11 @@ impl Module {
             }
             if kind == TYPE_DYNARRAY && slots != 0 {
                 return Err(LoadError::Invalid("dynamic array type with slots".into()));
+            }
+            if array_flags & DYN_BYTES != 0 && (width != 1 || refs != [SLOT_PLAIN]) {
+                return Err(LoadError::Invalid(
+                    "dynamic array of bytes whose element is not one plain slot".into(),
+                ));
             }
             out.push(TypeEntry {
                 kind,
@@ -1574,7 +2119,8 @@ impl Module {
         Ok(out)
     }
 
-    fn decode_units(buf: &[u8]) -> Result<(u32, Vec<UnitEntry>), LoadError> {
+    #[allow(clippy::type_complexity)]
+    fn decode_units(buf: &[u8]) -> Result<(u32, Vec<UnitEntry>, Vec<String>), LoadError> {
         let mut r = Reader { buf, pos: 0 };
         let entry = r.u32()?;
         let n = r.count("unit")?;
@@ -1595,7 +2141,12 @@ impl Module {
                 global_count,
             });
         }
-        Ok((entry, out))
+        let n = r.count("included file")?;
+        let mut included = Vec::with_capacity(n);
+        for _ in 0..n {
+            included.push(r.lp_utf8()?);
+        }
+        Ok((entry, out, included))
     }
 
     fn decode_hosts(buf: &[u8]) -> Result<Vec<HostEntry>, LoadError> {
@@ -1618,6 +2169,237 @@ impl Module {
         Ok(out)
     }
 
+    fn decode_exts(buf: &[u8]) -> Result<Vec<ExtEntry>, LoadError> {
+        let mut r = Reader { buf, pos: 0 };
+        let n = r.count("extension function")?;
+        let mut out = Vec::with_capacity(n);
+        for _ in 0..n {
+            let name = r.lp_utf8()?;
+            let unit = r.u32()?;
+            let ret = r.u8()?;
+            r.u8()?;
+            let nparams = r.u16()? as usize;
+            let ret_type = r.u32()?;
+            let ret_range = (r.i64()?, r.i64()?);
+            let params = r.bytes(nparams)?.to_vec();
+            r.pad4()?;
+            let nsigs = r.count("callback signature")?;
+            let mut sigs = Vec::with_capacity(nsigs);
+            for _ in 0..nsigs {
+                let ret = r.u8()?;
+                r.u8()?;
+                let n = r.u16()? as usize;
+                let params = r.bytes(n)?.to_vec();
+                r.pad4()?;
+                let mut ranges = Vec::with_capacity(n);
+                for _ in 0..n {
+                    ranges.push((r.i64()?, r.i64()?));
+                }
+                sigs.push(ExtSig {
+                    params,
+                    ret,
+                    ranges,
+                });
+            }
+            let nshapes = r.count("extension shape")?;
+            let mut shapes = Vec::with_capacity(nshapes);
+            for _ in 0..nshapes {
+                shapes.push(r.ext_shape(0)?);
+            }
+            out.push(ExtEntry {
+                name,
+                unit,
+                params,
+                ret,
+                ret_type,
+                ret_range,
+                sigs,
+                shapes,
+            });
+        }
+        Ok(out)
+    }
+
+    fn decode_ext_units(buf: &[u8]) -> Result<Vec<ExtUnitEntry>, LoadError> {
+        let mut r = Reader { buf, pos: 0 };
+        let n = r.count("extension unit")?;
+        let mut out = Vec::with_capacity(n);
+        for _ in 0..n {
+            let name = r.lp_utf8()?;
+            let fingerprint = r.i64()? as u64;
+            let nclasses = r.count("extension class")?;
+            let mut classes = Vec::with_capacity(nclasses);
+            for _ in 0..nclasses {
+                let name = r.lp_utf8()?;
+                classes.push((name, r.u32()?));
+            }
+            out.push(ExtUnitEntry {
+                name,
+                fingerprint,
+                classes,
+            });
+        }
+        Ok(out)
+    }
+
+    /// The extension sections (3.3): each function's unit is in the unit section, its kinds are
+    /// in the table, a result type is a class (an object) or a dynamic array (`TBytes`) of the
+    /// type section, and there is one signature per callable argument, of the kinds a callback
+    /// takes; each unit's classes are classes of the type section.
+    fn verify_exts(&self) -> Result<(), LoadError> {
+        let err = |m: String| LoadError::Invalid(m);
+        let is_kind = |ty: u32, kind: u8| {
+            ty.checked_sub(FIRST_TYPE_INDEX)
+                .and_then(|i| self.types.get(i as usize))
+                .is_some_and(|t| t.kind == kind)
+        };
+        // A result's class may be a built-in one (`TRefObject`)
+        let is_class = |ty: u32| {
+            is_kind(ty, TYPE_CLASS)
+                || builtin_types()
+                    .get(ty as usize)
+                    .is_some_and(|t| ty < FIRST_TYPE_INDEX && t.kind == TYPE_CLASS)
+        };
+        let callback_kind = |k: u8| {
+            !matches!(k, ext_kind::NONE | ext_kind::BYTES | ext_kind::CALLABLE)
+                && k <= ext_kind::LAST
+        };
+        for (i, e) in self.exts.iter().enumerate() {
+            if e.unit as usize >= self.ext_units.len() {
+                return Err(err(format!("extension function {i}: unit out of range")));
+            }
+            if e.params
+                .iter()
+                .any(|k| *k == ext_kind::NONE || *k > ext_kind::LAST)
+                || e.ret > ext_kind::LAST
+            {
+                return Err(err(format!("extension function {i}: bad kind")));
+            }
+            let type_ok = match e.ret {
+                ext_kind::OBJECT => e.ret_type == NONE_INDEX || is_class(e.ret_type),
+                ext_kind::BYTES => is_kind(e.ret_type, TYPE_DYNARRAY),
+                _ => e.ret_type == NONE_INDEX,
+            };
+            if !type_ok {
+                return Err(err(format!("extension function {i}: bad result type")));
+            }
+            let callables = e
+                .params
+                .iter()
+                .filter(|k| **k == ext_kind::CALLABLE)
+                .count();
+            let range_ok = |(lo, hi): (i64, i64)| lo <= hi;
+            let sigs_ok = e.sigs.len() == callables
+                && range_ok(e.ret_range)
+                && e.sigs.iter().all(|s| {
+                    s.params.iter().all(|k| callback_kind(*k))
+                        && (s.ret == ext_kind::NONE || callback_kind(s.ret))
+                        && s.ranges.len() == s.params.len()
+                        && s.ranges.iter().all(|r| range_ok(*r))
+                });
+            if !sigs_ok {
+                return Err(err(format!(
+                    "extension function {i}: bad callback signature"
+                )));
+            }
+            let shaped: Vec<u8> = e
+                .params
+                .iter()
+                .chain(std::iter::once(&e.ret))
+                .copied()
+                .filter(|k| ext_kind::has_shape(*k))
+                .collect();
+            let shapes_ok = shaped.len() == e.shapes.len()
+                && shaped
+                    .iter()
+                    .zip(&e.shapes)
+                    .all(|(k, s)| s.kind == *k && self.ext_shape_ok(s));
+            if !shapes_ok {
+                return Err(err(format!("extension function {i}: bad shape")));
+            }
+        }
+        for (i, u) in self.ext_units.iter().enumerate() {
+            // An extension class is one of the module's
+            if u.classes.iter().any(|(_, ty)| !is_kind(*ty, TYPE_CLASS)) {
+                return Err(err(format!("extension unit {i}: class out of range")));
+            }
+        }
+        Ok(())
+    }
+
+    /// Whether a shape of an extension function names types of the type section of its kinds,
+    /// and its fields and elements are laid out in their slots as the types say (slots that hold
+    /// references for the kinds whose values are blocks), so that the VM copying a value of it
+    /// reads and writes what the slots hold.
+    fn ext_shape_ok(&self, s: &ExtShape) -> bool {
+        let entry = |ty: u32| {
+            ty.checked_sub(FIRST_TYPE_INDEX)
+                .and_then(|i| self.types.get(i as usize))
+        };
+        let leaf = s.items.is_empty() && s.ty == NONE_INDEX;
+        match s.kind {
+            ext_kind::INT => leaf && s.range.0 <= s.range.1,
+            ext_kind::SINGLE | ext_kind::DOUBLE | ext_kind::STRING | ext_kind::UTF8 => {
+                leaf && s.range == FULL_RANGE
+            }
+            ext_kind::BYTES => {
+                s.items.is_empty()
+                    && s.range == FULL_RANGE
+                    && entry(s.ty).is_some_and(TypeEntry::is_dyn_bytes)
+            }
+            ext_kind::RECORD => {
+                let Some(t) = entry(s.ty).filter(|t| t.kind == TYPE_RECORD) else {
+                    return false;
+                };
+                s.range == FULL_RANGE && self.ext_items_ok(&s.items, &t.refs, t.slots as usize)
+            }
+            ext_kind::ARRAY => {
+                let Some(t) = entry(s.ty).filter(|t| t.kind == TYPE_DYNARRAY && !t.is_dyn_bytes())
+                else {
+                    return false;
+                };
+                s.range == FULL_RANGE
+                    && s.items.len() == 1
+                    && self.ext_items_ok(&s.items, &t.refs, t.elem_width())
+            }
+            _ => false,
+        }
+    }
+
+    /// Whether the fields `items` fill the `n` slots whose kinds are `refs` (a record's, or an
+    /// element's of an array), each valid and in slots of the kinds its values need.
+    fn ext_items_ok(&self, items: &[ExtShape], refs: &[u8], n: usize) -> bool {
+        let mut at = 0;
+        for item in items {
+            if !self.ext_shape_ok(item) || !self.ext_slots_ok(item, refs, at) {
+                return false;
+            }
+            at += item.width(&self.types);
+        }
+        at == n && refs.len() >= n
+    }
+
+    /// Whether the value of shape `s` at slot `at` of slots of kinds `refs` is in slots of the
+    /// kinds it needs: a reference for a value kept in a block, plain for an ordinal or a real,
+    /// and for a record laid out flat, those of its fields.
+    fn ext_slots_ok(&self, s: &ExtShape, refs: &[u8], at: usize) -> bool {
+        if s.flat_slots(&self.types).is_some() {
+            let mut k = at;
+            for item in &s.items {
+                if !self.ext_slots_ok(item, refs, k) {
+                    return false;
+                }
+                k += item.width(&self.types);
+            }
+            return true;
+        }
+        let want = match s.kind {
+            ext_kind::INT | ext_kind::SINGLE | ext_kind::DOUBLE => SLOT_PLAIN,
+            _ => SLOT_REF,
+        };
+        refs.get(at) == Some(&want)
+    }
+
     // ---- Verification (3.3) ----
 
     pub fn verify(&self) -> Result<(), LoadError> {
@@ -1637,6 +2419,27 @@ impl Module {
             Ok(())
         };
         check_fn(self.entry, "entry")?;
+        self.verify_exts()?;
+        self.verify_rtti()?;
+        self.verify_debug()?;
+        // The test table (3.3): each test's function takes no parameters, its file is a source
+        // file of the module, and the names differ
+        let mut names = std::collections::HashSet::new();
+        for t in &self.tests {
+            check_fn(t.func, "test")?;
+            if self.file_path(t.file).is_none() {
+                return Err(LoadError::Invalid(format!(
+                    "test `{}`: file index out of range",
+                    t.name
+                )));
+            }
+            if t.name.is_empty() || !names.insert(t.name.as_str()) {
+                return Err(LoadError::Invalid(format!(
+                    "test `{}`: name empty or repeated",
+                    t.name
+                )));
+            }
+        }
         // The units' global variables follow one another and cover them all (`units.md` 6.3)
         let mut next_global: u64 = 0;
         for u in &self.units {
@@ -1989,7 +2792,7 @@ impl Module {
         if (f.params as usize) > f.regs as usize && !(f.params == 0 && f.regs == 0) {
             return Err(err("params exceed regs".into()));
         }
-        if f.file as usize >= self.units.len() {
+        if f.file as usize >= self.units.len() + self.included.len() {
             return Err(err("file index out of range".into()));
         }
         // A nested routine takes the static link as its first argument (`docs/spec/semantics.md` 4.9)
@@ -2119,7 +2922,8 @@ impl Module {
                     reg(a, "A")?;
                     reg(b, "B")?;
                     reg(b + 4, "B+4")?;
-                    if c != 0 {
+                    // An intrinsic's `C` is its number (2.19)
+                    if c != 0 && opc != op::INTRINSIC {
                         return Err(err(format!("C={c} is not 0 at {pc:04x}")));
                     }
                 }
@@ -2189,6 +2993,16 @@ impl Module {
                                 )));
                             }
                         }
+                        op::CALL_EXT => {
+                            let e = self.exts.get(bx as usize).ok_or_else(|| {
+                                err(format!("extension function {bx} out of range at {pc:04x}"))
+                            })?;
+                            if a + e.params.len() as u32 > regs {
+                                return Err(err(format!(
+                                    "extension call arguments exceed regs at {pc:04x}"
+                                )));
+                            }
+                        }
                         _ => {}
                     }
                 }
@@ -2197,7 +3011,7 @@ impl Module {
                 ABSlot => {
                     reg(a, "A")?;
                     reg(b, "B")?;
-                    if opc == op::EXC_INFO && c > EXC_INFO_SUPPRESSED {
+                    if opc == op::EXC_INFO && c > EXC_INFO_VALUES {
                         return Err(err(format!("information {c} out of range at {pc:04x}")));
                     }
                 }
@@ -2477,11 +3291,16 @@ pub fn disassemble(m: &Module) -> String {
                 _ => "array",
             };
             let mut flags = String::new();
-            for (bit, name) in [
-                (CLASS_REF_COUNTED, " ref"),
-                (CLASS_ABSTRACT, " abstract"),
-                (CLASS_SEALED, " sealed"),
-            ] {
+            let names: &[(u32, &str)] = if t.kind == TYPE_DYNARRAY {
+                &[(DYN_BYTES, " bytes")]
+            } else {
+                &[
+                    (CLASS_REF_COUNTED, " ref"),
+                    (CLASS_ABSTRACT, " abstract"),
+                    (CLASS_SEALED, " sealed"),
+                ]
+            };
+            for &(bit, name) in names {
                 if t.flags & bit != 0 {
                     flags.push_str(name);
                 }
@@ -2576,6 +3395,12 @@ pub fn disassemble(m: &Module) -> String {
             out.push('\n');
         }
     }
+    if let Some(r) = &m.rtti {
+        rtti::disassemble(r, &mut out);
+    }
+    if let Some(d) = &m.debug {
+        debug::disassemble(d, &mut out);
+    }
     if !m.intf_calls.is_empty() {
         out.push_str(".intfcall\n");
         for (i, (intf, k)) in m.intf_calls.iter().enumerate() {
@@ -2599,6 +3424,63 @@ pub fn disassemble(m: &Module) -> String {
             h.name, h.params, h.ret as u8
         ));
     }
+    if !m.ext_units.is_empty() {
+        out.push_str(".extunit\n");
+        for (i, u) in m.ext_units.iter().enumerate() {
+            let classes: Vec<String> = u
+                .classes
+                .iter()
+                .map(|(n, ty)| format!("{n}=ty{ty}"))
+                .collect();
+            out.push_str(&format!(
+                "  {i}: {} fingerprint={:016x} classes=[{}]\n",
+                u.name,
+                u.fingerprint,
+                classes.join(",")
+            ));
+        }
+    }
+    if !m.exts.is_empty() {
+        out.push_str(".ext\n");
+        for (i, e) in m.exts.iter().enumerate() {
+            let mut sigs = e.sigs.iter();
+            let params: Vec<String> = e
+                .params
+                .iter()
+                .enumerate()
+                .map(|(j, k)| {
+                    if let Some(s) = (*k == ext_kind::CALLABLE).then(|| sigs.next()).flatten() {
+                        let p: Vec<String> = s
+                            .params
+                            .iter()
+                            .zip(&s.ranges)
+                            .map(|(k, r)| ext_kind_text(*k, *r))
+                            .collect();
+                        return format!("callable({}):{}", p.join(","), ext_kind::name(s.ret));
+                    }
+                    match e.param_shape(j).filter(|_| ext_kind::has_shape(*k)) {
+                        Some(s) => s.text(),
+                        None => ext_kind::name(*k).to_string(),
+                    }
+                })
+                .collect();
+            let ret = match e.ret_shape() {
+                Some(s) => s.text(),
+                None => ext_kind_text(e.ret, e.ret_range),
+            };
+            let mut line = format!(
+                "  {i}: {} unit={} params=[{}] ret={ret}",
+                e.name,
+                e.unit,
+                params.join(","),
+            );
+            if e.ret_type != NONE_INDEX {
+                line.push_str(&format!(" type=ty{}", e.ret_type));
+            }
+            out.push_str(&line);
+            out.push('\n');
+        }
+    }
     for (i, u) in m.units.iter().enumerate() {
         let idx = |v: Option<u32>| v.map(|x| x.to_string()).unwrap_or_else(|| "-".into());
         // Only the program row (the last) has an entry (`docs/spec/units.md` 6.3)
@@ -2616,11 +3498,33 @@ pub fn disassemble(m: &Module) -> String {
             entry
         ));
     }
+    for (i, p) in m.included.iter().enumerate() {
+        out.push_str(&format!(
+            ".file {} {}\n",
+            m.units.len() + i,
+            crate::lexer::debug_text(p.as_bytes())
+        ));
+    }
+    // The test table (`docs/spec/attributes.md` 5.2): the name last, as written
+    for (i, t) in m.tests.iter().enumerate() {
+        let mut line = format!(".test {i} f{} file={} line={}", t.func, t.file, t.line);
+        if let Some(k) = t.case {
+            line.push_str(&format!(" case={k}"));
+        }
+        if let Some(r) = &t.skip {
+            line.push_str(&format!(" skip={}", debug_str(r)));
+        }
+        out.push_str(&format!("{line} {}\n", t.name));
+    }
     for (i, f) in m.funcs.iter().enumerate() {
         out.push_str(&format!(
             ".func {i} {} params={} regs={}",
             f.name, f.params, f.regs
         ));
+        // A file past the units' is shown (`docs/spec/bytecode.md` 5)
+        if f.file as usize >= m.units.len() {
+            out.push_str(&format!(" file={}", f.file));
+        }
         if let Some(o) = f.outer {
             out.push_str(&format!(" outer={o}"));
         }
@@ -2783,6 +3687,7 @@ pub fn disassemble_one(code: &[u32], pc: usize) -> (String, usize) {
                 | op::STORE_GLOBAL_REF => "g",
                 op::CALL | op::CALL_METHOD => "f",
                 op::CALL_HOST => "h",
+                op::CALL_EXT => "x",
                 op::CALL_INTF => "ic",
                 op::UNIQUE
                 | op::SET_LEN
@@ -2863,6 +3768,7 @@ mod tests {
         Module {
             types: Vec::new(),
             intf_calls: Vec::new(),
+            rtti: None,
             consts: vec![
                 ConstEntry::Str("Hello, world\n".into()),
                 ConstEntry::Int(42),
@@ -2903,11 +3809,16 @@ mod tests {
                 first_global: 0,
                 global_count: 1,
             }],
+            included: Vec::new(),
             hosts: vec![HostEntry {
                 name: "Console.Write".into(),
                 params: 1,
                 ret: false,
             }],
+            exts: Vec::new(),
+            ext_units: Vec::new(),
+            tests: Vec::new(),
+            debug: None,
         }
     }
 
@@ -2934,6 +3845,109 @@ mod tests {
             assert_eq!(bx_at(&code, 0), bx, "{idx}");
             let (opc, a, _, _, _) = decode_at(&code, 0);
             assert_eq!((opc, a & 0xFF), (op::CALL, 7), "{idx}");
+        }
+    }
+
+    // A function's file past the units' names an included file, kept through the `.puyc`; past
+    // the included files it is rejected (3.2, 3.3).
+    #[test]
+    fn included_files_roundtrip_and_bound_function_files() {
+        let mut m = sample();
+        m.included = vec!["<stdlib>/S/A.inc".into()];
+        m.funcs[0].file = 1;
+        let back = Module::decode(&m.encode("0.0.0"), "0.0.0").unwrap();
+        assert_eq!(back.file_path(1), Some("<stdlib>/S/A.inc"));
+        assert_eq!(back.file_path(0), Some("Hello.pas"));
+        assert_eq!(back, m);
+        m.funcs[0].file = 2;
+        assert_eq!(
+            Module::decode(&m.encode("0.0.0"), "0.0.0"),
+            Err(LoadError::Invalid(
+                "function 0 (Hello.<main>): file index out of range".into()
+            ))
+        );
+    }
+
+    // The test table goes through the module file as it is, and the disassembly lists it
+    // (3.2, 5.2).
+    #[test]
+    fn test_table_round_trips() {
+        let mut m = sample();
+        m.tests = vec![
+            TestEntry {
+                name: "Hello.A".into(),
+                file: 0,
+                line: 3,
+                func: 0,
+                case: None,
+                skip: None,
+            },
+            TestEntry {
+                name: "Hello.B(1, 'x y')".into(),
+                file: 0,
+                line: 5,
+                func: 0,
+                case: Some(1),
+                skip: Some("slow".into()),
+            },
+        ];
+        assert_eq!(Module::decode(&m.encode("0.0.0"), "0.0.0").unwrap(), m);
+        let d = disassemble(&m);
+        assert!(
+            d.contains(
+                ".test 0 f0 file=0 line=3 Hello.A\n\
+                 .test 1 f0 file=0 line=5 case=1 skip=\"slow\" Hello.B(1, 'x y')\n.func 0 "
+            ),
+            "{d}"
+        );
+    }
+
+    // A test whose function is out of range or takes parameters, whose file is out of range, or
+    // whose name is empty or repeated is refused at load (3.3).
+    #[test]
+    fn test_table_is_checked_at_load() {
+        let base = || {
+            let mut m = sample();
+            let mut f = m.funcs[0].clone();
+            f.name = "Hello.Takes".into();
+            f.params = 1;
+            m.funcs.push(f);
+            m.tests = vec![TestEntry {
+                name: "Hello.A".into(),
+                file: 0,
+                line: 3,
+                func: 0,
+                case: None,
+                skip: None,
+            }];
+            m
+        };
+        assert!(base().verify().is_ok());
+        type Change = fn(&mut Module);
+        let cases: [(Change, &str); 5] = [
+            (|m| m.tests[0].func = 2, "test index out of range"),
+            (|m| m.tests[0].func = 1, "test function takes parameters"),
+            (
+                |m| m.tests[0].file = 1,
+                "test `Hello.A`: file index out of range",
+            ),
+            (
+                |m| m.tests[0].name = String::new(),
+                "test ``: name empty or repeated",
+            ),
+            (
+                |m| m.tests.push(m.tests[0].clone()),
+                "test `Hello.A`: name empty or repeated",
+            ),
+        ];
+        for (idx, (change, msg)) in cases.into_iter().enumerate() {
+            let mut m = base();
+            change(&mut m);
+            assert_eq!(
+                Module::decode(&m.encode("0.0.0"), "0.0.0"),
+                Err(LoadError::Invalid(msg.into())),
+                "{idx}"
+            );
         }
     }
 
@@ -3381,6 +4395,67 @@ mod tests {
                     "array element width {w} out of range"
                 ))),
                 "{w}"
+            );
+        }
+    }
+
+    /// [`with_flat_types`] with a fourth type: 67 a dynamic array of bytes.
+    fn with_byte_array_type() -> Module {
+        let ret = encode(op::RET_VOID, 0, 0, 0);
+        let mut m = with_flat_types(4, vec![ret]);
+        m.types.push(TypeEntry {
+            kind: TYPE_DYNARRAY,
+            refs: vec![SLOT_PLAIN],
+            width: 1,
+            flags: DYN_BYTES,
+            name: "array of Byte".into(),
+            ..TypeEntry::default()
+        });
+        m
+    }
+
+    #[test]
+    // A dynamic array of bytes carries its flag through writing and reading the module, and the
+    // dump shows it as `bytes` (2.9, 3.2, 5.2).
+    fn byte_array_types_round_trip() {
+        let m = with_byte_array_type();
+        let bytes = m.encode("0.0.0");
+        assert_eq!(Module::decode(&bytes, "0.0.0").as_ref(), Ok(&m));
+        let d = disassemble(&m);
+        assert!(
+            d.contains("  67: dynarray array of Byte bytes slots=0 elem=val\n"),
+            "{d}"
+        );
+    }
+
+    #[test]
+    // The byte after a type's kind is refused when it holds the flag of a dynamic array of bytes
+    // on an element that is not one plain slot, an unknown flag, or a flag on another kind (3.2,
+    // 3.3). Each type is written alone, so the byte is at a fixed place: after the number of
+    // entries and the kind.
+    fn bad_type_flags_are_refused() {
+        let m = with_byte_array_type();
+        let cases = [
+            (
+                1,
+                DYN_BYTES,
+                "dynamic array of bytes whose element is not one plain slot",
+            ),
+            (3, 2, "unknown type flags 2 of a type of kind 3"),
+            (0, DYN_BYTES, "unknown type flags 1 of a type of kind 1"),
+        ];
+        for (idx, (t, flags, message)) in cases.into_iter().enumerate() {
+            let one = Module {
+                types: vec![m.types[t].clone()],
+                ..m.clone()
+            };
+            let mut section = one.encode_types();
+            assert_eq!(section[4], one.types[0].kind, "{idx}");
+            section[5] = flags as u8;
+            assert_eq!(
+                Module::decode_types(&section),
+                Err(LoadError::Invalid(message.to_string())),
+                "{idx}"
             );
         }
     }
@@ -3843,14 +4918,15 @@ mod tests {
     }
 
     #[test]
-    // `ExcInfo` reads the stack trace or `Suppressed` (`C` 0 or 1; the class name moved to the
-    // `ClassName` intrinsic), and `New` makes an instance of a built-in exception class
-    // (`docs/spec/objects.md` 14.8).
+    // `ExcInfo` reads the stack trace, `Suppressed` or `EAssertionFailed.Values` (`C` 0 to 2;
+    // the class name moved to the `ClassName` intrinsic), and `New` makes an instance of a
+    // built-in exception class (`docs/spec/objects.md` 14.8).
     fn verify_checks_exception_instructions() {
-        let cases: [(&str, u32, bool); 6] = [
+        let cases: [(&str, u32, bool); 7] = [
             ("ExcInfo StackTrace", encode(op::EXC_INFO, 0, 1, 0), true),
             ("ExcInfo Suppressed", encode(op::EXC_INFO, 0, 1, 1), true),
-            ("ExcInfo ClassName", encode(op::EXC_INFO, 0, 1, 2), false),
+            ("ExcInfo Values", encode(op::EXC_INFO, 0, 1, 2), true),
+            ("ExcInfo 3", encode(op::EXC_INFO, 0, 1, 3), false),
             (
                 "New of a built-in exception",
                 encode(op::NEW, 0, 7, 0),
@@ -4285,14 +5361,14 @@ mod tests {
         // `StrInsert` reads `B` and `B+1`; with B = 2, B+1 is past the 3 registers
         m.funcs[0].code[0] = encode(op::INTRINSIC, 0, 2, u32::from(op::intr::STR_INSERT));
         assert!(m.verify().is_err());
-        // 97 is not given to an intrinsic yet (`docs/spec/bytecode.md` 2.19)
-        m.funcs[0].code[0] = encode(op::INTRINSIC, 0, 0, 97);
+        // 99 is not given to an intrinsic (`docs/spec/bytecode.md` 2.19)
+        m.funcs[0].code[0] = encode(op::INTRINSIC, 0, 0, 99);
         assert!(m.verify().is_err());
     }
 
-    // The intrinsics only the standard library uses (`I73`-`I75`, `I96`; 2.22) take registers of
-    // the function, `ArrayMoveRange`, `IsOverridden` and `ArraySortRange` also `B+1` and `B+2`,
-    // and show by their names (3.3, 5).
+    // The intrinsics only the standard library uses (`I73`-`I75`, `I96`-`I98`; 2.22) take
+    // registers of the function, `MathF64` also `B+1`, `ArrayMoveRange`, `IsOverridden`,
+    // `ArraySortRange` and `MathF64x2` also `B+1` and `B+2`, and show by their names (3.3, 5).
     #[test]
     fn stdlib_intrinsics_check_their_registers() {
         let mut m = sample();
@@ -4308,6 +5384,8 @@ mod tests {
                 word(2, 0, op::intr::ARRAY_SORT_RANGE),
                 "ArraySortRange r2, r0",
             ),
+            (word(2, 1, op::intr::MATH_F64), "MathF64      r2, r1"),
+            (word(2, 0, op::intr::MATH_F64X2), "MathF64x2    r2, r0"),
         ];
         for (w, text) in ok {
             m.funcs[0].code[0] = w;
@@ -4324,6 +5402,8 @@ mod tests {
             word(3, 0, op::intr::IS_OVERRIDDEN),
             word(0, 1, op::intr::ARRAY_SORT_RANGE),
             word(3, 0, op::intr::ARRAY_SORT_RANGE),
+            word(0, 2, op::intr::MATH_F64),
+            word(0, 1, op::intr::MATH_F64X2),
         ];
         for (i, w) in bad.into_iter().enumerate() {
             m.funcs[0].code[0] = w;

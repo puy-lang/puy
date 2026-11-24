@@ -1,0 +1,32 @@
+[sTruecwxyzxy-54000000000-1234567890123184467440737095516150.10.1a thing
+line
+False
+7
+2.5
+yz
+a thing
+]
+106 UTF-8 TRUE
+ERangeError: characters 3..4 are out of a buffer of 4 characters
+EF BB BF C3 A9 (5)
+EF BB BF C3 A9 78 (6)
+FF FE 61 00 E9 00 (6)
+FE FF 00 61 (4)
+C3 BC (2)
+TRUE
+0
+3
+11
+[abcdefghijk]
+[dropped]
+0
+F0 9F 98 80 (4)
+F0 9F 98 80 EF BF BD (7)
+C3 A9 C3 A9 E9 00 61 (7)
+[kept]
+TRUE
+EStreamError: the stream is closed
+EStreamError: the writer is closed
+EStreamError: the writer is closed
+EArgumentException: the stream of a TStreamWriter is nil
+EEncodingError: the unpaired surrogate $DC00 at position 2 cannot be encoded as UTF-8

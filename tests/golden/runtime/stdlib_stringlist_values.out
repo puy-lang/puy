@@ -1,0 +1,6 @@
+Values (3): [port=8080] [novalue] [user=me]
+ValueFromIndex (3): [port=443] [=x] [user=me]
+ValueFromIndex removes (2): [port=443] [=x]
+AddPair (4): [port=443] [=x] [k=v] [n=1]
+sorted (5): [=x] [k=v] [n=1] [port=443] [zz=last]
+cannot change a string of a sorted list

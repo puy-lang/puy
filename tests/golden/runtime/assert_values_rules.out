@@ -1,0 +1,35 @@
+assertion failed: (A = 2) and (B = 3) (2)
+  A = 1
+  B = <not evaluated>
+assertion failed: (A = 1) and ((B = 3) or (A + B = 4)) (3)
+  A = 1
+  B = 2
+  A + B = 3
+assertion failed: A + B * 2 - A = 0 (with a message) (5)
+  A + B * 2 - A = 4
+  A + B * 2 = 5
+  A = 1
+  B * 2 = 4
+  B = 2
+assertion failed: (A + 1 = 5) or (A + 1 = 6) (2)
+  A + 1 = 2
+  A = 1
+assertion failed: N + Bump(N) = 0 (3)
+  N + Bump(N) = 21
+  N = 10
+  Bump(N) = 11
+assertion failed: Secret.Shown = 0 (1)
+  Secret.Shown = 5
+assertion failed: Twin(Secret).Shown = 0 (3)
+  Twin(Secret).Shown = 5
+  Twin(Secret) = (FHidden: 0; Shown: 5)
+  Secret = (FHidden: 0; Shown: 5)
+assertion failed: Count + FCount = 0 (3)
+  Count + FCount = 9
+  Count = 6
+  FCount = 3
+assertion failed: Plain = nil (1)
+  Plain = <destroyed>
+made by hand (0)
+a descendant (0)
+done

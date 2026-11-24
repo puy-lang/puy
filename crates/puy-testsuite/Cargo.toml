@@ -14,6 +14,8 @@ path = "src/lib.rs"
 [dependencies]
 puy-core.workspace = true
 puy-host.workspace = true
+puy-ext.workspace = true
+puy-stdlib-ext.workspace = true
 
 [dev-dependencies]
 serde_json = { workspace = true, features = ["preserve_order"] }

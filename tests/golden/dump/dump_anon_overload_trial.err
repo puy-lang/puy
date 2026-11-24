@@ -1,0 +1,5 @@
+error: uncaught exception Exception: second
+  at DumpAnonOverloadTrial.Run.<anon2> (dump_anon_overload_trial.pas:54)
+  at DumpAnonOverloadTrial.Wrap (dump_anon_overload_trial.pas:16)
+  at DumpAnonOverloadTrial.Run (dump_anon_overload_trial.pas:54)
+  at DumpAnonOverloadTrial.<main> (dump_anon_overload_trial.pas:59)

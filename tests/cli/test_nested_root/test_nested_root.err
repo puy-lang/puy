@@ -1,0 +1,7 @@
+error[E0700]: undeclared identifier `Secret`
+   --> sub/other/src/Calc_test.pas:15:14
+    |
+ 15 |   Assert(Add(Secret, 1) = 2);
+    |              ^^^^^^
+
+error: aborting due to 1 error

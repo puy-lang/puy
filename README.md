@@ -25,12 +25,13 @@ ISO Pascal standards (see [Compatibility](#compatibility)).
 
 > **Status: early development.** The current release covers the core of the language:
 > records and arrays, exceptions, units, classes and interfaces, anonymous methods,
-> operator overloading, generics and `System.Generics.Collections` (see
-> [`examples/`](#example)). Lightweight tasks, most of the standard library (files,
-> networking, JSON, HTTP), runtime type information, the testing framework,
-> `puy build`, package dependencies, the formatter and running in the browser are not
-> implemented yet; using a feature that is not implemented reports a "not supported yet"
-> error (E3200).
+> operator overloading, generics and `System.Generics.Collections`, together with the
+> first part of the standard library: strings, files and streams, paths and OS basics,
+> regular expressions, math and dates, runtime type information (`TValue` and
+> `System.Rtti`) and the testing framework (`puy test`) (see [`examples/`](#example)).
+> Lightweight tasks and isolates, networking, JSON, HTTP, `puy build`, package
+> dependencies, the formatter and running in the browser are not implemented yet; using
+> a feature that is not implemented reports a "not supported yet" error (E3200).
 
 ## Compatibility
 
@@ -108,6 +109,26 @@ More samples are in [`examples/`](examples/):
 | `owning.pas` | Owning containers for manually managed objects: `TObjectList<T>`, `TObjectStack<T>` / `TObjectQueue<T>`, `TObjectDictionary<K, V>`, `Extract` |
 | `distinct.pas` | Distinct types (`type X = type Y`): overloads and helpers of their own, assignment compatibility with the root type |
 | `todo/` | A multi-file package: `puy.toml`, units under `src/` (`interface` / `implementation`, `initialization`), `uses … as`. Run `puy run examples/todo/main.pas` |
+| `log_messages.pas` | String helpers, `System.StrUtils`, Unicode character classification, and regex named groups and replacement callbacks |
+| `streams.pas` | UTF-8 settings with `TStringList`, text and binary streams, and `TConsole.Output` |
+| `file_workspace.pas` | Paths and file I/O in a `TMemoryFileSystem`, host capability checks, and a virtual clock with `Sleep` and `TStopwatch` |
+| `delivery_slots.pas` | `System.Math` and `System.DateUtils`, time windows with `TInstant` and `TTimeSpan`, lazy initialization and seeded shuffling |
+| `reflection.pas` | `TValue`, `array of const`, published properties, attributes and method invocation with `System.Rtti` and `System.TypInfo` |
+| `memory_usage.pas` | Isolate and process memory usage, live heap blocks by type, `GetMemoryManagerState` and shutdown leak reporting |
+| `legacy_objects.pas` | The non-generic `System.Contnrs.TObjectList` with ownership and `Extract` |
+| `test_report/` | A package with a paired test unit, parameterized tests, exception checks and a committed output snapshot |
+
+Run the report and its tests from `examples/test_report/`:
+
+```sh
+puy run main.pas
+puy test
+puy test --format json
+```
+
+If you built Puy from this checkout, `puy test --junit ../../target/test-report.xml` writes JUnit XML to Cargo's ignored `target/` directory.
+
+After an intentional change to the report format, use `puy test --update` to regenerate the snapshot and review the diff.
 
 ## Building
 
@@ -127,6 +148,7 @@ The `puy` command:
 | `puy run <file\|->` | Compile and run a program (`puy <file>` is the same; `-` reads the source from stdin) |
 | `puy check <file\|->` | Type-check only; `--dump tokens\|cst\|hir\|ir\|bytecode` prints a compiler stage |
 | `puy fix <file>` | Apply the safe fixes suggested by diagnostics |
+| `puy test [paths...]` | Run the tests of the package, or of the test files given (`--filter`, `--junit`, `--update` and more) |
 | `puy explain <code>` | Explain an error code (explanations are not included in this release yet) |
 | `puy -e '<statements>'` | Run statements given on the command line |
 
@@ -160,12 +182,15 @@ crates/
   puy-core/            Lexer, parser (CST), semantic analysis, code generation, bytecode, VM
                        (no I/O; builds for WASM)
   puy-host/            Host interface traits
+  puy-ext/             API for extensions written in Rust (no I/O)
+  puy-ext-macros/      Attribute macros that declare and register extensions
   puy-fmt/             Formatter
   puy-runtime-native/  Native runtime
   puy-runtime-wasi/    WASI runtime
   puy-runtime-web/     Browser runtime
   puy-cli/             The puy command (crate `puy`)
   puy-stdlib/          Pascal sources of the standard library units (embedded; no I/O)
+  puy-stdlib-ext/      The Rust parts of the standard library, written as extensions (no I/O)
   puy-testsuite/       Test runner for the cases under tests/ (not published)
 tests/                 Differential, lifetime, golden and CLI test cases
 examples/              Sample programs

@@ -1,0 +1,10 @@
+error[E0701]: `TG.Create` is already declared
+   --> local_type_method_body_heading.pas:17:15
+    |
+ 12 | constructor TG.Create;
+    |             --------- declared here
+...
+ 17 |   constructor TG.Create;
+    |               ^^^^^^^^^ declared again here
+
+error: aborting due to 1 error

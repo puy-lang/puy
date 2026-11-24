@@ -21,6 +21,10 @@
   .reg t16: EAssertionFailed temp
   .reg t17: string temp
   .reg t18: string temp
+  .reg t19: EConvertError temp
+  .reg t20: Integer temp
+  .reg t21: string temp
+  .reg t22: string temp
 bb0:
   .line 24
   LoadConst    t1, "x"
@@ -53,15 +57,20 @@ bb1:
   LoadConst    t15, "assertion failed: C <> nil"
   New          t16, EAssertionFailed
   ObjSetRef    t16, 0, t15
+  LoadConst    t17, "C"
+  Move         t18, t17
+  Move         t19, t13
+  LoadInt      t20, debugtype EConvertError
+  AssertValue  t16, t18, t19, t20
   Raise        t16
 bb2:
   .line 27
-  LoadConst    t18, "stop"
-  Move         t17, t18
-  Call         -, f1(t17)
+  LoadConst    t22, "stop"
+  Move         t21, t22
+  Call         -, f1(t21)
   .line 28
   RetVoid
-.finally t0, t1, t2, t4, t6, t7, t8, t10, t12, t13, t14, t15, t16, t18
+.finally t0, t1, t2, t4, t6, t7, t8, t10, t12, t13, t14, t15, t16, t17, t22
 .func f1 DumpExceptions.Fail params=1
   .reg v0 Why: string const param
   .reg v1 E: EAppError local

@@ -1,0 +1,19 @@
+isolated cwd: TRUE /work/session
+root: /
+create: TRUE FALSE
+parents: FALSE TRUE
+resolve: /work/session/docs/a.txt
+path read: hello
+case: FALSE
+docs/a.txt
+docs/z.txt
+copy: hello different
+overwrite: hello
+rename collision: FALSE
+rename into itself: FALSE
+renamed tree: TRUE
+copy into itself rejected: TRUE
+delete: TRUE FALSE FALSE
+deleted tree: TRUE
+host unavailable: ekNoPermission
+uninstalled: TRUE

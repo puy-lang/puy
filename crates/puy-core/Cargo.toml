@@ -9,5 +9,12 @@ license.workspace = true
 
 [dependencies]
 puy-host.workspace = true
+puy-ext.workspace = true
 puy-stdlib.workspace = true
 rowan.workspace = true
+libm.workspace = true
+
+[dev-dependencies]
+# The standard library's extensions, which the units of `puy-stdlib` use (tests only;
+# `docs/design/extensions.md` 3.12). Without a version, so that `cargo publish` drops it
+puy-stdlib-ext = { path = "../puy-stdlib-ext" }

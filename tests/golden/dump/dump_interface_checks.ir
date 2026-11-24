@@ -3,7 +3,12 @@
   g0 O: TObject
   g1 S: IShape
   g2 Q: TSquare
-.func f0 DumpInterfaceChecks.<main> params=0
+.func f0 System.SysUtils.<fini> params=0
+bb0:
+  .line 50
+  RetVoid
+.finally
+.func f1 DumpInterfaceChecks.<main> params=0
   .reg t0: TObject temp
   .reg t1: Int64 temp
   .reg t2: string temp
@@ -143,7 +148,7 @@ bb3:
   .line 38
   RetVoid
 .finally t0:obj, t2, t6, t7:obj, t11:obj, t15, t17:obj, t20, t22:obj, t27:obj, t29, t30, t35, t36, t42
-.func f1 DumpInterfaceChecks.TSquare.Area params=1
+.func f2 DumpInterfaceChecks.TSquare.Area params=1
   .reg v0 Self: TSquare self
   .reg v1 Result: Integer result
 bb0:

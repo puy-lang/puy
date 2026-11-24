@@ -1,0 +1,138 @@
+; puy ir 1
+.global
+  g0 C: TCounter
+  g1 S: TSpan
+.func f0 DumpExt.<main> params=0
+  .reg t0: TCounter temp
+  .reg t1: Integer temp
+  .reg t2: Integer temp
+  .reg t3: Integer temp
+  .reg t4: TCounter temp
+  .reg t5: TCounter temp
+  .reg t6: string temp
+  .reg t7: Integer temp
+  .reg t8: TCounter temp
+  .reg t9: TCounter temp
+  .reg t10: string temp
+  .reg t11: string temp
+  .reg t12: string temp
+  .reg t13: string temp
+  .reg t14: string temp
+  .reg t15: string temp
+  .reg t16: Integer temp
+  .reg t17: Integer temp
+  .reg t18: string temp
+  .reg t19: string temp
+  .reg t20: Integer temp
+  .reg t21: TIntFunc temp
+  .reg t22: Integer temp
+  .reg t23: TIntFunc temp
+  .reg t24: Int64 temp
+  .reg t25: Int64 temp
+  .reg t26: string temp
+  .reg t27: TSpan temp
+  .reg t28: TSpan temp
+  .reg t29: Int64 temp
+  .reg t30: TSpan temp
+  .reg t31: string temp
+  .reg t32: Int64 temp
+  .reg t33: TSpan temp
+  .reg t34: string temp
+  .reg t35: string temp
+  .reg t36: Integer temp
+  .reg t37: TArray<TEntry> temp
+  .reg t38: TArray<UTF8String> temp
+  .reg t39: TArray<UTF8String> temp
+  .reg t40: UTF8String temp
+  .reg t41: TArray<UTF8String> temp
+  .reg t42: Int64 temp
+  .reg t43: string temp
+bb0:
+  .line 13
+  LoadInt      t2, 1
+  LoadInt      t3, 2
+  CallExt      t1, x0(t2, t3)
+  CallExt      t1, x1(t1)
+  MoveRef      t0, t1
+  StoreGlobalRef t0, g0
+  .line 14
+  LoadGlobalRef t5, g0
+  Move         t4, t5
+  CallExt      -, x2(t4)
+  .line 15
+  LoadGlobalRef t9, g0
+  Move         t8, t9
+  CallExt      t7, x3(t8)
+  IntToStr     t6, t7
+  LoadConst    t10, " "
+  ConcatStr    t6, t6, t10
+  LoadConst    t13, "a"
+  Move         t12, t13
+  CallExt      t12, x4(t12)
+  MoveRef      t11, t12
+  ConcatStr    t6, t6, t11
+  LoadConst    t14, " "
+  ConcatStr    t6, t6, t14
+  CallExt      t16, x5()
+  IntToStr     t15, t16
+  ConcatStr    t6, t6, t15
+  LoadConst    t18, "\n"
+  ConcatStr    t6, t6, t18
+  CallHost     -, h0(t6)
+  .line 16
+  LoadInt      t24, 1
+  LoadZero     t25
+  MakeClosure  t23, t24, t25
+  Move         t21, t23
+  .line 19
+  LoadInt      t22, 1
+  .line 16
+  CallExt      t20, x6(t21, t22)
+  IntToStr     t19, t20
+  LoadConst    t26, "\n"
+  ConcatStr    t19, t19, t26
+  CallHost     -, h0(t19)
+  .line 20
+  LoadGlobalRef t30, g1
+  Move         t28, t30
+  LoadInt      t29, 2
+  CallExt      t28, x7(t28, t29)
+  MoveRef      t27, t28
+  StoreGlobalRef t27, g1
+  Release      t30
+  .line 21
+  LoadGlobal   t33, g1
+  FieldGet     t32, t33, 0
+  IntToStr     t31, t32
+  LoadConst    t34, " "
+  ConcatStr    t31, t31, t34
+  LoadConst    t40, utf8 "x"
+  LoadInt      t41, 1
+  NewArr       t41, TArray<UTF8String>
+  LoadZero     t42
+  DynSetRef    t41, t42, t40
+  MoveRef      t39, t41
+  Move         t38, t39
+  CallExt      t38, x8(t38)
+  MoveRef      t37, t38
+  ArrLen       t36, t37
+  IntToStr     t35, t36
+  ConcatStr    t31, t31, t35
+  LoadConst    t43, "\n"
+  ConcatStr    t31, t31, t43
+  CallHost     -, h0(t31)
+  Release      t39
+  Release      t37
+  .line 22
+  RetVoid
+.finally t0, t5, t6, t9, t10, t11, t13, t14, t15, t18, t19, t23, t26, t27, t30, t31, t34, t35, t37, t39, t40, t43
+.func f1 DumpExt.<main>.<anon1> params=2
+  .reg link
+  .reg v0 X: Integer param
+  .reg v1 Result: Integer result
+bb0:
+  .line 18
+  Move         v1, v0
+  .line 19
+  Ret          v1
+.finally

@@ -21,7 +21,10 @@
   .reg t12: TCountedColl temp
   .reg t13: TCountedColl temp
   .reg t14: TCountedColl temp
-  .reg t15: TColl temp
+  .reg t15: Integer temp
+  .reg t16: Integer temp
+  .reg t17: TIntfColl temp
+  .reg t18: TColl temp
   .try bb1..bb5 finally bb6..bb6 t2, t3
 bb0:
   .line 105
@@ -79,10 +82,25 @@ bb7:
   New          t14, DumpForInEnum.TCountedColl
   Move         t13, t14
   Call         -, f11(t13)
-  .line 111
-  LoadGlobal   t15, g1
-  Free         t15
   .line 112
+  ArgCount     t15
+  LoadInt      t16, 100
+  JmpIfLeInt   t15, t16, bb9, bb8
+bb8:
+  .line 113
+  LoadZero     t17
+  New          t17, DumpForInEnum.TIntfColl
+  Call         -, f10(t17)
+  .line 112
+  Jmp          bb10
+bb9:
+  .line 112
+  Jmp          bb10
+bb10:
+  .line 114
+  LoadGlobal   t18, g1
+  Free         t18
+  .line 115
   RetVoid
 .finally t3, t7, t9, t12, t14
 .func f1 DumpForInEnum.TEnum.MoveNext params=1

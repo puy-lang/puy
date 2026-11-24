@@ -105,6 +105,8 @@ fn keeps_instances(inst: &Inst) -> bool {
                 | op::STORE_REF
                 | op::DYN_GET
                 | op::DYN_SET
+                | op::BYTES_GET
+                | op::BYTES_SET
                 | op::VAL_GET
                 | op::VAL_SET
                 | op::FIELD_GET

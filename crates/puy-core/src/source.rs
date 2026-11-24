@@ -156,6 +156,18 @@ fn compute_line_starts(bytes: &[u8]) -> Vec<u32> {
 #[derive(Debug, Default, Clone)]
 pub struct SourceMap {
     files: Vec<SourceFile>,
+    /// The files joined from pieces of other files (a unit of the standard library kept in one
+    /// file per type; `docs/spec/collections.md` 1.2), with their pieces in order.
+    joined: Vec<(FileId, Vec<Piece>)>,
+}
+
+/// A piece of a joined file: its bytes from `start` to `end` are those of `file` from `offset`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Piece {
+    pub start: TextSize,
+    pub end: TextSize,
+    pub file: FileId,
+    pub offset: TextSize,
 }
 
 impl SourceMap {
@@ -179,6 +191,61 @@ impl SourceMap {
     pub fn line_col(&self, span: Span) -> LineCol {
         self.get(span.file).line_col(span.range.start())
     }
+
+    /// Replaces the file `id` (its text and the pieces it was joined from): a unit of the
+    /// standard library read again with more of its parts (`docs/spec/collections.md` 1.2).
+    pub fn replace(&mut self, id: FileId, file: SourceFile) {
+        self.files[id.0 as usize] = file;
+        self.joined.retain(|(f, _)| *f != id);
+    }
+
+    /// Records that `file` is joined from `pieces` (in order, each starting where the one before
+    /// it ends), so that [`SourceMap::resolve`] maps its positions back to the files they came
+    /// from.
+    pub fn join(&mut self, file: FileId, pieces: Vec<Piece>) {
+        debug_assert!(
+            pieces.windows(2).all(|w| w[0].end == w[1].start),
+            "the pieces follow one another"
+        );
+        self.joined.push((file, pieces));
+    }
+
+    /// The files a joined file was joined from other than `own` (the file whose `{$I}` lines
+    /// the others replace), in the order of their first pieces. Empty for a file that is not
+    /// joined.
+    pub fn joined_files(&self, file: FileId, own: &str) -> Vec<FileId> {
+        let mut out: Vec<FileId> = Vec::new();
+        for (_, pieces) in self.joined.iter().filter(|(f, _)| *f == file) {
+            for p in pieces {
+                if self.get(p.file).path != own && !out.contains(&p.file) {
+                    out.push(p.file);
+                }
+            }
+        }
+        out
+    }
+
+    /// The span in the file it came from: a span of a joined file is moved to the piece its
+    /// start is in, its end cut at the end of that piece. Other spans are returned as they are.
+    pub fn resolve(&self, span: Span) -> Span {
+        let Some((_, pieces)) = self.joined.iter().find(|(f, _)| *f == span.file) else {
+            return span;
+        };
+        let start = span.range.start();
+        // The last piece that starts at or before the position (an empty span at the end of a
+        // piece belongs to the next piece, the end of the file to the last one)
+        let k = pieces
+            .partition_point(|p| p.start <= start)
+            .saturating_sub(1);
+        let Some(p) = pieces.get(k) else {
+            return span;
+        };
+        let end = span.range.end().min(p.end).max(start);
+        Span::new(
+            p.file,
+            TextRange::new(p.offset + (start - p.start), p.offset + (end - p.start)),
+        )
+    }
 }
 
 #[cfg(test)]
@@ -196,6 +263,42 @@ mod tests {
         assert_eq!(f.line_col(10.into()), LineCol { line: 3, column: 1 });
         assert_eq!(f.line_count(), 3);
         assert_eq!(f.line_bytes(1), b"d\xc3\xa9f");
+    }
+
+    // A span of a joined file is moved to the file of the piece its start is in, with its end
+    // cut at the end of that piece; spans of other files are left as they are.
+    #[test]
+    fn joined_spans_resolve_to_their_pieces() {
+        let mut m = SourceMap::new();
+        let joined = m.add(SourceFile::new("u.pas", b"ab\nXY\ncd\n".to_vec()));
+        let own = m.add(SourceFile::new("u.pas", b"ab\n{$I x}\ncd\n".to_vec()));
+        let part = m.add(SourceFile::new("x", b"XY\n".to_vec()));
+        let piece = |start: u32, end: u32, file, offset: u32| Piece {
+            start: start.into(),
+            end: end.into(),
+            file,
+            offset: offset.into(),
+        };
+        m.join(
+            joined,
+            vec![
+                piece(0, 3, own, 0),
+                piece(3, 6, part, 0),
+                piece(6, 9, own, 10),
+            ],
+        );
+        let at = |s: u32, e: u32| {
+            let r = m.resolve(Span::new(joined, TextRange::new(s.into(), e.into())));
+            (r.file, u32::from(r.range.start()), u32::from(r.range.end()))
+        };
+        assert_eq!(at(1, 2), (own, 1, 2));
+        assert_eq!(at(3, 5), (part, 0, 2));
+        assert_eq!(at(4, 8), (part, 1, 3));
+        assert_eq!(at(6, 6), (own, 10, 10));
+        assert_eq!(at(7, 9), (own, 11, 13));
+        assert_eq!(at(9, 9), (own, 13, 13));
+        let other = Span::new(own, TextRange::new(1.into(), 2.into()));
+        assert_eq!(m.resolve(other), other);
     }
 
     #[test]

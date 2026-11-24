@@ -12,16 +12,26 @@
   9: str "!\n"
 .type
   64: record Greeting.TPoint slots=2
+  65: class System.Classes.Native.TFileHandle ref sealed slots=0 parent=ty20 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
 .global
   0: int Greeting.Count
   1: int Greeting.Calls
   2: ref P
 .host
   0: Console.Write params=1 ret=0
+.extunit
+  0: System.Classes.Native fingerprint=e75d2b7f94bae15c classes=[TFileHandle=ty65]
+  1: System.SysUtils.Native fingerprint=1c2f67c8ff109e6e classes=[]
+  2: System.IOUtils.Native fingerprint=555b5d5f60182a69 classes=[]
+  3: System.FileSystem.Native fingerprint=a4c02b03a3d800c1 classes=[]
 .unit Greeting file="src/Greeting.pas" init=0 fini=- entry=-
-.unit System.SysUtils file="<stdlib>/System.SysUtils.pas" init=- fini=- entry=-
+.unit System.Classes.Native file="<ext>/System.Classes.Native.pas" init=- fini=- entry=-
+.unit System.SysUtils.Native file="<ext>/System.SysUtils.Native.pas" init=- fini=- entry=-
+.unit System.IOUtils.Native file="<ext>/System.IOUtils.Native.pas" init=- fini=- entry=-
+.unit System.FileSystem.Native file="<ext>/System.FileSystem.Native.pas" init=- fini=- entry=-
+.unit System.SysUtils file="<stdlib>/System.SysUtils.pas" init=- fini=3 entry=-
 .unit MyApp.Models.User file="src/MyApp/Models.User.pas" init=- fini=- entry=-
-.unit Main file="main.pas" init=- fini=- entry=4
+.unit Main file="main.pas" init=- fini=- entry=5
 .func 0 Greeting.<init> params=0 regs=1
   .line 14
   0000  LoadInt      r0, 10
@@ -60,7 +70,10 @@
   .line 35
   0007  Ret          r0
 .finally r0
-.func 3 MyApp.Models.User.Describe params=1 regs=11
+.func 3 System.SysUtils.<fini> params=0 regs=1
+  .line 50
+  0000  RetVoid
+.func 4 MyApp.Models.User.Describe params=1 regs=11
   .local r0 Name
   .local r1 Result
   .line 13
@@ -79,7 +92,7 @@
   .line 14
   000c  Ret          r1
 .finally r1, r2, r3, r4, r5
-.func 4 Main.<main> params=0 regs=19
+.func 5 Main.<main> params=0 regs=19
   .line 9
   0000  LoadConst    r1, k4
   0001  Move         r16, r1
@@ -99,7 +112,7 @@
   .line 11
   000e  LoadConst    r7, k7
   000f  Move         r16, r7
-  0010  Call         r16, f3
+  0010  Call         r16, f4
   0011  MoveRef      r6, r16
   0012  LoadConst    r8, k5
   0013  ConcatStr    r6, r6, r8

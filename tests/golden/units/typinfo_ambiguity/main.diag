@@ -1,0 +1,25 @@
+error[E2502]: `TMemberVisibility` is declared in several units; qualify it
+  --> main.pas:7:15
+   |
+ 7 |   Visibility: TMemberVisibility;
+   |               ^^^^^^^^^^^^^^^^^
+  ::: src/OtherKinds.pas:6:3
+ 6 |   TMemberVisibility = (mvHidden, mvVisible);
+   |   ----------------- declared here
+  ::: <stdlib>/System.TypInfo.pas:7:3
+ 7 |   TMemberVisibility = (mvPrivate, mvProtected, mvPublic, mvPublished);
+   |   ----------------- declared here
+   |
+   = note: Puy does not let a later unit in `uses` hide an earlier one
+   = suggestion: replace with `OtherKinds.TMemberVisibility`
+   = suggestion: replace with `System.TypInfo.TMemberVisibility`
+
+error[E0736]: enumeration value `mvPublished` must be qualified with its type
+  --> main.pas:9:15
+   |
+ 9 |   WriteLn(Ord(mvPublished));
+   |               ^^^^^^^^^^^
+   |
+   = fix: replace with `System.TypInfo.TMemberVisibility.mvPublished`
+
+error: aborting due to 2 errors

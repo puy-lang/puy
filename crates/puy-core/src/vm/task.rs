@@ -6,9 +6,10 @@
 //! registers and frames as directly as when they were fields of the isolate; a scheduler (M5c)
 //! keeps the other tasks aside and swaps one in to run it.
 
-use puy_host::HostFuture;
+use puy_ext::ExtFuture;
 
 use super::Slot;
+use super::host::Deliver;
 
 /// The state of one task.
 pub(super) struct Task {
@@ -17,8 +18,9 @@ pub(super) struct Task {
     pub(super) regs: Vec<Slot>,
     /// The call frames, the running one last.
     pub(super) frames: Vec<Frame>,
-    /// The suspendable host call the task waits for (`docs/design/stackless-vm.md` 3.3).
-    pub(super) pending: Option<PendingHost>,
+    /// The suspendable host call the task waits for (`docs/design/stackless-vm.md` 3.3;
+    /// `host.rs`).
+    pub(super) pending: Option<Pending>,
     /// The `ReadLn` statements being run (between `ReadLnBegin` and `ReadLnEnd`), as the frame
     /// depth each runs in (`docs/spec/semantics.md` 6.2; `input.rs`). Words and `Char`s read in
     /// the frame of the innermost one stay within the line; a `Read` in a routine called from its
@@ -85,19 +87,15 @@ impl Frame {
     }
 }
 
-/// A pending call to a suspendable host function.
-pub(super) struct PendingHost {
-    pub(super) kind: PendingKind,
-    /// The `pc` to go on at when done (the instruction after `CallHost`, or the input instruction
-    /// itself, which runs again). On failure it is not advanced, so the report points at the instruction.
+/// A call to a suspendable host function that was not done when first polled (`host.rs`): the
+/// one shape every such call waits in (`docs/design/extensions.md` 3.7).
+pub(super) struct Pending {
+    /// The call, its result made into an owned value (its failure, the exception to raise).
+    pub(super) fut: ExtFuture,
+    /// Where the result goes.
+    pub(super) deliver: Deliver,
+    /// The `pc` to go on at when done (the instruction after `CallHost`, or an instruction that
+    /// runs again, such as an input instruction). On failure it is not advanced, so the report
+    /// points at the instruction.
     pub(super) resume_pc: u32,
-}
-
-pub(super) enum PendingKind {
-    Write(HostFuture<()>),
-    /// A line for the input buffer (`ahead`: the line after the current one; `input.rs`).
-    ReadLine {
-        fut: HostFuture<Option<String>>,
-        ahead: bool,
-    },
 }

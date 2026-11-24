@@ -77,6 +77,7 @@ var
   H: TFooHelper;                                 // E0753: not a type
   S: string;
   N: Integer;
+  Cur: Currency;
 
 procedure TFoo.Hidden;
 begin
@@ -116,6 +117,6 @@ begin
   S := 'abc';
   N := 0;
   S.Length := 3;                                 // E0707: a read-only property
-  N.Foo := 1;                                    // E3200: no helper has `Foo` (planned for M5)
-  WriteLn(N.ToHexString);                        // E3200
+  N.Foo := 1;                                    // E0700: no helper has `Foo`
+  WriteLn(Cur.ToHexString);                      // E3200: `Currency` has no members yet
 end.

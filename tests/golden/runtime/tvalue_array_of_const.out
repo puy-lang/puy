@@ -1,0 +1,6 @@
+10: 1/1 a/18 bc/18 2.5/4 True/3 (TFoo)/7 (empty)/0 Green/3 (TPoint)/14 9/1
+0:
+2: 5000000000/16 1/16
+2: 9/1 x/18
+3 x 1.50
+EConvertError: format '%d' invalid or incompatible with argument

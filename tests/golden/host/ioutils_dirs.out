@@ -1,0 +1,23 @@
+GetFiles: t/a.TXT t/b.txt t/c.txt.bak t/noext
+GetFiles *.txt: t/b.txt
+GetFiles *.TXT: t/a.TXT
+GetFiles ?.txt: t/b.txt
+GetFiles *.*: t/a.TXT t/b.txt t/c.txt.bak t/noext
+GetFiles *t*: t/b.txt t/c.txt.bak t/noext
+GetFiles all *.txt: t/b.txt t/Abc/z.txt t/sub/x.txt t/sub/deep/y.txt
+GetFiles all: t/a.TXT t/b.txt t/c.txt.bak t/noext t/Abc/z.txt t/sub/x.txt t/sub/deep/y.txt
+GetDirectories: t/Abc t/sub
+GetDirectories all: t/Abc t/sub t/sub/deep
+GetDirectories s*: t/sub
+GetFileSystemEntries: t/Abc t/a.TXT t/b.txt t/c.txt.bak t/noext t/sub
+GetFileSystemEntries /work/t/sub: /work/t/sub/deep /work/t/sub/x.txt
+IsEmpty: FALSE FALSE
+IsEmpty empty: TRUE
+Exists: TRUE FALSE FALSE
+Copy: u/Abc u/a.TXT u/b.txt u/c.txt.bak u/noext u/sub u/Abc/z.txt u/sub/deep u/sub/x.txt u/sub/deep/y.txt
+Move: FALSE TRUE
+Delete: FALSE FALSE
+/work
+/work/t/sub
+relative: ./x.txt
+parent: ../Abc ../sub

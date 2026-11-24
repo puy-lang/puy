@@ -7,7 +7,7 @@ use crate::args::{Color, Format, Options};
 use puy_core::diagnostics::{Diagnostic, Severity, json, render};
 use puy_core::fix::FixResult;
 use puy_core::source::SourceMap;
-use puy_core::vm::ExceptionReport;
+use puy_core::vm::{ExceptionReport, leaks_json, render_leaks};
 
 fn use_color(opts: &Options) -> bool {
     match opts.color {
@@ -228,6 +228,23 @@ pub fn emit_halt_exception(report: &ExceptionReport, opts: &Options) {
             let _ = std::io::stderr().write_all(text.as_bytes());
         }
     }
+}
+
+/// Reports the remaining heap blocks at shutdown (`diagnostics.md` 8.1).
+pub fn emit_leaks(leaks: &[(String, u64)], opts: &Options) {
+    let mut stderr = std::io::stderr().lock();
+    let _ = match opts.format {
+        Format::Json => writeln!(stderr, "{}", leaks_json(leaks)),
+        Format::Text => {
+            let text = render_leaks(leaks);
+            let text = if use_color(opts) {
+                colorize(&text)
+            } else {
+                text
+            };
+            stderr.write_all(text.as_bytes())
+        }
+    };
 }
 
 /// Failure to flush stdout at exit (`semantics.md` 7.2).

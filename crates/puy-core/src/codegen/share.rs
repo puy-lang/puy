@@ -121,10 +121,31 @@ pub(super) fn share(
             }
         }
     }
+    if let Some(rtti) = &mut m.rtti {
+        let renumber_target = |target: &mut bytecode::rtti::RttiTarget| {
+            if target.kind == bytecode::rtti::TARGET_FUNC {
+                target.value = func(target.value);
+            }
+            target.bridge = func(target.bridge);
+        };
+        for method in &mut rtti.methods {
+            renumber_target(&mut method.call);
+        }
+        for prop in &mut rtti.props {
+            renumber_target(&mut prop.read);
+            renumber_target(&mut prop.write);
+        }
+        for attr in &mut rtti.attrs {
+            attr.make = func(attr.make);
+        }
+    }
     m.entry = func(m.entry);
     for u in &mut m.units {
         u.init = u.init.map(func);
         u.fini = u.fini.map(func);
+    }
+    for t in &mut m.tests {
+        t.func = func(t.func);
     }
 }
 

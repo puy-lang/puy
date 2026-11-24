@@ -1,0 +1,31 @@
+; puyc format 0
+.const
+  0: str "\n"
+.type
+  64: class DumpRttiNone.TShape slots=2 parent=ty19 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+.global
+  0: int S
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpRttiNone file="dump_rtti_none.pas" init=- fini=- entry=0
+.func 0 DumpRttiNone.<main> params=0 regs=4
+  .line 17
+  0000  LoadZero     r2
+  0001  New          r2, ty64
+  0002  StoreGlobal  r2, g0
+  .line 18
+  0003  LoadInt      r3, 1
+  0004  ObjSet       r2, 0, r3
+  .line 19
+  0005  LoadGlobal   r3, g0
+  0006  ObjGet       r2, r3, 0
+  0007  IntToStr     r0, r2
+  0008  LoadConst    r1, k0
+  0009  ConcatStr    r0, r0, r1
+  000a  CallHost     r0, h0
+  .line 20
+  000b  LoadGlobal   r2, g0
+  000c  Free         r2
+  .line 21
+  000d  RetVoid
+.finally r0, r1

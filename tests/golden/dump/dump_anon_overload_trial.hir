@@ -1,0 +1,78 @@
+program DumpAnonOverloadTrial uses=System.SysUtils
+.type TP = reference to procedure
+.type TF0 = reference to function: Integer
+.routine f0 Wrap(F: TP): string
+  .var v0 F: TP param
+  .var v1 Result: string result
+  expr @16
+    call-closure: -
+      var v0 F: TP
+  assign @17 R+
+    var v1 Result
+    const string "wrapped"
+.routine f1 Z(const S: string)
+  .var v0 S: string const param
+  writeln @22
+    arg
+      var v0 S: string
+.routine f2 Z#2(F: TF0)
+  .var v0 F: TF0 param
+  writeln @27
+    arg
+      call-closure: Integer
+        var v0 F: TF0
+.routine f3 Run()
+  expr @32
+    call f1 Z: -
+      call f0 Wrap: string
+        anon f4
+  expr @54
+    call f1 Z: -
+      call f0 Wrap: string
+        anon f8
+.routine f4 Run.<anon1>() closure
+  .type TLoc = class(TObject)
+    .method f5 M
+  .var v0 T: TLoc local
+  expr @48
+    call f6 Run.<anon1>.Inner: -
+  assign @49 R+
+    var v0 T
+    create TLoc builtin
+  expr @50
+    method f5 Run.<anon1>.TLoc.M: -
+      var v0 T: TLoc
+  free @51
+    var v0 T: TLoc
+  expr @52
+    call f1 Z: -
+      call f0 Wrap: string
+        anon f7
+.routine f5 Run.<anon1>.TLoc.M()
+  .var v0 Self: TLoc self
+  writeln @39
+    arg
+      const string "method"
+.routine f6 Run.<anon1>.Inner()
+  writeln @43
+    arg
+      const string "inner"
+.routine f7 Run.<anon1>.<anon1>() closure
+  writeln @52
+    arg
+      const string "deep"
+.routine f8 Run.<anon2>() closure
+  raise @54
+    create Exception builtin
+      const string "second"
+.routine f9 <main>.<anon1>() closure
+  writeln @58
+    arg
+      const string "main"
+.routine <main>
+  expr @58
+    call f1 Z: -
+      call f0 Wrap: string
+        anon f9
+  expr @59
+    call f3 Run: -

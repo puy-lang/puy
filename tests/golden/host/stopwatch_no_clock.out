@@ -1,0 +1,5 @@
+FALSE 0 00:00:00 10000000
+ENotSupportedException: the clock is not permitted by the host ekNoPermission
+FALSE
+ENotSupportedException: the clock is not permitted by the host
+ENotSupportedException: the clock is not permitted by the host

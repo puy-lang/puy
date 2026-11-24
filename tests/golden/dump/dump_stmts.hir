@@ -179,7 +179,8 @@ program DumpStmts uses=System.SysUtils
   readln @54
   assert @55 "G < 5"
     binary Boolean
-      global g0 G: Integer
+      probe value #0 Integer
+        global g0 G: Integer
       < Boolean int:Integer
         const Integer 5
     binary string
@@ -187,6 +188,7 @@ program DumpStmts uses=System.SysUtils
       + string str
         builtin IntToStr string
           global g0 G: Int64
+    probe #0 Integer "G"
   nop @58
   nop @60
   writeln @61

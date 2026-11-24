@@ -1,0 +1,375 @@
+; puyc format 0
+.const
+  0: str "assertion failed: Twice(FBase) = 42"
+  1: str "Twice(FBase)"
+  2: str "FBase"
+  3: str "assertion failed: Half(X) = Expected"
+  4: str "Half(X)"
+  5: str "X"
+  6: str "Expected"
+  7: str "assertion failed: RefCount = 1"
+  8: str "RefCount"
+  9: str "assertion failed: Length(S) > 0"
+  10: str "Length(S)"
+  11: str "S"
+  12: str "a"
+  13: str "bc"
+.type
+  64: class MyApp.Calc_test.TCalcTests slots=1 parent=ty19 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+  65: class MyApp.Calc_test.TCounted ref slots=0 parent=ty20 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+.debug
+  dt1: int
+  dt2: string
+.global
+.host
+.unit MyApp.Calc file="src/MyApp/Calc.pas" init=- fini=- entry=-
+.unit MyApp.Calc_test file="src/MyApp/Calc_test.pas" init=- fini=- entry=2
+.test 0 f10 file=1 line=24 MyApp.Calc_test.TCalcTests.TwiceOfBase
+.test 1 f11 file=1 line=27 case=0 MyApp.Calc_test.TCalcTests.HalfOf(4, 2)
+.test 2 f12 file=1 line=27 case=1 MyApp.Calc_test.TCalcTests.HalfOf(9, 4)
+.test 3 f13 file=1 line=32 MyApp.Calc_test.TCounted.Counts
+.test 4 f14 file=1 line=62 skip="not yet" MyApp.Calc_test.Later
+.test 5 f15 file=1 line=68 case=0 MyApp.Calc_test.Upper('a')
+.test 6 f16 file=1 line=68 case=1 MyApp.Calc_test.Upper('b' + 'c')
+.func 0 MyApp.Calc.Twice params=1 regs=3
+  .local r0 X
+  .local r1 Result
+  .line 16
+  0000  MulIntI      r1, r0, 2
+  0001  NarrowOvf    r1, r1, 4
+  .line 17
+  0002  Ret          r1
+.func 1 MyApp.Calc.Half params=1 regs=3
+  .local r0 X
+  .local r1 Result
+  .line 11
+  0000  DivIntI      r1, r0, 2
+  0001  NarrowOvf    r1, r1, 4
+  .line 12
+  0002  Ret          r1
+.func 2 MyApp.Calc_test.<main> params=0 regs=1
+  .line 1
+  0000  RetVoid
+.func 3 MyApp.Calc_test.TCalcTests.Prepare params=1 regs=2
+  .local r0 Self
+  .line 37
+  0000  LoadInt      r1, 21
+  0001  ObjSet       r0, 0, r1
+  .line 38
+  0002  RetVoid
+.func 4 MyApp.Calc_test.TCalcTests.CleanUp params=1 regs=2
+  .local r0 Self
+  .line 42
+  0000  LoadZero     r1
+  0001  ObjSet       r0, 0, r1
+  .line 43
+  0002  RetVoid
+.func 5 MyApp.Calc_test.TCalcTests.TwiceOfBase params=1 regs=10
+  .local r0 Self
+  .line 47
+  0000  ObjGet       r6, r0, 0
+  .inline f0 MyApp.Calc.Twice line=47
+  .line 16
+  0001  MulIntI      r8, r6, 2
+  0002  NarrowOvf    r8, r8, 4
+  .endinline
+  .line 47
+  0003  JmpIfEqIntI  r8, 42, -> 0011
+  0004  LoadConst    r1, k0
+  0005  New          r2, ty7
+  0006  ObjSetRef    r2, 0, r1
+  0007  LoadConst    r3, k1
+  0008  Move         r7, r3
+  0009  LoadInt      r9, 1
+  000a  AssertValue  r2, r7
+  000b  LoadConst    r4, k2
+  000c  Move         r7, r4
+  000d  Move         r8, r6
+  000e  LoadInt      r9, 1
+  000f  AssertValue  r2, r7
+  0010  Raise        r2
+  .line 48
+  0011  RetVoid
+.finally r1, r2, r3, r4
+.func 6 MyApp.Calc_test.TCalcTests.HalfOf params=3 regs=14
+  .local r0 Self
+  .local r1 X
+  .local r2 Expected
+  .line 52
+  0000  NarrowRng    r11, r1, 4
+  .inline f1 MyApp.Calc.Half line=52
+  .line 11
+  0001  DivIntI      r12, r11, 2
+  0002  NarrowOvf    r12, r12, 4
+  .endinline
+  .line 52
+  0003  JmpIfEqInt   r12, r2, -> 0016
+  0004  LoadConst    r3, k3
+  0005  New          r4, ty7
+  0006  ObjSetRef    r4, 0, r3
+  0007  LoadConst    r5, k4
+  0008  Move         r11, r5
+  0009  LoadInt      r13, 1
+  000a  AssertValue  r4, r11
+  000b  LoadConst    r6, k5
+  000c  Move         r11, r6
+  000d  Move         r12, r1
+  000e  LoadInt      r13, 1
+  000f  AssertValue  r4, r11
+  0010  LoadConst    r7, k6
+  0011  Move         r11, r7
+  0012  Move         r12, r2
+  0013  LoadInt      r13, 1
+  0014  AssertValue  r4, r11
+  0015  Raise        r4
+  .line 53
+  0016  RetVoid
+.finally r3, r4, r5, r6, r7
+.func 7 MyApp.Calc_test.TCounted.Counts params=1 regs=8
+  .local r0 Self
+  .line 57
+  0000  RefCount     r4, r0
+  0001  JmpIfEqIntI  r4, 1, -> 000b
+  0002  LoadConst    r1, k7
+  0003  New          r2, ty7
+  0004  ObjSetRef    r2, 0, r1
+  0005  LoadConst    r3, k8
+  0006  Move         r5, r3
+  0007  Move         r6, r4
+  0008  LoadInt      r7, 1
+  0009  AssertValue  r2, r5
+  000a  Raise        r2
+  .line 58
+  000b  RetVoid
+.finally r1, r2, r3
+.func 8 MyApp.Calc_test.Later params=0 regs=1
+  .line 64
+  0000  RetVoid
+.func 9 MyApp.Calc_test.Upper params=1 regs=10
+  .local r0 S
+  .line 70
+  0000  StrLen       r6, r0
+  0001  JmpIfGtIntI  r6, 0, -> 0010
+  0002  LoadConst    r2, k9
+  0003  New          r3, ty7
+  0004  ObjSetRef    r3, 0, r2
+  0005  LoadConst    r4, k10
+  0006  Move         r7, r4
+  0007  Move         r8, r6
+  0008  LoadInt      r9, 1
+  0009  AssertValue  r3, r7
+  000a  LoadConst    r5, k11
+  000b  Move         r7, r5
+  000c  Move         r8, r0
+  000d  LoadInt      r9, 2
+  000e  AssertValue  r3, r7
+  000f  Raise        r3
+  .line 71
+  0010  RetVoid
+.finally r1, r2, r3, r4, r5
+.func 10 MyApp.Calc_test.<test:TCalcTests.TwiceOfBase> params=0 regs=11
+  .local r0 Obj
+  .local r1 E
+  .local r2 E2
+  .try 000c..0010 except 0010..0018 r6
+  .try 0005..0008 except 0008..001d r5
+  .try 0002..0021 finally 0021..0022 r3
+  .line 24
+  0000  LoadZero     r0
+  0001  New          r0, ty64
+  0002  ClassType    r10, r0
+  .inline f3 MyApp.Calc_test.TCalcTests.Prepare line=24
+  .line 37
+  0003  LoadInt      r9, 21
+  0004  ObjSet       r0, 0, r9
+  .endinline
+  .line 24
+  0005  Move         r8, r0
+  0006  CallMethod   r8, f5
+  0007  Jmp          -> 001d
+  0008  Move         r8, r5
+  0009  IsClass      r8, ty0
+  000a  JmpIfFalse   r8, -> 001c
+  000b  Move         r1, r5
+  000c  ClassType    r10, r0
+  .inline f4 MyApp.Calc_test.TCalcTests.CleanUp line=24
+  .line 42
+  000d  LoadZero     r9
+  000e  ObjSet       r0, 0, r9
+  .endinline
+  .line 24
+  000f  Jmp          -> 0018
+  0010  Move         r8, r6
+  0011  IsClass      r8, ty0
+  0012  JmpIfFalse   r8, -> 0017
+  0013  Move         r2, r6
+  0014  AddSuppressed r1, r2
+  0015  Release      r6
+  0016  Jmp          -> 0018
+  0017  Raise        r6
+  0018  AssignRef    r7, r5
+  0019  Raise        r7
+  001a  Release      r5
+  001b  Jmp          -> 001d
+  001c  Raise        r5
+  001d  ClassType    r10, r0
+  .inline f4 MyApp.Calc_test.TCalcTests.CleanUp line=24
+  .line 42
+  001e  LoadZero     r9
+  001f  ObjSet       r0, 0, r9
+  .endinline
+  .line 24
+  0020  LoadZero     r3
+  0021  Free         r0
+  0022  EndFinally   r3, 0
+  0023  RetVoid
+.finally r4, r5, r6, r7
+.func 11 MyApp.Calc_test.<test:TCalcTests.HalfOf(4, 2)> params=0 regs=11
+  .local r0 Obj
+  .local r1 E
+  .local r2 E2
+  .try 000e..0012 except 0012..001a r6
+  .try 0005..000a except 000a..001f r5
+  .try 0002..0023 finally 0023..0024 r3
+  .line 27
+  0000  LoadZero     r0
+  0001  New          r0, ty64
+  0002  ClassType    r10, r0
+  .inline f3 MyApp.Calc_test.TCalcTests.Prepare line=27
+  .line 37
+  0003  LoadInt      r9, 21
+  0004  ObjSet       r0, 0, r9
+  .endinline
+  .line 27
+  0005  Move         r8, r0
+  .line 25
+  0006  LoadInt      r9, 4
+  0007  LoadInt      r10, 2
+  .line 27
+  0008  CallMethod   r8, f6
+  0009  Jmp          -> 001f
+  000a  Move         r8, r5
+  000b  IsClass      r8, ty0
+  000c  JmpIfFalse   r8, -> 001e
+  000d  Move         r1, r5
+  000e  ClassType    r10, r0
+  .inline f4 MyApp.Calc_test.TCalcTests.CleanUp line=27
+  .line 42
+  000f  LoadZero     r9
+  0010  ObjSet       r0, 0, r9
+  .endinline
+  .line 27
+  0011  Jmp          -> 001a
+  0012  Move         r8, r6
+  0013  IsClass      r8, ty0
+  0014  JmpIfFalse   r8, -> 0019
+  0015  Move         r2, r6
+  0016  AddSuppressed r1, r2
+  0017  Release      r6
+  0018  Jmp          -> 001a
+  0019  Raise        r6
+  001a  AssignRef    r7, r5
+  001b  Raise        r7
+  001c  Release      r5
+  001d  Jmp          -> 001f
+  001e  Raise        r5
+  001f  ClassType    r10, r0
+  .inline f4 MyApp.Calc_test.TCalcTests.CleanUp line=27
+  .line 42
+  0020  LoadZero     r9
+  0021  ObjSet       r0, 0, r9
+  .endinline
+  .line 27
+  0022  LoadZero     r3
+  0023  Free         r0
+  0024  EndFinally   r3, 0
+  0025  RetVoid
+.finally r4, r5, r6, r7
+.func 12 MyApp.Calc_test.<test:TCalcTests.HalfOf(9, 4)> params=0 regs=11
+  .local r0 Obj
+  .local r1 E
+  .local r2 E2
+  .try 000e..0012 except 0012..001a r6
+  .try 0005..000a except 000a..001f r5
+  .try 0002..0023 finally 0023..0024 r3
+  .line 27
+  0000  LoadZero     r0
+  0001  New          r0, ty64
+  0002  ClassType    r10, r0
+  .inline f3 MyApp.Calc_test.TCalcTests.Prepare line=27
+  .line 37
+  0003  LoadInt      r9, 21
+  0004  ObjSet       r0, 0, r9
+  .endinline
+  .line 27
+  0005  Move         r8, r0
+  .line 26
+  0006  LoadInt      r9, 9
+  0007  LoadInt      r10, 4
+  .line 27
+  0008  CallMethod   r8, f6
+  0009  Jmp          -> 001f
+  000a  Move         r8, r5
+  000b  IsClass      r8, ty0
+  000c  JmpIfFalse   r8, -> 001e
+  000d  Move         r1, r5
+  000e  ClassType    r10, r0
+  .inline f4 MyApp.Calc_test.TCalcTests.CleanUp line=27
+  .line 42
+  000f  LoadZero     r9
+  0010  ObjSet       r0, 0, r9
+  .endinline
+  .line 27
+  0011  Jmp          -> 001a
+  0012  Move         r8, r6
+  0013  IsClass      r8, ty0
+  0014  JmpIfFalse   r8, -> 0019
+  0015  Move         r2, r6
+  0016  AddSuppressed r1, r2
+  0017  Release      r6
+  0018  Jmp          -> 001a
+  0019  Raise        r6
+  001a  AssignRef    r7, r5
+  001b  Raise        r7
+  001c  Release      r5
+  001d  Jmp          -> 001f
+  001e  Raise        r5
+  001f  ClassType    r10, r0
+  .inline f4 MyApp.Calc_test.TCalcTests.CleanUp line=27
+  .line 42
+  0020  LoadZero     r9
+  0021  ObjSet       r0, 0, r9
+  .endinline
+  .line 27
+  0022  LoadZero     r3
+  0023  Free         r0
+  0024  EndFinally   r3, 0
+  0025  RetVoid
+.finally r4, r5, r6, r7
+.func 13 MyApp.Calc_test.<test:TCounted.Counts> params=0 regs=2
+  .local r0 Obj
+  .line 32
+  0000  New          r0, ty65
+  0001  Move         r1, r0
+  0002  CallMethod   r1, f7
+  0003  RetVoid
+.finally r0
+.func 14 MyApp.Calc_test.<test:Later> params=0 regs=1
+  .line 62
+  0000  RetVoid
+.func 15 MyApp.Calc_test.<test:Upper('a')> params=0 regs=2
+  .line 66
+  0000  LoadConst    r0, k12
+  .line 68
+  0001  Move         r1, r0
+  0002  Call         r1, f9
+  0003  RetVoid
+.finally r0
+.func 16 MyApp.Calc_test.<test:Upper('b' + 'c')> params=0 regs=2
+  .line 67
+  0000  LoadConst    r0, k13
+  .line 68
+  0001  Move         r1, r0
+  0002  Call         r1, f9
+  0003  RetVoid
+.finally r0

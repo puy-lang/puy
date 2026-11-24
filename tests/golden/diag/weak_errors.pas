@@ -5,7 +5,7 @@ program WeakErrors;
 // take it (a parameter, a type, a method, a property). A language attribute takes no arguments
 // (E0705; empty parentheses are none). A `[weak]` variable or field is not passed to a `var` /
 // `out` parameter (E0706 with a note). A qualified name is not the language attribute (W0025
-// when nothing has the name), and `[Test]` is E3200 until M5 (attributes.md 2, 5).
+// when nothing has the name), and `[Test]` is E0781 outside a test unit (attributes.md 2, 5).
 
 uses System.SysUtils;
 

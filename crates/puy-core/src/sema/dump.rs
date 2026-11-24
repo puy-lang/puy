@@ -837,6 +837,7 @@ impl<'a> Dumper<'a> {
                 }
             }
             StmtKind::Flush => self.line(depth, &format!("flush {at}")),
+            StmtKind::RequestLeakReport => self.line(depth, &format!("requestleakreport {at}")),
             StmtKind::Write { args, newline, err } => {
                 let name = if *newline { "writeln" } else { "write" };
                 let to = if *err { " err" } else { "" };
@@ -858,11 +859,22 @@ impl<'a> Dumper<'a> {
                 cond,
                 message,
                 text,
+                probes,
+                marks: _,
             } => {
                 self.line(depth, &format!("assert {at} {}", escape_str(text)));
                 self.expr(cond, depth + 1);
                 if let Some(m) = message {
                     self.expr(m, depth + 1);
+                }
+                // `docs/spec/semantics.md` 5.4: the subexpressions a failure records
+                for (k, p) in probes.iter().enumerate() {
+                    let mark = p.mark.map_or(String::new(), |m| format!(" mark#{m}"));
+                    let ty = self.program.types.name(p.ty);
+                    self.line(
+                        depth + 1,
+                        &format!("probe #{k} {ty} {}{mark}", escape_str(&p.text)),
+                    );
                 }
             }
             StmtKind::SetLength { target, lens } => {
@@ -1280,6 +1292,9 @@ impl<'a> Dumper<'a> {
             ExprKind::ClassRefValue(class) => {
                 self.line(depth, &format!("classref {}", self.t(Ty::Class(*class))));
             }
+            ExprKind::TypeInfo(t) => {
+                self.line(depth, &format!("typeinfo {}", self.t(*t)));
+            }
             // `docs/spec/objects.md` 15.5
             ExprKind::RoutineRef(r) => {
                 let name = self.program.routines[r.0 as usize].name.clone();
@@ -1381,6 +1396,14 @@ impl<'a> Dumper<'a> {
                 self.line(depth, &format!("weak {ty}"));
                 self.expr(inner, depth + 1);
             }
+            ExprKind::Probe { operand, probe } => {
+                let what = match probe {
+                    Probe::Value(k) => format!("value #{k}"),
+                    Probe::Reached(k) => format!("reached mark#{k}"),
+                };
+                self.line(depth, &format!("probe {what} {ty}"));
+                self.expr(operand, depth + 1);
+            }
             ExprKind::TryStrToInt { s, target } => {
                 self.line(depth, &format!("builtin TryStrToInt {ty}"));
                 self.expr(s, depth + 1);
@@ -1407,6 +1430,8 @@ impl<'a> Dumper<'a> {
                 }
             }
             ExprKind::Error => self.line(depth, "error"),
+            // Not reached: no member reached through a type name reads it
+            ExprKind::TypeName => self.line(depth, &format!("type {ty}")),
         }
     }
 
@@ -1439,6 +1464,9 @@ pub(crate) fn exc_member_type(m: ExcMember) -> Ty {
         ExcMember::StackTrace => Ty::String,
         ExcMember::Suppressed => {
             Ty::DynArray(super::types::TypeId(crate::bytecode::EXCEPTION_ARRAY_TYPE))
+        }
+        ExcMember::Values => {
+            Ty::DynArray(super::types::TypeId(crate::bytecode::ASSERTION_VALUES_TYPE))
         }
     }
 }
@@ -1510,6 +1538,62 @@ fn builtin_text(b: Builtin) -> &'static str {
         Builtin::IsSameInstance => "SameInstance",
         Builtin::ObjectClassName => "ObjectClassName",
         Builtin::IsOverridden => "IsOverridden",
+        Builtin::SingleToBits => "SingleToBits",
+        Builtin::BitsToSingle => "BitsToSingle",
+        Builtin::DoubleToBits => "DoubleToBits",
+        Builtin::BitsToDouble => "BitsToDouble",
+        Builtin::CharClass => "CharClass",
+        Builtin::UnicodeCategory => "UnicodeCategory",
+        Builtin::CodePointClass => "CodePointClass",
+        Builtin::NumericValue => "NumericValue",
+        Builtin::ClockNow => "ClockNow",
+        Builtin::ClockMono => "ClockMono",
+        Builtin::ClockControl => "ClockControl",
+        Builtin::ClockSleep => "ClockSleep",
+        Builtin::AddSuppressed => "AddSuppressed",
+        Builtin::LocalOffset => "LocalOffset",
+        Builtin::RaiseConvertError => "RaiseConvertError",
+        Builtin::BytesCopy => "BytesCopy",
+        Builtin::BytesFill => "BytesFill",
+        Builtin::ConsoleRead => "ConsoleRead",
+        Builtin::ConsoleWrite => "ConsoleWrite",
+        Builtin::ConsoleWriteError => "ConsoleWriteError",
+        Builtin::TypeInfo => "TypeInfo",
+        Builtin::RttiTypeField => "RttiTypeField",
+        Builtin::RttiMemberField => "RttiMemberField",
+        Builtin::RttiName => "RttiName",
+        Builtin::RttiFindType => "RttiFindType",
+        Builtin::RttiTypeCount => "RttiTypeCount",
+        Builtin::RttiFieldGet => "RttiFieldGet",
+        Builtin::RttiFieldSet => "RttiFieldSet",
+        Builtin::RttiClassType => "RttiClassType",
+        Builtin::RttiClassOf => "RttiClassOf",
+        Builtin::RttiMethodRef => "RttiMethodRef",
+        Builtin::RttiPropRef => "RttiPropRef",
+        Builtin::RttiBridge => "RttiBridge",
+        Builtin::RttiAttrFunc => "RttiAttrFunc",
+        Builtin::RttiArgSet => "RttiArgSet",
+        Builtin::TypeInfoNumber => "TypeInfoNumber",
+        Builtin::TypeInfoOfNumber => "TypeInfoOfNumber",
+        Builtin::ValueWrap => "ValueWrap",
+        Builtin::ValueIs => "ValueIs",
+        Builtin::ValueCast => "ValueCast",
+        Builtin::ValueMatch => "ValueMatch",
+        Builtin::ValueToString => "ValueToString",
+        Builtin::ValueRead => "ValueRead",
+        Builtin::ValueReadDouble => "ValueReadDouble",
+        Builtin::ValueReadCurrency => "ValueReadCurrency",
+        Builtin::ValueReadString => "ValueReadString",
+        Builtin::TypeKindOf => "TypeKindOf",
+        Builtin::ValueArrayLength => "ValueArrayLength",
+        Builtin::ValueArrayType => "ValueArrayType",
+        Builtin::ValueArrayBits => "ValueArrayBits",
+        Builtin::ValueArrayRef => "ValueArrayRef",
+        Builtin::ValueArrayElemType => "ValueArrayElemType",
+        Builtin::ValueArrayValue => "ValueArrayValue",
+        Builtin::ValueArraySetValue => "ValueArraySetValue",
+        Builtin::ValueArraySet => "ValueArraySet",
+        Builtin::FormatValues => "Format",
         Builtin::HashFind => "HashFind",
         Builtin::HashLookup => "HashLookup",
         Builtin::IsPlainKey => "IsPlainKey",
@@ -1517,6 +1601,15 @@ fn builtin_text(b: Builtin) -> &'static str {
         Builtin::Succ => "Succ",
         Builtin::Pred => "Pred",
         Builtin::Sqrt => "Sqrt",
+        Builtin::Sin => "Sin",
+        Builtin::Cos => "Cos",
+        Builtin::ArcTan => "ArcTan",
+        Builtin::Ln => "Ln",
+        Builtin::Exp => "Exp",
+        Builtin::Int => "Int",
+        Builtin::Frac => "Frac",
+        Builtin::MathFunc1 => "MathFunc1",
+        Builtin::MathFunc2 => "MathFunc2",
         Builtin::HashCombine => "HashCombine",
         Builtin::SameInstance => "TObject.Equals",
         Builtin::InstanceHash => "TObject.GetHashCode",

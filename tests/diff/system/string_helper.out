@@ -1,0 +1,22 @@
+4 8 -1
+8 10 -1
+4 10
+TRUE FALSE
+TRUE FALSE TRUE
+TRUE TRUE FALSE
+World|Hello|lo
+Hello!!, World|Hello|HelloWorld
+HeLLo, WorLd|Hello, There
+HW 12 FALSE
+2: [Hello] [ World]
+3: [a] [b] [c]
+3: [one] [] [two]
+HELLO, WORLD|hello, world
+[padded text][padded text  ][  padded text]
+[abc][abcxx][xxabc]
+[   42][00042][42...]
+[Hello, World]
+124 -42
+TRUE FALSE
+TRUE TRUE TRUE
+12 o

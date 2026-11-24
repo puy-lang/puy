@@ -1,0 +1,14 @@
+zero: FALSE 0 0
+create: FALSE 0 00:00:00
+running: TRUE
+ticks: 15000
+ms: 3
+stopped: FALSE 45000 00:00:00.0045000 4.5
+again: 60000 6
+reset: FALSE 0
+restart: TRUE 15000
+original: 30000, copy: TRUE 45000
+restart twice: 15000
+start new: TRUE 15000
+frequency: 10000000 TRUE
+time stamps: 50225000 15000

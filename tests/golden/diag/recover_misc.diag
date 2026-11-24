@@ -27,17 +27,17 @@ error[E0006]: non-ASCII characters in identifier
     |
     = note: identifiers are limited to ASCII letters, digits and `_`
 
-error[E3200]: type helpers for built-in types are not supported yet (planned for M5)
-   --> recover_misc.pas:16:8
+error[E0700]: `Integer` has no member `_5`
+   --> recover_misc.pas:16:10
     |
  16 |   N := 1._5;
-    |        ^^^^
+    |          ^^
 
-error[E3200]: type helpers for built-in types are not supported yet (planned for M5)
-   --> recover_misc.pas:17:8
+error[E0700]: `Integer` has no member `Foo`
+   --> recover_misc.pas:17:10
     |
  17 |   N := 1.Foo;
-    |        ^^^^^
+    |          ^^^
 
 error[E3000]: `with` is not supported in Puy
    --> recover_misc.pas:18:3

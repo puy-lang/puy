@@ -1,0 +1,41 @@
+WriteAllText: C3 A9
+WriteAllText UTF8: EF BB BF C3 A9
+ReadAllText (BOM skipped): é 1
+WriteAllText Unicode: FF FE 61 00 E9 00
+ReadAllText (UTF-16 BOM): aé
+ReadAllText (UTF-16BE BOM): aé
+ReadAllText Unicode without BOM: hi
+WriteAllText ASCII (no preamble): 78
+AppendAllText Unicode (no BOM): 78 79 00 E9 00
+ReadAllLines: 4 [a] [b] [] [c]
+ReadAllLines empty: 0
+ReadAllLines no end: 1 [no end]
+WriteAllLines: 78 0A 0A 79 0A
+ReadAllLines Unicode: 1 [é]
+ReadLines 1: 65535 aaaaaa
+ReadLines 2: 6 second
+ReadLines 3: 5 third
+[one][twoé][three]
+<one><twoé><three>
+[be][x]
+(empty)
+fmAppend position: 8
+fmOpen faRead size: 8
+write to faRead: EWriteError
+fmOpenOrCreate existing size: 8
+fmOpenOrCreate new size: 0 TRUE
+fmTruncate size: 0
+fmCreateNew: TRUE
+OpenWrite / OpenRead: 1
+GetSize: 65550
+attributes: TRUE TRUE
+read-only: TRUE
+write read-only: EFCreateError ekPermissionDenied
+not read-only: TRUE
+last write: 1767323045
+last write: 129600
+last access: -21600
+creation: 1728000000
+moved keeps the time: 129600
+Copy overwrite: TRUE
+Delete: FALSE

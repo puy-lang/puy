@@ -1,0 +1,89 @@
+error[E3022]: `System.TypInfo.PPropInfo` is not supported in Puy
+  --> typinfo_unavailable.pas:7:24
+   |
+ 7 |   Prop: System.TypInfo.PPropInfo;
+   |                        ^^^^^^^^^
+   |
+   = note: use `System.Rtti.TRttiProperty` instead
+
+error[E3022]: `System.TypInfo.PTypeData` is not supported in Puy
+  --> typinfo_unavailable.pas:8:9
+   |
+ 8 |   Data: PTypeData;
+   |         ^^^^^^^^^
+   |
+   = note: use `System.Rtti.TRttiType` and its subclasses instead
+
+error[E3022]: `System.TypInfo.TTypeKind` is not supported in Puy
+  --> typinfo_unavailable.pas:9:24
+   |
+ 9 |   Kind: System.TypInfo.TTypeKind;
+   |                        ^^^^^^^^^
+   |
+   = note: use `System.TTypeKind` or `System.Rtti.TRttiType.TypeKind` instead
+
+error[E3022]: `System.TypInfo.PTypeInfo` is not supported in Puy
+   --> typinfo_unavailable.pas:10:24
+    |
+ 10 |   Info: System.TypInfo.PTypeInfo;
+    |                        ^^^^^^^^^
+    |
+    = note: use `System.PTypeInfo` instead
+
+error[E3022]: `System.TypInfo.GetEnumName` is not supported in Puy
+   --> typinfo_unavailable.pas:12:26
+    |
+ 12 |   WriteLn(System.TypInfo.getenumname(TypeInfo(Integer), 0));
+    |                          ^^^^^^^^^^^
+    |
+    = note: use `System.Rtti.TRttiEnumerationType.GetName<T>` instead
+
+error[E3022]: `System.TypInfo.GetEnumValue` is not supported in Puy
+   --> typinfo_unavailable.pas:13:11
+    |
+ 13 |   WriteLn(GetEnumValue(TypeInfo(Integer), 'abc'));
+    |           ^^^^^^^^^^^^
+    |
+    = note: use `System.Rtti.TRttiEnumerationType.GetValue<T>` instead
+
+error[E3022]: `System.TypInfo.GetTypeData` is not supported in Puy
+   --> typinfo_unavailable.pas:14:11
+    |
+ 14 |   WriteLn(GetTypeData(TypeInfo(Integer)));
+    |           ^^^^^^^^^^^
+    |
+    = note: use `System.Rtti.TRttiContext.GetType` and the members of the returned `TRttiType` instead
+
+error[E3022]: `System.TypInfo.GetPropInfo` is not supported in Puy
+   --> typinfo_unavailable.pas:15:11
+    |
+ 15 |   WriteLn(GetPropInfo(TypeInfo(Integer), 'Text'));
+    |           ^^^^^^^^^^^
+    |
+    = note: use `System.Rtti.TRttiType.GetProperty` instead
+
+error[E3022]: `System.TypInfo.GetPropValue` is not supported in Puy
+   --> typinfo_unavailable.pas:16:11
+    |
+ 16 |   WriteLn(GetPropValue(nil, 'Text'));
+    |           ^^^^^^^^^^^^
+    |
+    = note: use `System.Rtti.TRttiProperty.GetValue` instead
+
+error[E3022]: `System.TypInfo.SetPropValue` is not supported in Puy
+   --> typinfo_unavailable.pas:17:18
+    |
+ 17 |   System.TypInfo.SetPropValue(nil, 'Text', 0);
+    |                  ^^^^^^^^^^^^
+    |
+    = note: use `System.Rtti.TRttiProperty.SetValue` instead
+
+error[E3022]: `System.TypInfo.tkClass` is not supported in Puy
+   --> typinfo_unavailable.pas:18:30
+    |
+ 18 |   WriteLn(Ord(System.TypInfo.tkClass));
+    |                              ^^^^^^^
+    |
+    = note: use `System.TTypeKind.tkClass` instead
+
+error: aborting due to 11 errors

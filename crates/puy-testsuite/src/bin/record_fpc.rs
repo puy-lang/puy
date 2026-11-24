@@ -17,6 +17,36 @@ mod native {
     /// The FPC version used for recording (the apt version on `ubuntu-latest`).
     const FPC_VERSION: &str = "3.2.2";
 
+    /// Cases FPC 3.2.2 cannot compile, and why (`design/testing.md` 3.4): their `.out` is written
+    /// by hand and checked with Delphi (`check-dcc`). Such a case is compiled without writing
+    /// anything, and one that compiles (the list is out of date) makes the run fail.
+    const UNSUPPORTED: &[(&str, &str)] = &[
+        // FPC's helpers of `string` are for `AnsiString`; `delphiunicode` strings have none
+        ("string_helper", "no helper for UnicodeString"),
+        // FPC 3.2.2 has no anonymous methods
+        ("overload_proc_values", "no anonymous methods"),
+        // FPC 3.2.2 has no `System.RegularExpressions`
+        ("regex_basics", "no System.RegularExpressions"),
+        ("regex_replace", "no System.RegularExpressions"),
+        // FPC 3.2.2's `TStream` has no `TBytes` forms of `Read` / `Write`
+        ("memory_stream", "no TStream.Read / Write of TBytes"),
+        // FPC 3.2.2 has no `TStreamReader` / `TStreamWriter` / `TBinaryReader` / `TBinaryWriter`
+        ("stream_reader_writer", "no TStreamReader / TStreamWriter"),
+        ("binary_reader_writer", "no TBinaryReader / TBinaryWriter"),
+        // FPC 3.2.2 has no `System.IOUtils`
+        ("ioutils_errors", "no System.IOUtils"),
+        // FPC 3.2.2's `TTypeKind` has other values (no `tkProcedure`)
+        ("rtti_type_kinds", "TTypeKind has other values"),
+        // FPC 3.2.2 declares `TValue` in `Rtti` and its `TTypeKind` has other values
+        ("tvalue_basic", "TValue is in the unit Rtti"),
+        // FPC 3.2.2's `Rtti` lists the members in another way
+        ("rtti_members", "Rtti has other members"),
+        // FPC 3.2.2's `Rtti` has no `Invoke` of the same forms
+        ("rtti_invoke", "Rtti has another Invoke"),
+        // FPC 3.2.2 does not resolve System.Rtti directly
+        ("rtti_published_no_m", "no System.Rtti"),
+    ];
+
     pub fn main() -> ExitCode {
         let args: Vec<String> = std::env::args().skip(1).collect();
         let check = args.iter().any(|a| a == "--check");
@@ -50,6 +80,21 @@ mod native {
         };
         let mut failed = 0;
         for case in cases {
+            if let Some((_, reason)) = UNSUPPORTED.iter().find(|(n, _)| *n == case.name) {
+                match record(case, true) {
+                    Err(e) if e.starts_with(FPC_FAILED) => {
+                        println!("unsupported: {} ({reason})", case.name);
+                    }
+                    _ => {
+                        failed += 1;
+                        eprintln!(
+                            "FAILED: {}: listed as unsupported, but FPC compiles it",
+                            case.name
+                        );
+                    }
+                }
+                continue;
+            }
             match record(case, check) {
                 Ok(()) => println!("ok: {}", case.name),
                 Err(e) => {
@@ -64,6 +109,9 @@ mod native {
             ExitCode::SUCCESS
         }
     }
+
+    /// The start of the error of a case FPC cannot compile.
+    const FPC_FAILED: &str = "fpc failed:";
 
     fn record(case: &Case, check: bool) -> Result<(), String> {
         let src = case.source();
@@ -113,7 +161,7 @@ mod native {
         let out = fpc.output().map_err(|e| e.to_string())?;
         if !out.status.success() {
             return Err(format!(
-                "fpc failed:\n{}{}",
+                "{FPC_FAILED}\n{}{}",
                 String::from_utf8_lossy(&out.stdout),
                 String::from_utf8_lossy(&out.stderr)
             ));
@@ -185,11 +233,18 @@ mod native {
         );
         // Fully qualified unit names do not work with FPC 3.2.2's `-FN`, so rewrite them to short
         // names (`design/testing.md` 3.3; decided 2026-11-03): `System.SysUtils` and the units of
-        // the containers (M4-40)
+        // the containers (M4-40, `System.Contnrs` M5-14), `System.Classes` (M5-16), `System.Math` (M5-36),
+        // `System.Character` (M5-38)
         let mut body = String::from_utf8_lossy(src).into_owned();
         for (full, short) in [
+            ("System.Character", "Character"),
+            ("System.Classes", "Classes"),
+            ("System.Contnrs", "Contnrs"),
+            ("System.DateUtils", "DateUtils"),
+            ("System.Math", "Math"),
             ("System.Generics.Collections", "Generics.Collections"),
             ("System.Generics.Defaults", "Generics.Defaults"),
+            ("System.StrUtils", "StrUtils"),
             ("System.SysUtils", "SysUtils"),
         ] {
             body = replace_ascii_case_insensitive(&body, full, short);

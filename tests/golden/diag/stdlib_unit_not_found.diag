@@ -1,9 +1,9 @@
-error[E2500]: unit `System.Classes` not found
+error[E2500]: unit `System.Variants` not found
   --> stdlib_unit_not_found.pas:5:6
    |
- 5 | uses System.Classes;
-   |      ^^^^^^^^^^^^^^
+ 5 | uses System.Variants;
+   |      ^^^^^^^^^^^^^^^
    |
-   = note: the standard library of this release has only `System.Generics.Collections`, `System.Generics.Defaults`, `System.SysUtils`; more units come with later releases
+   = note: the standard library of this release has only `Puy.Console`, `Puy.Lazy`, `Puy.OS`, `Puy.Paths`, `Puy.Platform`, `Puy.Random`, `Puy.Runtime`, `Puy.Testing`, `System.Character`, `System.Classes`, `System.Contnrs`, `System.DateUtils`, `System.Diagnostics`, `System.Generics.Collections`, `System.Generics.Defaults`, `System.IOUtils`, `System.Math`, `System.RegularExpressions`, `System.Rtti`, `System.StrUtils`, `System.SysUtils`, `System.TimeSpan`, `System.TypInfo`; more units come with later releases
 
 error: aborting due to 1 error

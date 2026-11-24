@@ -1,0 +1,14 @@
+TRUE TRUE TRUE TRUE TRUE
+5: [a] [b] [] [c] []
+1: []
+1: [abc]
+2: [] []
+xy
+b😀a 😁😀 2
+97 55296
+0 0 0
+[abc] [abc] [] [abc]
+[Xabc] [X] [abcX] [aXbc] [aX] [Xabc] [abcX]
+TRUE FALSE TRUE FALSE 1 --A
+EOutOfMemory: out of memory
+1 10000000000 1.5 [a] []

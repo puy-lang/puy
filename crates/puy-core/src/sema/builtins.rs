@@ -1,7 +1,7 @@
 //! Tables of the built-ins in `System` and `System.SysUtils` (`docs/spec/semantics.md` chapters 5 and 8).
 
 use super::hir::Builtin;
-use super::types::{Ty, TypeId};
+use super::types::{TCLASS, Ty, TypeId};
 use crate::diagnostics::Code;
 
 /// Built-in procedures (used as statements).
@@ -56,6 +56,8 @@ pub enum BuiltinProc {
     /// default order of its elements (`I96`). Seen only from the units of the standard library
     /// (`docs/spec/bytecode.md` 2.22).
     ArraySortRange,
+    /// Enables leak counting at isolate shutdown. Seen only from standard library units.
+    RequestLeakReport,
 }
 
 /// The special variables `Input`, `Output` and `ErrOutput` of `System` (`docs/spec/semantics.md`
@@ -128,6 +130,10 @@ pub fn lookup_system(lower: &str) -> Option<SystemName> {
         // The range written as an index of a default array property (`docs/spec/objects.md` 12.3)
         return Some(SystemName::Type(Ty::Record(super::types::TINDEXRANGE)));
     }
+    if lower == "tassertionvalue" {
+        // An element of `EAssertionFailed.Values` (`docs/spec/exceptions.md` 2.1)
+        return Some(SystemName::Type(Ty::Record(super::types::TASSERTIONVALUE)));
+    }
     if lower == "tproc" {
         // `reference to procedure` (`docs/spec/objects.md` 9.9)
         return Some(SystemName::Type(Ty::Callable(super::types::TPROC)));
@@ -135,6 +141,10 @@ pub fn lookup_system(lower: &str) -> Option<SystemName> {
     if let Some(h) = super::helpers::builtin_helper_id(lower) {
         // A built-in helper (`docs/spec/objects.md` 10.7)
         return Some(SystemName::Type(Ty::Helper(h)));
+    }
+    if lower == "ttypekind" {
+        // `docs/spec/rtti.md` 2.3
+        return Some(SystemName::Type(Ty::Enum(super::types::TTYPEKIND)));
     }
     if lower == "tclass" {
         // `class of TObject` (`docs/spec/objects.md` 2.8)
@@ -180,6 +190,13 @@ pub fn lookup_system(lower: &str) -> Option<SystemName> {
         "succ" => SystemName::Func(Builtin::Succ),
         "pred" => SystemName::Func(Builtin::Pred),
         "sqrt" => SystemName::Func(Builtin::Sqrt),
+        "sin" => SystemName::Func(Builtin::Sin),
+        "cos" => SystemName::Func(Builtin::Cos),
+        "arctan" => SystemName::Func(Builtin::ArcTan),
+        "ln" => SystemName::Func(Builtin::Ln),
+        "exp" => SystemName::Func(Builtin::Exp),
+        "int" => SystemName::Func(Builtin::Int),
+        "frac" => SystemName::Func(Builtin::Frac),
         "hashcombine" => SystemName::Func(Builtin::HashCombine),
         "keyequals" => SystemName::Key(super::hir::KeyOp::Equals),
         "keyhash" => SystemName::Key(super::hir::KeyOp::Hash),
@@ -197,6 +214,7 @@ pub fn lookup_system(lower: &str) -> Option<SystemName> {
         "exchange" => SystemName::Proc(BuiltinProc::Exchange),
         "exitcode" => SystemName::ExitCode,
         "maxint" => SystemName::MaxInt,
+        "typeinfo" => SystemName::Func(Builtin::TypeInfo),
         _ => {
             if let Some(m) = reserved_milestone(lower) {
                 return Some(SystemName::Reserved(m));
@@ -227,6 +245,62 @@ pub fn lookup_stdlib_only(lower: &str) -> Option<SystemName> {
         "hashrelink" => SystemName::Proc(BuiltinProc::HashRelink),
         "isplainorder" => SystemName::Func(Builtin::IsPlainOrder),
         "arraysortrange" => SystemName::Proc(BuiltinProc::ArraySortRange),
+        "requestleakreport" => SystemName::Proc(BuiltinProc::RequestLeakReport),
+        "singletobits" => SystemName::Func(Builtin::SingleToBits),
+        "bitstosingle" => SystemName::Func(Builtin::BitsToSingle),
+        "doubletobits" => SystemName::Func(Builtin::DoubleToBits),
+        "bitstodouble" => SystemName::Func(Builtin::BitsToDouble),
+        "charclass" => SystemName::Func(Builtin::CharClass),
+        "unicodecategory" => SystemName::Func(Builtin::UnicodeCategory),
+        "codepointclass" => SystemName::Func(Builtin::CodePointClass),
+        "numericvalue" => SystemName::Func(Builtin::NumericValue),
+        "mathfunc1" => SystemName::Func(Builtin::MathFunc1),
+        "mathfunc2" => SystemName::Func(Builtin::MathFunc2),
+        "clocknow" => SystemName::Func(Builtin::ClockNow),
+        "clockmono" => SystemName::Func(Builtin::ClockMono),
+        "clockcontrol" => SystemName::Func(Builtin::ClockControl),
+        "clocksleep" => SystemName::Func(Builtin::ClockSleep),
+        "localoffset" => SystemName::Func(Builtin::LocalOffset),
+        "raiseconverterror" => SystemName::Func(Builtin::RaiseConvertError),
+        "bytescopy" => SystemName::Func(Builtin::BytesCopy),
+        "bytesfill" => SystemName::Func(Builtin::BytesFill),
+        "consoleread" => SystemName::Func(Builtin::ConsoleRead),
+        "consolewrite" => SystemName::Func(Builtin::ConsoleWrite),
+        "consolewriteerror" => SystemName::Func(Builtin::ConsoleWriteError),
+        "rttitypefield" => SystemName::Func(Builtin::RttiTypeField),
+        "rttimemberfield" => SystemName::Func(Builtin::RttiMemberField),
+        "rttiname" => SystemName::Func(Builtin::RttiName),
+        "rttifindtype" => SystemName::Func(Builtin::RttiFindType),
+        "rttitypecount" => SystemName::Func(Builtin::RttiTypeCount),
+        "rttifieldget" => SystemName::Func(Builtin::RttiFieldGet),
+        "rttifieldset" => SystemName::Func(Builtin::RttiFieldSet),
+        "rtticlasstype" => SystemName::Func(Builtin::RttiClassType),
+        "rtticlassof" => SystemName::Func(Builtin::RttiClassOf),
+        "rttimethodref" => SystemName::Func(Builtin::RttiMethodRef),
+        "rttipropref" => SystemName::Func(Builtin::RttiPropRef),
+        "rttibridge" => SystemName::Func(Builtin::RttiBridge),
+        "rttiattrfunc" => SystemName::Func(Builtin::RttiAttrFunc),
+        "rttiargset" => SystemName::Func(Builtin::RttiArgSet),
+        "typeinfonumber" => SystemName::Func(Builtin::TypeInfoNumber),
+        "typeinfoofnumber" => SystemName::Func(Builtin::TypeInfoOfNumber),
+        "valuewrap" => SystemName::Func(Builtin::ValueWrap),
+        "valueis" => SystemName::Func(Builtin::ValueIs),
+        "valuecast" => SystemName::Func(Builtin::ValueCast),
+        "valuematch" => SystemName::Func(Builtin::ValueMatch),
+        "valuetostring" => SystemName::Func(Builtin::ValueToString),
+        "valueread" => SystemName::Func(Builtin::ValueRead),
+        "valuereaddouble" => SystemName::Func(Builtin::ValueReadDouble),
+        "valuereadcurrency" => SystemName::Func(Builtin::ValueReadCurrency),
+        "valuereadstring" => SystemName::Func(Builtin::ValueReadString),
+        "typekindof" => SystemName::Func(Builtin::TypeKindOf),
+        "valuearraylength" => SystemName::Func(Builtin::ValueArrayLength),
+        "valuearraytype" => SystemName::Func(Builtin::ValueArrayType),
+        "valuearraybits" => SystemName::Func(Builtin::ValueArrayBits),
+        "valuearrayref" => SystemName::Func(Builtin::ValueArrayRef),
+        "valuearrayelemtype" => SystemName::Func(Builtin::ValueArrayElemType),
+        "valuearrayvalue" => SystemName::Func(Builtin::ValueArrayValue),
+        "valuearraysetvalue" => SystemName::Func(Builtin::ValueArraySetValue),
+        "valuearrayset" => SystemName::Func(Builtin::ValueArraySet),
         _ => return None,
     })
 }
@@ -251,6 +325,8 @@ pub enum SysUtilsName {
     /// `TCaseMapping` / `TCaseFold` of the `Ansi*` case routines (`docs/spec/semantics.md` 5.3).
     CaseMapping,
     CaseFold,
+    /// `TIOErrorKind`, the type of `EInOutError.ErrorKind` (`docs/spec/exceptions.md` 2.2).
+    IOErrorKind,
 }
 
 /// Names in `System.SysUtils`.
@@ -260,6 +336,7 @@ pub fn lookup_sysutils(lower: &str) -> Option<SysUtilsName> {
         "treplaceflags" => return Some(SysUtilsName::ReplaceFlags),
         "tcasemapping" => return Some(SysUtilsName::CaseMapping),
         "tcasefold" => return Some(SysUtilsName::CaseFold),
+        "tioerrorkind" => return Some(SysUtilsName::IOErrorKind),
         "freeandnil" => return Some(SysUtilsName::Proc(BuiltinProc::FreeAndNil)),
         _ => {}
     }
@@ -307,16 +384,11 @@ fn reserved_milestone(lower: &str) -> Option<&'static str> {
         "random",
         "randomize",
         "randseed",
-        "now",
-        "date",
-        "time",
-        "sleep",
         "tguid",
         "isequalguid",
         "guidtostring",
         "stringtoguid",
         "createguid",
-        "typeinfo",
     ];
     M5.contains(&lower).then_some("M5")
 }
@@ -403,6 +475,207 @@ pub fn builtin_signature(func: Builtin) -> (&'static [(&'static str, Ty)], Ty) {
         Builtin::IsSameInstance => (&[("X", Ty::Error), ("Y", Ty::Error)], Ty::Boolean),
         Builtin::ObjectClassName => (&[("X", Ty::Error)], Ty::String),
         Builtin::IsOverridden => (&[("Method", Ty::Error)], Ty::Boolean),
+        Builtin::SingleToBits => (&[("X", Ty::Single)], Ty::Cardinal),
+        Builtin::BitsToSingle => (&[("X", Ty::Cardinal)], Ty::Single),
+        Builtin::DoubleToBits => (&[("X", Ty::Double)], Ty::UInt64),
+        Builtin::BitsToDouble => (&[("X", Ty::UInt64)], Ty::Double),
+        Builtin::CharClass => (&[("C", Ty::Char)], Ty::Integer),
+        Builtin::UnicodeCategory => (&[("CP", Ty::Integer)], Ty::Integer),
+        Builtin::CodePointClass => (&[("CP", Ty::Integer)], Ty::Integer),
+        Builtin::NumericValue => (&[("CP", Ty::Integer)], Ty::Double),
+        Builtin::ClockNow => (&[], Ty::Int64),
+        Builtin::ClockMono => (&[], Ty::Int64),
+        Builtin::ClockControl => (&[("Kind", Ty::Integer), ("Value", Ty::Int64)], Ty::Integer),
+        Builtin::ClockSleep => (&[("Nanos", Ty::Int64)], Ty::Integer),
+        Builtin::AddSuppressed => (
+            &[
+                ("E", Ty::Class(super::types::EXCEPTION)),
+                ("X", Ty::Class(super::types::EXCEPTION)),
+            ],
+            Ty::Boolean,
+        ),
+        Builtin::LocalOffset => (&[("Nanos", Ty::Int64)], Ty::Integer),
+        Builtin::RaiseConvertError => (&[("S", Ty::String), ("What", Ty::String)], Ty::Boolean),
+        Builtin::BytesCopy => (
+            &[
+                ("Dst", Ty::Error),
+                ("DstIndex", Ty::Integer),
+                ("Src", Ty::Error),
+                ("SrcIndex", Ty::Integer),
+                ("Count", Ty::Integer),
+            ],
+            Ty::Integer,
+        ),
+        Builtin::BytesFill => (
+            &[
+                ("Dst", Ty::Error),
+                ("Index", Ty::Integer),
+                ("Count", Ty::Integer),
+                ("Value", Ty::Byte),
+            ],
+            Ty::Integer,
+        ),
+        Builtin::ConsoleRead | Builtin::ConsoleWrite | Builtin::ConsoleWriteError => (
+            &[
+                ("Buffer", Ty::Error),
+                ("Offset", Ty::Integer),
+                ("Count", Ty::Integer),
+            ],
+            Ty::Integer,
+        ),
+        Builtin::TypeInfo => (&[("T", Ty::Error)], Ty::TypeInfo),
+        Builtin::RttiTypeField => (
+            &[
+                ("Info", Ty::TypeInfo),
+                ("Field", Ty::Integer),
+                ("Index", Ty::Integer),
+            ],
+            Ty::Int64,
+        ),
+        Builtin::RttiMemberField => (
+            &[
+                ("Table", Ty::Integer),
+                ("Index", Ty::Integer),
+                ("Field", Ty::Integer),
+            ],
+            Ty::Int64,
+        ),
+        Builtin::RttiName => (&[("Index", Ty::Integer)], Ty::String),
+        Builtin::RttiFindType => (&[("Name", Ty::String)], Ty::TypeInfo),
+        Builtin::RttiTypeCount => (&[], Ty::Integer),
+        Builtin::RttiFieldGet => (
+            &[
+                ("Table", Ty::Integer),
+                ("Index", Ty::Integer),
+                ("Instance", Ty::Error),
+            ],
+            Ty::Error,
+        ),
+        Builtin::RttiFieldSet => (
+            &[
+                ("Table", Ty::Integer),
+                ("Index", Ty::Integer),
+                ("Instance", Ty::Error),
+                ("AValue", Ty::Error),
+            ],
+            Ty::Error,
+        ),
+        Builtin::RttiClassType => (&[("C", Ty::ClassRef(TCLASS))], Ty::TypeInfo),
+        Builtin::RttiClassOf => (&[("P", Ty::TypeInfo)], Ty::ClassRef(TCLASS)),
+        // Their arguments are read by `Sema::value_builtin`
+        Builtin::RttiMethodRef
+        | Builtin::RttiPropRef
+        | Builtin::RttiBridge
+        | Builtin::RttiAttrFunc
+        | Builtin::RttiArgSet => (&[], Ty::Error),
+        Builtin::TypeInfoNumber => (&[("P", Ty::TypeInfo)], Ty::Integer),
+        Builtin::TypeInfoOfNumber => (&[("N", Ty::Integer)], Ty::TypeInfo),
+        Builtin::ValueWrap => (&[("X", Ty::Error), ("Info", Ty::TypeInfo)], Ty::Error),
+        Builtin::ValueIs => (
+            &[("T", Ty::Error), ("V", Ty::Error), ("Raise", Ty::Boolean)],
+            Ty::Boolean,
+        ),
+        Builtin::ValueCast => (&[("T", Ty::Error), ("V", Ty::Error)], Ty::Error),
+        Builtin::ValueToString | Builtin::ValueReadString => (
+            &[
+                ("AType", Ty::Integer),
+                ("ABits", Ty::Int64),
+                ("ARef", Ty::ValueRef),
+            ],
+            Ty::String,
+        ),
+        Builtin::ValueRead => (
+            &[
+                ("AType", Ty::Integer),
+                ("ABits", Ty::Int64),
+                ("ARef", Ty::ValueRef),
+                ("Mode", Ty::Integer),
+            ],
+            Ty::Int64,
+        ),
+        Builtin::ValueReadDouble => (
+            &[
+                ("AType", Ty::Integer),
+                ("ABits", Ty::Int64),
+                ("ARef", Ty::ValueRef),
+            ],
+            Ty::Double,
+        ),
+        Builtin::ValueReadCurrency => (
+            &[
+                ("AType", Ty::Integer),
+                ("ABits", Ty::Int64),
+                ("ARef", Ty::ValueRef),
+            ],
+            Ty::Currency,
+        ),
+        Builtin::TypeKindOf => (&[("AType", Ty::Integer)], Ty::Integer),
+        Builtin::ValueArrayLength => (
+            &[("AType", Ty::Integer), ("ARef", Ty::ValueRef)],
+            Ty::Integer,
+        ),
+        Builtin::ValueMatch => (
+            &[
+                ("AType", Ty::Integer),
+                ("ABits", Ty::Int64),
+                ("ARef", Ty::ValueRef),
+                ("Target", Ty::Integer),
+                ("Raise", Ty::Boolean),
+            ],
+            Ty::Boolean,
+        ),
+        Builtin::ValueArrayType | Builtin::ValueArrayElemType => (
+            &[
+                ("AType", Ty::Integer),
+                ("ARef", Ty::ValueRef),
+                ("Index", Ty::Integer),
+            ],
+            Ty::Integer,
+        ),
+        Builtin::ValueArrayBits => (
+            &[
+                ("AType", Ty::Integer),
+                ("ARef", Ty::ValueRef),
+                ("Index", Ty::Integer),
+            ],
+            Ty::Int64,
+        ),
+        Builtin::ValueArrayRef => (
+            &[
+                ("AType", Ty::Integer),
+                ("ARef", Ty::ValueRef),
+                ("Index", Ty::Integer),
+            ],
+            Ty::ValueRef,
+        ),
+        Builtin::ValueArraySet => (
+            &[
+                ("AType", Ty::Integer),
+                ("ARef", Ty::ValueRef),
+                ("Index", Ty::Integer),
+                ("VBits", Ty::Int64),
+                ("VRef", Ty::ValueRef),
+            ],
+            Ty::ValueRef,
+        ),
+        Builtin::FormatValues => (&[("Fmt", Ty::String), ("Args", Ty::Error)], Ty::String),
+        Builtin::ValueArrayValue => (
+            &[
+                ("AType", Ty::Integer),
+                ("ARef", Ty::ValueRef),
+                ("Index", Ty::Integer),
+            ],
+            Ty::Error,
+        ),
+        Builtin::ValueArraySetValue => (
+            &[
+                ("AType", Ty::Integer),
+                ("ARef", Ty::ValueRef),
+                ("Index", Ty::Integer),
+                ("AValue", Ty::Error),
+            ],
+            Ty::ValueRef,
+        ),
         Builtin::HashFind => (
             &[
                 ("Hash", Ty::Int64),
@@ -426,7 +699,19 @@ pub fn builtin_signature(func: Builtin) -> (&'static [(&'static str, Ty)], Ty) {
         Builtin::IsPlainKey => (&[("X", Ty::Error)], Ty::Boolean),
         Builtin::IsPlainOrder => (&[("X", Ty::Error)], Ty::Boolean),
         Builtin::Succ | Builtin::Pred => (&[("X", Ty::Error)], Ty::Error),
-        Builtin::Sqrt => (&[("X", Ty::Double)], Ty::Double),
+        Builtin::Sqrt
+        | Builtin::Sin
+        | Builtin::Cos
+        | Builtin::ArcTan
+        | Builtin::Ln
+        | Builtin::Exp
+        | Builtin::Int
+        | Builtin::Frac => (&[("X", Ty::Double)], Ty::Double),
+        Builtin::MathFunc1 => (&[("Kind", Ty::Integer), ("X", Ty::Double)], Ty::Double),
+        Builtin::MathFunc2 => (
+            &[("Kind", Ty::Integer), ("X", Ty::Double), ("Y", Ty::Double)],
+            Ty::Double,
+        ),
         Builtin::HashCombine => (&[("H", Ty::Int64), ("X", Ty::Int64)], Ty::Int64),
         Builtin::SameInstance => (&[("Self", Ty::Error), ("Obj", Ty::Error)], Ty::Boolean),
         Builtin::InstanceHash => (&[("Self", Ty::Error)], Ty::Int64),
@@ -519,6 +804,62 @@ pub fn builtin_name(func: Builtin) -> &'static str {
         Builtin::IsSameInstance => "SameInstance",
         Builtin::ObjectClassName => "ObjectClassName",
         Builtin::IsOverridden => "IsOverridden",
+        Builtin::SingleToBits => "SingleToBits",
+        Builtin::BitsToSingle => "BitsToSingle",
+        Builtin::DoubleToBits => "DoubleToBits",
+        Builtin::BitsToDouble => "BitsToDouble",
+        Builtin::CharClass => "CharClass",
+        Builtin::UnicodeCategory => "UnicodeCategory",
+        Builtin::CodePointClass => "CodePointClass",
+        Builtin::NumericValue => "NumericValue",
+        Builtin::ClockNow => "ClockNow",
+        Builtin::ClockMono => "ClockMono",
+        Builtin::ClockControl => "ClockControl",
+        Builtin::ClockSleep => "ClockSleep",
+        Builtin::AddSuppressed => "AddSuppressed",
+        Builtin::LocalOffset => "LocalOffset",
+        Builtin::RaiseConvertError => "RaiseConvertError",
+        Builtin::BytesCopy => "BytesCopy",
+        Builtin::BytesFill => "BytesFill",
+        Builtin::ConsoleRead => "ConsoleRead",
+        Builtin::ConsoleWrite => "ConsoleWrite",
+        Builtin::ConsoleWriteError => "ConsoleWriteError",
+        Builtin::TypeInfo => "TypeInfo",
+        Builtin::RttiTypeField => "RttiTypeField",
+        Builtin::RttiMemberField => "RttiMemberField",
+        Builtin::RttiName => "RttiName",
+        Builtin::RttiFindType => "RttiFindType",
+        Builtin::RttiTypeCount => "RttiTypeCount",
+        Builtin::RttiFieldGet => "RttiFieldGet",
+        Builtin::RttiFieldSet => "RttiFieldSet",
+        Builtin::RttiClassType => "RttiClassType",
+        Builtin::RttiClassOf => "RttiClassOf",
+        Builtin::RttiMethodRef => "RttiMethodRef",
+        Builtin::RttiPropRef => "RttiPropRef",
+        Builtin::RttiBridge => "RttiBridge",
+        Builtin::RttiAttrFunc => "RttiAttrFunc",
+        Builtin::RttiArgSet => "RttiArgSet",
+        Builtin::TypeInfoNumber => "TypeInfoNumber",
+        Builtin::TypeInfoOfNumber => "TypeInfoOfNumber",
+        Builtin::ValueWrap => "ValueWrap",
+        Builtin::ValueIs => "ValueIs",
+        Builtin::ValueCast => "ValueCast",
+        Builtin::ValueMatch => "ValueMatch",
+        Builtin::ValueToString => "ValueToString",
+        Builtin::ValueRead => "ValueRead",
+        Builtin::ValueReadDouble => "ValueReadDouble",
+        Builtin::ValueReadCurrency => "ValueReadCurrency",
+        Builtin::ValueReadString => "ValueReadString",
+        Builtin::TypeKindOf => "TypeKindOf",
+        Builtin::ValueArrayLength => "ValueArrayLength",
+        Builtin::ValueArrayType => "ValueArrayType",
+        Builtin::ValueArrayBits => "ValueArrayBits",
+        Builtin::ValueArrayRef => "ValueArrayRef",
+        Builtin::ValueArrayElemType => "ValueArrayElemType",
+        Builtin::ValueArrayValue => "ValueArrayValue",
+        Builtin::ValueArraySetValue => "ValueArraySetValue",
+        Builtin::ValueArraySet => "ValueArraySet",
+        Builtin::FormatValues => "Format",
         Builtin::HashFind => "HashFind",
         Builtin::HashLookup => "HashLookup",
         Builtin::IsPlainKey => "IsPlainKey",
@@ -526,6 +867,15 @@ pub fn builtin_name(func: Builtin) -> &'static str {
         Builtin::Succ => "Succ",
         Builtin::Pred => "Pred",
         Builtin::Sqrt => "Sqrt",
+        Builtin::Sin => "Sin",
+        Builtin::Cos => "Cos",
+        Builtin::ArcTan => "ArcTan",
+        Builtin::Ln => "Ln",
+        Builtin::Exp => "Exp",
+        Builtin::Int => "Int",
+        Builtin::Frac => "Frac",
+        Builtin::MathFunc1 => "MathFunc1",
+        Builtin::MathFunc2 => "MathFunc2",
         Builtin::HashCombine => "HashCombine",
         Builtin::Sqr => "Sqr",
         Builtin::Pi => "Pi",
@@ -587,6 +937,7 @@ pub fn proc_name(p: BuiltinProc) -> &'static str {
         BuiltinProc::ArrayMoveRange => "ArrayMoveRange",
         BuiltinProc::HashRelink => "HashRelink",
         BuiltinProc::ArraySortRange => "ArraySortRange",
+        BuiltinProc::RequestLeakReport => "RequestLeakReport",
         BuiltinProc::FreeIfClass => "FreeIfClass",
         BuiltinProc::CheckDefaultOrder => "CheckDefaultOrder",
         BuiltinProc::CheckClassType => "CheckClassType",

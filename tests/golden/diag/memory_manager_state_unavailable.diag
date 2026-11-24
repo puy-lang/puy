@@ -1,0 +1,65 @@
+error[E3022]: `System.THeapStatus` is not supported in Puy
+  --> memory_manager_state_unavailable.pas:5:10
+   |
+ 5 |   Plain: THeapStatus;
+   |          ^^^^^^^^^^^
+   |
+   = note: use `TMemory` in `Puy.Runtime` instead
+
+error[E3022]: `System.THeapStatus` is not supported in Puy
+  --> memory_manager_state_unavailable.pas:6:21
+   |
+ 6 |   Qualified: System.THeapStatus;
+   |                     ^^^^^^^^^^^
+   |
+   = note: use `TMemory` in `Puy.Runtime` instead
+
+error[E3022]: `System.GetHeapStatus` is not supported in Puy
+  --> memory_manager_state_unavailable.pas:8:3
+   |
+ 8 |   GetHeapStatus;
+   |   ^^^^^^^^^^^^^
+   |
+   = note: use `TMemory` in `Puy.Runtime` instead
+
+error[E3022]: `System.GetHeapStatus` is not supported in Puy
+  --> memory_manager_state_unavailable.pas:9:10
+   |
+ 9 |   System.GetHeapStatus;
+   |          ^^^^^^^^^^^^^
+   |
+   = note: use `TMemory` in `Puy.Runtime` instead
+
+error[E3022]: `System.AllocMemSize` is not supported in Puy
+   --> memory_manager_state_unavailable.pas:10:11
+    |
+ 10 |   WriteLn(AllocMemSize, AllocMemCount);
+    |           ^^^^^^^^^^^^
+    |
+    = note: use `TMemory` in `Puy.Runtime` instead
+
+error[E3022]: `System.AllocMemCount` is not supported in Puy
+   --> memory_manager_state_unavailable.pas:10:25
+    |
+ 10 |   WriteLn(AllocMemSize, AllocMemCount);
+    |                         ^^^^^^^^^^^^^
+    |
+    = note: use `TMemory` in `Puy.Runtime` instead
+
+error[E3022]: `System.AllocMemSize` is not supported in Puy
+   --> memory_manager_state_unavailable.pas:11:18
+    |
+ 11 |   WriteLn(System.AllocMemSize, System.AllocMemCount);
+    |                  ^^^^^^^^^^^^
+    |
+    = note: use `TMemory` in `Puy.Runtime` instead
+
+error[E3022]: `System.AllocMemCount` is not supported in Puy
+   --> memory_manager_state_unavailable.pas:11:39
+    |
+ 11 |   WriteLn(System.AllocMemSize, System.AllocMemCount);
+    |                                       ^^^^^^^^^^^^^
+    |
+    = note: use `TMemory` in `Puy.Runtime` instead
+
+error: aborting due to 8 errors

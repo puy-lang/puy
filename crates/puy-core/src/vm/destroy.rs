@@ -19,7 +19,7 @@ use std::collections::VecDeque;
 pub(super) const DTOR_FN: u32 = u32::MAX;
 
 /// The registers of the procedure's frame; the frame of a destructor it calls starts after them.
-const DTOR_REGS: usize = 4;
+pub(super) const DTOR_REGS: usize = 4;
 const R_HANDLE: usize = 0;
 const R_EXCEPTION: usize = 1;
 const R_FLAGS: usize = 2;
@@ -126,14 +126,10 @@ impl Isolate {
     /// The first register of a frame of the procedure pushed now: after the top frame's
     /// registers (0 without frames: the end of the program).
     fn dtor_base(&self) -> usize {
-        self.task.frames.last().map_or(0, |fr| {
-            let regs = if fr.func == DTOR_FN {
-                DTOR_REGS
-            } else {
-                self.module.funcs[fr.func as usize].regs as usize
-            };
-            fr.base as usize + regs
-        })
+        self.task
+            .frames
+            .last()
+            .map_or(0, |fr| fr.base as usize + self.frame_regs(fr))
     }
 
     /// Makes room for the registers of a frame of the procedure (counted toward the usage limit).

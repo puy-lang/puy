@@ -1,0 +1,2 @@
+error: uncaught exception ETestError: uncaught
+  at ExtErrors.<main> (ext_errors.pas:40)

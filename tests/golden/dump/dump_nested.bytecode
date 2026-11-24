@@ -2,18 +2,32 @@
 .const
   0: str "\n"
   1: str "n="
+.type
+  64: class System.Classes.Native.TFileHandle ref sealed slots=0 parent=ty20 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
 .global
 .host
   0: Console.Write params=1 ret=0
-.unit System.SysUtils file="<stdlib>/System.SysUtils.pas" init=- fini=- entry=-
-.unit DumpNested file="dump_nested.pas" init=- fini=- entry=0
-.func 0 DumpNested.<main> params=0 regs=1
+.extunit
+  0: System.Classes.Native fingerprint=e75d2b7f94bae15c classes=[TFileHandle=ty64]
+  1: System.SysUtils.Native fingerprint=1c2f67c8ff109e6e classes=[]
+  2: System.IOUtils.Native fingerprint=555b5d5f60182a69 classes=[]
+  3: System.FileSystem.Native fingerprint=a4c02b03a3d800c1 classes=[]
+.unit System.Classes.Native file="<ext>/System.Classes.Native.pas" init=- fini=- entry=-
+.unit System.SysUtils.Native file="<ext>/System.SysUtils.Native.pas" init=- fini=- entry=-
+.unit System.IOUtils.Native file="<ext>/System.IOUtils.Native.pas" init=- fini=- entry=-
+.unit System.FileSystem.Native file="<ext>/System.FileSystem.Native.pas" init=- fini=- entry=-
+.unit System.SysUtils file="<stdlib>/System.SysUtils.pas" init=- fini=0 entry=-
+.unit DumpNested file="dump_nested.pas" init=- fini=- entry=1
+.func 0 System.SysUtils.<fini> params=0 regs=1
+  .line 50
+  0000  RetVoid
+.func 1 DumpNested.<main> params=0 regs=1
   .line 42
   0000  LoadInt      r0, 21
-  0001  Call         r0, f2
+  0001  Call         r0, f3
   .line 43
   0002  RetVoid
-.func 1 DumpNested.Show params=1 regs=3
+.func 2 DumpNested.Show params=1 regs=3
   .local r0 T
   .line 12
   0000  AssignRef    r1, r0
@@ -24,23 +38,23 @@
   .line 13
   0005  RetVoid
 .finally r1, r2
-.func 2 DumpNested.Run params=1 regs=4
+.func 3 DumpNested.Run params=1 regs=4
   .local r0 N
   .local r1 S
   .line 36
   0000  LoadConst    r1, k1
   .line 37
   0001  OuterRef     r3, 0, 0
-  0002  Call         r3, f4
+  0002  Call         r3, f5
   .line 38
   0003  AssignRef    r2, r1
   0004  Move         r3, r2
-  0005  Call         r3, f1
+  0005  Call         r3, f2
   0006  Release      r2
   .line 39
   0007  RetVoid
 .finally r1, r2
-.func 3 DumpNested.Run.Twice params=1 regs=3
+.func 4 DumpNested.Run.Twice params=1 regs=3
   .local r0 K
   .local r1 Result
   .line 21
@@ -48,13 +62,13 @@
   0001  NarrowOvf    r1, r1, 4
   .line 22
   0002  Ret          r1
-.func 4 DumpNested.Run.Middle params=1 regs=2 outer=2
+.func 5 DumpNested.Run.Middle params=1 regs=2 outer=3
   .line 32
   0000  OuterRef     r1, 0, 0
-  0001  Call         r1, f5
+  0001  Call         r1, f6
   .line 33
   0002  RetVoid
-.func 5 DumpNested.Run.Middle.Deep params=1 regs=9 outer=4
+.func 6 DumpNested.Run.Middle.Deep params=1 regs=9 outer=5
   .local r1 S
   .local r2 N
   .line 26
@@ -63,7 +77,7 @@
   .line 28
   0002  LoadRefRef   r3, r1
   0003  LoadRef      r6, r2
-  .inline f3 DumpNested.Run.Twice line=28
+  .inline f4 DumpNested.Run.Twice line=28
   .line 21
   0004  MulIntI      r5, r6, 2
   0005  NarrowOvf    r5, r5, 4

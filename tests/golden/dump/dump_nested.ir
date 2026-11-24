@@ -1,15 +1,20 @@
 ; puy ir 1
 .global
-.func f0 DumpNested.<main> params=0
+.func f0 System.SysUtils.<fini> params=0
+bb0:
+  .line 50
+  RetVoid
+.finally
+.func f1 DumpNested.<main> params=0
   .reg t0: Integer temp
 bb0:
   .line 42
   LoadInt      t0, 21
-  Call         -, f2(t0)
+  Call         -, f3(t0)
   .line 43
   RetVoid
 .finally
-.func f1 DumpNested.Show params=1
+.func f2 DumpNested.Show params=1
   .reg v0 T: string const param
   .reg t0: string temp
   .reg t1: string temp
@@ -23,7 +28,7 @@ bb0:
   .line 13
   RetVoid
 .finally t0, t1
-.func f2 DumpNested.Run params=1
+.func f3 DumpNested.Run params=1
   .reg v0 N: Integer param
   .reg v1 S: string local
   .reg t0: - ref
@@ -34,16 +39,16 @@ bb0:
   LoadConst    v1, "n="
   .line 37
   OuterRef     t0, 0, 0
-  Call         -, f4(t0)
+  Call         -, f5(t0)
   .line 38
   AssignRef    t2, v1
   Move         t1, t2
-  Call         -, f1(t1)
+  Call         -, f2(t1)
   Release      t2
   .line 39
   RetVoid
 .finally v1, t2
-.func f3 DumpNested.Run.Twice params=1
+.func f4 DumpNested.Run.Twice params=1
   .reg v0 K: Integer param
   .reg v1 Result: Integer result
   .reg t0: Integer temp
@@ -56,17 +61,17 @@ bb0:
   .line 22
   Ret          v1
 .finally
-.func f4 DumpNested.Run.Middle params=1 outer=f2
+.func f5 DumpNested.Run.Middle params=1 outer=f3
   .reg link
   .reg t0: - ref
 bb0:
   .line 32
   OuterRef     t0, 0, 0
-  Call         -, f5(t0)
+  Call         -, f6(t0)
   .line 33
   RetVoid
 .finally
-.func f5 DumpNested.Run.Middle.Deep params=1 outer=f4
+.func f6 DumpNested.Run.Middle.Deep params=1 outer=f5
   .reg link
   .reg v0 S: string outer v1 up=2
   .reg v1 N: Integer outer v0 up=2
@@ -82,7 +87,7 @@ bb0:
   .line 28
   LoadRefRef   t0, v0
   LoadRef      t3, v1
-  Call         t2, f3(t3)
+  Call         t2, f4(t3)
   IntToStr     t1, t2
   LoadRef      t4, v0
   AppendStr    t4, t0, t1

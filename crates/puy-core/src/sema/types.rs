@@ -87,6 +87,13 @@ pub enum Ty {
     /// the operations of its root type ([`TypeTable::root`]), another identity. Only the analysis
     /// sees it: the program lowered has the root types in its place (`sema::erase`).
     Distinct(TypeId),
+    /// `PTypeInfo` (`docs/spec/rtti.md` 2.1): an opaque value naming an entry of the type
+    /// information section (its type information number; 0 is `nil`). Not counted.
+    TypeInfo,
+    /// The managed part of a `TValue` (`docs/spec/rtti.md` 3.1): a heap reference of any kind (a
+    /// string, an array, a box, an instance of a reference counted class, …), `nil` by default,
+    /// counted. Only the part of `System` written in Pascal names it (`TValueRef`).
+    ValueRef,
     /// An expression whose type could not be determined (e.g. one that already got a diagnostic). Passes every check.
     Error,
 }
@@ -149,6 +156,7 @@ impl Ty {
                 | Ty::OpenArray(_)
                 | Ty::BigSet(_)
                 | Ty::Callable(_)
+                | Ty::ValueRef
         )
     }
 
@@ -232,6 +240,8 @@ impl Ty {
             | Ty::Helper(_)
             | Ty::Param(_)
             | Ty::Distinct(_) => "<type>",
+            Ty::TypeInfo => "PTypeInfo",
+            Ty::ValueRef => "TValueRef",
             Ty::Error => "<error>",
         }
     }
@@ -312,8 +322,9 @@ impl Ty {
             "string" => Ty::String,
             "utf8string" => Ty::Utf8String,
             "single" => Ty::Single,
-            "double" | "extended" | "real" => Ty::Double,
+            "double" | "extended" | "real" | "tdatetime" => Ty::Double,
             "currency" => Ty::Currency,
+            "ptypeinfo" => Ty::TypeInfo,
             _ => return None,
         })
     }
@@ -479,6 +490,8 @@ pub enum NameForm {
     Full,
     /// As `Short`, with each anonymous record marked ([`TypeTable::marked_name`]).
     Marked,
+    /// As `Full`, with the types of `System` qualified with `System` ([`TypeTable::rtti_name`]).
+    Rtti,
 }
 
 /// The characters around the type number in the mark of an anonymous record (private use code
@@ -540,17 +553,34 @@ pub struct Field {
     pub vis: Visibility,
 }
 
-/// The visibility of a class member (`docs/spec/objects.md` 2.5), narrowest first.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+/// The visibility of a class member (`docs/spec/objects.md` 2.5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Visibility {
     StrictPrivate,
     Private,
     StrictProtected,
     Protected,
     Public,
+    Published,
 }
 
 impl Visibility {
+    /// Whether the member is accessible from any scope.
+    pub fn is_public(self) -> bool {
+        matches!(self, Self::Public | Self::Published)
+    }
+
+    /// The ordering for override checks, where public and published grant the same access.
+    pub(super) fn access_rank(self) -> u8 {
+        match self {
+            Self::StrictPrivate => 0,
+            Self::Private => 1,
+            Self::StrictProtected => 2,
+            Self::Protected => 3,
+            Self::Public | Self::Published => 4,
+        }
+    }
+
     /// The words of the section (for diagnostics).
     pub fn text(self) -> &'static str {
         match self {
@@ -559,6 +589,7 @@ impl Visibility {
             Visibility::StrictProtected => "strict protected",
             Visibility::Protected => "protected",
             Visibility::Public => "public",
+            Visibility::Published => "published",
         }
     }
 }
@@ -600,7 +631,10 @@ pub enum SelfKind {
 /// What a member of a class that is not part of its instances is (`docs/spec/objects.md` 2.2).
 #[derive(Debug, Clone)]
 pub enum StaticKind {
-    /// `class var`: a global variable of the class, shared with its descendants.
+    /// `class var`: a global variable of the class, shared with its descendants. In the type
+    /// table of an IR module, a `class var` no kept function uses is
+    /// [`crate::ir::reach::DROPPED`] (it is not a global variable of the module;
+    /// `docs/spec/units.md` 6.2).
     Var(crate::sema::hir::GlobalId, Ty),
     /// A class constant (`const`).
     Const(Const, Ty),
@@ -628,7 +662,8 @@ pub enum Accessor {
         /// of the field).
         ty: Ty,
     },
-    /// A `class var` (a `class property`).
+    /// A `class var` (a `class property`): [`crate::ir::reach::DROPPED`] in an IR module when no
+    /// kept function uses it (as [`StaticKind::Var`]).
     ClassVar(crate::sema::hir::GlobalId),
     /// A method: its routine (a static class method for a `class property`).
     Method(crate::sema::hir::RoutineId),
@@ -892,6 +927,9 @@ pub struct TypeDef {
 #[derive(Debug, Clone)]
 pub struct TypeTable {
     pub defs: Vec<TypeDef>,
+    /// `TIOErrorKind` of `System.SysUtils`, the type of `EInOutError.ErrorKind` and
+    /// `ENotSupportedException.ErrorKind` (`docs/spec/exceptions.md` 2.2).
+    pub io_error_kind: TypeId,
     /// The generic declarations (`docs/spec/generics.md` 2.1) and their type parameters
     /// (`Ty::Param`), in order.
     pub generics: Vec<(TypeId, Vec<TypeId>)>,
@@ -937,6 +975,15 @@ pub struct TypeTable {
     /// where the `record type declared here` of a diagnostic naming it points
     /// (`docs/spec/diagnostics.md` 2.2).
     pub anon_record_files: std::collections::HashMap<TypeId, FileId>,
+    /// The root type of each distinct type, once they are erased (`sema::erase`): the type
+    /// information of a distinct type is its root's kind under its own name
+    /// (`docs/spec/rtti.md` 2.2).
+    pub distinct_roots: std::collections::HashMap<TypeId, Ty>,
+    /// The parameters of each method as declared in its class or interface: their names and
+    /// declared names (where their attributes are written), for the type information
+    /// (`docs/spec/rtti.md` 1.4). A body put off or never written has no variables to name them.
+    pub decl_params:
+        std::collections::HashMap<crate::sema::hir::RoutineId, Vec<(String, TextRange)>>,
 }
 
 /// The type's own `Equal` among its methods: the operator both of whose operands are of the
@@ -1052,6 +1099,9 @@ pub struct Instance {
     pub from: Option<TypeId>,
 }
 
+/// The fully qualified name of `TValue` (`docs/spec/rtti.md` chapter 3).
+pub const TVALUE_NAME: &str = "System.TValue";
+
 /// The id of the root exception class `Exception`.
 pub const EXCEPTION: TypeId = TypeId(crate::bytecode::exc::EXCEPTION);
 
@@ -1070,6 +1120,8 @@ pub const IINTERFACE: TypeId = TypeId(crate::bytecode::IINTERFACE_TYPE);
 /// The id of `TIndexRange`, the built-in record of a range written as an index
 /// (`docs/spec/objects.md` 12.3, 14.10).
 pub const TINDEXRANGE: TypeId = TypeId(crate::bytecode::TINDEXRANGE_TYPE);
+/// `TAssertionValue`, an element of `EAssertionFailed.Values` (`docs/spec/exceptions.md` 2.1).
+pub const TASSERTIONVALUE: TypeId = TypeId(crate::bytecode::TASSERTIONVALUE_TYPE);
 
 /// The name of `TIndexRange.Clamp`, whose body the compiler writes out where it is called
 /// (`docs/spec/objects.md` 12.3, 14.10).
@@ -1123,6 +1175,29 @@ fn index_range_record() -> TypeDef {
     }
 }
 
+/// `TAssertionValue` (`docs/spec/exceptions.md` 2.1): a subexpression of a failed `Assert` and
+/// its value as shown (`docs/spec/semantics.md` 5.4).
+fn assertion_value_record() -> TypeDef {
+    let field = |name: &str| Field {
+        name: name.to_string(),
+        ty: Ty::String,
+        span: TextRange::default(),
+        vis: Visibility::Public,
+    };
+    TypeDef {
+        name: Some("TAssertionValue".into()),
+        full_name: Some("TAssertionValue".into()),
+        kind: TypeKind::Record {
+            fields: vec![field("Expr"), field("Value")],
+            unit: None,
+            methods: Vec::new(),
+            statics: Vec::new(),
+            properties: Vec::new(),
+        },
+        span: TextRange::default(),
+    }
+}
+
 /// The id of `TClass` (`class of TObject`; `docs/spec/objects.md` 2.8): the first entry after the
 /// reserved built-in type indexes 0 to 63 (14.1), so that it never shares a number with a built-in
 /// type added later. A class reference has no type index, so it is not one of the VM's types.
@@ -1131,6 +1206,35 @@ pub const TCLASS: TypeId = TypeId(crate::bytecode::FIRST_TYPE_INDEX);
 /// The id of `TProc` (`reference to procedure`; `docs/spec/objects.md` 9.9), after `TClass`. A
 /// procedural type has no type index either.
 pub const TPROC: TypeId = TypeId(crate::bytecode::FIRST_TYPE_INDEX + 1);
+
+/// The id of `TTypeKind` (`System`; `docs/spec/rtti.md` 2.3), after the built-in helpers.
+pub const TTYPEKIND: TypeId = TypeId(TPROC.0 + 1 + super::helpers::BUILTIN_HELPER_COUNT);
+
+/// The values of `TTypeKind` in ordinal order (`docs/spec/rtti.md` 2.3).
+pub const TYPE_KINDS: [&str; 22] = [
+    "tkUnknown",
+    "tkInteger",
+    "tkChar",
+    "tkEnumeration",
+    "tkFloat",
+    "tkString",
+    "tkSet",
+    "tkClass",
+    "tkMethod",
+    "tkWChar",
+    "tkLString",
+    "tkWString",
+    "tkVariant",
+    "tkArray",
+    "tkRecord",
+    "tkInterface",
+    "tkInt64",
+    "tkDynArray",
+    "tkUString",
+    "tkClassRef",
+    "tkPointer",
+    "tkProcedure",
+];
 
 /// The virtual method table of `TObject` and `TRefObject` (`docs/spec/objects.md` 14.1):
 /// `Destroy`, `AfterConstruction`, `BeforeDestruction` (doing nothing), `ToString`, `Equals` and
@@ -1216,7 +1320,7 @@ pub const EXC_FIELD_INNER: &str = "FInnerException";
 /// `EInOutError.ErrorCode`), each behind a property. `Exception` declares the constructors
 /// `Create(Msg)` / `CreateFmt` (bodies of the compiler; the routine of `Create` is made when first
 /// used) and overrides `ToString` (returns `Message`).
-fn exception_class(name: &str, parent: Option<u32>, extra: Option<bool>) -> TypeDef {
+fn exception_class(name: &str, parent: Option<u32>, extra: &[bool]) -> TypeDef {
     let field = |name: &str, ty: Ty, slot: u32| ClassField {
         name: name.to_string(),
         ty,
@@ -1295,14 +1399,18 @@ fn exception_class(name: &str, parent: Option<u32>, extra: Option<bool>) -> Type
         });
     }
     let slot = crate::bytecode::EXC_SLOT_EXTRA;
-    match (name, extra) {
-        (_, Some(true)) => {
+    // `ErrorKind` (the slot after `ErrorCode`, or the only one of `ENotSupportedException`)
+    // is added by `TypeTable::new` once its type exists
+    match extra {
+        [true] => {
             fields.push(field("FValue", Ty::String, slot));
             properties.push(read_only("Value", "FValue", Ty::String, slot));
         }
-        (_, Some(false)) => {
+        [false, ..] if name == "EInOutError" => {
             fields.push(field("FErrorCode", Ty::Integer, slot));
-            properties.push(read_only("ErrorCode", "FErrorCode", Ty::Integer, slot));
+            let mut code = read_only("ErrorCode", "FErrorCode", Ty::Integer, slot);
+            code.write = code.read.clone();
+            properties.push(code);
         }
         _ => {}
     }
@@ -1345,6 +1453,7 @@ impl TypeTable {
     pub fn new() -> Self {
         let mut t = TypeTable {
             defs: Vec::new(),
+            io_error_kind: TypeId(0),
             generics: Vec::new(),
             instances: Vec::new(),
             instance_keys: std::collections::HashMap::new(),
@@ -1359,6 +1468,8 @@ impl TypeTable {
             value_equality: Default::default(),
             equality_members: Default::default(),
             anon_record_files: Default::default(),
+            distinct_roots: Default::default(),
+            decl_params: Default::default(),
         };
         let exceptions = crate::bytecode::BUILTIN_EXCEPTIONS;
         let root = |name: &str, parent: Option<TypeId>, ref_counted: bool| TypeDef {
@@ -1383,7 +1494,7 @@ impl TypeTable {
         while (t.defs.len() as u32) < crate::bytecode::FIRST_TYPE_INDEX {
             let id = t.defs.len() as u32;
             let def = match exceptions.iter().find(|e| e.0 == id) {
-                Some((_, name, parent, extra)) => exception_class(name, *parent, *extra),
+                Some((_, name, parent, extra)) => exception_class(name, *parent, extra),
                 None if id == crate::bytecode::EXCEPTION_ARRAY_TYPE => TypeDef {
                     name: None,
                     full_name: None,
@@ -1399,6 +1510,16 @@ impl TypeTable {
                     root("TCustomAttribute", Some(TREFOBJECT), true)
                 }
                 None if id == TINDEXRANGE.0 => index_range_record(),
+                None if id == TASSERTIONVALUE.0 => assertion_value_record(),
+                None if id == crate::bytecode::ASSERTION_VALUES_TYPE => TypeDef {
+                    name: None,
+                    full_name: None,
+                    kind: TypeKind::DynArray {
+                        elem: Ty::Record(TASSERTIONVALUE),
+                        generic: true,
+                    },
+                    span: TextRange::default(),
+                },
                 None if id == IINTERFACE.0 => TypeDef {
                     name: Some("IInterface".into()),
                     full_name: Some("IInterface".into()),
@@ -1447,7 +1568,95 @@ impl TypeTable {
             Some(TPROC.0 + 1),
             "the built-in helpers follow `TProc`"
         );
+        let kinds = t.add(TypeDef {
+            name: Some("TTypeKind".into()),
+            full_name: Some("System.TTypeKind".into()),
+            kind: TypeKind::Enum {
+                values: TYPE_KINDS
+                    .iter()
+                    .enumerate()
+                    .map(|(i, n)| EnumValueDef {
+                        name: (*n).to_string(),
+                        ord: i as i128,
+                        span: TextRange::default(),
+                    })
+                    .collect(),
+                low: 0,
+                high: TYPE_KINDS.len() as i128 - 1,
+            },
+            span: TextRange::default(),
+        });
+        debug_assert_eq!(kinds, TTYPEKIND, "`TTypeKind` follows the built-in helpers");
+        t.add_io_error_kind();
         t
+    }
+
+    /// `TIOErrorKind` (`System.SysUtils`) and the `ErrorKind` properties of `EInOutError` and
+    /// `ENotSupportedException` that have it as their type (`docs/spec/exceptions.md` 2.2): read
+    /// and write, so that Pascal code makes the exception of a host error.
+    fn add_io_error_kind(&mut self) {
+        let values = puy_ext::IO_ERROR_KINDS
+            .iter()
+            .enumerate()
+            .map(|(i, n)| EnumValueDef {
+                name: (*n).to_string(),
+                ord: i as i128,
+                span: TextRange::default(),
+            })
+            .collect();
+        let id = self.add(TypeDef {
+            name: Some("TIOErrorKind".into()),
+            full_name: Some("System.SysUtils.TIOErrorKind".into()),
+            kind: TypeKind::Enum {
+                values,
+                low: 0,
+                high: puy_ext::IO_ERROR_KINDS.len() as i128 - 1,
+            },
+            span: TextRange::default(),
+        });
+        self.io_error_kind = id;
+        let ty = Ty::Enum(id);
+        for (class, slot) in [
+            (
+                crate::bytecode::exc::IN_OUT_ERROR,
+                crate::bytecode::EXC_SLOT_EXTRA + 1,
+            ),
+            (
+                crate::bytecode::exc::NOT_SUPPORTED,
+                crate::bytecode::EXC_SLOT_EXTRA,
+            ),
+        ] {
+            let TypeKind::Class {
+                fields, properties, ..
+            } = &mut self.defs[class as usize].kind
+            else {
+                unreachable!("a built-in exception class");
+            };
+            fields.push(ClassField {
+                name: "FErrorKind".into(),
+                ty,
+                span: TextRange::default(),
+                vis: Visibility::StrictPrivate,
+                slot,
+            });
+            let access = Accessor::Field {
+                slot,
+                name: "FErrorKind".into(),
+                ty,
+            };
+            properties.push(ClassProperty {
+                name: "ErrorKind".into(),
+                span: TextRange::default(),
+                vis: Visibility::Public,
+                ty,
+                params: Vec::new(),
+                index: None,
+                read: Some(access.clone()),
+                write: Some(access),
+                is_class: false,
+                is_default: false,
+            });
+        }
     }
 
     /// Whether a class is one of the built-in exception classes or a descendant of one
@@ -1726,6 +1935,44 @@ impl TypeTable {
         false
     }
 
+    /// `System.TValue` (`docs/spec/rtti.md` chapter 3), when the part of `System` written in
+    /// Pascal that declares it was read.
+    pub fn tvalue(&self) -> Option<Ty> {
+        self.defs
+            .iter()
+            .position(|d| {
+                matches!(d.kind, TypeKind::Record { .. })
+                    && d.full_name.as_deref() == Some(TVALUE_NAME)
+            })
+            .map(|k| Ty::Record(TypeId(k as u32)))
+    }
+
+    /// Whether `ty` is `System.TValue`.
+    pub fn is_tvalue(&self, ty: Ty) -> bool {
+        matches!(ty, Ty::Record(id) if self.get(id).full_name.as_deref() == Some(TVALUE_NAME))
+    }
+
+    /// Whether `ty` is `TValue` or a record or array holding one (`docs/spec/rtti.md` 3.8).
+    pub fn contains_tvalue(&self, ty: Ty) -> bool {
+        let mut work = vec![ty];
+        let mut seen: Vec<Ty> = Vec::new();
+        while let Some(t) = work.pop() {
+            if seen.contains(&t) {
+                continue;
+            }
+            seen.push(t);
+            if self.is_tvalue(t) {
+                return true;
+            }
+            match t {
+                Ty::Record(_) => work.extend(self.fields(t).iter().map(|f| f.ty)),
+                Ty::Array(_) | Ty::DynArray(_) | Ty::OpenArray(_) => work.extend(self.elem_of(t)),
+                _ => {}
+            }
+        }
+        false
+    }
+
     /// How a value of `ty` is counted (`docs/spec/objects.md` 4.1, 14.1): [`SLOT_REF`] for the
     /// managed types of [`Ty::is_managed`] and the reference counted classes, [`SLOT_OBJ`] for
     /// exactly `TObject` (counted by its contents), [`SLOT_PLAIN`] for the rest (the classes
@@ -1882,6 +2129,14 @@ impl TypeTable {
         }
     }
 
+    /// Whether `ty` is a dynamic or open array of `Byte`, whose elements the VM holds one byte
+    /// each (a dynamic array of bytes: requirements §5.5, `docs/spec/types.md` 9): the type entry
+    /// of a dynamic array of bytes and the instructions reading and writing its elements
+    /// (`BytesGet` / `BytesSet`) both follow this.
+    pub fn is_bytes_array(&self, ty: Ty) -> bool {
+        self.dyn_elem(ty) == Some(Ty::Byte)
+    }
+
     /// The element type of any array (static, dynamic, open).
     pub fn elem_of(&self, ty: Ty) -> Option<Ty> {
         self.array(ty).map(|a| a.3).or_else(|| self.dyn_elem(ty))
@@ -1907,8 +2162,9 @@ impl TypeTable {
             Ty::Class(_) | Ty::Intf(_) => self.slot_kind(ty) != crate::bytecode::SLOT_PLAIN,
             // An anonymous method holds the `Self` it captured (`docs/spec/objects.md` 9.6)
             Ty::Callable(_) => self.proc_family(ty) == Some(ProcFamily::Reference),
-            // A type parameter may stand for a reference counted class
-            Ty::Param(_) => true,
+            // A type parameter may stand for a reference counted class, and the managed part of a
+            // `TValue` may hold an instance of one (`docs/spec/rtti.md` 3.1)
+            Ty::Param(_) | Ty::ValueRef => true,
             Ty::Record(_) => self
                 .fields(ty)
                 .iter()
@@ -1917,7 +2173,8 @@ impl TypeTable {
                 .elem_of(ty)
                 .is_some_and(|e| self.holds_object_in(e, seen)),
             // Every other type is listed, so that a new one (a class in M3) has to be decided here
-            Ty::ShortInt
+            Ty::TypeInfo
+            | Ty::ShortInt
             | Ty::Byte
             | Ty::SmallInt
             | Ty::Word
@@ -2170,19 +2427,43 @@ impl TypeTable {
         self.name_with(ty, NameForm::Marked)
     }
 
+    /// The fully qualified name in the type information (`docs/spec/rtti.md` 2.4): as
+    /// [`TypeTable::full_name`], with the types of `System` qualified (`System.Integer`,
+    /// `System.TObject`, `array of System.Integer`).
+    pub fn rtti_name(&self, ty: Ty) -> String {
+        self.name_with(ty, NameForm::Rtti)
+    }
+
     fn name_with(&self, ty: Ty, form: NameForm) -> String {
-        let full = form == NameForm::Full;
+        let full = matches!(form, NameForm::Full | NameForm::Rtti);
         if let Ty::Weak(c) = ty {
             return self.name_with(self.strong(Ty::Weak(c)), form);
         }
         let Some(id) = ty.type_id() else {
-            return ty.builtin_name().to_string();
+            return match form {
+                NameForm::Rtti => format!("System.{}", ty.builtin_name()),
+                _ => ty.builtin_name().to_string(),
+            };
         };
         let def = self.get(id);
         if let (Ty::OpenArray(_), TypeKind::DynArray { elem, .. }) = (ty, &def.kind) {
             return format!("array of {}", self.name_with(*elem, form));
         }
+        if form == NameForm::Rtti
+            && let Some(inst) = self.instance_of(id)
+            && let Some(def_name) = &self.get(inst.def).full_name
+        {
+            // An instantiation's type arguments are named as the types themselves
+            // (`docs/spec/rtti.md` 2.4)
+            let head = def_name.split('<').next().unwrap_or(def_name);
+            let args: Vec<String> = inst.args.iter().map(|a| self.name_with(*a, form)).collect();
+            return format!("{head}<{}>", args.join(","));
+        }
         if let (true, Some(n)) = (full, &def.full_name) {
+            // The types `System` declares are named without their unit elsewhere
+            if form == NameForm::Rtti && id.0 <= TTYPEKIND.0 && !n.contains('.') {
+                return format!("System.{n}");
+            }
             return n.clone();
         }
         if let Some(n) = &def.name {
@@ -2237,7 +2518,8 @@ impl TypeTable {
     }
 
     /// Renumbers the global variables the members of the types refer to (`class var`s and the
-    /// properties reading or writing them; `docs/spec/generics.md` 2.5).
+    /// properties reading or writing them; `docs/spec/generics.md` 2.5). After
+    /// `ir::reach::drop_unreachable`, a dropped `class var` is [`crate::ir::reach::DROPPED`].
     pub fn remap_globals(&mut self, map: &impl Fn(GlobalId) -> GlobalId) {
         for def in &mut self.defs {
             let (statics, properties) = match &mut def.kind {

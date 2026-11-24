@@ -108,5 +108,8 @@ begin
   Manual(C);
   Counted(TCountedColl.Create);
   Captured(TCountedColl.Create);
+  // Never true: keeps `ByContents` in the module (units.md 8.3)
+  if ParamCount > 100 then
+    ByContents(TIntfColl.Create);
   C.Free;
 end.

@@ -135,6 +135,7 @@ pub enum SyntaxKind {
     LOCAL_KW,
     MESSAGE_KW,
     NAME_KW,
+    NATIVE_KW,
     NEAR_KW,
     NODEFAULT_KW,
     ON_KW,
@@ -410,6 +411,11 @@ impl SyntaxKind {
             .map(|(_, k)| *k)
     }
 
+    /// The reserved words (lowercase), in the order of their kinds.
+    pub fn reserved_words() -> impl Iterator<Item = &'static str> {
+        RESERVED_WORDS.iter().map(|(w, _)| *w)
+    }
+
     /// Table of context-sensitive directives (lowercase). Used by the parser when re-tagging from `IDENT`.
     pub fn contextual_directive(lower: &str) -> Option<SyntaxKind> {
         CONTEXTUAL_DIRECTIVES
@@ -585,6 +591,7 @@ kind_names![
     LOCAL_KW,
     MESSAGE_KW,
     NAME_KW,
+    NATIVE_KW,
     NEAR_KW,
     NODEFAULT_KW,
     ON_KW,
@@ -815,6 +822,7 @@ const CONTEXTUAL_DIRECTIVES: &[(&str, SyntaxKind)] = &[
     ("local", LOCAL_KW),
     ("message", MESSAGE_KW),
     ("name", NAME_KW),
+    ("native", NATIVE_KW),
     ("near", NEAR_KW),
     ("nodefault", NODEFAULT_KW),
     ("on", ON_KW),

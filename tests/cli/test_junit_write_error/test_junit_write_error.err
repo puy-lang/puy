@@ -1,0 +1,1 @@
+{"schema":"puy.diagnostics/1","diagnostics":[{"code":"F0002","severity":"error","name":null,"message":"cannot write `missing/report.xml`: file not found","primary":null,"secondary":[],"notes":[],"fixes":[],"rendered":"error[F0002]: cannot write `missing/report.xml`: file not found"}],"summary":{"errors":1,"warnings":0,"notes":0}}

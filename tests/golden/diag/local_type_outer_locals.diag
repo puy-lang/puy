@@ -1,0 +1,100 @@
+error[E0775]: parameter `N` of `Run` cannot be used in a method of local type `TBox`
+   --> local_type_outer_locals.pas:50:15
+    |
+ 16 | function Run(N: Integer): Integer;
+    |              - declared here
+...
+ 50 |     FValue := N;
+    |               ^
+    |
+    = note: an instance of a local type can outlive the routine that declares it, so its methods cannot reach the routine's variables or nested routines; pass values to the constructor or store them in fields
+
+error[E0775]: nested routine `Helper` of `Run` cannot be used in a method of local type `TBox`
+   --> local_type_outer_locals.pas:55:5
+    |
+ 24 |   procedure Helper;
+    |             ------ declared here
+...
+ 55 |     Helper;
+    |     ^^^^^^
+    |
+    = note: an instance of a local type can outlive the routine that declares it, so its methods cannot reach the routine's variables or nested routines; pass values to the constructor or store them in fields
+
+error[E0775]: `Result` of `Run` cannot be used in a method of local type `TBox`
+   --> local_type_outer_locals.pas:61:5
+    |
+ 16 | function Run(N: Integer): Integer;
+    |          --- declared here
+...
+ 61 |     Run := 2;
+    |     ^^^
+    |
+    = note: an instance of a local type can outlive the routine that declares it, so its methods cannot reach the routine's variables or nested routines; pass values to the constructor or store them in fields
+
+error[E0775]: local variable `K` of `Run` cannot be used in a method of local type `TBox`
+   --> local_type_outer_locals.pas:67:24
+    |
+ 22 |   K: Integer;
+    |   - declared here
+...
+ 67 |     Result := FValue + K;
+    |                        ^
+    |
+    = note: an instance of a local type can outlive the routine that declares it, so its methods cannot reach the routine's variables or nested routines; pass values to the constructor or store them in fields
+
+error[E0775]: local variable `K` of `Run` cannot be used in a method of local type `TBox`
+   --> local_type_outer_locals.pas:72:5
+    |
+ 22 |   K: Integer;
+    |   - declared here
+...
+ 72 |     K := AValue;
+    |     ^
+    |
+    = note: an instance of a local type can outlive the routine that declares it, so its methods cannot reach the routine's variables or nested routines; pass values to the constructor or store them in fields
+
+error[E0775]: local variable `K` of `Run` cannot be used in a method of local type `TBox`
+   --> local_type_outer_locals.pas:80:17
+    |
+ 22 |   K: Integer;
+    |   - declared here
+...
+ 80 |       FValue := K;
+    |                 ^
+    |
+    = note: an instance of a local type can outlive the routine that declares it, so its methods cannot reach the routine's variables or nested routines; pass values to the constructor or store them in fields
+
+error[E0775]: parameter `N` of `Run` cannot be used in a method of local type `TBox`
+   --> local_type_outer_locals.pas:89:19
+    |
+ 16 | function Run(N: Integer): Integer;
+    |              - declared here
+...
+ 89 |         Result := N;
+    |                   ^
+    |
+    = note: an instance of a local type can outlive the routine that declares it, so its methods cannot reach the routine's variables or nested routines; pass values to the constructor or store them in fields
+
+error[E0775]: `Result` of `Run` cannot be used in a method of local type `TBox`
+   --> local_type_outer_locals.pas:92:5
+    |
+ 16 | function Run(N: Integer): Integer;
+    |          --- declared here
+...
+ 92 |     Result := G();
+    |     ^^^^^^
+    |
+    = note: an instance of a local type can outlive the routine that declares it, so its methods cannot reach the routine's variables or nested routines; pass values to the constructor or store them in fields
+
+error[E0775]: local variable `K` of `Run` cannot be used in a method of local type `TPair`
+    --> local_type_outer_locals.pas:105:10
+     |
+  22 |   K: Integer;
+     |   - declared here
+...
+ 105 |     A := K;
+     |          ^
+     |
+     = note: an instance of a local type can outlive the routine that declares it, so its methods cannot reach the routine's variables or nested routines; pass values to the constructor or store them in fields
+
+error: aborting due to 9 errors

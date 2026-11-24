@@ -1,0 +1,73 @@
+error[E0734]: ambiguous call to overloaded `Z`
+   --> overload_anon_errors.pas:36:3
+    |
+ 15 | procedure Z(F: TA); overload;
+    |           - candidate
+...
+ 19 | procedure Z(F: TB); overload;
+    |           - candidate
+...
+ 36 |   Z(function(X: Integer): string begin if K = X then Result := '' else Result := Undeclared2; end);
+    |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0700]: undeclared identifier `Undeclared2`
+   --> overload_anon_errors.pas:36:82
+    |
+ 36 |   Z(function(X: Integer): string begin if K = X then Result := '' else Result := Undeclared2; end);
+    |                                                                                  ^^^^^^^^^^^
+
+error[E0734]: ambiguous call to overloaded `Z`
+   --> overload_anon_errors.pas:42:3
+    |
+ 15 | procedure Z(F: TA); overload;
+    |           - candidate
+...
+ 19 | procedure Z(F: TB); overload;
+    |           - candidate
+...
+ 42 |   Z(function(X: Integer): string begin Result := ''; end);
+    |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0735]: no overload of `W` matches these arguments
+   --> overload_anon_errors.pas:43:3
+    |
+ 23 | procedure W(const S: string); overload;
+    |           - candidate
+...
+ 27 | procedure W(F: TA); overload;
+    |           - candidate
+...
+ 43 |   W(function(X: Integer): Integer begin Result := X; end);
+    |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: the arguments have types `function(…)`
+
+error[E0700]: undeclared identifier `Undeclared`
+   --> overload_anon_errors.pas:44:50
+    |
+ 44 |   W(function(X: Integer): string begin Result := Undeclared; end);
+    |                                                  ^^^^^^^^^^
+
+error[E0729]: cannot infer the type of an anonymous method
+   --> overload_anon_errors.pas:45:6
+    |
+ 45 |   W((function(X: Integer): string begin Result := ''; end));
+    |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: give the anonymous method a type, as in `var P: TProc := procedure begin … end`
+
+error[E0735]: no overload of `W` matches these arguments
+   --> overload_anon_errors.pas:47:3
+    |
+ 23 | procedure W(const S: string); overload;
+    |           - candidate
+...
+ 27 | procedure W(F: TA); overload;
+    |           - candidate
+...
+ 47 |   W(C);
+    |   ^^^^
+    |
+    = note: the arguments have types `TC`
+
+error: aborting due to 7 errors

@@ -1,0 +1,15 @@
+; puyc format 0
+.const
+.global
+.host
+.unit Lone_test file="Lone_test.pas" init=- fini=- entry=0
+.test 0 f2 file=0 line=10 Lone_test.Works
+.func 0 Lone_test.<main> params=0 regs=1
+  .line 1
+  0000  RetVoid
+.func 1 Lone_test.Works params=0 regs=1
+  .line 12
+  0000  RetVoid
+.func 2 Lone_test.<test:Works> params=0 regs=1
+  .line 10
+  0000  RetVoid

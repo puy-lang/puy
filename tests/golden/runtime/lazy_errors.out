@@ -1,0 +1,14 @@
+first read: EConvertError: attempt 1 failed
+made: FALSE
+second read: EConvertError: attempt 2 failed
+30
+third read: no exception
+30
+fourth read: no exception
+calls: 3
+read while making: EInvalidOperation: the value of a TLazy was read while it was being made
+made: FALSE
+Reset while making: EInvalidOperation: a TLazy cannot be reset while its value is being made
+nil function: EArgumentException: the function that makes the value of a TLazy is nil
+made: FALSE
+read after Reset of CreateValue: EInvalidOperation: a TLazy made by CreateValue cannot make its value again after Reset

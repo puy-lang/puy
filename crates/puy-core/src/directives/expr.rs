@@ -465,8 +465,14 @@ impl Parser {
     }
 }
 
-/// Evaluates an expression. Returns a boolean (E0215 if the type is not boolean).
-pub fn evaluate(text: &str, ctx: &mut dyn Context) -> Result<bool, EvalError> {
+pub(super) struct Evaluation {
+    pub value: bool,
+    /// The entire expression is `Defined(UNICODE)`, with optional grouping parentheses.
+    pub is_unicode_guard: bool,
+}
+
+/// Evaluates a boolean expression (E0215 if the type is not boolean).
+pub(super) fn evaluate(text: &str, ctx: &mut dyn Context) -> Result<Evaluation, EvalError> {
     let toks = tokenize(text)?;
     let mut p = Parser {
         toks,
@@ -526,7 +532,10 @@ pub fn evaluate(text: &str, ctx: &mut dyn Context) -> Result<bool, EvalError> {
         }
     }
     match eval(&expr, ctx, true)? {
-        Value::Bool(b) => Ok(b),
+        Value::Bool(value) => Ok(Evaluation {
+            value,
+            is_unicode_guard: matches!(expr, Expr::Defined(name, ..) if name.eq_ignore_ascii_case("UNICODE")),
+        }),
         _ => {
             let (s, e) = expr.range();
             Err(EvalError::TypeMismatch { start: s, end: e })
@@ -654,7 +663,7 @@ mod tests {
     }
 
     fn ev(s: &str) -> Result<bool, EvalError> {
-        evaluate(s, &mut Ctx(vec!["PUY", "DEBUG"]))
+        evaluate(s, &mut Ctx(vec!["PUY", "DEBUG"])).map(|result| result.value)
     }
 
     #[test]

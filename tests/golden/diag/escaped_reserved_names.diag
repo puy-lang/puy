@@ -1,0 +1,26 @@
+error[E0701]: `Result` is a reserved name
+  --> escaped_reserved_names.pas:9:14
+   |
+ 9 |     function Result: Integer;
+   |              ^^^^^^
+
+error[E0701]: `Self` is a reserved name
+   --> escaped_reserved_names.pas:10:5
+    |
+ 10 |     Self: Integer;
+    |     ^^^^
+
+error[E0701]: `Result` is a reserved name
+   --> escaped_reserved_names.pas:19:3
+    |
+ 19 |   &Result: Integer;
+    |   ^^^^^^^
+
+error[E0701]: `Foo` is already declared
+   --> escaped_reserved_names.pas:20:8
+    |
+ 20 |   Foo, &Foo: Integer;
+    |        ^^^^ declared again here
+    |   --- declared here
+
+error: aborting due to 4 errors

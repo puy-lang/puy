@@ -1,0 +1,10 @@
+TFile.Exists: ENotSupportedException: the file system is not permitted by the host (ekNoPermission)
+ReadAllText: ENotSupportedException: the file system is not permitted by the host (ekNoPermission)
+WriteAllText: ENotSupportedException: the file system is not permitted by the host (ekNoPermission)
+TFile.Delete: ENotSupportedException: the file system is not permitted by the host (ekNoPermission)
+GetLastWriteTimeUtc: ENotSupportedException: the file system is not permitted by the host (ekNoPermission)
+GetFiles: ENotSupportedException: the file system is not permitted by the host (ekNoPermission)
+CreateDirectory: ENotSupportedException: the file system is not permitted by the host (ekNoPermission)
+TDirectory.Delete: ENotSupportedException: the file system is not permitted by the host (ekNoPermission)
+TFile.Copy: ENotSupportedException: the file system is not permitted by the host (ekNoPermission)
+[] [] a/b

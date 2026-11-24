@@ -1,7 +1,7 @@
-error[E3200]: type helpers for built-in types are not supported yet (planned for M5)
-   --> main.pas:14:11
+error[E0700]: `string` has no member `Bang`
+   --> main.pas:14:13
     |
  14 |   WriteLn(S.Bang);
-    |           ^^^^^^
+    |             ^^^^
 
 error: aborting due to 1 error

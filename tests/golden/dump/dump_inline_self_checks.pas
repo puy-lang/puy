@@ -37,7 +37,7 @@ begin
   WriteLn(X + B.Get);
 end;
 
-// Not called: freeing `B` and then calling a method on it raises.
+// Not run: freeing `B` and then calling a method on it raises.
 procedure AfterFree(B: TBox);
 var
   X: Integer;
@@ -70,5 +70,8 @@ begin
   WriteLn(B.Sum);
   Loops(B, 2);
   AfterCall(B);
+  // Never true: keeps `AfterFree` in the module (units.md 8.3)
+  if ParamCount > 100 then
+    AfterFree(B);
   B.Free;
 end.

@@ -22,6 +22,9 @@ pub mod source;
 pub mod syntax;
 pub mod vm;
 
+/// The API of extensions (`puy-ext`), for the runtimes that register them.
+pub use puy_ext as ext;
+
 /// Version of the implementation (`puy --version`, the `.puyc` header, `PuyVersionString`).
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 

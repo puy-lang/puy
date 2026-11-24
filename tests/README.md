@@ -8,7 +8,7 @@ without starting a process.
 |---|---|
 | `diff/` | Programs whose expected output was recorded with Free Pascal (`{$mode delphiunicode}`) |
 | `lifetime/` | Lifetime management: where the compiler inserts lifetime instructions (`.ir`), leak reports (`.leak`; none expected when absent), memory limits that check freeing, and the order of destructor calls |
-| `golden/` | Output fixed by Puy itself: stage dumps (`.tokens` / `.cst` / `.hir` / `.ir` / `.bytecode`), diagnostics (`.diag`), and behavior that intentionally differs from Delphi (`.out` / `.code`) |
+| `golden/` | Output fixed by Puy itself: stage dumps (`.tokens` / `.cst` / `.hir` / `.ir` / `.bytecode`), diagnostics (`.diag`), and behavior that intentionally differs from Delphi (`.out` / `.code`). A directory with a `puy.toml` (`golden/units/<name>/`) is one package case: `main.pas` is compiled with that directory as the package root, and the expectations sit next to it (`main.diag` and so on) |
 | `cli/` | Cases run through the `puy` command (`crates/puy-cli/tests/cli.rs`). One directory per case; `<name>.cmd` holds the arguments |
 
 ## Running

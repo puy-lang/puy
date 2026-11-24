@@ -1,0 +1,31 @@
+[a][b][c][d][][e] UTF-8
+[x] TRUE [] -1 -1
+ UTF-8
+127 1 125 1 
+256 TRUE TRUE
+[aé日😀][b][c] UTF-8
+[aé日😀][b][c] UTF-16LE
+10 TRUE
+[é1][2] UTF-8
+[é1][2] UTF-16LE
+[é1][2] UTF-16BE
+[ab] UTF-16LE
+[é] UTF-8
+1
+2 TRUE
+1 65533 UTF-8
+104 104 233
+3 éll
+6 o wörl
+[d] [rest
+more] TRUE 0
+ERangeError: characters 4..6 are out of a buffer of 6 characters
+one 13
+two three
+TRUE
+TRUE
+EStreamError: the stream is closed
+EStreamError: the reader is closed
+EArgumentException: the stream of a TStreamReader is nil
+3 65533
+EEncodingError: invalid UTF-8 at byte 1

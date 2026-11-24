@@ -162,7 +162,7 @@ impl<'a, 's> Sema<'a, 's> {
             }
             let index_written = index.is_some();
             let index = index.and_then(|e| self.property_index(e));
-            self.check_reserved_name(&name.to_ascii_lowercase(), name_range);
+            self.check_reserved_member_name(&name.to_ascii_lowercase(), name_range);
             let types: Vec<Ty> = params.iter().map(|(_, t)| *t).collect();
             if self.default_property_duplicate(&props, &name, name_range, &types, is_default) {
                 continue;

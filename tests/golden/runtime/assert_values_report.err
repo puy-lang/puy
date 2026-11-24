@@ -1,0 +1,10 @@
+error: uncaught exception EWrapped: check failed
+  at assert_values_report.Run (assert_values_report.pas:21)
+  at assert_values_report.<main> (assert_values_report.pas:26)
+  caused by: EAssertionFailed: assertion failed: Half(N) * 2 = N (odd)
+      Half(N) * 2 = 6
+      Half(N) = 3
+      N = 7
+    at assert_values_report.Check (assert_values_report.pas:13)
+    at assert_values_report.Run (assert_values_report.pas:19)
+    at assert_values_report.<main> (assert_values_report.pas:26)

@@ -1,0 +1,19 @@
+error[E0700]: `string` has no member `Missing`
+   --> helper_on_member_errors.pas:16:18
+    |
+ 16 |   WriteLn(X.Name.Missing('a'));
+    |                  ^^^^^^^
+
+error[E0700]: `Integer` has no member `Missing`
+   --> helper_on_member_errors.pas:17:19
+    |
+ 17 |   WriteLn(X.Count.Missing(1));
+    |                   ^^^^^^^
+
+error[E0700]: `TItem` has no field `Absent`
+   --> helper_on_member_errors.pas:18:13
+    |
+ 18 |   WriteLn(X.Absent.StartsWith('a'));
+    |             ^^^^^^
+
+error: aborting due to 3 errors

@@ -1,0 +1,43 @@
+error[E0747]: a class procedure must be declared in a class
+  --> class_routine_without_class.pas:8:17
+   |
+ 8 | class procedure Bar;
+   |                 ^^^
+
+error[E0747]: a class function must be declared in a class
+   --> class_routine_without_class.pas:13:16
+    |
+ 13 | Class Function Answer: Integer;
+    |                ^^^^^^
+
+error[E0747]: a class constructor must be declared in a class
+   --> class_routine_without_class.pas:18:19
+    |
+ 18 | class constructor Setup;
+    |                   ^^^^^
+
+error[E0747]: a class destructor must be declared in a class
+   --> class_routine_without_class.pas:22:18
+    |
+ 22 | class destructor Teardown;
+    |                  ^^^^^^^^
+
+error[E0747]: a class operator must be declared in a class
+   --> class_routine_without_class.pas:26:16
+    |
+ 26 | class operator Add(A, B: Integer): Integer;
+    |                ^^^
+
+error[E0747]: a class procedure must be declared in a class
+   --> class_routine_without_class.pas:33:19
+    |
+ 33 |   class procedure Inner;
+    |                   ^^^^^
+
+error[E0747]: a class function must be declared in a class
+   --> class_routine_without_class.pas:38:18
+    |
+ 38 |   class function Twice(X: Integer): Integer;
+    |                  ^^^^^
+
+error: aborting due to 7 errors

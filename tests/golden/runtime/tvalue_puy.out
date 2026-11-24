@@ -1,0 +1,23 @@
+TRUE FALSE 5
+TRUE FALSE
+TRUE FALSE 4
+(TPoint) 1 14
+[fA,fC] TRUE
+TRUE 3 20
+25
+z a a
+ERangeError: array index 3 is out of range 0..2
+EInvalidCast: invalid type cast: `TValue` of `Integer` to `string`
+(TFoo) TRUE TFoo
+EInvalidCast: invalid type cast: `TValue` of `TFoo` to `string`
+EInvalidCast: invalid type cast: `TValue` of `Int64` to `Integer`
+EInvalidCast: invalid type cast: empty `TValue` to `Integer`
+TRUE TRUE FALSE
+12.5 12.50 12.50
+utf utf
+TRUE 1
+42 TRUE
+7
+True 1.5 a
+2 (TPoint)
+9

@@ -1,0 +1,97 @@
+; puyc format 0
+.const
+  0: str " "
+  1: str "\n"
+.type
+  64: dynarray DumpByteArrays.TBuf bytes slots=0 elem=val
+  65: dynarray array of ShortInt slots=0 elem=val
+.global
+  0: ref A
+  1: ref S
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpByteArrays file="dump_byte_arrays.pas" init=- fini=- entry=0
+.func 0 DumpByteArrays.<main> params=0 regs=10
+  .line 24
+  0000  LoadInt      r6, 3
+  0001  LoadGlobal   r7, g0
+  0002  Move         r8, r7
+  0003  Move         r9, r6
+  0004  SetLen       r8, ty64
+  0005  Move         r7, r8
+  0006  StoreGlobal  r7, g0
+  .line 25
+  0007  LoadZero     r6
+  0008  LoadInt      r7, 200
+  0009  LoadGlobal   r8, g0
+  000a  BytesSet     r8, r6, r7
+  .line 26
+  000b  LoadInt      r6, 1
+  000c  LoadGlobal   r8, g0
+  000d  LoadZero     r9
+  000e  BytesGet     r7, r8, r9
+  000f  DivIntI      r7, r7, 2
+  0010  NarrowOvf    r7, r7, 4
+  0011  NarrowRng    r7, r7, 1
+  0012  LoadGlobal   r8, g0
+  0013  BytesSet     r8, r6, r7
+  .line 27
+  0014  LoadInt      r6, -1
+  0015  LoadInt      r7, 1
+  0016  NewArr       r7, ty65
+  0017  LoadZero     r8
+  0018  DynSet       r7, r8, r6
+  0019  MoveRef      r0, r7
+  001a  StoreGlobalRef r0, g1
+  001b  Release      r0
+  .line 28
+  001c  LoadZero     r6
+  001d  LoadGlobal   r8, g1
+  001e  LoadZero     r9
+  001f  DynGet       r7, r8, r9
+  0020  AddIntI      r7, r7, -1
+  0021  NarrowOvf    r7, r7, 4
+  0022  NarrowRng    r7, r7, 0
+  0023  LoadGlobal   r8, g1
+  0024  DynSet       r8, r6, r7
+  .line 29
+  0025  LoadGlobalRef r2, g0
+  0026  Move         r7, r2
+  0027  Call         r7, f1
+  0028  Move         r6, r7
+  0029  IntToStr     r1, r6
+  002a  LoadConst    r3, k0
+  002b  ConcatStr    r1, r1, r3
+  002c  LoadGlobal   r8, g1
+  002d  LoadZero     r9
+  002e  DynGet       r7, r8, r9
+  002f  IntToStr     r4, r7
+  0030  ConcatStr    r1, r1, r4
+  0031  LoadConst    r5, k1
+  0032  ConcatStr    r1, r1, r5
+  0033  CallHost     r1, h0
+  0034  Release      r2
+  .line 30
+  0035  RetVoid
+.finally r0, r1, r2, r3, r4, r5
+.func 1 DumpByteArrays.Total params=1 regs=7
+  .local r0 A
+  .local r1 Result
+  .local r2 B
+  .line 15
+  0000  LoadZero     r1
+  .line 16
+  0001  AssignRef    r3, r0
+  0002  ArrLen       r5, r3
+  0003  LoadZero     r4
+  0004  JmpIfLeInt   r5, r4, -> 000a
+  0005  BytesGet     r2, r3, r4
+  .line 17
+  0006  AddInt       r1, r1, r2
+  0007  NarrowOvf    r1, r1, 4
+  .line 16
+  0008  AddIntI      r4, r4, 1
+  0009  Jmp          -> 0004
+  .line 18
+  000a  Ret          r1
+.finally r3

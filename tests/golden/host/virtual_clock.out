@@ -1,0 +1,18 @@
+advance before freeze: EInvalidOperation: TTestClock.Advance(1) needs a frozen virtual clock: call TTestClock.Freeze first
+set before freeze: EInvalidOperation: TTestClock.SetNow needs a frozen virtual clock: call TTestClock.Freeze first
+real: 15000 30000
+frozen: 2026-11-20T12:34:56.789123456Z 2026-11-20 21:34:56.789 0
+still: 2026-11-20T12:34:56.789123456Z 2026-11-20 21:34:56.789 0
+freeze again: 2026-11-20T12:34:56.789123456Z 2026-11-20 21:34:56.789 0
+advance 1500: 2026-11-20T12:34:58.289123456Z 2026-11-20 21:34:58.289 15000000
+sleep 250: 2026-11-20T12:34:58.539123456Z 2026-11-20 21:34:58.539 17500000
+sleep 0: 2026-11-20T12:34:58.539123456Z 2026-11-20 21:34:58.539 17500000
+set 2000: 2000-01-01T00:00:00Z 2000-01-01 09:00:00.000 17500000
+freeze at 2030: 2030-06-15T12:00:00.500Z 2030-06-15 21:00:00.500 17500000
+stopwatch from before: 17545000
+advance -1: EArgumentException: TTestClock.Advance(-1): the time is negative
+advance max: ERangeError: TTestClock.Advance(9223372036854775807) would move the virtual clock past its range
+advance past the range: ERangeError: TTestClock.Advance(2) would move the virtual clock past its range
+sleep past the range: ERangeError: Sleep(2) would move the virtual clock past its range
+unmoved: 9223372036853775807 17500000
+to the end: TRUE 17510000

@@ -1,0 +1,195 @@
+; puyc format 0
+.const
+  0: str "\n"
+  1: str "s"
+.type
+  64: class DumpTValue.TFoo slots=0 parent=ty19 vmt=builtin0,builtin0,builtin0,builtin1,builtin3,builtin4
+  65: record System.TValue slots=3 refs=2
+.rtti
+  1: class DumpTValue.TFoo name=TFoo ty=ty64 parent=ti4
+  2: integer System.Integer name=Integer shape=4 min=-2147483648 max=2147483647
+  3: ustring System.string name=string
+  4: class System.TObject name=TObject ty=ty19
+.global
+  0: ref V
+  1: int F
+.host
+  0: Console.Write params=1 ret=0
+.unit System file="<stdlib>/System.pas" init=- fini=- entry=-
+.unit DumpTValue file="dump_tvalue.pas" init=- fini=- entry=0
+.file 2 "<stdlib>/System/TValue.Interface.inc"
+.file 3 "<stdlib>/System/TValue.Implementation.inc"
+.func 0 DumpTValue.<main> params=0 regs=15
+  .line 17
+  0000  LoadInt      r12, 1
+  0001  Call         r12, f1
+  0002  MoveRef      r0, r12
+  0003  StoreGlobalRef r0, g0
+  .line 18
+  0004  MakeGlobalRef r13, g0
+  0005  Call         r13, f2
+  0006  Move         r12, r13
+  0007  IntToStr     r1, r12
+  0008  LoadConst    r2, k0
+  0009  ConcatStr    r1, r1, r2
+  000a  CallHost     r1, h0
+  .line 19
+  000b  LoadConst    r4, k1
+  000c  Move         r12, r4
+  000d  Call         r12, f3
+  000e  MoveRef      r3, r12
+  000f  StoreGlobalRef r3, g0
+  .line 20
+  0010  MakeGlobalRef r12, g0
+  0011  Call         r12, f4
+  0012  MoveRef      r5, r12
+  0013  LoadConst    r6, k0
+  0014  ConcatStr    r5, r5, r6
+  0015  CallHost     r5, h0
+  .line 21
+  0016  LoadZero     r12
+  0017  New          r12, ty64
+  0018  StoreGlobal  r12, g1
+  .line 22
+  0019  Call         r12, f5
+  001a  MoveRef      r7, r12
+  001b  StoreGlobalRef r7, g0
+  .line 23
+  001c  MakeGlobalRef r14, g0
+  001d  Call         r14, f6
+  001e  Move         r13, r14
+  001f  LoadGlobal   r14, g1
+  0020  EqInt        r12, r13, r14
+  0021  BoolToStr    r8, r12
+  0022  LoadConst    r9, k0
+  0023  ConcatStr    r8, r8, r9
+  0024  CallHost     r8, h0
+  .line 24
+  0025  LoadGlobal   r13, g1
+  0026  AssignObj    r11, r13
+  0027  Move         r12, r11
+  0028  Call         r12, f7
+  0029  MoveRef      r10, r12
+  002a  StoreGlobalRef r10, g0
+  .line 25
+  002b  LoadGlobal   r12, g1
+  002c  Free         r12
+  .line 26
+  002d  RetVoid
+.finally r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11:obj
+.func 1 System.TValue.From<Integer> params=1 regs=4 file=3
+  .local r0 AValue
+  .local r1 Result
+  .line 34
+  0000  LoadInt      r3, 2
+  0001  Release      r2
+  0002  Unique       r2, ty65
+  0003  FieldSet     r2, 0, r3
+  0004  FieldSet     r2, 1, r0
+  0005  MoveRef      r1, r2
+  .line 35
+  0006  Ret          r1
+.finally r1, r2
+.func 2 System.TValue.AsType<Integer> params=1 regs=11 file=3
+  .local r0 Self
+  .local r1 Result
+  .line 39
+  0000  LoadRefRef   r2, r0
+  0001  FieldGet     r5, r2, 0
+  0002  FieldGet     r9, r2, 1
+  0003  FieldGet     r10, r2, 2
+  0004  OrInt        r6, r9, r10
+  0005  LoadInt      r7, 2
+  0006  LoadInt      r8, 1
+  0007  ValueMatch   r4, r5
+  .line 40
+  0008  LoadRefRef   r3, r0
+  0009  FieldGet     r1, r3, 1
+  .line 41
+  000a  Ret          r1
+.finally r2, r3
+.func 3 System.TValue.From<string> params=1 regs=4 file=3
+  .local r0 AValue
+  .local r1 Result
+  .line 34
+  0000  LoadInt      r3, 3
+  0001  Release      r2
+  0002  Unique       r2, ty65
+  0003  FieldSet     r2, 0, r3
+  0004  FieldSetRef  r2, 2, r0
+  0005  MoveRef      r1, r2
+  .line 35
+  0006  Ret          r1
+.finally r1, r2
+.func 4 System.TValue.AsType<string> params=1 regs=11 file=3
+  .local r0 Self
+  .local r1 Result
+  .line 39
+  0000  LoadRefRef   r2, r0
+  0001  FieldGet     r5, r2, 0
+  0002  FieldGet     r9, r2, 1
+  0003  FieldGet     r10, r2, 2
+  0004  OrInt        r6, r9, r10
+  0005  LoadInt      r7, 3
+  0006  LoadInt      r8, 1
+  0007  ValueMatch   r4, r5
+  .line 40
+  0008  LoadRefRef   r3, r0
+  0009  FieldGetRef  r1, r3, 2
+  .line 41
+  000a  Ret          r1
+.finally r1, r2, r3
+.func 5 System.TValue.From<DumpTValue.TFoo> params=1 regs=6 file=3
+  .local r0 AValue
+  .local r1 Result
+  .line 34
+  0000  Move         r4, r0
+  0001  LoadInt      r5, 1
+  0002  ValueOfObject r3, r4
+  0003  Release      r2
+  0004  Unique       r2, ty65
+  0005  FieldSet     r2, 0, r3
+  0006  FieldSet     r2, 1, r0
+  0007  MoveRef      r1, r2
+  .line 35
+  0008  Ret          r1
+.finally r1, r2
+.func 6 System.TValue.AsType<DumpTValue.TFoo> params=1 regs=11 file=3
+  .local r0 Self
+  .local r1 Result
+  .line 39
+  0000  LoadRefRef   r2, r0
+  0001  FieldGet     r5, r2, 0
+  0002  FieldGet     r9, r2, 1
+  0003  FieldGet     r10, r2, 2
+  0004  OrInt        r6, r9, r10
+  0005  LoadInt      r7, 1
+  0006  LoadInt      r8, 1
+  0007  ValueMatch   r4, r5
+  .line 40
+  0008  LoadRefRef   r3, r0
+  0009  FieldGet     r1, r3, 1
+  .line 41
+  000a  Ret          r1
+.finally r2, r3
+.func 7 System.TValue.From<TObject> params=1 regs=9 file=3
+  .local r0 AValue
+  .local r1 Result
+  .line 34
+  0000  Move         r4, r0
+  0001  LoadInt      r5, 4
+  0002  ValueOfObject r3, r4
+  0003  Release      r2
+  0004  Unique       r2, ty65
+  0005  FieldSet     r2, 0, r3
+  0006  IsRefObj     r6, r0
+  0007  AddIntI      r7, r6, -1
+  0008  AndInt       r8, r0, r7
+  0009  FieldSet     r2, 1, r8
+  000a  NegInt       r7, r6
+  000b  AndInt       r8, r0, r7
+  000c  FieldSetRef  r2, 2, r8
+  000d  MoveRef      r1, r2
+  .line 35
+  000e  Ret          r1
+.finally r1, r2

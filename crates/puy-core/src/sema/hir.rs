@@ -52,9 +52,33 @@ pub struct Program {
     /// The generated `<eq:…>` / `<hash:…>` functions (`docs/spec/equality.md` 8.3), in the order
     /// they were made, for the `hir` dump (9).
     pub generated: Vec<GeneratedInfo>,
+    /// The bridges and the attribute functions of `System.Rtti` (`docs/spec/rtti.md` 7.3, 7.4).
+    pub rtti_funcs: super::invoke::RttiFuncs,
     /// Where each routine of an instantiation that the work list copied comes from: the
     /// functions made from the same generic routine may be shared (`docs/spec/generics.md` 7).
     pub origins: std::collections::HashMap<RoutineId, GenericOrigin>,
+    /// The tests of the test units (`docs/spec/attributes.md` 5.2; all of a package's for
+    /// `puy test`, `docs/spec/test.md` 2), in the order they run; `None` when no test unit was
+    /// compiled. The module of a test unit has
+    /// an empty `<main>` and the test table (`docs/spec/bytecode.md` 3.2, section 13).
+    pub tests: Option<Vec<TestInfo>>,
+}
+
+/// A test collected from a test unit (`docs/spec/attributes.md` 5.2).
+#[derive(Debug, Clone)]
+pub struct TestInfo {
+    /// The test's name (`MyApp.Calc_test.TCalcTests.Add`, `….Sqrt(4, 2)`).
+    pub name: String,
+    /// The unit declaring the test (index into `Program::units`).
+    pub unit: u32,
+    /// The name of the test routine in its declaration (its file and line in the table).
+    pub span: TextRange,
+    /// The routine without parameters that runs the test.
+    pub thunk: RoutineId,
+    /// The position of its `[TestCase]` among the routine's, from 0.
+    pub case: Option<u32>,
+    /// `[Skip]`: the reason given (empty when none was).
+    pub skip: Option<String>,
 }
 
 /// Where a routine of an instantiation comes from (`docs/spec/generics.md` 7, 8).
@@ -135,6 +159,11 @@ pub struct UnitHir {
     pub global_count: u32,
     /// The units named in `uses`, as written (for the `hir` dump).
     pub uses: Vec<String>,
+    /// The unit of an extension: the fingerprint of its source (`docs/spec/extensions.md` 4).
+    pub extension: Option<u64>,
+    /// A unit of the standard library (its types are not found by name through the type
+    /// information unless reached otherwise; `docs/spec/rtti.md` 1.3).
+    pub stdlib: bool,
 }
 
 /// A declared type for the `hir` dump (`docs/spec/semantics.md` chapter 9).
@@ -163,6 +192,9 @@ pub struct Global {
     pub span: Option<TextRange>,
     /// The unit declaring it (`None` for `ExitCode` of `System`).
     pub unit: Option<u32>,
+    /// A `class var` (of a type or of an instantiation): dropped from the module when no kept
+    /// function uses it (`docs/spec/units.md` 6.2).
+    pub class_var: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -278,12 +310,19 @@ pub struct Routine {
     pub link: bool,
     /// An abstract method (`docs/spec/objects.md` 2.3): it has no body and no function.
     pub is_abstract: bool,
+    /// A `native` routine (`docs/spec/extensions.md`): its body is a Rust function of an
+    /// extension, called with `CallExt`; it has no function.
+    pub native: bool,
     /// A method of a built-in class (`TObject.ToString`): `System`'s, named without a unit.
     pub builtin: bool,
     /// A method of a generic type, or a routine nested in one (`docs/spec/generics.md` 3.3):
     /// checked once with its type parameters, and it has no function (7). Set by
     /// `sema::finish`.
     pub generic: bool,
+    /// A method of a type of the standard library whose body was put off and that no analyzed
+    /// body uses (`docs/spec/units.md` 6.1): its body is not analyzed and it has no function. Set
+    /// by `sema::finish`.
+    pub unreached: bool,
     /// The class whose destructor this is (`docs/spec/objects.md` 3.2): its body starts with
     /// `DtorEnter` (14.8).
     pub dtor_of: Option<super::types::TypeId>,
@@ -377,6 +416,8 @@ pub enum Place {
 pub enum ExcMember {
     StackTrace,
     Suppressed,
+    /// `EAssertionFailed.Values` (only of `EAssertionFailed` and its descendants).
+    Values,
 }
 
 impl ExcMember {
@@ -384,6 +425,7 @@ impl ExcMember {
         match self {
             ExcMember::StackTrace => "StackTrace",
             ExcMember::Suppressed => "Suppressed",
+            ExcMember::Values => "Values",
         }
     }
 
@@ -392,6 +434,7 @@ impl ExcMember {
         match lower {
             "stacktrace" => Some(ExcMember::StackTrace),
             "suppressed" => Some(ExcMember::Suppressed),
+            "values" => Some(ExcMember::Values),
             _ => None,
         }
     }
@@ -512,11 +555,19 @@ pub enum StmtKind {
     },
     /// `Flush(Output)`: writes out the standard output buffer.
     Flush,
+    /// `RequestLeakReport` (`I154`; the standard library only).
+    RequestLeakReport,
     Assert {
         cond: Box<Expr>,
         message: Option<Box<Expr>>,
         /// Source text of the condition.
         text: String,
+        /// The subexpressions of the condition whose values a failure records, in the order they
+        /// are shown (`docs/spec/semantics.md` 5.4); their [`ExprKind::Probe`] nodes in `cond`
+        /// name them by their position here. Empty under `{$C-}`.
+        probes: Vec<AssertProbe>,
+        /// The number of marks of right sides of `and` / `or` the probes are under.
+        marks: u32,
     },
     /// `SetLength(target, N[, M…])` (`docs/spec/types.md` 2.3, chapter 7): a string or a dynamic
     /// array; one length per dimension of nested dynamic arrays.
@@ -990,6 +1041,9 @@ pub enum ExprKind {
     /// A class written as a value where a class reference is expected (`C := TCircle`;
     /// `docs/spec/objects.md` 2.8): the class `class` (the expression's type is a class reference).
     ClassRefValue(super::types::TypeId),
+    /// `TypeInfo(T)` (`docs/spec/rtti.md` 2.2): the `PTypeInfo` of the type (a constant, its
+    /// type information number; codegen numbers the entries).
+    TypeInfo(Ty),
     /// `X is T`, `X as T` and the conversions by type name `T(X)` of an instance or a class
     /// reference (`docs/spec/objects.md` 2.8, 2.9): checked at run time against the class
     /// `class` (for a class reference, the class its type is `class of`).
@@ -1059,8 +1113,40 @@ pub enum ExprKind {
         callee: Box<Expr>,
         args: Vec<CallArg>,
     },
+    /// A subexpression of the condition of an `Assert` under `{$C+}` (`docs/spec/semantics.md`
+    /// 5.4), evaluated as `operand`: [`Probe::Value`] keeps its value for the failure,
+    /// [`Probe::Reached`] notes that the right side of an `and` / `or` was evaluated.
+    Probe {
+        operand: Box<Expr>,
+        probe: Probe,
+    },
+    /// The name of a type of the language (`Integer`, `Char`) standing as the receiver of a class
+    /// member of its helpers (`Integer.Parse(S)`; `docs/spec/objects.md` 10.4): it has no
+    /// instance, and no member reached through it reads it.
+    TypeName,
     /// An expression whose type could not be determined.
     Error,
+}
+
+/// What an [`ExprKind::Probe`] does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Probe {
+    /// The value of the operand is kept for the probe `k` of the statement
+    /// ([`StmtKind::Assert`]'s `probes`).
+    Value(u32),
+    /// The mark `k` of the statement is set before the operand is evaluated.
+    Reached(u32),
+}
+
+/// A subexpression of an `Assert` whose value a failure records (`docs/spec/semantics.md` 5.4).
+#[derive(Debug, Clone)]
+pub struct AssertProbe {
+    /// The source text, with each run of trivia as one space.
+    pub text: String,
+    pub ty: Ty,
+    /// The mark of the innermost right side of an `and` / `or` it is in: unset, the
+    /// subexpression was not evaluated.
+    pub mark: Option<u32>,
 }
 
 /// An element of a set constructor: the ordinal `low`, or the range `low..high`. `check` (`{$R+}`)
@@ -1244,6 +1330,169 @@ pub enum Builtin {
     /// whether the default order of the type of `X` is a built-in comparison (`ArraySortRange`
     /// sorts it), a constant once the type is known (`X` is not evaluated).
     IsPlainOrder,
+    /// `SingleToBits(X)`, `BitsToSingle(X)`, `DoubleToBits(X)`, `BitsToDouble(X)`
+    /// (`docs/spec/bytecode.md` 2.22; the units of the standard library only): the bits of a
+    /// `Single` as a `Cardinal`, of a `Double` as a `UInt64`, and back. A slot of either type holds
+    /// the same bits (`docs/design/vm.md` 3.2), so each is a `Move`.
+    SingleToBits,
+    BitsToSingle,
+    DoubleToBits,
+    BitsToDouble,
+    /// `CharClass(C)` (`docs/spec/bytecode.md` 2.22; the units of the standard library only): the
+    /// Unicode properties of a `Char` as a set of bits (`CharClass`, `I105`).
+    CharClass,
+    /// `UnicodeCategory(CP)` (`docs/spec/bytecode.md` 2.22; the units of the standard library
+    /// only): the general category of a code point as its ordinal in `TUnicodeCategory`
+    /// (`UnicodeCategory`, `I101`).
+    UnicodeCategory,
+    /// `CodePointClass(CP)` (`docs/spec/bytecode.md` 2.22; the units of the standard library
+    /// only): the bits of `CharClass` for a code point (`CodePointClass`, `I102`).
+    CodePointClass,
+    /// `NumericValue(CP)` (`docs/spec/bytecode.md` 2.22; the units of the standard library only):
+    /// the numeric value of a code point, -1 if none (`NumericValue`, `I103`).
+    NumericValue,
+    /// `ClockNow` (`docs/spec/bytecode.md` 2.22; the units of the standard library only): the
+    /// host's wall clock in nanoseconds since the UNIX epoch (`ClockNow`, `I117`).
+    ClockNow,
+    /// `ClockMono` (`docs/spec/bytecode.md` 2.22; the units of the standard library only): the
+    /// host's monotonic clock in nanoseconds since an arbitrary origin (`ClockMono`, `I120`).
+    ClockMono,
+    /// `ClockControl(Kind, Value)` (`docs/spec/bytecode.md` 2.22; the units of the standard
+    /// library only): freezes, moves or sets the isolate's virtual clock; the status
+    /// (`ClockControl`, `I151`).
+    ClockControl,
+    /// `ClockSleep(Nanos)` (`docs/spec/bytecode.md` 2.22; the units of the standard library
+    /// only): waits on the isolate's clock; the status (`ClockSleep`, `I152`).
+    ClockSleep,
+    /// `AddSuppressed(E, X)` (`docs/spec/bytecode.md` 2.19): `X` goes at the end of `Suppressed`
+    /// of the exception `E` (`I145`). Only the generated routine of a test of a class makes it
+    /// (`docs/spec/attributes.md` 5.2); it has no name, and no value (`Boolean`).
+    AddSuppressed,
+    /// `LocalOffset(Nanos)` (`docs/spec/bytecode.md` 2.22; the units of the standard library
+    /// only): the offset of the local time from UTC in seconds at an instant (`LocalOffset`,
+    /// `I118`).
+    LocalOffset,
+    /// `RaiseConvertError(S, What)` (`docs/spec/bytecode.md` 2.22; the units of the standard
+    /// library only): raises the `EConvertError` of `S`, which is not a valid `What`, as the
+    /// built-in conversions do (`docs/spec/semantics.md` 7.1; `ConvertError`, `I119`). Never
+    /// returns; its `Boolean` is never made.
+    RaiseConvertError,
+    /// `BytesCopy(Dst, DstIndex, Src, SrcIndex, Count)` (`docs/spec/bytecode.md` 2.22; the units
+    /// of the standard library only): copies `Count` bytes of the dynamic array of bytes `Src`
+    /// into `Dst`, written in place (`I109`); the value is `Count`.
+    BytesCopy,
+    /// `BytesFill(Dst, Index, Count, Value)` (`docs/spec/bytecode.md` 2.22; the units of the
+    /// standard library only): sets `Count` bytes of the dynamic array of bytes `Dst` to `Value`
+    /// in place (`I110`); the value is `Count`.
+    BytesFill,
+    /// `ConsoleRead(Buffer, Offset, Count)` (`docs/spec/bytecode.md` 2.22; the units of the
+    /// standard library only): reads up to `Count` bytes of standard input into the dynamic array
+    /// of bytes `Buffer` from `Offset`, in place, from the VM's input buffer (`I113`); the value
+    /// is the number read, 0 at the end of input.
+    ConsoleRead,
+    /// `ConsoleWrite(Buffer, Offset, Count)` (`docs/spec/bytecode.md` 2.22; the units of the
+    /// standard library only): appends `Count` bytes of `Buffer` from `Offset` to the VM's
+    /// standard output buffer (`I114`); the value is `Count`.
+    ConsoleWrite,
+    /// `ConsoleWriteError(Buffer, Offset, Count)` (`docs/spec/bytecode.md` 2.22; the units of the
+    /// standard library only): writes `Count` bytes of `Buffer` from `Offset` to standard error
+    /// (`I115`); the value is `Count`.
+    ConsoleWriteError,
+    /// `TypeInfo(T)` (`docs/spec/rtti.md` 2.2): only a name; sema makes [`ExprKind::TypeInfo`].
+    TypeInfo,
+    /// `RttiTypeField(Info, Field, Index)` (`docs/spec/bytecode.md` 2.24; the units of the
+    /// standard library only): a field of the entry `Info` of the type information section
+    /// (`I129`).
+    RttiTypeField,
+    /// `RttiMemberField(Table, Index, Field)` (2.24; the standard library only): a field of an
+    /// entry of a member table of the type information section (`I130`).
+    RttiMemberField,
+    /// `RttiName(Index)` (2.24; the standard library only): a name of the name table (`I131`).
+    RttiName,
+    /// `RttiFindType(Name)` / `RttiTypeCount` (2.24; the standard library only): the type
+    /// information of a fully qualified name, the number of types (`I132`).
+    RttiFindType,
+    RttiTypeCount,
+    /// `RttiFieldGet(Table, Index, Instance)` (2.24; the standard library only): the field or the
+    /// property read through its field (`Table` 0 or 1) of the instance a `TValue` holds, as a
+    /// `TValue` (`I133`; `docs/spec/rtti.md` 5.6).
+    RttiFieldGet,
+    /// `RttiFieldSet(Table, Index, Instance, AValue)` (2.24; the standard library only): writes
+    /// the `TValue` `AValue` into the field or property of the instance `Instance` holds; the
+    /// value is the instance's `TValue` after the write (a record's box made unique; `I134`).
+    RttiFieldSet,
+    /// `RttiClassType(C)` / `RttiClassOf(P)` (2.24; the standard library only): the type
+    /// information of a class reference, the class reference of a class's type information
+    /// (`I135`).
+    RttiClassType,
+    RttiClassOf,
+    /// `RttiMethodRef(Index, Instance)` (2.24; the standard library only): the method value
+    /// (`TProc`) `TRttiMethod.Invoke` calls the method `Index` of the methods table through, for
+    /// the instance or class reference `Instance` holds (`I141`; `docs/spec/rtti.md` 5.7).
+    RttiMethodRef,
+    /// `RttiPropRef(Index, Which, Instance)` (2.24; the standard library only): the method value
+    /// of the read (`Which` 0) or write (1) method of the property `Index` (`I144`; 5.6).
+    RttiPropRef,
+    /// `RttiBridge(T, Table, Index, Which)` (2.24; the standard library only): the bridge
+    /// function (7.3) of the method `Index` (`Table` 2) or of the accessor `Which` of the
+    /// property `Index` (`Table` 1), as a value of the procedural type `T` (`nil` if none;
+    /// `I142`).
+    RttiBridge,
+    /// `RttiAttrFunc(T, Index)` (2.24; the standard library only): the function making the
+    /// instance of the attribute `Index` (7.4) as a value of the procedural type `T` (`nil` if
+    /// none; `I143`).
+    RttiAttrFunc,
+    /// `RttiArgSet(Args, Index, V)` (2.24; the standard library only): writes the `TValue` `V`
+    /// into the element `Index` of the open array `Args` where it is, the caller's array
+    /// (`TRttiMethod.Invoke`'s `var` arguments; `I153`; 5.7). The value is 1 if written.
+    RttiArgSet,
+    /// `TypeInfoNumber(P)` / `TypeInfoOfNumber(N)` (2.24; the standard library only): a
+    /// `PTypeInfo` as its type information number and back (the same slot).
+    TypeInfoNumber,
+    TypeInfoOfNumber,
+    /// `ValueWrap(X, TypeInfo(T))` (`docs/spec/rtti.md` 3.3; the part of `System` written in
+    /// Pascal, and the elements of an `array of const`): `X` as a `TValue` of the type `T`; lower
+    /// puts it in `FBits` or `FRef` by the type of `X`.
+    ValueWrap,
+    /// `ValueIs(T, V, Raise)` (`docs/spec/rtti.md` 3.5; `System` only): whether `AsType<T>` of
+    /// `V` holds (`ValueMatch`, `I124`); with `Raise`, `EInvalidCast` when it does not. The
+    /// first argument is [`ExprKind::TypeInfo`] of `T`.
+    ValueIs,
+    /// `ValueMatch(AType, ABits, ARef, Target, Raise)` (`System` only): `ValueIs` with the type
+    /// information number of the target (`I124`).
+    ValueMatch,
+    /// `ValueCast(T, V)` (`System` only): the value of `V` as a `T` (after `ValueIs`), by the
+    /// representation of `T`. The first argument is [`ExprKind::TypeInfo`] of `T`.
+    ValueCast,
+    /// `ValueToString(AType, ABits, ARef)` (`System` only): `TValue.ToString` (`I122`).
+    ValueToString,
+    /// `ValueRead(AType, ABits, ARef, Mode)`, `ValueReadDouble(…)`, `ValueReadCurrency(…)`
+    /// (`System` only): the named reads of `TValue` (`ValueRead`, `I123`).
+    ValueRead,
+    ValueReadDouble,
+    ValueReadCurrency,
+    /// `ValueReadString(AType, ABits, ARef)` (`System` only): `TValue.AsString` (`I125`).
+    ValueReadString,
+    /// `TypeKindOf(AType)` (`System` only): the `TTypeKind` ordinal of a type information
+    /// number (`I126`).
+    TypeKindOf,
+    /// `ValueArrayLength(AType, ARef)`, `ValueArrayType` / `ValueArrayBits` / `ValueArrayRef` /
+    /// `ValueArrayElemType(AType, ARef, Index)`, `ValueArraySet(AType, ARef, Index, VBits, VRef)`
+    /// (`System` only): the array members of `TValue` (`ValueArray`, `I128`).
+    ValueArrayLength,
+    ValueArrayType,
+    ValueArrayBits,
+    ValueArrayRef,
+    ValueArrayElemType,
+    ValueArraySet,
+    /// `ValueArrayValue(AType, ARef, Index)` / `ValueArraySetValue(AType, ARef, Index, AValue)`
+    /// (`System` only): an element of an array of `TValue` read and written as the `TValue` it
+    /// is, not nested (`ValueArray`, `I128`; `docs/spec/rtti.md` 3.3, 3.6).
+    ValueArrayValue,
+    ValueArraySetValue,
+    /// `Format(Fmt, Args)` with an `array of TValue` (`docs/spec/rtti.md` 4.2): the format and the
+    /// array (`FormatValues`, `I121`).
+    FormatValues,
     /// `ExceptObject`: the exception of the `except` block being run (`docs/spec/objects.md` 8.4).
     ExceptObject,
     /// `Succ(X)` / `Pred(X)` (`docs/spec/semantics.md` 5.3). Only a name: sema lowers the call to
@@ -1252,6 +1501,20 @@ pub enum Builtin {
     Pred,
     /// `Sqrt(X)` of a `Double` (`docs/spec/semantics.md` 5.3).
     Sqrt,
+    /// `Sin`, `Cos`, `ArcTan`, `Ln`, `Exp`, `Int` and `Frac` of a `Double` (`docs/spec/semantics.md`
+    /// 5.3): `MathF64` (`I97`) with the function's number (`bytecode::MATH_SIN` ...).
+    Sin,
+    Cos,
+    ArcTan,
+    Ln,
+    Exp,
+    Int,
+    Frac,
+    /// `MathFunc1(Kind, X)` / `MathFunc2(Kind, X, Y)` (`docs/spec/bytecode.md` 2.22; the units of
+    /// the standard library only): the floating-point function numbered `Kind` of one or two
+    /// `Double`s (`MathF64`, `I97`; `MathF64x2`, `I98`).
+    MathFunc1,
+    MathFunc2,
     /// `HashCombine(H, X)`: `HashMix` (`docs/spec/equality.md` chapter 4). Never folded (hash values
     /// differ between processes).
     HashCombine,

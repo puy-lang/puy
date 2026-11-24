@@ -1,0 +1,13 @@
+running 2 tests (seed 3)
+ok    Lone_test.Works (Nms)
+FAIL  Lone_test.Fails (Nms)
+
+---- Lone_test.Fails ----
+error: uncaught exception EAssertionFailed: assertion failed: False
+  at Lone_test.Fails (Lone_test.pas:17)
+  at Lone_test.<test:Fails> (Lone_test.pas:15)
+
+test result: FAILED. 1 ok; 1 failed; 0 errors; 0 skipped; 0 filtered out
+
+to run a failed test again:
+  puy test --seed 3 --filter 'Lone_test.Fails' --exact

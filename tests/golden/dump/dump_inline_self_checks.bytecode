@@ -50,11 +50,17 @@
   .line 72
   0015  LoadGlobal   r2, g0
   0016  Call         r2, f4
-  .line 73
-  0017  LoadGlobal   r2, g0
-  0018  Free         r2
   .line 74
-  0019  RetVoid
+  0017  ArgCount     r2
+  0018  JmpIfLeIntI  r2, 100, -> 001b
+  .line 75
+  0019  LoadGlobal   r2, g0
+  001a  Call         r2, f5
+  .line 76
+  001b  LoadGlobal   r2, g0
+  001c  Free         r2
+  .line 77
+  001d  RetVoid
 .finally r0, r1
 .func 1 DumpInlineSelfChecks.TBox.Get params=1 regs=2
   .local r0 Self

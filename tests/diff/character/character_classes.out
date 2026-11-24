@@ -1,0 +1,61 @@
+Cc Cc
+Cf Cf
+Cn Cn
+Co Co
+Cs Cs
+Ll Ll
+Lm Lm
+Lo Lo
+Lt Lt
+Lu Lu
+Mc Mc
+Me Me
+Mn Mn
+Nd Nd
+Nl Nl
+No No
+Pc Pc
+Pd Pd
+Pe Pe
+Pf Pf
+Pi Pi
+Po Po
+Ps Ps
+Sc Sc
+Sk Sk
+Sm Sm
+So So
+Zl Zl
+Zp Zp
+Zs Zs
+A letter=TRUE digit=FALSE number=FALSE upper=TRUE lower=FALSE space=FALSE control=FALSE punct=FALSE symbol=FALSE sep=FALSE letdig=TRUE
+z letter=TRUE digit=FALSE number=FALSE upper=FALSE lower=TRUE space=FALSE control=FALSE punct=FALSE symbol=FALSE sep=FALSE letdig=TRUE
+5 letter=FALSE digit=TRUE number=TRUE upper=FALSE lower=FALSE space=FALSE control=FALSE punct=FALSE symbol=FALSE sep=FALSE letdig=TRUE
+fullwidth 7 letter=FALSE digit=TRUE number=TRUE upper=FALSE lower=FALSE space=FALSE control=FALSE punct=FALSE symbol=FALSE sep=FALSE letdig=TRUE
+half letter=FALSE digit=FALSE number=TRUE upper=FALSE lower=FALSE space=FALSE control=FALSE punct=FALSE symbol=FALSE sep=FALSE letdig=FALSE
+space letter=FALSE digit=FALSE number=FALSE upper=FALSE lower=FALSE space=TRUE control=FALSE punct=FALSE symbol=FALSE sep=TRUE letdig=FALSE
+tab letter=FALSE digit=FALSE number=FALSE upper=FALSE lower=FALSE space=TRUE control=TRUE punct=FALSE symbol=FALSE sep=FALSE letdig=FALSE
+nbsp letter=FALSE digit=FALSE number=FALSE upper=FALSE lower=FALSE space=TRUE control=FALSE punct=FALSE symbol=FALSE sep=TRUE letdig=FALSE
+ideographic space letter=FALSE digit=FALSE number=FALSE upper=FALSE lower=FALSE space=TRUE control=FALSE punct=FALSE symbol=FALSE sep=TRUE letdig=FALSE
+line sep letter=FALSE digit=FALSE number=FALSE upper=FALSE lower=FALSE space=TRUE control=FALSE punct=FALSE symbol=FALSE sep=TRUE letdig=FALSE
+comma letter=FALSE digit=FALSE number=FALSE upper=FALSE lower=FALSE space=FALSE control=FALSE punct=TRUE symbol=FALSE sep=FALSE letdig=FALSE
+plus letter=FALSE digit=FALSE number=FALSE upper=FALSE lower=FALSE space=FALSE control=FALSE punct=FALSE symbol=TRUE sep=FALSE letdig=FALSE
+yen letter=FALSE digit=FALSE number=FALSE upper=FALSE lower=FALSE space=FALSE control=FALSE punct=FALSE symbol=TRUE sep=FALSE letdig=FALSE
+hiragana a letter=TRUE digit=FALSE number=FALSE upper=FALSE lower=FALSE space=FALSE control=FALSE punct=FALSE symbol=FALSE sep=FALSE letdig=TRUE
+high surrogate letter=FALSE digit=FALSE number=FALSE upper=FALSE lower=FALSE space=FALSE control=FALSE punct=FALSE symbol=FALSE sep=FALSE letdig=FALSE
+6
+TRUE TRUE TRUE TRUE
+Lu So
+TRUE TRUE TRUE TRUE FALSE FALSE
+TRUE FALSE
+97 66560 119070
+66560 2
+49 1
+128512
+2 55357 56832
+1 A
+1 65535
+2 56319 57343
+0.0000 9.0000 0.5000 0.7500 4.0000 7.0000 3.0000
+1.0000
+Ab ABC àéî ÀÉÎ

@@ -54,6 +54,9 @@ const BUILTIN_HELPERS: &[(Option<&str>, BuiltinHelper)] = &[
 
 /// The id of the named built-in helper called `lower` (lowercase): they follow `TProc` in the
 /// type table ([`super::types::TypeTable::new`]).
+/// The number of built-in helpers: their ids follow `TProc`.
+pub(super) const BUILTIN_HELPER_COUNT: u32 = BUILTIN_HELPERS.len() as u32;
+
 pub(super) fn builtin_helper_id(lower: &str) -> Option<TypeId> {
     BUILTIN_HELPERS
         .iter()
@@ -138,6 +141,9 @@ impl<'a, 's> Sema<'a, 's> {
         let is_class = h.is_class();
         let target = self.helper_target_type(h, is_class);
         let parent = self.helper_parent(id, h, target);
+        // A built-in helper declared in the part of `System` written in Pascal keeps its
+        // built-in member (`docs/spec/stdlib/System/README.md`)
+        let builtin = self.types.helper_builtin(id);
         self.types.get_mut(id).kind = TypeKind::Helper {
             is_class,
             target,
@@ -146,7 +152,7 @@ impl<'a, 's> Sema<'a, 's> {
             methods: Vec::new(),
             statics: Vec::new(),
             properties: Vec::new(),
-            builtin: None,
+            builtin,
         };
         let mut methods = Vec::new();
         let mut properties = Vec::new();
@@ -485,13 +491,17 @@ impl<'a, 's> Sema<'a, 's> {
     /// and the position (`None` for a built-in helper's member).
     fn helper_member_decl(&self, id: TypeId, name: &str) -> Option<(TypeId, Option<Span>)> {
         for h in self.types.class_chain(id) {
-            if let Some(b) = self.types.helper_builtin(h) {
-                if b.name().eq_ignore_ascii_case(name) {
-                    return Some((h, None));
-                }
-                continue;
+            if let Some(b) = self.types.helper_builtin(h)
+                && b.name().eq_ignore_ascii_case(name)
+            {
+                return Some((h, None));
             }
-            let file = self.unit_file(self.types.class_unit(h)?);
+            // A built-in helper has members besides its built-in one once the part of `System`
+            // written in Pascal declares it
+            let Some(unit) = self.types.class_unit(h) else {
+                continue;
+            };
+            let file = self.unit_file(unit);
             if let Some(span) = self.declared_member_span(h, name) {
                 return Some((h, Some(Span::new(file, span))));
             }
@@ -595,7 +605,7 @@ impl<'a, 's> Sema<'a, 's> {
             if self.in_interface_part && !u.in_interface {
                 continue;
             }
-            for (_, sym) in &self.units[i].exports {
+            for (_, sym) in self.unit_names(i) {
                 if let GSym::Type { ty, .. } = sym {
                     self.push_visible_helpers(*ty, None, &mut out);
                 }
@@ -679,7 +689,7 @@ impl<'a, 's> Sema<'a, 's> {
             || self.used_units.iter().any(|u| {
                 u.iface.is_some_and(|i| {
                     !(self.in_interface_part && !u.in_interface)
-                        && self.units[i].exports.iter().any(|(n, _)| n == lower)
+                        && self.unit_names(i).any(|(n, _)| n == lower)
                 })
             })
     }
@@ -704,11 +714,11 @@ impl<'a, 's> Sema<'a, 's> {
                 continue;
             }
             match self.types.helper_builtin(owner) {
-                Some(b) => {
+                Some(b) if b.name().eq_ignore_ascii_case(name) => {
                     named_builtin = true;
                     out.push((h, HelperMember::Builtin(b)));
                 }
-                None => out.push((h, HelperMember::Declared)),
+                _ => out.push((h, HelperMember::Declared)),
             }
         }
         if !named_builtin
@@ -756,7 +766,22 @@ impl<'a, 's> Sema<'a, 's> {
             }
             _ => {}
         }
-        for step in steps {
+        // The part of `System` written in Pascal may declare it in a visible built-in helper,
+        // where it is found, or makes the call ambiguous, along with the other helpers
+        let standard: Vec<String> = visible
+            .iter()
+            .filter(|&&h| {
+                self.types
+                    .helper_target(h)
+                    .is_some_and(|t| steps.contains(&t))
+                    && self.standard_member(h, name)
+            })
+            .filter_map(|&h| self.types.get(h).name.clone())
+            .collect();
+        for h in &standard {
+            self.system_part_known(h);
+        }
+        for &step in &steps {
             let found = self.helpers_with(step, name, &visible);
             match found.len() {
                 0 => continue,
@@ -771,6 +796,30 @@ impl<'a, 's> Sema<'a, 's> {
             }
         }
         Err(false)
+    }
+
+    /// Whether the built-in helper of `ty` is one the part of `System` written in Pascal gives
+    /// members (`docs/spec/stdlib/System/README.md`): a missing member of a value of `ty` is then
+    /// E0700, not the E3200 of the helpers still to come (`docs/spec/objects.md` 10.4), also where
+    /// a declaration of its name hides the helper (10.7).
+    pub(super) fn has_standard_members(&self, ty: Ty) -> bool {
+        BUILTIN_HELPERS.iter().any(|(n, _)| {
+            n.is_some_and(|n| {
+                builtin_target(n) == ty && puy_stdlib::system_helper_members(n).next().is_some()
+            })
+        })
+    }
+
+    /// Whether `h` is a built-in helper whose member `name` the part of `System` written in
+    /// Pascal declares (`docs/spec/stdlib/System/README.md`).
+    fn standard_member(&self, h: TypeId, name: &str) -> bool {
+        self.types.helper_builtin(h).is_some()
+            && self
+                .types
+                .get(h)
+                .name
+                .as_deref()
+                .is_some_and(|n| puy_stdlib::system_helper_declares(n, name))
     }
 
     /// E0754 (`docs/spec/objects.md` 10.4), with a fix per candidate that calls it as
@@ -920,7 +969,7 @@ impl<'a, 's> Sema<'a, 's> {
         if ty.is_error() {
             return None;
         }
-        let written = if matches!(recv.kind, ExprKind::Error) {
+        let written = if matches!(recv.kind, ExprKind::Error | ExprKind::TypeName) {
             HelperRecv::Implicit
         } else {
             HelperRecv::Written(recv.span)
@@ -1010,15 +1059,42 @@ impl<'a, 's> Sema<'a, 's> {
                     }
                 }
             }
-            _ => {
-                self.error(
-                    Code::E(3200),
-                    "type helpers for built-in types are not supported yet (planned for M5)",
-                    whole,
-                );
+            _ if self.has_standard_members(declared) || self.has_standard_members(ty) => {
+                let t = self.tn(declared);
+                self.error(Code::E(700), format!("`{t}` has no member `{name}`"), range);
             }
+            _ => self.helpers_to_come(whole),
         }
         Resolved::Error
+    }
+
+    /// The E3200 of the helpers of the built-in types still to come at `whole`
+    /// (`docs/spec/objects.md` 10.4).
+    pub(super) fn helpers_to_come(&mut self, whole: TextRange) {
+        self.error(
+            Code::E(3200),
+            "type helpers for built-in types are not supported yet (planned for M5)",
+            whole,
+        );
+    }
+
+    /// A member `name` (at `range`) that no helper of the built-in type `ty` has, in `X.Name` written
+    /// at `whole`: E0700 when the part of `System` written in Pascal gives the type's helper
+    /// members, else the E3200 of the helpers still to come
+    /// (`docs/spec/stdlib/System/README.md` chapter 4).
+    pub(super) fn builtin_member_missing(
+        &mut self,
+        ty: Ty,
+        name: &str,
+        range: TextRange,
+        whole: TextRange,
+    ) {
+        if self.has_standard_members(self.types.strong(ty)) {
+            let t = self.tn(ty);
+            self.error(Code::E(700), format!("`{t}` has no member `{name}`"), range);
+        } else {
+            self.helpers_to_come(whole);
+        }
     }
 
     /// The base `X` of the member `X.Name` whose name is written at `name`.
@@ -1057,9 +1133,13 @@ impl<'a, 's> Sema<'a, 's> {
                 self.instance_member_error(b.name(), None, range);
                 return Resolved::Error;
             }
-            let t = self.tn(Ty::Helper(h));
-            self.error(Code::E(700), format!("`{t}` has no member `{name}`"), range);
-            return Resolved::Error;
+            // The other members are those the part of `System` written in Pascal declares
+            let helper = self.types.get(h).name.clone().unwrap_or_default();
+            if !self.standard_member(h, name) || !self.system_part_known(&helper) {
+                let t = self.tn(Ty::Helper(h));
+                self.error(Code::E(700), format!("`{t}` has no member `{name}`"), range);
+                return Resolved::Error;
+            }
         }
         match self.find_member(h, name, range) {
             Ok(Member::Static(owner, st)) => self.static_resolved(owner, &st),

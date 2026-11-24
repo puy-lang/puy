@@ -11,6 +11,7 @@ use super::{GSym, LSym, Sema, builtins};
 use crate::diagnostics::{Code, Diagnostic, Stage};
 use crate::source::{FileId, Span, TextRange};
 use crate::syntax::SyntaxKind;
+use crate::syntax::TokenName;
 use crate::syntax::ast::{self, AstNode};
 
 /// The records and static arrays of the outermost `type` section being declared (with the
@@ -260,12 +261,12 @@ impl<'a, 's> Sema<'a, 's> {
         let Some(last) = idents.last() else {
             return GenericRef::TArray(self.generic_elem(g));
         };
-        let name = last.text().to_string();
+        let name = last.name().to_string();
         let name_range = last.text_range();
         let scope = if idents.len() > 1 {
             let unit: Vec<String> = idents[..idents.len() - 1]
                 .iter()
-                .map(|t| t.text().to_string())
+                .map(|t| t.name().to_string())
                 .collect();
             let lower = unit.join(".").to_ascii_lowercase();
             match self.unit_named(&lower) {
@@ -279,7 +280,7 @@ impl<'a, 's> Sema<'a, 's> {
                 None if let Some(c) = {
                     let chain: Vec<(String, TextRange)> = idents[..idents.len() - 1]
                         .iter()
-                        .map(|t| (t.text().to_string(), t.text_range()))
+                        .map(|t| t.name_and_range())
                         .collect();
                     match self.chain_owner(&chain) {
                         Ok(c) => c,
@@ -387,10 +388,7 @@ impl<'a, 's> Sema<'a, 's> {
         {
             return Ty::Error;
         }
-        let chain: Vec<(String, TextRange)> = q
-            .idents()
-            .map(|t| (t.text().to_string(), t.text_range()))
-            .collect();
+        let chain: Vec<(String, TextRange)> = q.idents().map(|t| t.name_and_range()).collect();
         let whole = ast::trimmed_range(n.syntax());
         let Some(((name, name_range), init)) = chain.split_last() else {
             return Ty::Error;
@@ -522,7 +520,15 @@ impl<'a, 's> Sema<'a, 's> {
             .array_token()
             .map(|t| t.text_range())
             .unwrap_or(a.syntax().text_range());
-        let elem = self.resolve_type(a.element());
+        let elem = if a.of_const() {
+            // `array of const` is `array of TValue` (`docs/spec/rtti.md` 4.1)
+            self.tvalue_type()
+        } else {
+            self.resolve_type(a.element())
+        };
+        if elem.is_error() {
+            return Ty::Error;
+        }
         match self.dyn_array_of(
             elem,
             DynWritten::Anonymous {
@@ -616,6 +622,21 @@ impl<'a, 's> Sema<'a, 's> {
             kind: TypeKind::Pending,
             span,
         })
+    }
+
+    /// The built-in helper `lower` of `System` (`docs/spec/objects.md` 10.7) when its declaration
+    /// at `span` is in the part of `System` written in Pascal: that declaration gives the helper
+    /// its members besides the built-in one (`docs/spec/stdlib/System/README.md`).
+    fn system_helper_id(&mut self, lower: &str, span: TextRange) -> Option<TypeId> {
+        if !self.is_system_source() || self.class_scope().is_some() || self.cur.is_some() {
+            return None;
+        }
+        let id = super::helpers::builtin_helper_id(lower)?;
+        let full_name = self.qualified_type_name(self.types.get(id).name.as_deref()?);
+        let def = self.types.get_mut(id);
+        def.full_name = Some(full_name);
+        def.span = span;
+        Some(id)
     }
 
     /// `Hello.TPoint` for a type of the program, `Hello.Routine.TPoint` for a local type,
@@ -957,7 +978,7 @@ impl<'a, 's> Sema<'a, 's> {
                 // `docs/spec/objects.md` 7.1, as for a class
                 let later = section.decls().any(|d| {
                     d.name().is_some_and(|n| {
-                        n.text().eq_ignore_ascii_case(&name) && n.text_range().start() > range.start()
+                        n.name().eq_ignore_ascii_case(&name) && n.text_range().start() > range.start()
                     }) && matches!(d.type_spec(), Some(ast::TypeSpec::Interface(i)) if !i.is_forward())
                 });
                 if !later {
@@ -1024,7 +1045,10 @@ impl<'a, 's> Sema<'a, 's> {
                     (Ty::Error, Pending::Defines(self.pending_aliases.len() - 1))
                 }
                 Some(ast::TypeSpec::Helper(h)) => {
-                    let id = self.add_type(Some(name.clone()), range);
+                    let id = match self.system_helper_id(&lower, range) {
+                        Some(id) => id,
+                        None => self.add_type(Some(name.clone()), range),
+                    };
                     // Still declared, so its uses add no other error
                     self.helper_in_generic(id, &h);
                     (Ty::Helper(id), Pending::Helper(id, h))
@@ -1205,7 +1229,7 @@ impl<'a, 's> Sema<'a, 's> {
         let Some(name_tok) = decl.name().filter(|_| forward) else {
             self.decl_attributes(decl.syntax(), super::attrs::AttrSite::Other, Ty::Error);
             if let Some(n) = decl.name() {
-                let name = self.member_display_name(n.text());
+                let name = self.member_display_name(n.name());
                 self.declare_hints(decl.syntax(), n.text_range(), name);
             }
             return;
@@ -1213,7 +1237,7 @@ impl<'a, 's> Sema<'a, 's> {
         let full = super::generics::completing_decl(section, decl)
             .and_then(|d| d.name())
             .map(|n| n.text_range());
-        let name = name_tok.text().to_string();
+        let name = name_tok.name().to_string();
         self.attributes_on_forward(decl.syntax(), &name, full.map(|r| self.span(r)), true);
         self.read_hints(decl.syntax());
         self.hints_on_forward(decl.syntax(), &name, full.map(|r| self.span(r)), true);
@@ -1234,7 +1258,7 @@ impl<'a, 's> Sema<'a, 's> {
     fn bind_type(&mut self, lower: String, ty: Ty, span: TextRange) {
         if self.class_scope().is_some() {
             // A nested type (`docs/spec/objects.md` 2.2), under its name as written
-            let name = self.src(span);
+            let name = self.name_src(span);
             self.bind_nested_type(name, ty, span);
             return;
         }
@@ -1318,7 +1342,7 @@ impl<'a, 's> Sema<'a, 's> {
         !lower.contains('.')
             && section.decls().any(|d| {
                 d.name()
-                    .is_some_and(|n| n.text().eq_ignore_ascii_case(&lower))
+                    .is_some_and(|n| n.name().eq_ignore_ascii_case(&lower))
             })
     }
 
@@ -1526,6 +1550,7 @@ impl<'a, 's> Sema<'a, 's> {
                             Visibility::StrictProtected
                         }
                         Some(crate::syntax::SyntaxKind::PROTECTED_KW) => Visibility::Protected,
+                        Some(crate::syntax::SyntaxKind::PUBLISHED_KW) => Visibility::Published,
                         _ => Visibility::Public,
                     };
                     if let Some(scope) = self.class_scopes.last_mut() {
@@ -1583,7 +1608,9 @@ impl<'a, 's> Sema<'a, 's> {
                                     *n == lower
                                         && match v {
                                             Visibility::StrictPrivate => false,
-                                            Visibility::Private => *u == Some(self.unit_index),
+                                            Visibility::Private => {
+                                                u.is_some_and(|u| self.is_own_unit(u))
+                                            }
                                             _ => true,
                                         }
                                 })
@@ -2166,7 +2193,7 @@ impl<'a, 's> Sema<'a, 's> {
                     // A generic type with its type arguments (`Default(TBox<Integer>)`;
                     // `docs/spec/generics.md` 1.4): reported where it is written
                     let tok = n.token()?;
-                    let lower = tok.text().to_ascii_lowercase();
+                    let lower = tok.name().to_ascii_lowercase();
                     let generic = !self
                         .generic_types_named(&lower, &super::generics::GenericScope::Visible)
                         .is_empty();
@@ -2187,13 +2214,15 @@ impl<'a, 's> Sema<'a, 's> {
                     None => self
                         .unit_type(&lower)
                         .or_else(|| Ty::from_name(&lower))
+                        .or_else(|| self.system_pas_type(&lower))
                         .or_else(|| match builtins::lookup_system(&lower) {
                             // The built-in types of `System` (`TObject`, `TIndexRange`, `TProc`, …)
                             Some(builtins::SystemName::Type(t)) if !matches!(t, Ty::Helper(_)) => {
                                 Some(t)
                             }
                             _ => None,
-                        }),
+                        })
+                        .or_else(|| self.sysutils_type_arg(n)),
                 }
             }
             ast::Expr::Field(f) if f.type_args().is_some() => {
@@ -2211,7 +2240,8 @@ impl<'a, 's> Sema<'a, 's> {
                     Some(ast::Expr::NameRef(b)) if b.text().eq_ignore_ascii_case("system")
                 ) && self.lookup_type_symbol("system").is_none() =>
             {
-                Ty::from_name(&f.field()?.text().to_ascii_lowercase())
+                let lower = f.field()?.name().to_ascii_lowercase();
+                Ty::from_name(&lower).or_else(|| self.system_pas_type(&lower))
             }
             ast::Expr::Field(f) => {
                 // A type of a unit (`Default(Shapes.TRec)`; `docs/spec/units.md` 3.2), or a type
@@ -2220,9 +2250,16 @@ impl<'a, 's> Sema<'a, 's> {
                 // `docs/spec/objects.md` 2.2, `docs/spec/generics.md` 2.5). Anything else is left
                 // to the caller as a value (`Low(R.Bounds)`).
                 let base = f.base()?;
-                let in_unit = super::name_chain(e)
-                    .and_then(|chain| Some(self.unit_prefix(&chain)?.1 + 1 == chain.len()))
-                    .unwrap_or(false);
+                // A unit of the package, or a built-in unit (`High(System.SysUtils.TIOErrorKind)`)
+                let in_unit = super::name_chain(e).is_some_and(|chain| {
+                    self.unit_prefix(&chain)
+                        .is_some_and(|(_, n)| n + 1 == chain.len())
+                        || chain.split_last().is_some_and(|(_, quals)| {
+                            let q: Vec<String> =
+                                quals.iter().map(|(n, _)| n.to_ascii_lowercase()).collect();
+                            self.builtin_unit_named(&q.join(".")).is_some()
+                        })
+                });
                 if !in_unit {
                     self.type_owner_in_expr(&base)?;
                 }
@@ -2239,6 +2276,31 @@ impl<'a, 's> Sema<'a, 's> {
             }
             ast::Expr::Paren(p) => self.type_name_arg(&p.inner()?),
             _ => None,
+        }
+    }
+
+    /// A built-in type of `System.SysUtils` named by an argument (`Low(TReplaceFlag)`,
+    /// `High(TIOErrorKind)`; `docs/spec/semantics.md` 5.3), resolved as in an expression so that
+    /// it is a type only where `System.SysUtils` is in `uses`. `None` for any other name, and
+    /// where it does not resolve to a type (left to the caller as a value, which reports it).
+    fn sysutils_type_arg(&mut self, n: &ast::NameRef) -> Option<Ty> {
+        let lower = n.text().to_ascii_lowercase();
+        if !matches!(
+            builtins::lookup_sysutils(&lower),
+            Some(k) if !matches!(k, builtins::SysUtilsName::Func(_) | builtins::SysUtilsName::Proc(_))
+        ) {
+            return None;
+        }
+        let range = n.syntax().text_range();
+        let name = n.text();
+        // Probe first without reporting, then resolve again for real so that the use is recorded
+        let probe = self.dry_run(|s| s.resolve_ident(&name, range));
+        if !matches!(probe, super::Resolved::Type(_)) {
+            return None;
+        }
+        match self.resolve_ident(&name, range) {
+            super::Resolved::Type(t) => Some(t),
+            _ => Some(Ty::Error),
         }
     }
 
@@ -2349,10 +2411,7 @@ impl<'a, 's> Sema<'a, 's> {
             }
         } else {
             // A name qualified with a package unit (`docs/spec/units.md` 3.2)
-            let chain: Vec<(String, TextRange)> = q
-                .idents()
-                .map(|t| (t.text().to_string(), t.text_range()))
-                .collect();
+            let chain: Vec<(String, TextRange)> = q.idents().map(|t| t.name_and_range()).collect();
             // A nested type (`TOuter.TInner`, `Unit.TOuter.TInner`; `docs/spec/objects.md` 2.2)
             let unit = self.unit_prefix(&chain);
             let start = unit.map_or(0, |(_, n)| n);
@@ -2404,6 +2463,11 @@ impl<'a, 's> Sema<'a, 's> {
         if let Some(ty) = Ty::from_name(&unqualified) {
             return ty;
         }
+        if self.input.stdlib && unqualified == "tvalueref" {
+            // The managed part of `TValue`, which only the standard library names
+            // (`docs/spec/rtti.md` 3.1)
+            return Ty::ValueRef;
+        }
         if let Some(ty) =
             builtins::builtin_exception(&unqualified).or_else(|| self.sysutils_exception(&lower))
         {
@@ -2418,7 +2482,14 @@ impl<'a, 's> Sema<'a, 's> {
                     | Ty::Callable(_)
                     | Ty::Helper(_)
                     | Ty::Record(_)
+                    | Ty::Enum(_)
             )
+        {
+            return ty;
+        }
+        // A type of the part of `System` written in Pascal (`TInstant`, `System.TInstant`)
+        if (lower == unqualified || self.builtin_unit_named("system").is_some())
+            && let Some(ty) = self.system_pas_type(&unqualified)
         {
             return ty;
         }
@@ -2462,6 +2533,13 @@ impl<'a, 's> Sema<'a, 's> {
             return Ty::Error;
         }
         if lower.contains('.') {
+            if let Some((unit, _)) = lower.rsplit_once('.')
+                && self.builtin_unit_named(unit) == Some(super::UnitRef::System)
+                && let Some((name, at)) = q.idents().last().map(|t| t.name_and_range())
+                && self.unavailable_in_unit("System", &name, at)
+            {
+                return Ty::Error;
+            }
             self.error(
                 Code::E(700),
                 format!("undeclared identifier `{text}`"),
@@ -2478,15 +2556,13 @@ impl<'a, 's> Sema<'a, 's> {
                 );
             }
             Some(builtins::SystemName::Deleted(code)) => {
-                let note = builtins::deleted_note(code);
-                self.error(code, format!("`{text}` is not supported in Puy"), range)
-                    .notes
-                    .push(note.into());
+                self.deleted_name(code, &text, range);
             }
             Some(_) => {
                 self.error(Code::E(708), format!("`{text}` is not a type"), range);
             }
             None if lower == "notrefcounted" => self.not_ref_counted_misplaced(range),
+            None if self.unavailable_name(&text, range) => {}
             None if self.generic_needs_args(&text, range) => {}
             None => {
                 let d = Diagnostic::error(

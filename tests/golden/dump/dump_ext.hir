@@ -1,0 +1,54 @@
+program DumpExt uses=TestExt
+.global g0 C: TCounter
+.global g1 S: TSpan
+.routine f0 <main>.<anon1>(X: Integer): Integer closure
+  .var v0 X: Integer param
+  .var v1 Result: Integer result
+  assign @18 R+
+    var v1 Result
+    var v0 X: Integer
+.routine <main>
+  assign @13 R+
+    global g0 C
+    create TCounter f1
+      call f2 Add: Integer
+        const Integer 1
+        const Integer 2
+  expr @14
+    method f3 TCounter.Increment: -
+      global g0 C: TCounter
+  writeln @15
+    arg
+      method f4 TCounter.Value: Integer
+        global g0 C: TCounter
+    arg
+      const Char #32
+    arg
+      call f5 Upper: string
+        const string "a"
+    arg
+      const Char #32
+    arg
+      call f6 TCounter.Live: Integer
+        classref TCounter
+  writeln @16
+    arg
+      call f7 Apply: Integer
+        anon f0
+        const Integer 1
+  assign @20 R+
+    global g1 S
+    call f8 ShiftSpan: TSpan
+      global g1 S: TSpan
+      const Int64 2
+  writeln @21
+    arg
+      field Int64 Start #0
+        global g1 S: TSpan
+    arg
+      const Char #32
+    arg
+      builtin Length Integer
+        call f9 MakeEntries: TArray<TEntry>
+          array TArray<UTF8String>
+            const UTF8String utf8 "x"

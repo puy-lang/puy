@@ -27,5 +27,10 @@ type
     Owner: TObject;
   end;
 
+var
+  S: TShape;
 begin
+  // Never true: names the class, so that its table keeps the generated methods (units.md 8.3)
+  if ParamCount > 100 then
+    S := TShape.Create;
 end.

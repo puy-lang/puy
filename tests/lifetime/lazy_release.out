@@ -1,0 +1,54 @@
+create shared 1
+read shared 1
+reset
+destroy shared 1
+create shared 2
+read shared 2
+drop the TLazy
+destroy shared 2
+dropped
+--
+create captured
+read from captured
+the function is kept after making the value
+read from captured
+drop the TLazy
+destroy captured
+dropped
+--
+create not owned
+drop the TLazy
+dropped; the object is still not owned
+destroy not owned
+--
+raised: first attempt failed
+create owned 2
+read owned 2
+reset
+destroy owned 2
+made after Reset: FALSE
+create owned 3
+read owned 3
+drop the TLazyObject
+destroy owned 3
+dropped
+create given
+drop the TLazyObject
+destroy given
+dropped
+--
+make 1
+made: TRUE
+destroy failing
+Reset raised: the destructor failed
+made after Reset: FALSE
+make 2
+made again: TRUE
+destroy failing
+Reset raised again: the destructor failed
+--
+dropped the last reference while making
+read made
+the global is nil: TRUE
+destroy the TLazy
+after the read

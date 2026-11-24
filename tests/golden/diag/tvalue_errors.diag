@@ -1,0 +1,39 @@
+error[E0778]: `TValue` has no key equality
+   --> tvalue_errors.pas:24:20
+    |
+ 24 |   Dict: TDictionary<TValue, Integer>;
+    |                    ^^^^^^^^^^^^^^^^^
+    |
+    = note: a `TValue` is compared by the type it holds; compare the values taken out of it
+
+error[E0778]: `TValue` has no key equality
+   --> tvalue_errors.pas:30:11
+    |
+ 30 |   WriteLn(KeyEquals(X, Y));
+    |           ^^^^^^^^^^^^^^^
+    |
+    = note: a `TValue` is compared by the type it holds; compare the values taken out of it
+
+error[E0778]: `TRec` has no key equality
+   --> tvalue_errors.pas:31:11
+    |
+ 31 |   WriteLn(KeyHash(R));
+    |           ^^^^^^^^^^
+    |
+    = note: a `TValue` is compared by the type it holds; compare the values taken out of it
+
+error[E0777]: routine `P` cannot be an element of an `array of const`
+   --> tvalue_errors.pas:32:9
+    |
+ 32 |   Show([P]);
+    |         ^
+    |
+    = note: call it, or pass a value of a procedural type
+
+error[E0703]: operator `=` cannot be applied to `TValue` and `TValue`
+   --> tvalue_errors.pas:33:13
+    |
+ 33 |   WriteLn(X = Y);
+    |             ^
+
+error: aborting due to 5 errors

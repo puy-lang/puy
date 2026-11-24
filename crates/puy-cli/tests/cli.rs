@@ -6,7 +6,7 @@
 //!    `puy fix` lines, usage error exit code 2, `--format json`, `-e`, stdin) with the arguments
 //!    in `<name>.cmd`.
 //!
-//! `PUY_UPDATE_GOLDEN=1` rewrites `.out` / `.err` / `.code` / `.fixed.pas` in `tests/cli/`.
+//! `PUY_UPDATE_GOLDEN=1` rewrites `.out` / `.err` / `.code` / `.xml` / `.fixed.pas` in `tests/cli/`.
 //! Native only (spawns child processes).
 
 #![cfg(not(target_os = "wasi"))]
@@ -115,7 +115,51 @@ fn parse_cmd(bytes: &[u8]) -> Vec<String> {
     args
 }
 
-/// Copies a directory, leaving out the expected results of `puy fix` (`*.fixed.pas`).
+/// Replaces the time of each test on the lines of `puy test` (`(12ms)` at the end of a line;
+/// `docs/spec/test.md` 5) with `(Nms)`, so that the expected output does not depend on the
+/// machine.
+fn mask_durations(stdout: &[u8]) -> Vec<u8> {
+    let text = String::from_utf8_lossy(stdout);
+    let mut out = String::new();
+    for line in text.split_inclusive('\n') {
+        let body = line.trim_end_matches('\n');
+        let masked = body.strip_suffix("ms)").and_then(|rest| {
+            let open = rest.rfind(" (")?;
+            let digits = &rest[open + 2..];
+            (!digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()))
+                .then(|| format!("{} (Nms)", &rest[..open]))
+        });
+        match masked {
+            Some(m) => {
+                out.push_str(&m);
+                out.push_str(&line[body.len()..]);
+            }
+            None => out.push_str(line),
+        }
+    }
+    out.into_bytes()
+}
+
+/// Sets the elapsed times in JSON and JUnit to zero for comparison.
+fn mask_report_times(report: &[u8], prefix: &str, replacement: &str) -> Vec<u8> {
+    let mut text = String::from_utf8_lossy(report).into_owned();
+    let mut start = 0;
+    while let Some(offset) = text[start..].find(prefix) {
+        start += offset + prefix.len();
+        let len = text[start..]
+            .bytes()
+            .take_while(|b| b.is_ascii_digit() || *b == b'.')
+            .count();
+        if len > 0 {
+            text.replace_range(start..start + len, replacement);
+            start += replacement.len();
+        }
+    }
+    text.into_bytes()
+}
+
+/// Copies a directory, leaving out the expected files after the command (`*.fixed.pas` of
+/// `puy fix`, `*.after`).
 fn copy_tree(from: &Path, to: &Path) {
     if from.is_dir() {
         fs::create_dir_all(to).unwrap();
@@ -129,11 +173,24 @@ fn copy_tree(from: &Path, to: &Path) {
 }
 
 fn is_fixed_expectation(p: &Path) -> bool {
-    p.file_name()
-        .is_some_and(|n| n.to_string_lossy().ends_with(".fixed.pas"))
+    p.file_name().is_some_and(|n| {
+        let n = n.to_string_lossy();
+        n.ends_with(".fixed.pas") || n.ends_with(".after")
+    })
 }
 
-/// The expected results of `puy fix` under `dir`, as paths relative to it.
+/// The file an expected file after the command stands for: `<path>.pas` for `<path>.fixed.pas`
+/// (the result of `puy fix`), `<path>` for `<path>.after` (a file the command writes, such as a
+/// snapshot of `puy test --update`).
+fn expected_target(rel: &Path) -> String {
+    let rel = rel.to_string_lossy();
+    match rel.strip_suffix(".after") {
+        Some(t) => t.to_string(),
+        None => rel.replace(".fixed.pas", ".pas"),
+    }
+}
+
+/// The expected files after the command under `dir`, as paths relative to it.
 fn fixed_expectations(dir: &Path, rel: &Path, out: &mut Vec<PathBuf>) {
     let mut entries: Vec<PathBuf> = fs::read_dir(dir.join(rel))
         .unwrap()
@@ -252,6 +309,14 @@ fn runner_cases_through_puy_run() {
             || cfg.stack_limit.is_some()
             || cfg.memory_limit.is_some()
             || cfg.merge_stderr
+            || cfg.test_ext
+            || cfg.test_fs
+            || cfg.no_fs
+            || cfg.absent_unsupported
+            || cfg.clock.is_some()
+            || cfg.no_clock
+            || cfg.random.is_some()
+            || cfg.no_random
         {
             continue;
         }
@@ -344,6 +409,23 @@ fn examples_run_cleanly() {
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// Run the report example's four tests, including its checked-in snapshot, through package discovery.
+#[test]
+fn examples_test_report_runs_cleanly() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/test_report");
+    let r = run(&dir, &["test".into(), "--seed".into(), "1".into()], b"");
+    let stdout = String::from_utf8_lossy(&r.stdout);
+    let stderr = String::from_utf8_lossy(&r.stderr);
+    assert_eq!(r.code, 0, "{stdout}\n{stderr}");
+    assert!(stderr.is_empty(), "{stderr}");
+    assert!(
+        stdout
+            .lines()
+            .any(|line| line.starts_with("test result: ok. 4 ok;")),
+        "{stdout}"
+    );
 }
 
 /// Nesting-limit cases also pass on the main thread with `puy check` (`design/testing.md` 3.9).
@@ -471,6 +553,35 @@ still running
     assert_eq!(stderr, "");
 }
 
+/// `TFilePath.Resolve` follows symbolic links through the OS, while `Normalize` takes `..` by
+/// name (`docs/spec/stdlib/Puy.Paths/README.md` 3). The runner's file system in memory has no
+/// links, so this runs `puy` in a directory with one. Unix only, for making the link.
+#[cfg(unix)]
+#[test]
+fn resolve_follows_symbolic_links() {
+    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("resolve-links");
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(dir.join("real/sub")).unwrap();
+    fs::write(dir.join("real/f.txt"), "f").unwrap();
+    std::os::unix::fs::symlink("real/sub", dir.join("link")).unwrap();
+    let program = "program ResolveLinks;
+uses Puy.Paths;
+begin
+  WriteLn(TFilePath('link/../f.txt').Resolve.ToString);
+  WriteLn(TFilePath('link/../f.txt').Normalize.ToString);
+end.
+";
+    fs::write(dir.join("resolve.pas"), program).unwrap();
+    let out = run(&dir, &["run".into(), "resolve.pas".into()], b"");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.code, 0, "stderr:\n{stderr}");
+    let canon = fs::canonicalize(&dir).unwrap();
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout),
+        format!("{}/real/f.txt\nf.txt\n", canon.display())
+    );
+}
+
 /// Cases in `tests/cli/<name>/`. The directory is copied to `target/tmp` before running (because
 /// `puy fix` rewrites files).
 #[test]
@@ -501,7 +612,7 @@ fn cli_cases() {
             let is_expectation = fname.starts_with(&format!("{name}."))
                 && matches!(
                     p.extension().and_then(|e| e.to_str()),
-                    Some("cmd" | "in" | "out" | "err" | "code" | "readonly")
+                    Some("cmd" | "in" | "out" | "err" | "code" | "readonly" | "xml")
                 );
             if !is_expectation {
                 copy_tree(&p, &work.join(&fname));
@@ -516,7 +627,12 @@ fn cli_cases() {
             continue;
         }
         let stdin = fs::read(stem.with_extension("in")).unwrap_or_default();
-        let r = run(&work, &args, &stdin);
+        let mut r = run(&work, &args, &stdin);
+        if r.stdout.starts_with(b"{\"schema\":\"puy.test/1\"") {
+            r.stdout = mask_report_times(&r.stdout, "\"duration_ms\":", "0");
+        } else if args.first().is_some_and(|a| a == "test") {
+            r.stdout = mask_durations(&r.stdout);
+        }
         if let Some(list) = &readonly {
             make_readonly(&work, list, false);
         }
@@ -538,6 +654,23 @@ fn cli_cases() {
             Some(&err_path),
             &mut f,
         );
+        let xml_path = stem.with_extension("xml");
+        if let Ok(expected) = fs::read(&xml_path) {
+            let target = args
+                .windows(2)
+                .rfind(|pair| pair[0] == "--junit")
+                .expect("the JUnit case names the output file");
+            match fs::read(work.join(&target[1])) {
+                Ok(actual) => compare(
+                    "JUnit report",
+                    &expected,
+                    &mask_report_times(&actual, " time=\"", "0.000"),
+                    Some(&xml_path),
+                    &mut f,
+                ),
+                Err(e) => f.push(format!("cannot read JUnit report: {e}\n")),
+            }
+        }
         let want_code = fs::read(&code_path).map(|c| parse_code(&c)).unwrap_or(0);
         if r.code != want_code {
             if update() {
@@ -550,16 +683,17 @@ fn cli_cases() {
                 f.push(format!("exit code: expected {want_code}, got {}\n", r.code));
             }
         }
-        // Result of `puy fix`: each `<path>.fixed.pas` is compared with `<path>.pas`
+        // Files after the command: each `<path>.fixed.pas` is compared with `<path>.pas`, each
+        // `<path>.after` with `<path>`
         let mut fixed = Vec::new();
         fixed_expectations(&dir, Path::new(""), &mut fixed);
         for rel in fixed {
             let fixed_path = dir.join(&rel);
             let expected = fs::read(&fixed_path).unwrap();
-            let target = rel.to_string_lossy().replace(".fixed.pas", ".pas");
+            let target = expected_target(&rel);
             let actual = fs::read(work.join(&target)).unwrap_or_default();
             compare(
-                &format!("fixed file {target}"),
+                &format!("file {target} after the command"),
                 &expected,
                 &actual,
                 Some(&fixed_path),

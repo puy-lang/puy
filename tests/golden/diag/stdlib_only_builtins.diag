@@ -28,4 +28,46 @@ error[E0700]: undeclared identifier `ArrayMoveRange`
  18 |   System.ArrayMoveRange(A, 0, 1, 1);
     |          ^^^^^^^^^^^^^^
 
-error: aborting due to 5 errors
+error[E0700]: undeclared identifier `MathFunc1`
+   --> stdlib_only_builtins.pas:19:11
+    |
+ 19 |   WriteLn(MathFunc1(0, 1.0));
+    |           ^^^^^^^^^
+
+error[E0700]: undeclared identifier `MathFunc2`
+   --> stdlib_only_builtins.pas:20:18
+    |
+ 20 |   WriteLn(System.MathFunc2(1, 2.0, 3.0));
+    |                  ^^^^^^^^^
+
+error[E0700]: undeclared identifier `UnicodeCategory`
+   --> stdlib_only_builtins.pas:21:11
+    |
+ 21 |   WriteLn(UnicodeCategory(65));
+    |           ^^^^^^^^^^^^^^^
+
+error[E0700]: undeclared identifier `CodePointClass`
+   --> stdlib_only_builtins.pas:22:18
+    |
+ 22 |   WriteLn(System.CodePointClass(65));
+    |                  ^^^^^^^^^^^^^^
+
+error[E0700]: undeclared identifier `NumericValue`
+   --> stdlib_only_builtins.pas:23:11
+    |
+ 23 |   WriteLn(NumericValue(65));
+    |           ^^^^^^^^^^^^
+
+error[E0700]: undeclared identifier `RequestLeakReport`
+   --> stdlib_only_builtins.pas:24:3
+    |
+ 24 |   RequestLeakReport;
+    |   ^^^^^^^^^^^^^^^^^
+
+error[E0700]: undeclared identifier `RequestLeakReport`
+   --> stdlib_only_builtins.pas:25:10
+    |
+ 25 |   System.RequestLeakReport;
+    |          ^^^^^^^^^^^^^^^^^
+
+error: aborting due to 12 errors

@@ -1,0 +1,25 @@
+error[E0770]: `native` is only allowed in the unit of an extension
+  --> ext_native_outside.pas:7:20
+   |
+ 7 |     procedure Run; native;
+   |                    ^^^^^^
+   |
+   = note: the body of a `native` routine is a Rust function its extension registers
+
+error[E0770]: `native` is only allowed in the unit of an extension
+   --> ext_native_outside.pas:10:18
+    |
+ 10 | procedure Hello; native;
+    |                  ^^^^^^
+    |
+    = note: the body of a `native` routine is a Rust function its extension registers
+
+error[E0770]: `native` is only allowed in the unit of an extension
+   --> ext_native_outside.pas:17:20
+    |
+ 17 |   procedure Inner; native;
+    |                    ^^^^^^
+    |
+    = note: the body of a `native` routine is a Rust function its extension registers
+
+error: aborting due to 3 errors

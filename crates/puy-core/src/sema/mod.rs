@@ -4,6 +4,7 @@ mod anon;
 mod attrs;
 pub mod builtins;
 mod defaults;
+mod deferred;
 pub mod dump;
 mod enumerators;
 pub mod erase;
@@ -17,10 +18,13 @@ pub(crate) mod hirwalk;
 mod infer;
 mod instances;
 mod interfaces;
+pub mod invoke;
 mod keys;
 mod methods;
+pub(crate) mod native;
 mod operators;
 mod overload;
+mod probes;
 mod procs;
 mod properties;
 mod reals;
@@ -29,15 +33,20 @@ mod statics;
 mod stdio;
 mod stmt;
 mod sysutils;
+mod testunit;
+mod tvalue;
 mod typedecl;
 pub mod types;
+mod unavailable;
 mod values;
 
 use crate::diagnostics::{Code, Diagnostic, DiagnosticSink, Fix, Stage, TextEdit};
 use crate::directives::DirectiveOutput;
 use crate::source::{FileId, Span, TextRange, TextSize};
+use crate::syntax::TokenName;
 use crate::syntax::ast::{self, AstNode, ParamMode};
 use crate::syntax::{SyntaxKind, SyntaxNode, SyntaxToken};
+pub use deferred::analyze_deferred;
 pub use expr::{compare_strings, compare_units};
 use hir::*;
 use types::{Const, Ty, TypeTable};
@@ -61,6 +70,20 @@ pub struct SemaInput<'a> {
     /// The file is a unit of the standard library (`docs/spec/collections.md` 1.2): it also sees
     /// the built-ins only the standard library uses (12.1).
     pub stdlib: bool,
+    /// The file is the unit of an extension, with the fingerprint of its source
+    /// (`docs/spec/extensions.md` 2): its routines may be `native`.
+    pub extension: Option<u64>,
+    /// The file is a test unit (`*_test.pas`; `docs/spec/units.md` 2.4).
+    pub test: Option<TestUnit>,
+}
+
+/// What the analysis of a test unit is given (`docs/spec/units.md` 2.4).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct TestUnit {
+    /// The paired unit (index into [`ModuleState::units`]): the unit of the package named like
+    /// the test unit without `_test`, if it was analyzed. Its `implementation` section is seen
+    /// when the test unit names it in `uses`.
+    pub pair: Option<usize>,
 }
 
 /// What an item of `uses` names (keyed by the range of its `QualifiedName`).
@@ -94,6 +117,11 @@ pub struct UnitInterface {
     type_spellings: Vec<(String, String)>,
     /// The generic types declared in the `interface` section (`docs/spec/generics.md` 2.3).
     generics: Vec<generics::GenericTypeName>,
+    /// The names declared in the `implementation` section, and its generic types: seen by the
+    /// test unit the unit is paired with (`docs/spec/units.md` 2.4). Kept for the units of the
+    /// package only.
+    private: Vec<(String, GSym)>,
+    private_generics: Vec<generics::GenericTypeName>,
 }
 
 /// State shared by the files of one compilation: the module's globals, routines and types are
@@ -127,6 +155,19 @@ pub struct ModuleState {
     explicit_consts: std::collections::HashSet<Span>,
     /// The type parameter of `KeyEquals` / `KeyHash` for inference, shared by the units.
     key_param: Option<types::TypeId>,
+    /// The built-in helpers (lowercase names) whose members the part of `System` written in
+    /// Pascal given to the analysis declares (`docs/spec/stdlib/System/README.md`).
+    system_helpers: Vec<String>,
+    /// The built-in helpers (lowercase names) a file asked for a member of that the built-ins do
+    /// not have, while the files of `System` that declare it were not given: the driver analyzes
+    /// again with them.
+    wanted_helpers: Vec<String>,
+    /// The method bodies of the standard library's types put off until a body uses them
+    /// (`deferred.rs`).
+    deferred: deferred::DeferredBodies,
+    /// The tests of the test units analyzed (`docs/spec/attributes.md` 5.2), in the order the
+    /// units were analyzed; `None` when no test unit was.
+    tests: Option<Vec<TestInfo>>,
 }
 
 impl ModuleState {
@@ -157,83 +198,43 @@ impl ModuleState {
     pub fn closure_plan(&self) -> ClosurePlan {
         closure_plan(&self.routines)
     }
+
+    /// Gives the analysis the part of `System` written in Pascal with the files that declare the
+    /// members of the built-in helpers `helpers` (lowercase names; the driver analyzes that unit
+    /// first).
+    pub fn set_system_helpers(&mut self, helpers: Vec<String>) {
+        self.system_helpers = helpers;
+    }
+
+    /// The helper or exported names (lowercase) whose parts of `System` were requested but
+    /// have not been loaded. The driver analyzes all the files again with those parts.
+    pub fn wanted_system_helpers(&self) -> impl Iterator<Item = &str> {
+        self.wanted_helpers
+            .iter()
+            .filter(|h| !self.system_helpers.contains(h))
+            .map(String::as_str)
+    }
 }
 
 /// Runs semantic analysis of one file (a unit, a program or a script) and adds it to `state`.
 /// Units are analyzed before the files that use them (`docs/design/compiler-pipeline.md` 3.8).
 pub fn analyze(input: &SemaInput<'_>, state: &mut ModuleState, sink: &mut DiagnosticSink) {
     let unit_index = state.units.len() as u32;
-    let s = Sema {
-        input,
-        sink,
-        globals: std::mem::take(&mut state.globals),
-        exit_code: state.exit_code,
-        replace_flags: state.replace_flags,
-        case_mapping: state.case_mapping,
-        case_fold: state.case_fold,
-        routines: std::mem::take(&mut state.routines),
-        global_scope: Vec::new(),
-        sysutils: SysUtils::NotUsed,
-        uses_fix: UsesFix::compute(input.root, input.bytes),
-        script_top_vars: Vec::new(),
-        script_all_top_vars: Vec::new(),
-        is_script: false,
-        cur: None,
-        outer: Vec::new(),
-        allow_type_as_value: false,
-        mismatch_shown: None,
-        use_span: None,
-        anon_self: Default::default(),
-        plan: std::mem::take(&mut state.plan),
-        last_place_result: None,
-        dry_run: 0,
-        types: std::mem::take(&mut state.types),
-        type_decls: std::mem::take(&mut state.type_decls),
-        attr_uses: std::mem::take(&mut state.attrs),
-        hints: std::mem::take(&mut state.hints),
-        hint_state: Default::default(),
-        unit_name_span: None,
-        program_name: String::new(),
-        pending_aliases: Vec::new(),
-        pending_classes: Vec::new(),
-        incomplete_classes: std::collections::HashSet::new(),
-        pending_impls: Vec::new(),
-        attr_checks: Vec::new(),
-        user_attrs: Vec::new(),
-        attr_defer: 0,
-        equality_attrs: Default::default(),
-        class_scopes: Vec::new(),
-        lexical_outer: std::collections::HashMap::new(),
-        generic_helpers: std::collections::HashSet::new(),
-        overload_picks: std::collections::HashMap::new(),
-        unit_index,
-        units: std::mem::take(&mut state.units),
-        used_units: Vec::new(),
-        in_interface_part: false,
-        is_unit: false,
-        sysutils_item: None,
-        generic_types: Vec::new(),
-        generic_params: Vec::new(),
-        cycle_check: Default::default(),
-        routine_type_params: Vec::new(),
-        explicit_sets: std::collections::HashMap::new(),
-        comma_comparisons: Vec::new(),
-        param_scopes: Vec::new(),
-        deferred_checks: None,
-        instances: std::mem::take(&mut state.instances),
-        typed_consts: std::mem::take(&mut state.typed_consts),
-        explicit_consts: std::mem::take(&mut state.explicit_consts),
-        key_param: state.key_param,
-    };
-    s.run(state);
+    let ctx = deferred::FileCtx::new(input);
+    Sema::new(input, sink, state, unit_index, ctx).run(state);
 }
 
 /// Builds the program from the analyzed files (`analyze` was called for each, the file passed to
 /// `puy` last).
 pub fn finish(mut state: ModuleState, sink: &mut DiagnosticSink) -> Program {
+    debug_assert!(
+        state.deferred.ready_to_finish(),
+        "`analyze_deferred` runs before `finish` (`deferred.rs`)"
+    );
     // The bodies of the methods of the instantiations that are used (`docs/design/generics.md`
     // 3.1), after every routine they may be used from
     let mut diags = Vec::new();
+    let rtti_roots: Vec<RoutineId>;
     {
         let program_unit = state.parts.len().saturating_sub(1) as u32;
         state.instances.unit_files = state.parts.iter().map(|u| u.file).collect();
@@ -268,6 +269,9 @@ pub fn finish(mut state: ModuleState, sink: &mut DiagnosticSink) -> Program {
         }
         roots.extend(state.main.iter());
         i.instantiate_bodies(&roots);
+        // The bridges and attribute functions of `System.Rtti` (`docs/spec/rtti.md` 7.3, 7.4)
+        let wants = i.inst.rtti_wants;
+        rtti_roots = i.generate_rtti(wants, &state.attrs);
     }
     for d in diags {
         sink.push(d);
@@ -463,6 +467,10 @@ pub fn finish(mut state: ModuleState, sink: &mut DiagnosticSink) -> Program {
             })
         })
         .collect();
+    // The methods whose bodies were put off and not analyzed (`deferred.rs`)
+    let unreached: Vec<bool> = (0..state.routines.len())
+        .map(|i| state.deferred.is_pending(RoutineId(i as u32)))
+        .collect();
     let mut routines: Vec<Routine> = state
         .routines
         .drain(..)
@@ -533,14 +541,17 @@ pub fn finish(mut state: ModuleState, sink: &mut DiagnosticSink) -> Program {
                 body_begin: None,
                 name_span: r.name_span,
                 has_syntax_errors: false,
-                // An abstract method has no body and no function: not an error
-                has_errors: !r.is_abstract,
+                // An abstract method and a `native` routine have no body and no function: not an
+                // error
+                has_errors: !r.is_abstract && !r.native,
                 unit: r.unit,
                 parent: r.parent,
                 link: false,
                 is_abstract: false,
+                native: false,
                 builtin: false,
                 generic: false,
+                unreached: false,
                 dtor_of: None,
                 helper: false,
                 operator: false,
@@ -552,6 +563,7 @@ pub fn finish(mut state: ModuleState, sink: &mut DiagnosticSink) -> Program {
             routine.name = full;
             routine.instance = instance;
             routine.is_abstract = r.is_abstract;
+            routine.native = r.native;
             routine.builtin = r.method_of == Some(types::TOBJECT);
             routine.generic = generic;
             routine.dtor_of = dtor_of;
@@ -562,6 +574,9 @@ pub fn finish(mut state: ModuleState, sink: &mut DiagnosticSink) -> Program {
             routine
         })
         .collect();
+    for (r, u) in routines.iter_mut().zip(unreached) {
+        r.unreached = u;
+    }
     for (r, op) in routines.iter_mut().zip(operators) {
         r.operator = op;
     }
@@ -616,7 +631,7 @@ pub fn finish(mut state: ModuleState, sink: &mut DiagnosticSink) -> Program {
         ),
         None => (String::new(), None),
     };
-    let main = state.main.take().unwrap_or_else(|| Routine {
+    let mut main = state.main.take().unwrap_or_else(|| Routine {
         name: "<main>".into(),
         vars: Vec::new(),
         param_count: 0,
@@ -631,8 +646,10 @@ pub fn finish(mut state: ModuleState, sink: &mut DiagnosticSink) -> Program {
         parent: None,
         link: false,
         is_abstract: false,
+        native: false,
         builtin: false,
         generic: false,
+        unreached: false,
         dtor_of: None,
         helper: false,
         operator: false,
@@ -640,6 +657,26 @@ pub fn finish(mut state: ModuleState, sink: &mut DiagnosticSink) -> Program {
         captures: Vec::new(),
         groups: Default::default(),
         instance: None,
+    });
+    let mut init = init;
+    // The `<main>` of a test unit is empty: its module runs the tests' routines
+    // (`docs/spec/attributes.md` 5.2)
+    if state.tests.is_some() {
+        main.has_syntax_errors = false;
+    }
+    let tests = state.tests.take();
+    mark_unreached(&mut routines, &state.types, |v| {
+        v.0.extend(tests.iter().flatten().map(|t| t.thunk));
+        v.0.extend(rtti_roots.iter().copied());
+        hirwalk::walk_routine(&mut main, v);
+        for r in init.iter_mut() {
+            hirwalk::walk_routine(r, v);
+        }
+        for u in &mut units {
+            for r in u.init.iter_mut().chain(u.fini.iter_mut()) {
+                hirwalk::walk_routine(r, v);
+            }
+        }
     });
     Program {
         name,
@@ -658,7 +695,69 @@ pub fn finish(mut state: ModuleState, sink: &mut DiagnosticSink) -> Program {
         instances,
         instance_order: state.instances.order,
         generated: state.instances.generated,
+        rtti_funcs: invoke::RttiFuncs {
+            bridges: state.instances.method_bridges,
+            attrs: state.instances.attr_funcs,
+        },
         origins,
+        tests,
+    }
+}
+
+/// Marks the routines no entry reaches (`docs/spec/units.md` 6.1) as `unreached`, so that they
+/// are not lowered: the entries are the bodies `entries` walks (`<main>`, the units' `<init>` and
+/// `<fini>`) and the functions of every class's virtual method table and interface table; a
+/// routine reaches those its body refers to and the one it is nested in. This keeps more than the
+/// module keeps (only the tables of the classes in the type section are entries there), which
+/// drops the rest after lowering.
+fn mark_unreached(
+    routines: &mut [Routine],
+    types: &TypeTable,
+    entries: impl FnOnce(&mut RoutineRefs),
+) {
+    let mut refs = RoutineRefs(Vec::new());
+    entries(&mut refs);
+    for t in 0..types.defs.len() {
+        let id = types::TypeId(t as u32);
+        if let types::TypeKind::Class { vmt, intfs, .. } = &types.get(id).kind {
+            for e in vmt {
+                if let types::VmtEntry::Func(r) = e {
+                    refs.0.push(*r);
+                }
+            }
+            for i in intfs {
+                for e in &i.entries {
+                    if let types::IntfEntry::Func(r) = e {
+                        refs.0.push(*r);
+                    }
+                }
+            }
+        }
+    }
+    let mut reached = vec![false; routines.len()];
+    while let Some(r) = refs.0.pop() {
+        let i = r.0 as usize;
+        if reached[i] {
+            continue;
+        }
+        reached[i] = true;
+        if let Some(p) = routines[i].parent {
+            refs.0.push(p);
+        }
+        hirwalk::walk_routine(&mut routines[i], &mut refs);
+    }
+    for (r, reached) in routines.iter_mut().zip(reached) {
+        r.unreached |= !reached;
+    }
+}
+
+/// The routines the walked bodies refer to.
+struct RoutineRefs(Vec<RoutineId>);
+
+impl hirwalk::HirVisit for RoutineRefs {
+    fn ty(&mut self, _t: &mut Ty) {}
+    fn routine(&mut self, r: &mut RoutineId) {
+        self.0.push(*r);
     }
 }
 
@@ -941,7 +1040,7 @@ pub(super) fn name_chain(e: &ast::Expr) -> Option<Vec<(String, TextRange)>> {
                 return None;
             }
             let tok = n.token()?;
-            Some(vec![(tok.text().to_string(), tok.text_range())])
+            Some(vec![tok.name_and_range()])
         }
         ast::Expr::Field(f) => {
             if f.type_args().is_some() {
@@ -949,7 +1048,7 @@ pub(super) fn name_chain(e: &ast::Expr) -> Option<Vec<(String, TextRange)>> {
             }
             let mut v = name_chain(&f.base()?)?;
             let field = f.field()?;
-            v.push((field.text().to_string(), field.text_range()));
+            v.push(field.name_and_range());
             Some(v)
         }
         _ => None,
@@ -968,6 +1067,8 @@ struct FilePart {
     exports: Vec<(String, GSym)>,
     /// The names of the public types as written ([`UnitInterface::type_spellings`]).
     type_spellings: Vec<(String, String)>,
+    /// The names of the `implementation` section ([`UnitInterface::private`]).
+    private: Vec<(String, GSym)>,
 }
 
 /// A unit visible from the file being analyzed.
@@ -989,6 +1090,9 @@ struct UsedUnit {
     /// names are found like those of a package unit, but the unit name (and its alias) names the
     /// built-in unit, which falls back to this part ([`UnitRef::SysUtils`]).
     sysutils: bool,
+    /// The unit paired with the test unit being analyzed (`docs/spec/units.md` 2.4): its
+    /// `implementation` section is seen too.
+    pair: bool,
 }
 
 /// State of `uses System.SysUtils`.
@@ -1001,6 +1105,7 @@ enum SysUtils {
 
 /// Insertion points for the E0700 fix that adds a `uses` (chapter 5; per section in a unit,
 /// `docs/spec/units.md` 3.1).
+#[derive(Default)]
 struct UsesFix {
     /// The program or script, or the `interface` section of a unit.
     main: UsesSite,
@@ -1059,6 +1164,11 @@ impl UsesSite {
 }
 
 impl UsesFix {
+    /// No place (the state left behind when a file's state is taken out of its analysis).
+    fn empty() -> Self {
+        Self::default()
+    }
+
     fn compute(root: &SyntaxNode, bytes: &[u8]) -> Self {
         use SyntaxKind::*;
         if let Some(unit) = root.children().find(|n| n.kind() == UNIT) {
@@ -1219,6 +1329,8 @@ struct RoutineInfo {
     self_kind: types::SelfKind,
     /// An abstract method (no body, no function).
     is_abstract: bool,
+    /// A `native` routine (`docs/spec/extensions.md`): no body, no function.
+    native: bool,
     /// The name in the implementation heading of a method's body.
     body_span: Option<TextRange>,
     /// An anonymous method (`docs/spec/objects.md` 9.6), or a closure-form nested routine (9.7):
@@ -1243,6 +1355,11 @@ struct ClosureInfo {
     /// captured variables, the variable of the routine around it the cell comes from.
     srcs: Vec<VarId>,
 }
+
+/// Where a routine is declared in a routine body: the routine it is written in (`None` for
+/// `<main>`, `<init>`, `<fini>`), the file, and the range of the anonymous method or of the
+/// nested routine's or method's name.
+type RoutineSite = (Option<RoutineId>, FileId, TextRange);
 
 /// The nested routines compiled as closures (`docs/spec/objects.md` 9.7), by file and the position
 /// of the name in the heading, with their groups (14.9). Found by [`ModuleState::closure_plan`]
@@ -1374,6 +1491,9 @@ struct Sema<'a, 's> {
     use_span: Option<TextRange>,
     /// Where each anonymous method that captured `Self` first used it (W0024).
     anon_self: std::collections::HashMap<RoutineId, TextRange>,
+    /// The routines declared in a routine body so far ([`Sema::routine_at`]), by where they are
+    /// declared, with the number of an anonymous method (0 for a nested routine).
+    site_routines: std::collections::HashMap<RoutineSite, (u32, RoutineId)>,
     /// The nested routines compiled as closures ([`ModuleState::with_plan`]).
     plan: ClosurePlan,
     /// Set when `lower_place` finds a non-variable for `RefArg` (the caller reports E0706).
@@ -1400,6 +1520,11 @@ struct Sema<'a, 's> {
     /// The attribute classes read whose checks wait for the types and their constructors
     /// (`attrs.rs`).
     user_attrs: Vec<attrs::UserAttr>,
+    /// The attributes of the testing framework read in a test unit, collected once its
+    /// declarations are analyzed (`testunit.rs`).
+    test_attrs: Vec<attrs::TestAttr>,
+    /// The tests collected (`testunit.rs`).
+    tests: Vec<TestInfo>,
     /// Above 0 while a `type` section is declared: the checks of `user_attrs` wait for its
     /// classes' methods.
     attr_defer: u32,
@@ -1448,6 +1573,13 @@ struct Sema<'a, 's> {
     is_unit: bool,
     /// The item of `uses` naming `System.SysUtils` (the order of E2502's fixes).
     sysutils_item: Option<TextRange>,
+    /// See [`ModuleState::set_system_helpers`].
+    system_helpers: Vec<String>,
+    /// See [`ModuleState::wanted_system_helpers`].
+    wanted_helpers: Vec<String>,
+    /// Analyzing an element of an `array of const` argument: a routine name without a call is
+    /// E0777 (`docs/spec/rtti.md` 4.1).
+    const_elem: bool,
     /// The generic types declared in the file (`docs/spec/generics.md` 2.3).
     generic_types: Vec<generics::GenericTypeName>,
     /// The generic types of the `type` section being declared whose type parameters are not
@@ -1485,6 +1617,8 @@ struct Sema<'a, 's> {
     /// The type parameter of `KeyEquals` / `KeyHash` for inference, made the first time a unit
     /// of the compilation needs it (`docs/spec/equality.md` chapter 4).
     key_param: Option<types::TypeId>,
+    /// The method bodies this file put off (`deferred.rs`).
+    deferred: Vec<deferred::Deferred>,
 }
 
 /// Result of name resolution.
@@ -1580,6 +1714,9 @@ impl<'a, 's> Sema<'a, 's> {
             builtins::SysUtilsName::ReplaceFlags => Resolved::Type(self.replace_flag_types().1),
             builtins::SysUtilsName::CaseMapping => Resolved::Type(self.case_mapping_type()),
             builtins::SysUtilsName::CaseFold => Resolved::Type(self.case_fold_type()),
+            builtins::SysUtilsName::IOErrorKind => {
+                Resolved::Type(Ty::Enum(self.types.io_error_kind))
+            }
         }
     }
 
@@ -1659,6 +1796,7 @@ impl<'a, 's> Sema<'a, 's> {
             ty: Ty::Integer,
             span: None,
             unit: None,
+            class_var: false,
         });
         self.exit_code = Some(id);
         id
@@ -1737,6 +1875,19 @@ impl<'a, 's> Sema<'a, 's> {
         self.last_mut()
     }
 
+    fn deleted_name(&mut self, code: Code, name: &str, range: TextRange) {
+        let in_unicode_guard =
+            code == Code::E(3003) && self.input.directives.in_unicode_guard(range.start());
+        let diag = self.error(code, format!("`{name}` is not supported in Puy"), range);
+        diag.notes.push(builtins::deleted_note(code).into());
+        if in_unicode_guard {
+            diag.notes.push(
+                "Puy always defines `UNICODE`; to exclude this branch in Puy, use `{$IF Defined(UNICODE) and not Defined(PUY)}`"
+                    .into(),
+            );
+        }
+    }
+
     /// Lowers the arguments of a call with the wrong number of arguments (for their own
     /// diagnostics), and returns whether one of them (not an argument of a call nested in them)
     /// is a comparison read as type arguments across the comma between two arguments
@@ -1785,6 +1936,37 @@ impl<'a, 's> Sema<'a, 's> {
         r
     }
 
+    /// The routine declared at `site`, with its number. In a routine body, it is a new one the
+    /// first time, and the same one when a trial check ([`Sema::dry_run`]) and the analysis
+    /// after it declare it again; outside one, it is always a new one. `make` gives the number
+    /// and the information (made anew each time), from the number given the first time if any.
+    /// A trial thus leaves no routine of its own, and the anonymous methods keep their numbers
+    /// in order of appearance (`docs/spec/objects.md` 9.6).
+    pub(super) fn routine_at(
+        &mut self,
+        site: TextRange,
+        make: impl FnOnce(&mut Self, Option<u32>) -> (u32, RoutineInfo),
+    ) -> (u32, RoutineId) {
+        let key = self
+            .cur
+            .as_ref()
+            .map(|c| (c.routine, self.input.file, site));
+        let known = key.and_then(|k| self.site_routines.get(&k).copied());
+        let (n, info) = make(self, known.map(|(n, _)| n));
+        if let Some((_, id)) = known {
+            self.routines[id.0 as usize] = info;
+            // Its body declares its types again
+            self.type_decls.retain(|d| d.routine != Some(id));
+            return (n, id);
+        }
+        let id = RoutineId(self.routines.len() as u32);
+        self.routines.push(info);
+        if let Some(k) = key {
+            self.site_routines.insert(k, (n, id));
+        }
+        (n, id)
+    }
+
     /// Takes the marks of the anonymous records out of the text of the diagnostics from `first`
     /// on ([`Sema::tn`]), and adds a `record type declared here` at the `record` of each, in the
     /// order they are named (`docs/spec/diagnostics.md` 2.2, `docs/spec/types.md` 1.2).
@@ -1818,10 +2000,39 @@ impl<'a, 's> Sema<'a, 's> {
         self.sink.iter_mut().last().unwrap()
     }
 
+    /// The text of a token; for an identifier, its name (without the escaping `&`.
+    /// `docs/spec/lexical.md` 3.2).
     fn text(&self, tok: &SyntaxToken) -> &'a str {
         let r = tok.text_range();
-        std::str::from_utf8(&self.input.bytes[usize::from(r.start())..usize::from(r.end())])
-            .unwrap_or("")
+        crate::syntax::ident_name(
+            std::str::from_utf8(&self.input.bytes[usize::from(r.start())..usize::from(r.end())])
+                .unwrap_or(""),
+        )
+    }
+
+    /// Puts the module's state back into `state` (the inverse of [`Sema::new`]).
+    fn put_back(&mut self, state: &mut ModuleState) {
+        state.globals = std::mem::take(&mut self.globals);
+        state.exit_code = self.exit_code;
+        state.replace_flags = self.replace_flags;
+        state.case_mapping = self.case_mapping;
+        state.case_fold = self.case_fold;
+        state.routines = std::mem::take(&mut self.routines);
+        state.plan = std::mem::take(&mut self.plan);
+        state.types = std::mem::take(&mut self.types);
+        state.type_decls = std::mem::take(&mut self.type_decls);
+        state.attrs = std::mem::take(&mut self.attr_uses);
+        state.hints = std::mem::take(&mut self.hints);
+        state.units = std::mem::take(&mut self.units);
+        state.instances = std::mem::take(&mut self.instances);
+        state.typed_consts = std::mem::take(&mut self.typed_consts);
+        state.explicit_consts = std::mem::take(&mut self.explicit_consts);
+        state.key_param = self.key_param;
+        for h in std::mem::take(&mut self.wanted_helpers) {
+            if !state.wanted_helpers.contains(&h) {
+                state.wanted_helpers.push(h);
+            }
+        }
     }
 
     fn run(mut self, state: &mut ModuleState) {
@@ -1847,11 +2058,15 @@ impl<'a, 's> Sema<'a, 's> {
                 fini: None,
                 exports: Vec::new(),
                 type_spellings: Vec::new(),
+                private: Vec::new(),
             }
         };
         let uses: Vec<String> = {
             let mut v: Vec<String> = Vec::new();
-            if self.sysutils != SysUtils::NotUsed {
+            if self.sysutils != SysUtils::NotUsed
+                && !self.is_sysutils_source()
+                && !self.is_system_source()
+            {
                 v.push("System.SysUtils".into());
             }
             for u in self.used_units.iter().filter(|u| !u.sysutils) {
@@ -1864,23 +2079,15 @@ impl<'a, 's> Sema<'a, 's> {
         self.report_hint_uses();
         self.label_anon_records(first_diag);
         let is_program = part.main.is_some();
-        // Put the shared state back
-        state.globals = std::mem::take(&mut self.globals);
-        state.exit_code = self.exit_code;
-        state.replace_flags = self.replace_flags;
-        state.case_mapping = self.case_mapping;
-        state.case_fold = self.case_fold;
-        state.routines = std::mem::take(&mut self.routines);
-        state.plan = std::mem::take(&mut self.plan);
-        state.types = std::mem::take(&mut self.types);
-        state.type_decls = std::mem::take(&mut self.type_decls);
-        state.attrs = std::mem::take(&mut self.attr_uses);
-        state.hints = std::mem::take(&mut self.hints);
-        state.units = std::mem::take(&mut self.units);
-        state.instances = std::mem::take(&mut self.instances);
-        state.typed_consts = std::mem::take(&mut self.typed_consts);
-        state.explicit_consts = std::mem::take(&mut self.explicit_consts);
-        state.key_param = self.key_param;
+        self.put_back(state);
+        // `puy test` analyzes every test unit of the package into one module, each adding its
+        // tests after those of the units before it (`docs/spec/test.md` 2)
+        if self.input.test.is_some() {
+            state
+                .tests
+                .get_or_insert_with(Vec::new)
+                .extend(std::mem::take(&mut self.tests));
+        }
         if is_program {
             state.uses_sysutils = self.sysutils != SysUtils::NotUsed;
             state.main = part.main;
@@ -1897,6 +2104,16 @@ impl<'a, 's> Sema<'a, 's> {
                 .filter(|g| g.interface)
                 .cloned()
                 .collect(),
+            private: part.private,
+            private_generics: if self.input.stdlib || self.input.extension.is_some() {
+                Vec::new()
+            } else {
+                self.generic_types
+                    .iter()
+                    .filter(|g| !g.interface)
+                    .cloned()
+                    .collect()
+            },
         });
         state.parts.push(UnitHir {
             name: part.name,
@@ -1907,7 +2124,10 @@ impl<'a, 's> Sema<'a, 's> {
             first_global,
             global_count: state.globals.len() as u32 - first_global,
             uses,
+            extension: self.input.extension,
+            stdlib: self.input.stdlib,
         });
+        self.suspend(state);
     }
 
     fn empty_main(&mut self, end: TextRange, syntax_errors: bool) -> Routine {
@@ -1926,8 +2146,10 @@ impl<'a, 's> Sema<'a, 's> {
             parent: None,
             link: false,
             is_abstract: false,
+            native: false,
             builtin: false,
             generic: false,
+            unreached: false,
             dtor_of: None,
             helper: false,
             operator: false,
@@ -2003,6 +2225,7 @@ impl<'a, 's> Sema<'a, 's> {
             fini: None,
             exports: Vec::new(),
             type_spellings: Vec::new(),
+            private: Vec::new(),
         }
     }
 
@@ -2043,6 +2266,12 @@ impl<'a, 's> Sema<'a, 's> {
             .map(|q| q.text())
             .unwrap_or_else(|| "Unit".to_string());
         self.program_name = name.clone();
+        // The Pascal part of `System.SysUtils` sees the unit's built-ins as if it used itself
+        // (`docs/spec/collections.md` 1.1); so does the Pascal part of `System`, without the
+        // Pascal part of `System.SysUtils` (`docs/spec/stdlib/System/README.md`)
+        if self.is_sysutils_source() || self.is_system_source() {
+            self.sysutils = SysUtils::Used;
+        }
         if let Some(h) = unit.header() {
             self.check_unit_directives(&h);
             // The unit's marks (`docs/spec/attributes.md` 6.2): its own uses are inside it
@@ -2068,7 +2297,7 @@ impl<'a, 's> Sema<'a, 's> {
         let type_spellings = exports
             .iter()
             .filter_map(|(n, sym)| match sym {
-                GSym::Type { span, .. } => Some((n.clone(), self.src(*span))),
+                GSym::Type { span, .. } => Some((n.clone(), self.name_src(*span))),
                 _ => None,
             })
             .collect();
@@ -2079,6 +2308,10 @@ impl<'a, 's> Sema<'a, 's> {
         }
         self.check_forward_bodies();
         self.check_method_bodies();
+        if self.input.test.is_some() {
+            self.check_test_unit_sections(&unit);
+            self.collect_tests();
+        }
         // `<init>`: the initial values, then the `initialization` statements; `<fini>`: the
         // `finalization` statements (5.1). Both follow the rules of `<main>`.
         let end_span = unit
@@ -2115,6 +2348,12 @@ impl<'a, 's> Sema<'a, 's> {
                 end_span,
             )
         });
+        // The `implementation` section's names, for the paired test unit (2.4)
+        let private = if self.input.stdlib || self.input.extension.is_some() {
+            Vec::new()
+        } else {
+            self.global_scope[exports.len()..].to_vec()
+        };
         FilePart {
             name,
             main: None,
@@ -2122,6 +2361,36 @@ impl<'a, 's> Sema<'a, 's> {
             fini,
             exports,
             type_spellings,
+            private,
+        }
+    }
+
+    /// E0780: a test unit has an `initialization` or `finalization` section
+    /// (`docs/spec/units.md` 2.4). Every unit is initialized again for each test, so a test
+    /// unit's would run for the tests of the other units too.
+    fn check_test_unit_sections(&mut self, unit: &ast::Unit) {
+        // The old form `begin … end.` is an `initialization` section too (1)
+        let sections = [
+            (
+                "an `initialization`",
+                unit.initialization().and_then(|s| s.keyword()),
+            ),
+            (
+                "a `finalization`",
+                unit.finalization().and_then(|s| s.keyword()),
+            ),
+        ];
+        for (section, kw) in sections {
+            let Some(kw) = kw else { continue };
+            let d = Diagnostic::error(
+                Code::E(780),
+                format!("a test unit cannot have {section} section"),
+                Stage::Sema,
+            )
+            .with_primary(self.span(kw.text_range()), "")
+            .with_note("every unit is initialized again for each test")
+            .with_note("prepare in the test, or in a `[Setup]` method of a test class");
+            self.push(d);
         }
     }
 
@@ -2335,6 +2604,7 @@ impl<'a, 's> Sema<'a, 's> {
                             in_interface: self.in_interface_part,
                             item: range,
                             sysutils: true,
+                            pair: false,
                         });
                     }
                     self.sysutils = match alias {
@@ -2376,6 +2646,7 @@ impl<'a, 's> Sema<'a, 's> {
                                 in_interface,
                                 item: range,
                                 sysutils: false,
+                                pair: self.input.test.is_some_and(|t| t.pair == Some(i)),
                             });
                         }
                         // Reported by the driver; its names resolve to the error type (3.4)
@@ -2387,6 +2658,7 @@ impl<'a, 's> Sema<'a, 's> {
                             in_interface,
                             item: range,
                             sysutils: false,
+                            pair: false,
                         }),
                         None => self.unit_not_found(&text, &lower, range),
                     }
@@ -2410,8 +2682,10 @@ impl<'a, 's> Sema<'a, 's> {
                 "check the platform at run time with `TOSVersion.Platform`, and use `Puy.UI` for a GUI".into(),
             );
         } else if std_prefix {
+            // The part of `System` written in Pascal is not used by name
             let names: Vec<String> = puy_stdlib::UNITS
                 .iter()
+                .filter(|u| !u.name.eq_ignore_ascii_case("System"))
                 .map(|u| format!("`{}`", u.name))
                 .collect();
             d.notes.push(format!(
@@ -2438,7 +2712,7 @@ impl<'a, 's> Sema<'a, 's> {
             return self.class_duplicate(lower, range);
         }
         if let Some(prev) = self.find_declared(lower) {
-            let name = self.src(range);
+            let name = self.name_src(range);
             let d = Diagnostic::error(
                 Code::E(701),
                 format!("`{name}` is already declared"),
@@ -2454,13 +2728,10 @@ impl<'a, 's> Sema<'a, 's> {
 
     /// E0701 for a declaration of a reserved name (`docs/spec/semantics.md` 2.3, `docs/spec/objects.md` 2.3).
     pub(super) fn check_reserved_name(&mut self, lower: &str, range: TextRange) -> bool {
-        if !matches!(
-            lower,
-            "result" | "exit" | "break" | "continue" | "self" | "true" | "false"
-        ) {
+        if !is_reserved_name(lower) {
             return false;
         }
-        let name = self.src(range);
+        let name = self.name_src(range);
         let d = Diagnostic::error(
             Code::E(701),
             format!("`{name}` is a reserved name"),
@@ -2469,6 +2740,16 @@ impl<'a, 's> Sema<'a, 's> {
         .with_primary(self.span(range), "");
         self.push(d);
         true
+    }
+
+    /// [`Self::check_reserved_name`] for a member of a class or record: a reserved name written
+    /// with `&` (`function &Result`) is a member's name, found only after `.` (`M.Result`;
+    /// `docs/spec/semantics.md` 4.1).
+    pub(super) fn check_reserved_member_name(&mut self, lower: &str, range: TextRange) -> bool {
+        if crate::syntax::is_escaped_ident(&self.src(range)) {
+            return false;
+        }
+        self.check_reserved_name(lower, range)
     }
 
     /// Position of a declaration in the same scope (for locals, the names visible in the whole routine; for globals,
@@ -2536,6 +2817,73 @@ impl<'a, 's> Sema<'a, 's> {
         }
     }
 
+    /// Whether the file is the Pascal part of `System.SysUtils` in the standard library.
+    fn is_sysutils_source(&self) -> bool {
+        self.input.stdlib && self.program_name.eq_ignore_ascii_case("System.SysUtils")
+    }
+
+    /// Whether this is the part of `System` written in Pascal (`docs/spec/stdlib/System/README.md`).
+    fn is_system_source(&self) -> bool {
+        self.input.stdlib && self.program_name.eq_ignore_ascii_case("System")
+    }
+
+    /// Whether the members the part of `System` written in Pascal adds to the built-in helper
+    /// `helper` are known: the files that declare them were given to the analysis. When they were
+    /// not, a member the built-ins do not have asks the driver for them
+    /// ([`ModuleState::wanted_system_helpers`]) and is reported as missing in the meantime.
+    pub(super) fn system_part_known(&mut self, helper: &str) -> bool {
+        let lower = helper.to_ascii_lowercase();
+        if self.system_helpers.contains(&lower) {
+            return true;
+        }
+        if !self.wanted_helpers.contains(&lower) {
+            self.wanted_helpers.push(lower);
+        }
+        false
+    }
+
+    /// An export of the part of `System` written in Pascal (`docs/spec/stdlib/System/README.md`
+    /// 1). Every file sees it after its own names and the names of its units. If its part has not
+    /// been loaded, the driver is asked for it and the reference is resolved on the next pass.
+    fn system_pas_name(&mut self, lower: &str) -> Option<Resolved> {
+        if self.is_system_source() {
+            return None;
+        }
+        puy_stdlib::system_export_part(lower)?;
+        if !self.system_part_known(lower) {
+            return Some(Resolved::Error);
+        }
+        let system = self
+            .units
+            .iter()
+            .position(|u| u.name.eq_ignore_ascii_case("System"))?;
+        let (_, sym) = self.units[system]
+            .exports
+            .iter()
+            .find(|(n, _)| n == lower)?;
+        Some(self.export_resolved(system, sym))
+    }
+
+    /// A Pascal export of `System` used in a type position.
+    fn system_pas_type(&mut self, lower: &str) -> Option<Ty> {
+        puy_stdlib::system_type_part(lower)?;
+        match self.system_pas_name(lower)? {
+            Resolved::Type(ty) => Some(ty),
+            Resolved::Error => Some(Ty::Error),
+            _ => None,
+        }
+    }
+
+    /// `System.TValue` (`docs/spec/rtti.md` chapter 3), the type the part of `System` written in
+    /// Pascal declares: asked for like a name written in the file (the error type until the
+    /// analysis runs again with it), and in `System` itself found by its name.
+    pub(super) fn tvalue_type(&mut self) -> Ty {
+        if self.is_system_source() {
+            return self.types.tvalue().unwrap_or(Ty::Error);
+        }
+        self.system_pas_type("tvalue").unwrap_or(Ty::Error)
+    }
+
     /// Whether this is a unit name (`System`, `System.SysUtils`, or an alias).
     fn is_unit_name(&self, lower: &str) -> bool {
         if lower == "system" {
@@ -2556,6 +2904,11 @@ impl<'a, 's> Sema<'a, 's> {
             return None;
         }
         builtins::builtin_exception(name)
+    }
+
+    /// The name of the identifier at `range` (without the escaping `&`. `docs/spec/lexical.md` 3.2).
+    fn name_src(&self, range: TextRange) -> String {
+        crate::syntax::ident_name(&self.src(range)).to_string()
     }
 
     fn src(&self, range: TextRange) -> String {
@@ -2710,6 +3063,7 @@ impl<'a, 's> Sema<'a, 's> {
                     ty: storage,
                     span: Some(range),
                     unit: Some(self.unit_index),
+                    class_var: false,
                 });
                 self.global_scope.push((lower, GSym::Global(id)));
                 ids.push(id);
@@ -2858,13 +3212,19 @@ impl<'a, 's> Sema<'a, 's> {
             && let Some(kw) = header.first_token().filter(|t| {
                 matches!(
                     t.kind(),
-                    SyntaxKind::CONSTRUCTOR_KW | SyntaxKind::DESTRUCTOR_KW
+                    SyntaxKind::CONSTRUCTOR_KW | SyntaxKind::DESTRUCTOR_KW | SyntaxKind::CLASS_KW
                 )
             })
         {
-            // A constructor or destructor is a method: only its body is written outside the
-            // class (`docs/spec/objects.md` chapter 1)
-            let what = self.text(&kw).to_ascii_lowercase();
+            // A constructor, a destructor or a `class` routine (`class procedure`, `class
+            // operator`, ...) is a method: only its body is written outside the class
+            // (`docs/spec/objects.md` chapter 1, 3.2)
+            let mut what = self.text(&kw).to_ascii_lowercase();
+            if kw.kind() == SyntaxKind::CLASS_KW
+                && let Some(k) = header.routine_keyword()
+            {
+                what = format!("{what} {}", self.text(&k).to_ascii_lowercase());
+            }
             self.error(
                 Code::E(747),
                 format!("a {what} must be declared in a class"),
@@ -2896,6 +3256,12 @@ impl<'a, 's> Sema<'a, 's> {
             let Some(id) = self.method_heading(&header, &params, ret, generic_class) else {
                 return;
             };
+            if self.routines[id.0 as usize].native {
+                if decl.body().is_some() {
+                    self.native_with_body(&name_text, name_range, id);
+                }
+                return;
+            }
             // The attributes of a method are written on its declaration in the class
             // (`docs/spec/attributes.md` 1.2)
             let declared = self.routine_decl_span(id);
@@ -2905,11 +3271,16 @@ impl<'a, 's> Sema<'a, 's> {
                 return;
             }
             let class = self.routines[id.0 as usize].method_of;
-            self.routine_body(decl, id, params, ret, name_text, name_range, lower, class);
+            if self.defers_body(id, class) {
+                self.defer_body(decl, id, params, ret, name_text, name_range, lower, class);
+            } else {
+                self.routine_body(decl, id, params, ret, name_text, name_range, lower, class);
+            }
             return;
         }
         // Directives
         let mut has_forward = false;
+        let mut native = None;
         for d in decl.directives() {
             let Some(kw) = d.keyword() else { continue };
             let range = kw.text_range();
@@ -2934,6 +3305,7 @@ impl<'a, 's> Sema<'a, 's> {
                     self.push(dg);
                 }
                 Some(SyntaxKind::FORWARD_KW) => has_forward = true,
+                Some(SyntaxKind::NATIVE_KW) => native = Some(range),
                 Some(k) => self.routine_directive(k, &kw, d.syntax()),
                 None => {}
             }
@@ -2964,6 +3336,16 @@ impl<'a, 's> Sema<'a, 's> {
                     .map(|r| Span::new(self.routines[id.0 as usize].file, r));
                 self.attributes_on_forward(decl.syntax(), &name_text, declared, false);
                 self.hints_on_forward(decl.syntax(), &name_text, declared, false);
+                if let Some(at) = native {
+                    // `native` is written on the first declaration
+                    self.native_misplaced(at);
+                }
+                if self.routines[id.0 as usize].native {
+                    if body.is_some() {
+                        self.native_with_body(&name_text, name_range, id);
+                    }
+                    return;
+                }
                 if body.is_none() {
                     // Another body-less declaration after the forward declaration. The parser has reported E0411,
                     // so report nothing here (E0723 at the end if it never gets a body)
@@ -2981,8 +3363,7 @@ impl<'a, 's> Sema<'a, 's> {
                 ) {
                     return;
                 }
-                let id = RoutineId(self.routines.len() as u32);
-                self.routines.push(RoutineInfo {
+                let info = RoutineInfo {
                     name: name_text.clone(),
                     params: params.clone(),
                     ret,
@@ -3010,11 +3391,13 @@ impl<'a, 's> Sema<'a, 's> {
                     method_of: None,
                     self_kind: types::SelfKind::Instance,
                     is_abstract: false,
+                    native: false,
                     body_span: None,
                     closure: false,
                     type_params: fresh.clone().unwrap_or_default(),
                     closure_info: ClosureInfo::default(),
-                });
+                };
+                let id = self.routine_at(name_range, |_, _| (0, info)).1;
                 // A nested routine compiled as a closure (`docs/spec/objects.md` 9.7)
                 if self.cur.is_some()
                     && let Some(&g) = self.plan.get(&(self.input.file, name_range))
@@ -3044,6 +3427,14 @@ impl<'a, 's> Sema<'a, 's> {
                 id
             }
         };
+        if let Some(at) = native
+            && self.native_allowed(at, has_forward)
+        {
+            let r = &mut self.routines[id.0 as usize];
+            r.native = true;
+            r.implicit_forward = true;
+            self.check_native_signature(id, None, name_range);
+        }
         if has_forward || body.is_none() {
             // No body (the parser has reported E0411)
             return;
@@ -3381,6 +3772,8 @@ impl<'a, 's> Sema<'a, 's> {
                             .into(),
                     );
             }
+            // On a declaration that completes a routine (`docs/spec/extensions.md` 2.1)
+            SyntaxKind::NATIVE_KW => self.native_misplaced(range),
             // `docs/spec/semantics.md` 4.7 (checked with the redeclaration)
             SyntaxKind::OVERLOAD_KW => {}
             // Read with the declaration (`hints.rs`)
@@ -3589,8 +3982,10 @@ impl<'a, 's> Sema<'a, 's> {
             parent: ctx.routine.and_then(|r| self.routines[r.0 as usize].parent),
             link: false,
             is_abstract: false,
+            native: false,
             builtin: false,
             generic: false,
+            unreached: false,
             dtor_of: None,
             helper: false,
             operator: false,
@@ -3866,9 +4261,61 @@ impl<'a, 's> Sema<'a, 's> {
             .filter_map(|c| c.routine)
     }
 
+    /// How many routines out the innermost method of a local type is, if the routine being
+    /// analyzed is one or is nested in one (`docs/spec/types.md` 1.1): the routines further out
+    /// declare the type, and the method cannot reach their variables, `Result` or nested
+    /// routines (it takes no static link; E0775).
+    fn local_method_up(&self) -> Option<u32> {
+        self.cur
+            .iter()
+            .chain(self.outer.iter().rev())
+            .position(|c| {
+                c.routine
+                    .is_some_and(|r| self.routines[r.0 as usize].scope.is_some())
+            })
+            .map(|up| up as u32)
+    }
+
+    /// Whether something of the routine `up` levels out is out of reach of the routine being
+    /// analyzed: it is outside the method of a local type (E0775).
+    fn beyond_local_method(&self, up: u32) -> bool {
+        self.local_method_up().is_some_and(|b| up > b)
+    }
+
+    /// E0775: `what` (`` local variable `K` ``, `` `Result` ``, …), declared at `decl` by the
+    /// routine `up` levels out, used at `at` in a method of a local type
+    /// (`docs/spec/types.md` 1.1).
+    fn local_method_outer_error(&mut self, what: &str, up: u32, decl: TextRange, at: TextRange) {
+        let b = self
+            .local_method_up()
+            .expect("inside a method of a local type");
+        let outer = self
+            .ctx_at(up)
+            .routine
+            .map(|r| self.routines[r.0 as usize].name.clone())
+            .unwrap_or_default();
+        let ty = match self.ctx_at(b).self_class {
+            Some(t) if self.types.is_record(t) => self.types.name(Ty::Record(t)),
+            Some(t) => self.types.name(Ty::Class(t)),
+            None => String::new(),
+        };
+        let d = Diagnostic::error(
+            Code::E(775),
+            format!("{what} of `{outer}` cannot be used in a method of local type `{ty}`"),
+            Stage::Sema,
+        )
+        .with_primary(self.span(at), "")
+        .with_secondary(self.span(decl), "declared here")
+        .with_note(
+            "an instance of a local type can outlive the routine that declares it, so its methods cannot reach the routine's variables or nested routines; pass values to the constructor or store them in fields",
+        );
+        self.push(d);
+    }
+
     /// How many routines out the `Result` a name `Result` refers to is: the routine being
     /// analyzed if it is a function, otherwise the innermost enclosing function
-    /// (`docs/spec/semantics.md` 4.9).
+    /// (`docs/spec/semantics.md` 4.9). The function may be out of reach (outside the method of
+    /// a local type; [`Sema::beyond_local_method`]).
     fn result_owner(&self) -> Option<u32> {
         self.cur
             .iter()
@@ -3878,8 +4325,15 @@ impl<'a, 's> Sema<'a, 's> {
     }
 
     /// How many routines out the function `id` is, if it is the routine being analyzed or one
-    /// enclosing it.
+    /// enclosing it within reach (not outside the method of a local type, whose body calls it as
+    /// any other routine).
     fn enclosing_function(&self, id: RoutineId) -> Option<u32> {
+        self.enclosing_function_any(id)
+            .filter(|&up| !self.beyond_local_method(up))
+    }
+
+    /// [`Sema::enclosing_function`], also outside the method of a local type.
+    fn enclosing_function_any(&self, id: RoutineId) -> Option<u32> {
         self.cur
             .iter()
             .chain(self.outer.iter().rev())
@@ -4102,6 +4556,25 @@ impl<'a, 's> Sema<'a, 's> {
             return Resolved::Type(Ty::Param(p));
         }
         if let Some((up, sym)) = self.lookup_scopes(&lower) {
+            // A variable or a nested routine of a routine that declares the local type whose
+            // method is being analyzed (`docs/spec/types.md` 1.1)
+            if matches!(sym, LSym::Var(_) | LSym::Routine(_)) && self.beyond_local_method(up) {
+                // Counted as a read, so that the variable is not also reported as unused (W0001)
+                if let LSym::Var(id) = &sym {
+                    let n = self.outer.len();
+                    self.outer[n - up as usize].vars[id.0 as usize].read_by_nested = true;
+                }
+                let what = match &sym {
+                    LSym::Var(id) => match self.ctx_at(up).vars[id.0 as usize].kind {
+                        VarKind::Param(_) => format!("parameter `{name}`"),
+                        _ => format!("local variable `{name}`"),
+                    },
+                    _ => format!("nested routine `{name}`"),
+                };
+                let decl = self.lsym_span(up, &sym);
+                self.local_method_outer_error(&what, up, decl, range);
+                return Resolved::Error;
+            }
             // `docs/spec/attributes.md` 6.2 (a routine is used once its overload is picked)
             if !matches!(sym, LSym::Routine(_)) {
                 let decl = self.lsym_span(up, &sym);
@@ -4127,8 +4600,11 @@ impl<'a, 's> Sema<'a, 's> {
                 LSym::Type { ty, .. } => Resolved::Type(ty),
             };
         }
-        // `Self` and the members of `Self` (`docs/spec/objects.md` 2.3)
-        if let Some(class) = self.method_class() {
+        // `Self` and the members of `Self` (`docs/spec/objects.md` 2.3). A member with a reserved
+        // name (`&Result`) is found only after `.` (`docs/spec/semantics.md` 4.1)
+        if let Some(class) = self.method_class()
+            && (lower == "self" || !is_reserved_name(&lower))
+        {
             if lower == "self" {
                 if let Some((v, _)) = self.self_var() {
                     return Resolved::Var(v);
@@ -4195,6 +4671,11 @@ impl<'a, 's> Sema<'a, 's> {
                 // In a nested procedure, `Result` is that of the innermost enclosing function
                 // (`docs/spec/semantics.md` 4.9)
                 if let Some(up) = self.result_owner() {
+                    if self.beyond_local_method(up) {
+                        let decl = self.ctx_at(up).name_span;
+                        self.local_method_outer_error("`Result`", up, decl, range);
+                        return Resolved::Error;
+                    }
                     let id = self.result_id(up);
                     return Resolved::Var(self.var_at(up, id));
                 }
@@ -4267,6 +4748,9 @@ impl<'a, 's> Sema<'a, 's> {
         {
             return Resolved::Unit(UnitRef::SysUtils);
         }
+        if let Some(name) = self.system_pas_name(&lower) {
+            return name;
+        }
         match self.system_name(&lower) {
             Some(builtins::SystemName::Type(t)) => return Resolved::Type(t),
             Some(builtins::SystemName::True) => return Resolved::Bool(true),
@@ -4289,10 +4773,7 @@ impl<'a, 's> Sema<'a, 's> {
                 return Resolved::Error;
             }
             Some(builtins::SystemName::Deleted(code)) => {
-                let note = builtins::deleted_note(code);
-                self.error(code, format!("`{name}` is not supported in Puy"), range)
-                    .notes
-                    .push(note.into());
+                self.deleted_name(code, name, range);
                 return Resolved::Error;
             }
             None => {}
@@ -4367,6 +4848,10 @@ impl<'a, 's> Sema<'a, 's> {
             self.not_ref_counted_misplaced(range);
             return Resolved::Error;
         }
+        // A name a unit of the standard library does not provide (requirements §8.6)
+        if self.unavailable_name(name, range) {
+            return Resolved::Error;
+        }
         // A generic type without type arguments (`docs/spec/generics.md` 2.3)
         if self.generic_needs_args(name, range) {
             return Resolved::Error;
@@ -4400,6 +4885,34 @@ impl<'a, 's> Sema<'a, 's> {
             .iter()
             .enumerate()
             .filter(move |(_, u)| u.in_interface || !intf)
+    }
+
+    /// The unit paired with the test unit being analyzed, when it is named in `uses` (index into
+    /// `units`; `docs/spec/units.md` 2.4).
+    pub(super) fn pair_unit(&self) -> Option<usize> {
+        self.used_units
+            .iter()
+            .find(|u| u.pair)
+            .and_then(|u| u.iface)
+    }
+
+    /// The names the unit `i` (named in `uses`) gives the file being analyzed: its public part,
+    /// and for the paired unit of a test unit its `implementation` section too
+    /// (`docs/spec/units.md` 2.4).
+    pub(super) fn unit_names(&self, i: usize) -> impl Iterator<Item = &(String, GSym)> {
+        let private: &[(String, GSym)] = if self.pair_unit() == Some(i) {
+            &self.units[i].private
+        } else {
+            &[]
+        };
+        self.units[i].exports.iter().chain(private)
+    }
+
+    /// Whether the code being analyzed sees the members of the types of `unit` as code of that
+    /// unit does (`private` and `protected`; `docs/spec/objects.md` 2.5): in the unit itself, and
+    /// in the test unit paired with it (`docs/spec/units.md` 2.4).
+    pub(super) fn is_own_unit(&self, unit: u32) -> bool {
+        unit == self.unit_index || self.pair_unit() == Some(unit as usize)
     }
 
     /// The part of `System.SysUtils` written in Pascal, if visible here (index into
@@ -4443,7 +4956,9 @@ impl<'a, 's> Sema<'a, 's> {
                 return Some(UnitRef::Package(k));
             }
         }
-        (self.is_unit && self.program_name.eq_ignore_ascii_case(lower)).then_some(UnitRef::Own)
+        // `System.Name` in the part of `System` written in Pascal names the built-ins
+        (self.is_unit && self.program_name.eq_ignore_ascii_case(lower) && !self.is_system_source())
+            .then_some(UnitRef::Own)
     }
 
     /// A built-in unit (`System`, `System.SysUtils` or its alias) named before a name, unless a
@@ -4513,7 +5028,7 @@ impl<'a, 's> Sema<'a, 's> {
         }
         self.visible_units().any(|(_, u)| {
             u.iface
-                .is_some_and(|i| self.units[i].exports.iter().any(|(n, _)| n == lower))
+                .is_some_and(|i| self.unit_names(i).any(|(n, _)| n == lower))
         })
     }
 
@@ -4522,9 +5037,7 @@ impl<'a, 's> Sema<'a, 's> {
         let lower = name.to_ascii_lowercase();
         let sym = match u {
             UnitRef::Package(k) => self.used_units[k].iface.and_then(|i| {
-                self.units[i]
-                    .exports
-                    .iter()
+                self.unit_names(i)
                     .find(|(n, _)| *n == lower)
                     .map(|(_, s)| s.clone())
             }),
@@ -4549,26 +5062,14 @@ impl<'a, 's> Sema<'a, 's> {
         self.visible_units()
             .filter(|(_, u)| u.alias.is_none())
             .filter_map(|(_, u)| u.iface)
-            .filter_map(|i| self.units[i].exports.iter().find(|(n, _)| n == lower))
+            .filter_map(|i| self.unit_names(i).find(|(n, _)| n == lower))
             .any(|(_, s)| !matches!(s, GSym::Type { .. }))
     }
 
-    /// A type declared by exactly one visible unit (no diagnostics).
+    /// A type exported under this name by the visible units, if unambiguous (no diagnostics).
     pub(super) fn unit_type(&self, lower: &str) -> Option<Ty> {
-        let mut found = self.visible_units().filter_map(|(_, u)| {
-            let i = u.iface?;
-            self.units[i]
-                .exports
-                .iter()
-                .find(|(n, _)| n == lower)
-                .map(|(_, s)| s.clone())
-        });
-        let first = found.next()?;
-        if found.next().is_some() {
-            return None;
-        }
-        match first {
-            GSym::Type { ty, .. } => Some(ty),
+        match self.unit_exports_named(lower).as_slice() {
+            [(_, GSym::Type { ty, .. })] => Some(*ty),
             _ => None,
         }
     }
@@ -4606,20 +5107,36 @@ impl<'a, 's> Sema<'a, 's> {
         }
     }
 
-    /// Looks a name up in the public parts of the visible units (`docs/spec/units.md` 3.1). A
-    /// name in two or more of them (or in one and in `System.SysUtils`) is E2502.
-    fn lookup_in_units(&mut self, lower: &str, name: &str, range: TextRange) -> UnitLookup {
-        let mut found: Vec<(usize, GSym)> = Vec::new();
-        for (k, u) in self.visible_units() {
-            // A unit with an alias is only reached through the alias (M1 1.3)
-            if u.alias.is_some() {
+    /// The distinct exports of an unqualified name (`docs/spec/units.md` 3.1). For a type
+    /// exported by several units, prefer its defining unit when it also exports the name.
+    fn unit_exports_named(&self, lower: &str) -> Vec<(usize, &GSym)> {
+        let mut found: Vec<(usize, &GSym)> = Vec::new();
+        // A unit with an alias is only reached through the alias (M1 1.3).
+        for (k, u) in self.visible_units().filter(|(_, u)| u.alias.is_none()) {
+            let Some(i) = u.iface else { continue };
+            let Some((_, sym)) = self.unit_names(i).find(|(n, _)| n == lower) else {
+                continue;
+            };
+            if let GSym::Type { ty, .. } = sym
+                && !ty.is_error()
+                && let Some(previous) = found.iter_mut().find(
+                    |(_, exported)| matches!(exported, GSym::Type { ty: other, .. } if other == ty),
+                )
+            {
+                if ty.type_id().and_then(|id| self.type_unit(id)) == Some(i as u32) {
+                    *previous = (k, sym);
+                }
                 continue;
             }
-            let Some(i) = u.iface else { continue };
-            if let Some((_, sym)) = self.units[i].exports.iter().find(|(n, _)| n == lower) {
-                found.push((k, sym.clone()));
-            }
+            found.push((k, sym));
         }
+        found
+    }
+
+    /// Looks an unqualified name up in the visible units. Distinct exports, including the
+    /// built-in names of `System.SysUtils`, give E2502.
+    fn lookup_in_units(&mut self, lower: &str, name: &str, range: TextRange) -> UnitLookup {
+        let found = self.unit_exports_named(lower);
         let in_sysutils =
             self.sysutils == SysUtils::Used && builtins::lookup_sysutils(lower).is_some();
         match found.as_slice() {
@@ -4628,7 +5145,7 @@ impl<'a, 's> Sema<'a, 's> {
                 let i = self.used_units[*k]
                     .iface
                     .expect("found in a unit with a public part");
-                let sym = sym.clone();
+                let sym = (*sym).clone();
                 UnitLookup::Found(self.export_used(i, &sym, range))
             }
             _ => {
@@ -4705,9 +5222,7 @@ impl<'a, 's> Sema<'a, 's> {
         let aliased = self.visible_units().find_map(|(_, u)| {
             let i = u.iface?;
             u.alias.as_ref()?;
-            self.units[i]
-                .exports
-                .iter()
+            self.unit_names(i)
                 .any(|(n, _)| n == lower)
                 .then(|| u.qualifier.clone())
         });
@@ -4782,9 +5297,19 @@ impl<'a, 's> Sema<'a, 's> {
         // The public parts of the visible units (`docs/spec/units.md` 3.1)
         for (_, u) in self.visible_units() {
             let Some(i) = u.iface else { continue };
-            for (n, sym) in &self.units[i].exports {
+            for (n, sym) in self.unit_names(i) {
                 let GSym::Type { ty, .. } = sym else { continue };
                 if !matches!(ty, Ty::Enum(_)) || types.iter().any(|(t, _)| t == ty) {
+                    continue;
+                }
+                // Prefer the declaration to a same-named alias when both are in scope.
+                if let Some(owner) = ty.type_id().and_then(|id| self.type_unit(id))
+                    && owner as usize != i
+                    && self.unit_exports_named(n).iter().any(|(k, sym)| {
+                        self.used_units[*k].iface == Some(owner as usize)
+                            && matches!(sym, GSym::Type { ty: other, .. } if other == ty)
+                    })
+                {
                     continue;
                 }
                 // The public name as written: an alias (`TK = TKind`) is what this file sees
@@ -4815,6 +5340,16 @@ impl<'a, 's> Sema<'a, 's> {
                 builtin.push(self.case_fold_type());
             }
             for ty in builtin {
+                types.push((ty, self.types.name(ty)));
+            }
+        }
+        // `TTypeKind` of `System` (`docs/spec/rtti.md` 2.3)
+        if types::TYPE_KINDS
+            .iter()
+            .any(|v| v.eq_ignore_ascii_case(name))
+        {
+            let ty = Ty::Enum(types::TTYPEKIND);
+            if !types.iter().any(|(t, _)| *t == ty) {
                 types.push((ty, self.types.name(ty)));
             }
         }
@@ -4868,13 +5403,7 @@ impl<'a, 's> Sema<'a, 's> {
         if self.sysutils == SysUtils::Used && builtins::lookup_sysutils(lower).is_some() {
             return false;
         }
-        let mut found = self
-            .visible_units()
-            .filter(|(_, u)| u.alias.is_none())
-            .filter_map(|(_, u)| u.iface)
-            .filter_map(|i| self.units[i].exports.iter().find(|(n, _)| n == lower));
-        let first = found.next();
-        found.next().is_none() && matches!(first, Some((_, GSym::Type { ty: t, .. })) if *t == ty)
+        self.unit_type(lower) == Some(ty)
     }
 
     /// If a name written in a routine (outside `<main>`) is the name of a variable at the script's top level, the position of its declaration (for the 1.2 `notes`).
@@ -4928,14 +5457,18 @@ impl<'a, 's> Sema<'a, 's> {
                 let Some(i) = self.used_units[k].iface else {
                     return Resolved::Error;
                 };
-                let found = self.units[i]
-                    .exports
-                    .iter()
+                let found = self
+                    .unit_names(i)
                     .find(|(n, _)| *n == lower)
                     .map(|(_, s)| s.clone());
                 match found {
                     Some(sym) => self.export_used(i, &sym, range),
                     None => {
+                        // A name the unit does not provide (requirements §8.6)
+                        let unit = self.used_units[k].lower.clone();
+                        if self.unavailable_in_unit(&unit, name, range) {
+                            return Resolved::Error;
+                        }
                         self.error(
                             Code::E(700),
                             format!("undeclared identifier `{name}`"),
@@ -4997,13 +5530,16 @@ impl<'a, 's> Sema<'a, 's> {
                     Resolved::Error
                 }
                 Some(builtins::SystemName::Deleted(code)) => {
-                    let note = builtins::deleted_note(code);
-                    self.error(code, format!("`{name}` is not supported in Puy"), range)
-                        .notes
-                        .push(note.into());
+                    self.deleted_name(code, name, range);
                     Resolved::Error
                 }
                 None => {
+                    if let Some(name) = self.system_pas_name(&lower) {
+                        return name;
+                    }
+                    if self.unavailable_in_unit("System", name, range) {
+                        return Resolved::Error;
+                    }
                     self.error(
                         Code::E(700),
                         format!("undeclared identifier `{name}`"),
@@ -5307,7 +5843,7 @@ impl<'a, 's> Sema<'a, 's> {
                     && let Some(c) = f.base().and_then(|b| self.type_owner_in_expr(&b))
                     && !self
                         .generic_types_named(
-                            &field.text().to_ascii_lowercase(),
+                            &field.name().to_ascii_lowercase(),
                             &generics::GenericScope::Type(c),
                         )
                         .is_empty()
@@ -5462,9 +5998,15 @@ impl<'a, 's> Sema<'a, 's> {
                     };
                     return Some((r, field_name, field_range));
                 }
-                if !matches!(base, ast::Expr::NameRef(_) | ast::Expr::Field(_)) {
-                    // `.` on a value that is not a name (literal, parentheses, call): its type's
-                    // helpers (`docs/spec/objects.md` 10.4)
+                if !matches!(base, ast::Expr::NameRef(_) | ast::Expr::Field(_))
+                    || (matches!(base, ast::Expr::Field(_))
+                        && !base_ty.is_error()
+                        && !matches!(base_ty, Ty::Record(_)))
+                {
+                    // `.` on a value that is not a name (literal, parentheses, call), or on a
+                    // member of a value that is not a class or a record (`X.Name.StartsWith(…)`
+                    // with a field `Name` of a record `X`): its type's helpers
+                    // (`docs/spec/objects.md` 10.4)
                     let whole = ast::trimmed_range(f.syntax());
                     let (b, declared) = self.lower_value_declared(&base);
                     let r = self.value_member(b, declared, &field_name, field_range, whole);
@@ -5613,6 +6155,10 @@ impl<'a, 's> Sema<'a, 's> {
                                             id,
                                             &field_name,
                                             field_range,
+                                        ) && !self.unavailable_member(
+                                            id,
+                                            &field_name,
+                                            field_range,
                                         ) {
                                             let t = self.types.name(Ty::Class(id));
                                             self.class_member_missing(&t, &field_name, field_range);
@@ -5639,6 +6185,48 @@ impl<'a, 's> Sema<'a, 's> {
                         }
                         let whole = TextRange::new(base_range.start(), field_range.end());
                         self.param_misuse(p, generics::ParamOp::Create, whole);
+                        Some((Resolved::Error, field_name, field_range))
+                    }
+                    Resolved::Type(Ty::Param(p))
+                        if field_name.eq_ignore_ascii_case("classname")
+                            && self.param_class(p).is_some() =>
+                    {
+                        // `T.ClassName` (`docs/spec/generics.md` 3.3): the name of the type
+                        // argument, through the class as a value. The value is typed as a
+                        // reference to the constraint's class; the instantiation replaces `T`
+                        let class = self.param_class(p).expect("checked above");
+                        let r = match self.find_member(class, &field_name, field_range) {
+                            Ok(member) => {
+                                let ty = self.types.class_ref(
+                                    class,
+                                    types::DynWritten::Anonymous {
+                                        generic: false,
+                                        span: base_range,
+                                    },
+                                );
+                                let recv = hir::Expr {
+                                    kind: ExprKind::ClassRefValue(p),
+                                    ty,
+                                    value: None,
+                                    span: base_range,
+                                };
+                                Resolved::Member {
+                                    recv: Box::new(recv),
+                                    class,
+                                    member,
+                                    inherited: false,
+                                }
+                            }
+                            Err(_) => Resolved::Error,
+                        };
+                        Some((r, field_name, field_range))
+                    }
+                    Resolved::Type(Ty::Param(p))
+                        if field_name.eq_ignore_ascii_case("classname") =>
+                    {
+                        // `T.ClassName` needs a class constraint (`docs/spec/generics.md` 3.3)
+                        let whole = TextRange::new(base_range.start(), field_range.end());
+                        self.param_misuse(p, generics::ParamOp::ClassMember(&field_name), whole);
                         Some((Resolved::Error, field_name, field_range))
                     }
                     Resolved::Type(Ty::Helper(h)) => {
@@ -5668,6 +6256,10 @@ impl<'a, 's> Sema<'a, 's> {
                                     Some(r) => r,
                                     None => {
                                         if !self.nested_generic_without_args(
+                                            id,
+                                            &field_name,
+                                            field_range,
+                                        ) && !self.unavailable_member(
                                             id,
                                             &field_name,
                                             field_range,
@@ -5735,16 +6327,39 @@ impl<'a, 's> Sema<'a, 's> {
                         .push("use an array constructor, as in `[1, 2]`".into());
                         Some((Resolved::Error, field_name, field_range))
                     }
+                    Resolved::Type(t)
+                        if !t.is_error() && !matches!(t, Ty::Record(_) | Ty::Class(_)) =>
+                    {
+                        // `Integer.Parse(S)`, `Integer.MaxValue`: a class member of the helpers of
+                        // a type of the language (`docs/spec/objects.md` 10.4)
+                        let whole = TextRange::new(base_range.start(), field_range.end());
+                        let recv = Expr {
+                            kind: ExprKind::TypeName,
+                            ty: t,
+                            value: None,
+                            span: base_range,
+                        };
+                        let r = match self.helper_resolved(recv, &field_name, field_range) {
+                            Some(Resolved::Member {
+                                member: methods::Member::HelperBuiltin(b),
+                                ..
+                            }) => {
+                                // `Integer.ToString` has no value to convert (2.3)
+                                self.instance_member_error(b.name(), None, field_range);
+                                Resolved::Error
+                            }
+                            Some(r) => r,
+                            None => {
+                                self.builtin_member_missing(t, &field_name, field_range, whole);
+                                Resolved::Error
+                            }
+                        };
+                        Some((r, field_name, field_range))
+                    }
                     _ => {
                         // `.` on a type of the language or another name that has no members
                         let whole = TextRange::new(base_range.start(), field_range.end());
-                        let d = Diagnostic::error(
-                            Code::E(3200),
-                            "type helpers for built-in types are not supported yet (planned for M5)",
-                            Stage::Sema,
-                        )
-                        .with_primary(self.span(whole), "");
-                        self.push(d);
+                        self.helpers_to_come(whole);
                         Some((Resolved::Error, field_name, field_range))
                     }
                 }
@@ -5759,6 +6374,9 @@ impl<'a, 's> Sema<'a, 's> {
     /// E0700 for a member a class or an interface does not have (E3017 for `_AddRef`,
     /// `_Release` and `QueryInterface`; `docs/spec/objects.md` 7.2).
     pub(super) fn member_missing(&mut self, class: types::TypeId, name: &str, range: TextRange) {
+        if !self.types.is_interface(class) && self.unavailable_member(class, name, range) {
+            return;
+        }
         if !self.types.is_interface(class) || interfaces::is_ref_count_method(name) {
             let t = self.types.name(Ty::Class(class));
             self.class_member_missing(&t, name, range);
@@ -6012,4 +6630,13 @@ pub(crate) fn const_init_value(e: &hir::Expr) -> Option<Const> {
             .map(Const::Agg),
         _ => None,
     }
+}
+
+/// The names that are identifiers but cannot be declared (E0701; `docs/spec/semantics.md` 4.1):
+/// `Result`, `Exit`, `Break`, `Continue`, `Self`, `True`, `False`.
+pub(super) fn is_reserved_name(lower: &str) -> bool {
+    matches!(
+        lower,
+        "result" | "exit" | "break" | "continue" | "self" | "true" | "false"
+    )
 }

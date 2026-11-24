@@ -1,0 +1,17 @@
+0 1 2
+added (5): [zero] [one] [two] [three] [four]
+deleted (4): [zero] [one] [three] [four]
+exchanged (4): [four] [one] [three] [zero]
+moved (4): [one] [three] [four] [zero]
+written (4): [one] [ONE] [four] [zero]
+0 2 -1
+one;ONE;four;zero;
+AddStrings (5): [first] [one] [ONE] [four] [zero]
+Assign (4): [one] [ONE] [four] [zero]
+Clear (0):
+CR LF, LF, CR (4): [a] [b] [c] [d]
+empty line, break at the end (3): [a] [] [b]
+empty (0):
+no break (1): [x]
+LineBreak | (4): [p] [q] [] [r]
+p|q||r|

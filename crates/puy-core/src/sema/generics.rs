@@ -8,6 +8,7 @@ use super::types::{Constraint, Ty, TypeDef, TypeId, TypeKind, Visibility};
 use crate::diagnostics::{Code, Diagnostic, Fix, Stage, TextEdit};
 use crate::source::{Span, TextRange, TextSize};
 use crate::syntax::SyntaxKind;
+use crate::syntax::TokenName;
 use crate::syntax::ast::{self, AstNode};
 
 /// A generic type declared in the file (`docs/spec/generics.md` 2.3): its names are found by the
@@ -98,13 +99,15 @@ pub(super) enum ParamOp<'n> {
     /// An element of a set constructor, `Include` / `Exclude`.
     SetElement,
     Member(&'n str),
+    /// `T.ClassName`, which needs a class constraint (an interface constraint does not give it).
+    ClassMember(&'n str),
 }
 
 /// The names of the type parameters of a `TYPE_PARAMS` node, in order.
 fn param_names(tp: &ast::TypeParams) -> Vec<(String, TextRange)> {
     tp.groups()
         .flat_map(|g| g.names())
-        .map(|t| (t.text().to_string(), t.text_range()))
+        .map(|t| t.name_and_range())
         .collect()
 }
 
@@ -137,7 +140,7 @@ pub(super) fn completing_decl(
     let arity = decl_arity(forward);
     section.decls().find(|d| {
         d.name().is_some_and(|n| {
-            n.text().eq_ignore_ascii_case(name.text())
+            n.name().eq_ignore_ascii_case(name.name())
                 && n.text_range().start() > name.text_range().start()
         }) && class_or_interface(d) == Some((class, false))
             && decl_arity(d) == arity
@@ -292,7 +295,7 @@ impl<'a, 's> Sema<'a, 's> {
         // them declares another type (2.3)
         let forward = section.decls().find_map(|d| {
             let n = d.name()?;
-            (n.text().eq_ignore_ascii_case(name)
+            (n.name().eq_ignore_ascii_case(name)
                 && n.text_range().start() < range.start()
                 && decl_arity(&d) == Some(arity)
                 && class_or_interface(&d).is_some_and(|(_, fwd)| fwd))
@@ -473,7 +476,7 @@ impl<'a, 's> Sema<'a, 's> {
             for g in source.groups() {
                 let cs = s.resolve_constraints(&g);
                 for n in g.names() {
-                    if next.as_deref() == Some(&n.text().to_ascii_lowercase()) && k < params.len() {
+                    if next.as_deref() == Some(&n.name().to_ascii_lowercase()) && k < params.len() {
                         assigned.push((params[k], cs.clone()));
                         k += 1;
                         next = names.next();
@@ -958,7 +961,7 @@ impl<'a, 's> Sema<'a, 's> {
         };
         match (idents.len(), tps.as_slice()) {
             (1, []) => HeadingParams::None,
-            (1, [(1, tp)]) => self.generic_routine_heading(header, tp, idents[0].text()),
+            (1, [(1, tp)]) => self.generic_routine_heading(header, tp, idents[0].name()),
             (2, _) => {
                 let class_tp = tps.iter().find(|(k, _)| *k == 1).map(|(_, tp)| tp);
                 let method_tp = tps.iter().find(|(k, _)| *k == 2).map(|(_, tp)| tp);
@@ -970,14 +973,14 @@ impl<'a, 's> Sema<'a, 's> {
                     None => None,
                 };
                 let owner = class.or_else(|| {
-                    let lower = idents[0].text().to_ascii_lowercase();
+                    let lower = idents[0].name().to_ascii_lowercase();
                     match self.dry_run(|s| s.lookup_type_symbol(&lower)) {
                         Some(Some(Ty::Class(c) | Ty::Record(c) | Ty::Helper(c))) => Some(c),
                         _ => None,
                     }
                 });
                 let Some(owner) = owner else {
-                    let lower = idents[0].text().to_ascii_lowercase();
+                    let lower = idents[0].name().to_ascii_lowercase();
                     let candidates = self.heading_generic_types(None, &lower);
                     if candidates.is_empty() {
                         // Not a class: reported by the heading's own checks
@@ -986,16 +989,16 @@ impl<'a, 's> Sema<'a, 's> {
                     // A generic type without its type parameters (E0757): the body is not
                     // checked; its declaration counts as having one (no E0723)
                     if let Some(class) =
-                        self.missing_type_params(&idents[0], &candidates, idents[1].text())
+                        self.missing_type_params(&idents[0], &candidates, idents[1].name())
                     {
-                        self.mark_has_body(class, idents[1].text());
+                        self.mark_has_body(class, idents[1].name());
                     }
                     return HeadingParams::Failed;
                 };
                 if self.generic_helpers.contains(&owner) {
                     // A helper in a generic body (E0757): the body is not checked; its
                     // declaration counts as having one (no E0723)
-                    self.mark_has_body(owner, idents[1].text());
+                    self.mark_has_body(owner, idents[1].name());
                     return HeadingParams::Failed;
                 }
                 let own = match self.generic_method_heading(header, owner, &idents, method_tp) {
@@ -1043,7 +1046,7 @@ impl<'a, 's> Sema<'a, 's> {
         // that the method's declaration counts as having a body (no E0723)
         let mut failed = false;
         for (k, ident) in idents[..n - 1].iter().enumerate() {
-            let name = ident.text().to_string();
+            let name = ident.name().to_string();
             let lower = name.to_ascii_lowercase();
             let next = match after(k) {
                 Some(tp) => {
@@ -1092,7 +1095,7 @@ impl<'a, 's> Sema<'a, 's> {
                                     HeadingParams::None
                                 };
                             }
-                            let member = idents[k + 1].text();
+                            let member = idents[k + 1].name();
                             let picked = if failed {
                                 // Only the first part is reported; the rest is still found
                                 self.pick_by_member(&candidates, member)
@@ -1116,7 +1119,7 @@ impl<'a, 's> Sema<'a, 's> {
         };
         if failed || self.generic_helpers.contains(&owner) {
             // The body is not checked; its declaration counts as having one (no E0723)
-            self.mark_has_body(owner, idents[n - 1].text());
+            self.mark_has_body(owner, idents[n - 1].name());
             return HeadingParams::Failed;
         }
         let method_tp = after(n - 1);
@@ -1247,7 +1250,7 @@ impl<'a, 's> Sema<'a, 's> {
         tp: &ast::TypeParams,
         idents: &[crate::syntax::SyntaxToken],
     ) -> Option<TypeId> {
-        let name = idents[0].text().to_string();
+        let name = idents[0].name().to_string();
         let lower = name.to_ascii_lowercase();
         let written = param_names(tp);
         let candidates: Vec<TypeId> = self
@@ -1270,7 +1273,7 @@ impl<'a, 's> Sema<'a, 's> {
         if !self.check_heading_params(tp, &declared, &name) {
             // The body is not checked; its declaration counts as having one (no E0723)
             if idents.len() == 2 {
-                self.mark_has_body(class, idents[1].text());
+                self.mark_has_body(class, idents[1].name());
             }
             return None;
         }
@@ -1322,7 +1325,7 @@ impl<'a, 's> Sema<'a, 's> {
             .map(|p| self.types.get(*p).name.clone().unwrap_or_default())
             .collect();
         let list = format!("<{}>", names.join(", "));
-        let name = ident.text();
+        let name = ident.name();
         let at = ident.text_range();
         let mut d = Diagnostic::error(
             Code::E(757),
@@ -1406,7 +1409,7 @@ impl<'a, 's> Sema<'a, 's> {
         idents: &[crate::syntax::SyntaxToken],
         tp: Option<&ast::TypeParams>,
     ) -> Option<Vec<TypeId>> {
-        let method = idents[1].text();
+        let method = idents[1].name();
         let routines: Vec<super::RoutineId> = self
             .types
             .class_methods(owner)
@@ -1497,6 +1500,10 @@ impl<'a, 's> Sema<'a, 's> {
                 format!("type parameter `{t}` has no member `{m}`"),
                 format!("add a class or interface constraint that declares `{m}`"),
             ),
+            ParamOp::ClassMember(m) => (
+                format!("type parameter `{t}` has no member `{m}`"),
+                format!("add a class constraint to the type parameter, as in `<{t}: class>`"),
+            ),
             ParamOp::SetElement => (
                 format!("cannot use a value of type parameter `{t}` as a set element"),
                 "a type parameter can only be used in ways that its constraints allow".to_string(),
@@ -1513,7 +1520,9 @@ impl<'a, 's> Sema<'a, 's> {
                     ParamOp::Operator(o) => format!("apply operator `{o}` to"),
                     ParamOp::Ordinal => "take the ordinal of".to_string(),
                     ParamOp::SizeOf => "take the size of".to_string(),
-                    ParamOp::Member(_) | ParamOp::SetElement => unreachable!("handled above"),
+                    ParamOp::Member(_) | ParamOp::ClassMember(_) | ParamOp::SetElement => {
+                        unreachable!("handled above")
+                    }
                 };
                 let note = match op {
                     ParamOp::Free => format!(
@@ -1884,9 +1893,17 @@ impl<'a, 's> Sema<'a, 's> {
             .map(|g| (g.clone(), None))
             .collect();
         let of_unit = |s: &Self, i: usize, k: usize| {
+            // The paired unit of a test unit gives its `implementation` section's too
+            // (`docs/spec/units.md` 2.4)
+            let private: &[GenericTypeName] = if s.pair_unit() == Some(i) {
+                &s.units[i].private_generics
+            } else {
+                &[]
+            };
             s.units[i]
                 .generics
                 .iter()
+                .chain(private)
                 .filter(|g| g.lower == lower)
                 .map(|g| (g.clone(), Some(k)))
                 .collect::<Vec<_>>()
@@ -2636,7 +2653,7 @@ impl<'a, 's> Sema<'a, 's> {
         for g in tp.groups() {
             let mut of_group = Vec::new();
             for t in g.names() {
-                let (n, r) = (t.text().to_string(), t.text_range());
+                let (n, r) = t.name_and_range();
                 let twice = names
                     .iter()
                     .find(|(p, _)| p.eq_ignore_ascii_case(&n))
@@ -2996,8 +3013,8 @@ impl<'a, 's> Sema<'a, 's> {
         if a.type_args().is_some() || t.type_args().is_some() {
             return false;
         }
-        let a_name = a_tok.text().to_string();
-        let t_name = t_tok.text().to_string();
+        let a_name = a_tok.name().to_string();
+        let t_name = t_tok.name().to_string();
         let generic = match self.dry_run(|s| s.resolve_ident(&a_name, a_tok.text_range())) {
             super::Resolved::Routine(id) => self
                 .routine_overloads(id)
@@ -3068,9 +3085,8 @@ pub(super) fn default_ctor(
     routines: &[super::RoutineInfo],
     class: TypeId,
 ) -> Option<(Option<super::hir::RoutineId>, Vec<super::hir::Expr>)> {
-    let set = super::methods::method_set(types, routines, class, "Create", |vis, _| {
-        vis == Visibility::Public
-    });
+    let set =
+        super::methods::method_set(types, routines, class, "Create", |vis, _| vis.is_public());
     if set.is_empty() {
         // Without a public `Create` of a routine, the built-in `TObject.Create`, unless a
         // `Create` the code cannot call hides it

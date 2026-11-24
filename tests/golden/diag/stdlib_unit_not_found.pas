@@ -2,7 +2,7 @@
 // the note lists the units of the standard library (docs/spec/diagnostics.md 4.10).
 program StdlibUnitNotFound;
 
-uses System.Classes;
+uses System.Variants;
 
 begin
 end.

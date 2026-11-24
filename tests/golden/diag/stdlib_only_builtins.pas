@@ -3,7 +3,7 @@
 // (docs/spec/collections.md 12.1).
 program StdlibOnlyBuiltins;
 
-uses System.Generics.Collections;
+uses System.Generics.Collections, System.Math, System.Character;
 
 var
   A: TArray<Integer>;
@@ -16,4 +16,11 @@ begin
   B := IsRefCountedObject(O);
   B := IsOverridden(B);
   System.ArrayMoveRange(A, 0, 1, 1);
+  WriteLn(MathFunc1(0, 1.0));
+  WriteLn(System.MathFunc2(1, 2.0, 3.0));
+  WriteLn(UnicodeCategory(65));
+  WriteLn(System.CodePointClass(65));
+  WriteLn(NumericValue(65));
+  RequestLeakReport;
+  System.RequestLeakReport;
 end.

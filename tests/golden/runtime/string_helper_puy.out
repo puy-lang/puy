@@ -1,0 +1,33 @@
+TRUE 0 -1 -1 -1
+FALSE TRUE TRUE FALSE
+1: []
+1: [abcabc]
+1: [abcabc]
+0 3 -1 -1
+1 -1 -1
+0 1 -1 3
+5 0 -1 -1
+-1 -1 0 -1
+[ab][bc][][]
+[][][c]
+[<abcabc][abcabc>][abcabc][abcabc]
+[abcabc][abca][abcabc]
+[abcabc][**]
+3: [a] [b] []
+3: [] [] []
+4: [a] [] [b] [c]
+3: [a] [b] [c]
+2: [Hello] [World]
+10: [a] [b] [c] [d] [e] [f] [g] [h] [i] [j]
+3: [a] [a] []
+STRAßE Ǆ àéî σ
+TRUE TRUE FALSE
+a, b, c||x
+TRUE FALSE
+1 -1 0
+1 0 -1
+'it''s' "say ""hi""" ''
+2 0 0
+-9000000000 2.50 x|abc
+ERangeError: string index -1 is out of range 0..5
+EConvertError: '12x' is not a valid integer

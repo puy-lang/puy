@@ -1,0 +1,20 @@
+initial: local 2026-01-02 04:04:05.000 | utc 2026-01-02 03:04:05.000 | 2026-01-02T03:04:05Z
+instant: local 2026-06-01 14:00:00.123 | utc 2026-06-01 12:00:00.123 | 2026-06-01T12:00:00.123456789Z
+access instant: 1969-12-31T23:59:59.999999999Z
+creation instant: 1970-01-01T00:00:00Z | local 1970-01-01 01:00:00.000
+winter: local 2026-12-01 10:00:00.000 | utc 2026-12-01 09:00:00.000 | 2026-12-01T09:00:00Z
+summer: local 2026-07-01 10:00:00.000 | utc 2026-07-01 08:00:00.000 | 2026-07-01T08:00:00Z
+access: local 2026-07-02 11:30:00.250 | utc 2026-07-02 09:30:00.250
+creation: local 2026-02-03 04:05:06.000 | utc 2026-02-03 03:05:06.000
+before spring: local 2026-03-29 01:59:59.999 | utc 2026-03-29 00:59:59.999 | 2026-03-29T00:59:59.999Z
+skipped: local 2026-03-29 03:30:00.000 | utc 2026-03-29 01:30:00.000 | 2026-03-29T01:30:00Z
+after spring: local 2026-03-29 03:00:00.000 | utc 2026-03-29 01:00:00.000 | 2026-03-29T01:00:00Z
+before autumn: local 2026-10-25 01:59:59.999 | utc 2026-10-24 23:59:59.999 | 2026-10-24T23:59:59.999Z
+twice: local 2026-10-25 02:30:00.000 | utc 2026-10-25 00:30:00.000 | 2026-10-25T00:30:00Z
+after autumn: local 2026-10-25 03:00:00.000 | utc 2026-10-25 02:00:00.000 | 2026-10-25T02:00:00Z
+second 02:30: local 2026-10-25 02:30:00.000 | utc 2026-10-25 01:30:00.000 | 2026-10-25T01:30:00Z
+directory: local 2026-08-09 10:11:12.000 | utc 2026-08-09 08:11:12.000 | 2026-08-09T08:11:12Z
+out of range: EArgumentException: the time 1000000000 is out of the range of file times
+last instant: 2262-04-11T23:47:16.854775807Z
+local out of range: ERangeError: TInstant value out of range (1677-09-21 to 2262-04-11)
+missing: EFileNotFoundException: cannot read the attributes of 'missing.txt': file not found

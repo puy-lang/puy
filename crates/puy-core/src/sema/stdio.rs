@@ -8,6 +8,7 @@ use super::hir::*;
 use super::types::Ty;
 use crate::diagnostics::Code;
 use crate::source::TextRange;
+use crate::syntax::TokenName;
 use crate::syntax::ast::{self, AstNode};
 
 impl Sema<'_, '_> {
@@ -33,7 +34,7 @@ impl Sema<'_, '_> {
                 if unit != "system" || self.find_visible(&unit).is_some() {
                     return None;
                 }
-                f.field()?.text().to_ascii_lowercase()
+                f.field()?.name().to_ascii_lowercase()
             }
             _ => return None,
         };

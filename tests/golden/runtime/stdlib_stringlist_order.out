@@ -1,0 +1,14 @@
+case sensitive: A B Z _ a ab b z Ä ä
+not case sensitive: _ a A ab b B z Z Ä ä
+8 -1
+a x X x 
+TRUE 1
+resorted: X a x x
+<<>> the list was changed while it was being sorted
+after: c b
+3 q s
+2 2 0
+p+q+r+s+t 5
+Append, AddStrings: p q r s t u v w
+TRUE 8
+TRUE

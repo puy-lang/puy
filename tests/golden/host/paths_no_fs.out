@@ -1,0 +1,5 @@
+b
+Resolve: ENotSupportedException: the file system is not permitted by the host (ekNoPermission)
+Exists: ENotSupportedException: the file system is not permitted by the host (ekNoPermission)
+ReadAllText: ENotSupportedException: the file system is not permitted by the host (ekNoPermission)
+Entries: ENotSupportedException: the file system is not permitted by the host (ekNoPermission)

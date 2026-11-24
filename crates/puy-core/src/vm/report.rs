@@ -14,12 +14,19 @@ pub struct StackFrame {
 pub enum PropValue {
     Str(String),
     Int(i64),
+    /// `EAssertionFailed.Values`: the subexpressions and their values as shown
+    /// (`docs/spec/semantics.md` 5.4).
+    Values(Vec<(String, String)>),
 }
 
 /// An uncaught exception, or one attached to it (`Suppressed`, `InnerException`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExceptionReport {
     pub class: String,
+    /// The type indices of the class and of its ancestors, the class first, up to `Exception`
+    /// (`docs/spec/bytecode.md` 3.2): `puy test` tells an `EAssertionFailed` from another
+    /// exception by them (`docs/spec/test.md` 4).
+    pub class_types: Vec<u32>,
     pub message: String,
     /// Innermost first. At most 32 (16 innermost + 16 outermost).
     pub stack: Vec<StackFrame>,
@@ -56,8 +63,16 @@ impl ExceptionReport {
         out
     }
 
-    /// The stack trace and the attached exceptions, each line starting with `indent` and two spaces.
+    /// The values of a failed `Assert`, the stack trace and the attached exceptions, each line
+    /// starting with `indent` and two spaces (a value four).
     fn render_body(&self, out: &mut String, indent: &str) {
+        for (_, v) in &self.properties {
+            if let PropValue::Values(values) = v {
+                for (expr, value) in values {
+                    out.push_str(&format!("{indent}    {expr} = {value}\n"));
+                }
+            }
+        }
         for line in trace_lines(&self.stack, self.omitted) {
             out.push_str(indent);
             out.push_str(&line);
@@ -118,6 +133,16 @@ impl ExceptionReport {
             match v {
                 PropValue::Str(s) => w.field_string(k, s),
                 PropValue::Int(n) => w.field_number(k, n),
+                PropValue::Values(values) => {
+                    w.field_array(k);
+                    for (expr, value) in values {
+                        w.begin_object();
+                        w.field_string("expr", expr);
+                        w.field_string("value", value);
+                        w.end_object();
+                    }
+                    w.end_array().end_field()
+                }
             };
         }
         w.end_object().end_field();
@@ -224,6 +249,7 @@ mod tests {
     fn render_text_and_json() {
         let r = ExceptionReport {
             class: "ERangeError".into(),
+            class_types: vec![3, 1, 0],
             message: "string index 5 is out of range 1..3".into(),
             stack: vec![
                 StackFrame {
@@ -264,6 +290,7 @@ mod tests {
     fn report(class: &str, message: &str, stack: Vec<StackFrame>) -> ExceptionReport {
         ExceptionReport {
             class: class.into(),
+            class_types: Vec::new(),
             message: message.into(),
             stack,
             omitted: 0,

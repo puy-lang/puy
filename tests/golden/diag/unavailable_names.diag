@@ -1,0 +1,55 @@
+error[E3022]: `System.Classes.TList` is not supported in Puy
+   --> unavailable_names.pas:10:19
+    |
+ 10 |   TMyList = class(TList)
+    |                   ^^^^^
+    |
+    = note: use `TList<T>` or `TObjectList` instead
+
+error[E3022]: `System.Classes.TList` is not supported in Puy
+   --> unavailable_names.pas:14:6
+    |
+ 14 |   L: TList;
+    |      ^^^^^
+    |
+    = note: use `TList<T>` or `TObjectList` instead
+
+error[E3022]: `System.Contnrs.TStack` is not supported in Puy
+   --> unavailable_names.pas:15:6
+    |
+ 15 |   S: tstack;
+    |      ^^^^^^
+    |
+    = note: use `TStack<T>` or `TObjectStack` instead
+
+error[E3022]: `System.Contnrs.TBucketList` is not supported in Puy
+   --> unavailable_names.pas:16:6
+    |
+ 16 |   B: TBucketList;
+    |      ^^^^^^^^^^^
+    |
+    = note: use `TDictionary<K, V>` instead
+
+error[E3022]: `System.Contnrs.TComponentList` is not supported in Puy
+   --> unavailable_names.pas:17:6
+    |
+ 17 |   C: TComponentList;
+    |      ^^^^^^^^^^^^^^
+    |
+    = note: use `TObjectList` instead
+
+error[E0700]: undeclared identifier `TList`
+   --> unavailable_names.pas:18:6
+    |
+ 18 |   G: TList<Integer>;
+    |      ^^^^^
+
+error[E3022]: `System.Classes.TList` is not supported in Puy
+   --> unavailable_names.pas:21:8
+    |
+ 21 |   L := TList.Create;
+    |        ^^^^^
+    |
+    = note: use `TList<T>` or `TObjectList` instead
+
+error: aborting due to 7 errors

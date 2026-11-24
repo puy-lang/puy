@@ -1,0 +1,25 @@
+error[E3022]: `System.Contnrs.TList` is not supported in Puy
+   --> unavailable_names_with_generics.pas:12:6
+    |
+ 12 |   A: TList;
+    |      ^^^^^
+    |
+    = note: use `TList<T>` or `TObjectList` instead
+
+error[E3022]: `System.Contnrs.TQueue` is not supported in Puy
+   --> unavailable_names_with_generics.pas:13:21
+    |
+ 13 |   B: System.Contnrs.TQueue;
+    |                     ^^^^^^
+    |
+    = note: use `TQueue<T>` or `TObjectQueue` instead
+
+error[E3022]: `System.Contnrs.TStack` is not supported in Puy
+   --> unavailable_names_with_generics.pas:16:6
+    |
+ 16 |   E: TStack;
+    |      ^^^^^^
+    |
+    = note: use `TStack<T>` or `TObjectStack` instead
+
+error: aborting due to 3 errors

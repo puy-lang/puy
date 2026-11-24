@@ -1,0 +1,4 @@
+error: uncaught exception ERangeError: value 70000 is out of range for Word (0..65535)
+  at System.ParseIntRange (<stdlib>/System/IntegerHelpers.Implementation.inc:10)
+  at System.TWordHelper.Parse (<stdlib>/System/IntegerHelpers.Implementation.inc:196)
+  at TypeHelpersPuy.<main> (type_helpers_puy.pas:129)

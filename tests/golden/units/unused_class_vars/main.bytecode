@@ -1,0 +1,116 @@
+; puyc format 0
+.const
+  0: str "init Hidden\n"
+  1: str "fini Hidden\n"
+  2: str "init Kept\n"
+  3: str "fini Kept\n"
+  4: str "free "
+  5: str "\n"
+  6: str "main"
+  7: str "kept"
+  8: str "main "
+.type
+  64: class Kept.TNoisy ref slots=1 refs=0 parent=ty20 vmt=f5,builtin0,builtin0,builtin1,builtin3,builtin4
+.global
+  0: ref Kept.TKeeper.Held
+  1: int Kept.Counter
+  2: ref Mine
+.host
+  0: Console.Write params=1 ret=0
+.unit Hidden file="src/Hidden.pas" init=0 fini=1 entry=-
+.unit Kept file="src/Kept.pas" init=2 fini=3 entry=-
+.unit Main file="main.pas" init=- fini=- entry=6
+.func 0 Hidden.<init> params=0 regs=1
+  .line 15
+  0000  LoadConst    r0, k0
+  0001  CallHost     r0, h0
+  .line 18
+  0002  RetVoid
+.finally r0
+.func 1 Hidden.<fini> params=0 regs=1
+  .line 17
+  0000  LoadConst    r0, k1
+  0001  CallHost     r0, h0
+  .line 18
+  0002  RetVoid
+.finally r0
+.func 2 Kept.<init> params=0 regs=1
+  .line 35
+  0000  LoadConst    r0, k2
+  0001  CallHost     r0, h0
+  .line 38
+  0002  RetVoid
+.finally r0
+.func 3 Kept.<fini> params=0 regs=1
+  .line 37
+  0000  LoadConst    r0, k3
+  0001  CallHost     r0, h0
+  .line 38
+  0002  RetVoid
+.finally r0
+.func 4 Kept.TNoisy.Create params=2 regs=2
+  .local r0 Self
+  .local r1 AName
+  .line 25
+  0000  ObjSetRef    r0, 0, r1
+  .line 26
+  0001  RetVoid
+.func 5 Kept.TNoisy.Destroy params=1 regs=5
+  .local r0 Self
+  .line 28
+  0000  LoadInt      r4, 64
+  0001  DtorEnter    r0, r4
+  .line 30
+  0002  LoadConst    r1, k4
+  0003  ObjGetRef    r2, r0, 0
+  0004  ConcatStr    r1, r1, r2
+  0005  LoadConst    r3, k5
+  0006  ConcatStr    r1, r1, r3
+  0007  CallHost     r1, h0
+  0008  Release      r2
+  .line 32
+  0009  RetVoid
+.finally r1, r2, r3
+.func 6 Main.<main> params=0 regs=15
+  .try 0004..0007 finally 0007..0009 r2
+  .try 0010..0013 finally 0013..0015 r6
+  .line 12
+  0000  LoadConst    r1, k6
+  0001  Move         r13, r1
+  0002  LoadZero     r11
+  0003  New          r11, ty64
+  0004  Move         r12, r11
+  0005  CallMethod   r12, f4
+  0006  LoadZero     r2
+  0007  JmpIfNeIntI  r2, 1, -> 0009
+  0008  DestroyFailed r11
+  0009  EndFinally   r2, 0
+  000a  MoveRef      r0, r11
+  000b  StoreGlobalRef r0, g2
+  .line 13
+  000c  LoadConst    r5, k7
+  000d  Move         r13, r5
+  000e  LoadZero     r11
+  000f  New          r11, ty64
+  0010  Move         r12, r11
+  0011  CallMethod   r12, f4
+  0012  LoadZero     r6
+  0013  JmpIfNeIntI  r6, 1, -> 0015
+  0014  DestroyFailed r11
+  0015  EndFinally   r6, 0
+  0016  MoveRef      r4, r11
+  0017  StoreGlobalRef r4, g0
+  .line 14
+  0018  LoadInt      r11, 1
+  0019  StoreGlobal  r11, g1
+  .line 15
+  001a  LoadConst    r8, k8
+  001b  LoadGlobal   r11, g1
+  001c  IntToStr     r9, r11
+  001d  ConcatStr    r8, r8, r9
+  001e  LoadConst    r10, k5
+  001f  ConcatStr    r8, r8, r10
+  0020  CallHost     r8, h0
+  .line 16
+  0021  RetVoid
+.finally r0, r1, r3, r4, r5, r7, r8, r9, r10

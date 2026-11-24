@@ -24,6 +24,7 @@ pub fn erase(p: &Program) -> Option<Program> {
     }
     let mut q = p.clone();
     let storage = storage_types(&mut q.types);
+    q.types.distinct_roots = storage.iter().map(|(id, (_, root))| (*id, *root)).collect();
     visit_table(&mut q.types, &mut |t: &mut Ty| {
         if let Ty::Distinct(id) = *t {
             *t = storage[&id].0;
@@ -76,6 +77,7 @@ impl HirVisit for Left {
     fn ty(&mut self, t: &mut Ty) {
         self.0 |= matches!(t, Ty::Distinct(_));
     }
+    fn type_info(&mut self, _t: &mut Ty) {}
 }
 
 /// The type in storage and the root of each distinct type, turning the definitions of those
@@ -212,6 +214,13 @@ impl HirVisit for Eraser<'_> {
     fn ty(&mut self, t: &mut Ty) {
         if let Ty::Distinct(id) = *t {
             *t = self.storage[&id].0;
+        }
+    }
+
+    fn type_info(&mut self, t: &mut Ty) {
+        // `TypeInfo` of a distinct type names its own entry (`docs/spec/rtti.md` 2.2)
+        if !matches!(t, Ty::Distinct(_)) {
+            self.ty(t);
         }
     }
 

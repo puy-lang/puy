@@ -227,10 +227,13 @@ impl Isolate {
                 Ok(())
             }
             op::word::ARR_LEN => self.op_arr_len(ra, rb),
-            op::word::DYN_GET | op::word::DYN_GET_REF => {
+            // `BytesGet` / `BytesSet` of an array that is not of bytes (an open array parameter
+            // given a static array of `Byte`), and every case the fast path leaves, read and write
+            // as `DynGet` / `DynSet` (one call site each, so that they stay inlined here)
+            op::word::DYN_GET | op::word::DYN_GET_REF | op::word::BYTES_GET => {
                 self.op_dyn_get(ra, rb, rc, opc == op::word::DYN_GET_REF)
             }
-            op::word::DYN_SET | op::word::DYN_SET_REF => {
+            op::word::DYN_SET | op::word::DYN_SET_REF | op::word::BYTES_SET => {
                 self.op_dyn_set(ra, rb, rc, opc == op::word::DYN_SET_REF)
             }
             op::word::FIELD_GET | op::word::FIELD_GET_REF => {
@@ -982,12 +985,20 @@ impl Isolate {
         let fatal = |m: String| Err(RefError::Fatal(m));
         let heap = &self.heap;
         let whats = ["the buckets", "the hashes", "the next entries"];
-        let [buckets, hashes, next, keys] = match key {
-            Some(_) => heap.hash_arrays(arrays, [whats[0], whats[1], whats[2], "the keys"])?,
-            None => {
-                let [b, h, n] = heap.hash_arrays([arrays[0], arrays[1], arrays[2]], whats)?;
-                [b, h, n, &[]]
-            }
+        let ([buckets, hashes, next], keys) = match key {
+            // The four arrays at once; keys of bytes (`TDictionary<Byte, V>`) on a path of
+            // their own
+            Some(_) => match heap.hash_arrays(arrays, [whats[0], whats[1], whats[2], "the keys"]) {
+                Ok([b, h, n, k]) => ([b, h, n], heap::Elems::Slots(k)),
+                Err(e) => match Self::hash_byte_keys(heap, arrays, whats) {
+                    Some(found) => found?,
+                    None => return Err(e.into()),
+                },
+            },
+            None => (
+                heap.hash_arrays([arrays[0], arrays[1], arrays[2]], whats)?,
+                heap::Elems::Slots(&[]),
+            ),
         };
         if !buckets.is_empty() && !buckets.len().is_power_of_two() {
             return fatal(format!(
@@ -1027,7 +1038,12 @@ impl Isolate {
                 let found = match key {
                     None => true,
                     Some((_, wanted)) => {
-                        let k = at(keys, i)?;
+                        let k = keys.get(i).ok_or_else(|| {
+                            RefError::Fatal(format!(
+                                "a hash table entry {i} out of range 0..{}",
+                                keys.len()
+                            ))
+                        })?;
                         match wanted_str {
                             None => k == wanted,
                             // The same block (or both empty) is equal without reading it
@@ -1044,6 +1060,27 @@ impl Isolate {
         #[cfg(test)]
         executed::add(steps as u64);
         Ok(i.max(-1))
+    }
+
+    /// The arrays of a hash table whose keys are a dynamic array of bytes ([`Heap::hash_keys`]):
+    /// `None` when the keys are not one (the caller reports the error it has), otherwise the
+    /// other three arrays as [`Heap::hash_arrays`] reads them.
+    #[cold]
+    #[allow(clippy::type_complexity)]
+    fn hash_byte_keys<'h>(
+        heap: &'h heap::Heap,
+        arrays: [Slot; 4],
+        whats: [&str; 3],
+    ) -> Option<Result<([&'h [i64]; 3], heap::Elems<'h>), RefError>> {
+        let keys = heap.hash_keys(arrays[3]).ok()?;
+        if !matches!(keys, heap::Elems::Bytes(_)) {
+            return None;
+        }
+        Some(
+            heap.hash_arrays([arrays[0], arrays[1], arrays[2]], whats)
+                .map(|a| (a, keys))
+                .map_err(RefError::from),
+        )
     }
 
     /// `HashRelink A B` (`docs/spec/bytecode.md` 2.23): the chains of the hash table made again.
@@ -1240,10 +1277,10 @@ impl Isolate {
         if managed {
             self.heap.check_share(v)?;
             self.heap.add_ref(v)?;
-            let old = std::mem::replace(self.heap.slot_mut(container, i)?, v);
+            let old = self.heap.slot_replace(container, i, v)?;
             self.heap.release(old)?;
         } else {
-            *self.heap.slot_mut(container, i)? = v;
+            self.heap.slot_replace(container, i, v)?;
         }
         Ok(())
     }

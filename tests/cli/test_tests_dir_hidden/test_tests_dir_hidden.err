@@ -1,0 +1,9 @@
+error[E2500]: unit `Fixture` not found
+  --> src/App.pas:6:6
+   |
+ 6 | uses Fixture;
+   |      ^^^^^^^
+   |
+   = note: unit `Fixture` is looked up as `src/Fixture.pas`
+
+error: aborting due to 1 error

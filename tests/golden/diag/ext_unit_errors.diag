@@ -1,0 +1,143 @@
+error[E0772]: a class with `native` methods must be declared as `class sealed(TRefObject)`
+   --> <ext>/TestExtBad.pas:31:3
+    |
+ 31 |   TOpen = class(TRefObject)
+    |   ^^^^^
+
+error[E0772]: a class with `native` methods cannot declare fields
+   --> <ext>/TestExtBad.pas:31:3
+    |
+ 31 |   TOpen = class(TRefObject)
+    |   ^^^^^
+    |
+    = note: its state is the Rust value its instances hold
+
+error[E0772]: method `TOpen.Plain` of a class with `native` methods must be `native`
+   --> <ext>/TestExtBad.pas:35:15
+    |
+ 35 |     procedure Plain;
+    |               ^^^^^
+
+error[E0773]: this method cannot be `native`
+   --> <ext>/TestExtBad.pas:36:30
+    |
+ 36 |     procedure Spin; virtual; native;
+    |                              ^^^^^^
+    |
+    = note: a `native` method is a static or class method, or a constructor, of a class
+
+error[E0773]: a `native` routine cannot have `var` or `out` parameters
+   --> <ext>/TestExtBad.pas:42:21
+    |
+ 42 | procedure Twice(var X: Integer); native;
+    |                     ^
+
+error[E0773]: type `TPoint` cannot be passed to a `native` routine
+   --> <ext>/TestExtBad.pas:43:27
+    |
+ 43 | procedure TakePoint(const P: TPoint); native;
+    |                           ^
+
+error[E0773]: type `TByRef` cannot be passed to a `native` routine
+   --> <ext>/TestExtBad.pas:44:27
+    |
+ 44 | procedure TakeByRef(const F: TByRef); native;
+    |                           ^
+
+error[E0773]: type `TPoint` cannot be returned from a `native` routine
+   --> <ext>/TestExtBad.pas:45:10
+    |
+ 45 | function MakePoint: TPoint; native;
+    |          ^^^^^^^^^
+
+error[E0773]: type `TArray<TRefObject>` cannot be passed to a `native` routine
+   --> <ext>/TestExtBad.pas:46:29
+    |
+ 46 | procedure TakeObjects(const A: TArray<TRefObject>); native;
+    |                             ^
+
+error[E0773]: type `TNode` cannot be passed to a `native` routine
+   --> <ext>/TestExtBad.pas:47:26
+    |
+ 47 | procedure TakeNode(const N: TNode); native;
+    |                          ^
+
+error[E0773]: type `TWide12` cannot be passed to a `native` routine
+   --> <ext>/TestExtBad.pas:48:26
+    |
+ 48 | procedure TakeWide(const W: TWide12); native;
+    |                          ^
+
+error[E0773]: type `TArrayFunc` cannot be passed to a `native` routine
+   --> <ext>/TestExtBad.pas:50:27
+    |
+ 50 | function TakeArrays(const F: TArrayFunc): Integer; native;
+    |                           ^
+
+error[E0773]: a `native` routine cannot be overloaded
+   --> <ext>/TestExtBad.pas:51:11
+    |
+ 51 | procedure Same(A: Integer); overload; native;
+    |           ^^^^
+
+error[E0773]: a `native` routine cannot be overloaded
+   --> <ext>/TestExtBad.pas:52:11
+    |
+ 52 | procedure Same(A: string); overload; native;
+    |           ^^^^
+
+error[E0723]: `forward` is not allowed in the interface section
+   --> <ext>/TestExtBad.pas:53:18
+    |
+ 53 | procedure Later; forward; native;
+    |                  ^^^^^^^
+    |
+    = fix: remove `forward`
+
+error[E0723]: `Again` is declared in the interface section but has no body
+   --> <ext>/TestExtBad.pas:55:11
+    |
+ 55 | procedure Again;
+    |           ^^^^^
+
+error[E0723]: forward declaration of `Hidden` has no body
+   --> <ext>/TestExtBad.pas:59:11
+    |
+ 59 | procedure Hidden; forward; native;
+    |           ^^^^^^
+
+error[E0771]: a `native` routine cannot be `forward`
+   --> <ext>/TestExtBad.pas:59:28
+    |
+ 59 | procedure Hidden; forward; native;
+    |                            ^^^^^^
+
+error[E0771]: `native` is written only on the first declaration of a routine
+   --> <ext>/TestExtBad.pas:61:18
+    |
+ 61 | procedure Again; native;
+    |                  ^^^^^^
+
+error[E0771]: `native` routine `Bodied` cannot have a body
+   --> <ext>/TestExtBad.pas:67:11
+    |
+ 54 | procedure Bodied; native;
+    |           ------ declared here
+...
+ 67 | procedure Bodied;
+    |           ^^^^^^
+    |
+    = note: its body is a Rust function of the extension
+
+error[E0771]: `native` routine `Later` cannot have a body
+   --> <ext>/TestExtBad.pas:71:11
+    |
+ 53 | procedure Later; forward; native;
+    |           ----- declared here
+...
+ 71 | procedure Later;
+    |           ^^^^^
+    |
+    = note: its body is a Rust function of the extension
+
+error: aborting due to 21 errors

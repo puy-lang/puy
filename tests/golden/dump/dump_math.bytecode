@@ -1,0 +1,66 @@
+; puyc format 0
+.const
+  0: float 0.5
+  1: str "\n"
+.global
+  0: int X
+  1: int N
+.host
+  0: Console.Write params=1 ret=0
+.unit DumpMath file="dump_math.pas" init=- fini=- entry=0
+.func 0 DumpMath.<main> params=0 regs=18
+  .line 11
+  0000  LoadConst    r8, k0
+  0001  StoreGlobal  r8, g0
+  .line 12
+  0002  LoadInt      r8, 2
+  0003  StoreGlobal  r8, g1
+  .line 13
+  0004  LoadGlobal   r9, g0
+  0005  Move         r10, r9
+  0006  LoadZero     r11
+  0007  MathF64      r8, r10
+  0008  F64ToStr     r0, r8
+  0009  LoadGlobal   r10, g1
+  000a  IntToF64     r10, r10
+  000b  Move         r11, r10
+  000c  LoadInt      r12, 1
+  000d  MathF64      r9, r11
+  000e  F64ToStr     r1, r9
+  000f  ConcatStr    r0, r0, r1
+  0010  LoadGlobal   r11, g0
+  0011  Move         r12, r11
+  0012  LoadInt      r13, 5
+  0013  MathF64      r10, r12
+  0014  F64ToStr     r2, r10
+  0015  ConcatStr    r0, r0, r2
+  0016  LoadGlobal   r12, g0
+  0017  Move         r13, r12
+  0018  LoadInt      r14, 13
+  0019  MathF64      r11, r13
+  001a  F64ToStr     r3, r11
+  001b  ConcatStr    r0, r0, r3
+  001c  LoadGlobal   r13, g0
+  001d  Move         r14, r13
+  001e  LoadInt      r15, 12
+  001f  MathF64      r12, r14
+  0020  F64ToStr     r4, r12
+  0021  ConcatStr    r0, r0, r4
+  0022  LoadGlobal   r14, g0
+  0023  Move         r15, r14
+  0024  LoadInt      r16, 17
+  0025  MathF64      r13, r15
+  0026  F64ToStr     r5, r13
+  0027  ConcatStr    r0, r0, r5
+  0028  LoadGlobal   r15, g0
+  0029  Move         r16, r15
+  002a  LoadInt      r17, 18
+  002b  MathF64      r14, r16
+  002c  F64ToStr     r6, r14
+  002d  ConcatStr    r0, r0, r6
+  002e  LoadConst    r7, k1
+  002f  ConcatStr    r0, r0, r7
+  0030  CallHost     r0, h0
+  .line 14
+  0031  RetVoid
+.finally r0, r1, r2, r3, r4, r5, r6, r7

@@ -1,0 +1,62 @@
+[
+  {
+    "schema": "puy.exception/1",
+    "class": "EWrapped",
+    "message": "check failed",
+    "stack": [
+      {
+        "function": "assert_values_report.Run",
+        "file": "assert_values_report.pas",
+        "line": 21
+      },
+      {
+        "function": "assert_values_report.<main>",
+        "file": "assert_values_report.pas",
+        "line": 26
+      }
+    ],
+    "omitted": 0,
+    "properties": {},
+    "suppressed": [],
+    "inner": {
+      "class": "EAssertionFailed",
+      "message": "assertion failed: Half(N) * 2 = N (odd)",
+      "stack": [
+        {
+          "function": "assert_values_report.Check",
+          "file": "assert_values_report.pas",
+          "line": 13
+        },
+        {
+          "function": "assert_values_report.Run",
+          "file": "assert_values_report.pas",
+          "line": 19
+        },
+        {
+          "function": "assert_values_report.<main>",
+          "file": "assert_values_report.pas",
+          "line": 26
+        }
+      ],
+      "omitted": 0,
+      "properties": {
+        "Values": [
+          {
+            "expr": "Half(N) * 2",
+            "value": "6"
+          },
+          {
+            "expr": "Half(N)",
+            "value": "3"
+          },
+          {
+            "expr": "N",
+            "value": "7"
+          }
+        ]
+      },
+      "suppressed": [],
+      "inner": null
+    }
+  }
+]

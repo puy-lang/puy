@@ -1,0 +1,69 @@
+error[E0701]: `FSide` is already declared
+   --> src/App/Shapes_test.pas:19:5
+    |
+ 19 |     FSide: Integer;
+    |     ^^^^^ declared again here
+   ::: src/App/Shapes.pas:12:5
+ 12 |     FSide: Integer;
+    |     ----- declared here
+
+error[E0743]: `FSecret` is private to `TShape`
+   --> src/App/Shapes_test.pas:30:5
+    |
+ 30 |   S.FSecret := 1;
+    |     ^^^^^^^
+   ::: src/App/Shapes.pas:8:5
+  8 |     FSecret: Integer;
+    |     ------- declared here
+
+error[E0743]: `Hidden` is protected in `TShape`
+   --> src/App/Shapes_test.pas:31:5
+    |
+ 31 |   S.Hidden;
+    |     ^^^^^^
+   ::: src/App/Shapes.pas:10:15
+ 10 |     procedure Hidden;
+    |               ------ declared here
+
+error[E0700]: undeclared identifier `Logged`
+   --> src/App/Shapes_test.pas:38:10
+    |
+ 38 |   Assert(Logged = 0);
+    |          ^^^^^^
+    |
+    = fix: add `uses App.Log`
+
+error[E0700]: undeclared identifier `StoreOnly`
+   --> src/App/Shapes_test.pas:46:10
+    |
+ 46 |   Assert(StoreOnly = 2);
+    |          ^^^^^^^^^
+
+error[E0743]: `FHidden` is private to `TItem`
+   --> src/App/Shapes_test.pas:47:12
+    |
+ 47 |   Assert(I.FHidden = 0);
+    |            ^^^^^^^
+   ::: src/App/Store.pas:8:5
+  8 |     FHidden: Integer;
+    |     ------- declared here
+
+error[E0780]: a test unit cannot have an `initialization` section
+   --> src/App/Shapes_test.pas:50:1
+    |
+ 50 | initialization
+    | ^^^^^^^^^^^^^^
+    |
+    = note: every unit is initialized again for each test
+    = note: prepare in the test, or in a `[Setup]` method of a test class
+
+error[E0780]: a test unit cannot have a `finalization` section
+   --> src/App/Shapes_test.pas:52:1
+    |
+ 52 | finalization
+    | ^^^^^^^^^^^^
+    |
+    = note: every unit is initialized again for each test
+    = note: prepare in the test, or in a `[Setup]` method of a test class
+
+error: aborting due to 8 errors

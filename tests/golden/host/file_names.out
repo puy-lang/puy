@@ -1,0 +1,17 @@
+[/] [] [:]
+[/home/puy/a.txt] path=[/home/puy/] dir=[/home/puy] name=[a.txt] ext=[.txt] drive=[]
+[rel/dir/archive.tar.gz] path=[rel/dir/] dir=[rel/dir] name=[archive.tar.gz] ext=[.gz] drive=[]
+[/] path=[/] dir=[/] name=[] ext=[] drive=[]
+[/a] path=[/] dir=[/] name=[a] ext=[] drive=[]
+[a/] path=[a/] dir=[a] name=[] ext=[] drive=[]
+[//a] path=[//] dir=[//] name=[a] ext=[] drive=[]
+[.bashrc] path=[] dir=[] name=[.bashrc] ext=[.bashrc] drive=[]
+[dir.d/noext] path=[dir.d/] dir=[dir.d] name=[noext] ext=[] drive=[]
+[C:\dir\name.txt] path=[] dir=[] name=[C:\dir\name.txt] ext=[.txt] drive=[]
+[] path=[] dir=[] name=[] ext=[] drive=[]
+a/b.pas a.d/b.x a
+/new/name.txt dir/name.txt
+a/ a/ [/]
+a a/ []
+TRUE FALSE FALSE FALSE
+6 0 0

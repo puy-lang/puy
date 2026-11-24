@@ -1,0 +1,3 @@
+error: uncaught exception ERangeError: string index 0 is out of range 0..-1
+  at System.TStringHelper.GetChars (<stdlib>/System/TStringHelper.Implementation.inc:19)
+  at StringHelperPuy.<main> (string_helper_puy.pas:67)

@@ -1,0 +1,9 @@
+handle: TRUE positions: 5 0
+read: 5 10 20 0 0 50 99
+resized: 2 2 4
+read-only handle: ekPermissionDenied
+write-only handle: ekPermissionDenied
+attribute: TRUE
+read-only file: ekPermissionDenied
+rename: TRUE TRUE
+old contents: 3 30

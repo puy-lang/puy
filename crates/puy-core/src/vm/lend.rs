@@ -187,10 +187,7 @@ impl Isolate {
         let root = self.task.regs[rb];
         let ((r, i), after) = self.lend_walk(root, ra + 1, c, depth)?;
         let ncontainers = self.heap.loan_containers().len() - first;
-        let (ty, n) = {
-            let (t, s) = self.heap.any_slots(r)?;
-            (t, s.len())
-        };
+        let (ty, n) = self.heap.any_shape(r)?;
         let mut loan = Loan {
             value: ra,
             root,
@@ -211,9 +208,9 @@ impl Isolate {
                 let twice = l.depth == depth;
                 return Err(self.heap.aliased_slot(r, i as i64, twice).into());
             }
-            // The compiler made a record or static array container unique (`any_slot_mut`
+            // The compiler made a record or static array container unique (`any_replace`
             // checks it)
-            let value = std::mem::take(self.heap.any_slot_mut(r, i)?);
+            let value = self.heap.any_replace(r, i, 0)?;
             return self.finish_lend(ra, loan, value);
         };
         let width = self.place_width(pty)?;
@@ -269,17 +266,14 @@ impl Isolate {
             // An instance's handle as the root: the first step is the instance's slot
             // (`docs/spec/objects.md` 14.3)
             let r = self.heap.obj_index(root)? as heap::StrRef + 1;
-            let (ty, n) = {
-                let (t, s) = self.heap.any_slots(r)?;
-                (t, s.len())
-            };
+            let (ty, n) = self.heap.any_shape(r)?;
             self.push_container(r, ty)?;
             let (i, used) = self.path_slot(ty, n, path, 0, len)?;
             (Some((r, i)), used, None, 0)
         } else if deref(root).0 == PLACE_REF {
             let (j, loan) = self.place_loan(root)?;
             let ((r, i), used) = self.place_path_slot(&loan, path, len)?;
-            let ty = self.heap.any_slots(r)?.0;
+            let ty = self.heap.any_shape(r)?.0;
             self.push_container(r, ty)?;
             (Some((r, i)), used, Some(j), 0)
         } else {
@@ -420,7 +414,7 @@ impl Isolate {
         if let Err(e) = self.heap.push_loan(loan) {
             if loan.place.is_none() {
                 let (r, i) = loan.loc.expect("a value is lent from a slot");
-                *self.heap.any_slot_mut(r, i)? = value;
+                self.heap.any_replace(r, i, value)?;
             }
             return Err(e.into());
         }
@@ -552,8 +546,8 @@ impl Isolate {
         value: Slot,
     ) -> Result<(), RefError> {
         let (r, i) = self.find_again(loan, walked)?;
-        let kind = self.heap.slot_kind(self.heap.any_slots(r)?.0, i);
-        let old = std::mem::replace(self.heap.any_slot_mut(r, i)?, value);
+        let kind = self.heap.slot_kind(self.heap.any_shape(r)?.0, i);
+        let old = self.heap.any_replace(r, i, value)?;
         self.heap.release_kind(old, kind)?;
         Ok(())
     }
@@ -722,10 +716,7 @@ impl Isolate {
         // `EAccessViolation` (`docs/spec/objects.md` 14.3)
         let (mut at, mut k, mut ci, mut v, mut parent) = if is_handle(loan.root) {
             let r = self.heap.obj_index(loan.root)? as heap::StrRef + 1;
-            let (ty, n) = {
-                let (t, s) = self.heap.any_slots(r)?;
-                (t, s.len())
-            };
+            let (ty, n) = self.heap.any_shape(r)?;
             let (i, used) = self.path_slot(ty, n, path, 0, len)?;
             (Some((r, i)), used, 1, 0, None)
         } else if deref(loan.root).0 == PLACE_REF {
